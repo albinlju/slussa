@@ -34,7 +34,7 @@ fn render_pr_list(frame: &mut Frame, state: &AppState, area: ratatui::layout::Re
     } else {
         let content_chunks = Layout::default()
             .direction(Direction::Vertical)
-            .constraints([Constraint::Length(3), Constraint::Min(3)])
+            .constraints([Constraint::Length(0), Constraint::Min(0)])
             .split(chunks[0]);
 
         let prs: Vec<ListItem> = state
@@ -120,6 +120,10 @@ fn render_pr_list(frame: &mut Frame, state: &AppState, area: ratatui::layout::Re
             )
             .highlight_symbol("▶ ");
 
-        frame.render_stateful_widget(list, content_chunks[0], &mut list_state);
+        frame.render_stateful_widget(list, content_chunks[1], &mut list_state);
     }
+
+    let status = Paragraph::new("  j/k: navigate  enter: open PR  q: quit")
+        .style(Style::default().fg(Color::DarkGray));
+    frame.render_widget(status, chunks[1]);
 }
