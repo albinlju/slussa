@@ -11,6 +11,9 @@ use ratatui::{
 use crate::{
     app::state::{AppState, Mode},
     providers::github,
+    tui::{
+        Outcome, pr_detail::{self}, pr_list
+    },
 };
 
 pub mod actions;
@@ -51,22 +54,12 @@ impl App {
                     }
 
                     let mut state = self.state.lock().unwrap();
-
-                    match state.mode {
-                        Mode::PrList => match key.code {
-                            KeyCode::Char('q') => return Ok(()),
-                            KeyCode::Down | KeyCode::Char('j') => {
-                                if state.selected_pr + 1 < state.prs.len() {
-                                    state.selected_pr += 1;
-                                }
-                            }
-                            KeyCode::Up | KeyCode::Char('k') => {
-                                if state.selected_pr > 0 {
-                                    state.selected_pr -= 1;
-                                }
-                            }
-                            _ => {}
-                        },
+                    let outcome = match state.mode {
+                        Mode::PrList => pr_list::handle_key(&mut state, key.code),
+                        Mode::PrDetail => pr_detail::handle_key(&mut state, key.code),
+                    };
+                    if matches!(outcome, Outcome::Quit) {
+                        return Ok(());
                     }
                 }
             }
