@@ -34,12 +34,7 @@ struct GhPr {
 
 pub fn fetch_prs() -> Vec<PullRequest> {
     let output = Command::new("gh")
-        .args([
-            "pr",
-            "list",
-            "--json",
-            "number,title,author,state,isDraft,headRefName,baseRefName,body,createdAt,updatedAt",
-        ])
+        .args(["pr", "list", "--json", "title"])
         .output()
         .expect("gh not installed");
 
