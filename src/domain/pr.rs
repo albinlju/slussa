@@ -1,8 +1,7 @@
-use super::{ci::CiStatus, repo::Repo, review::Review, user::User};
+use super::{ci::CiStatus, repo::Repo, review::Reviewer, user::User};
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 
-pub type Reviewer = Review;
 pub type BuildStatus = CiStatus;
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
