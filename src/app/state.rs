@@ -13,4 +13,5 @@ pub struct AppState {
 pub enum Mode {
     #[default]
     PrList,
+    PrDetail,
 }
