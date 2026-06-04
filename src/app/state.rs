@@ -1,17 +1,41 @@
+use std::collections::HashMap;
+
+use crate::domain::commit::Commit;
 use crate::domain::pr::PullRequest;
+use crate::tui::pr_detail::DetailTab;
 
 #[derive(Debug, Default)]
 pub struct AppState {
-    pub prs: Vec<PullRequest>,
+    pub cache: Cache,
     pub selected: usize,
-    pub mode: Mode,
-    pub loading: bool,
-    pub selected_pr: usize,
+    pub screen: Screen,
 }
 
-#[derive(Debug, Default, PartialEq)]
-pub enum Mode {
+#[derive(Debug, Default)]
+pub struct Cache {
+    pub prs: LoadState<Vec<PullRequest>>,
+    pub details: HashMap<u64, PrData>,
+}
+
+#[derive(Debug, Default)]
+pub struct PrData {
+    pub commits: LoadState<Vec<Commit>>,
+}
+
+#[derive(Debug, Default)]
+pub enum LoadState<T> {
     #[default]
-    PrList,
-    PrDetail,
+    NotRequested,
+    Loading,
+    Loaded(T),
+}
+
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+pub enum Screen {
+    #[default]
+    List,
+    Detail {
+        pr_id: u64,
+        tab: DetailTab,
+    },
 }
