@@ -1,17 +1,13 @@
 use ratatui::{
     Frame,
     layout::Rect,
-    widgets::{Paragraph, Wrap},
+    style::{Color, Style},
+    widgets::Paragraph,
 };
 
 use crate::domain::pr::PullRequest;
 
-pub fn render(frame: &mut Frame, pr: &PullRequest, area: Rect) {
-    let body = pr
-        .description
-        .clone()
-        .unwrap_or_else(|| "(ingen beskrivning)".to_string());
-
-    let paragraph = Paragraph::new(body).wrap(Wrap { trim: false });
+pub fn render(frame: &mut Frame, _pr: &PullRequest, area: Rect) {
+    let paragraph = Paragraph::new("Conversation — TODO").style(Style::default().fg(Color::DarkGray));
     frame.render_widget(paragraph, area);
 }
