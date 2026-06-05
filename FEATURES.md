@@ -15,7 +15,7 @@ providers are intended. The search view is drafted in `SEARCH_SCREEN.md`.
 
 Mostly completing tabs that already exist as placeholders.
 
-- [ x ] **diff view.** `gh pr diff <n>`. File tree on the left, diff on the
+- [x] **diff view.** `gh pr diff <n>`. File tree on the left, diff on the
   right, syntax highlighting.
 - [ ] **Checks/CI status.** "Builds". Fetch via `gh pr checks <n>` →
   a list with green/red/yellow per check + link. Also show a summary icon in the PR list.
