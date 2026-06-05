@@ -128,7 +128,7 @@ pub fn render(frame: &mut Frame, state: &AppState, area: ratatui::layout::Rect) 
                 .collect();
 
             let mut list_state = ListState::default();
-            list_state.select(Some(state.selected));
+            list_state.select(Some(state.ui.list_selected));
 
             let list = List::new(items)
                 .highlight_style(
@@ -153,7 +153,9 @@ pub fn key_to_action(state: &AppState, key: KeyCode) -> Option<Action> {
         KeyCode::Down | KeyCode::Char('j') => Some(Action::NextPr),
         KeyCode::Up | KeyCode::Char('k') => Some(Action::PrevPr),
         KeyCode::Enter => match &state.cache.prs {
-            LoadState::Loaded(prs) => prs.get(state.selected).map(|p| Action::OpenPr(p.id)),
+            LoadState::Loaded(prs) => prs
+                .get(state.ui.list_selected)
+                .map(|p| Action::OpenPr(p.id)),
             _ => None,
         },
         _ => None,

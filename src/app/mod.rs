@@ -11,9 +11,16 @@ use tokio::{
 use tokio_stream::StreamExt;
 
 use crate::{
-    app::state::{AppState, LoadState, Screen},
+    app::state::{AppState, DiffViewState, LoadState, Screen},
     providers::github,
-    tui::{Action, key_to_action, pr_detail::DetailTab, render},
+    tui::{
+        Action, key_to_action,
+        pr_detail::{
+            DetailTab,
+            file_tree::{TreeRow, build_visible_rows},
+        },
+        render,
+    },
 };
 
 pub mod state;
@@ -92,10 +99,10 @@ impl App {
                     _ => 0,
                 };
                 let last = len.saturating_sub(1);
-                self.state.selected = (self.state.selected + 1).min(last);
+                self.state.ui.list_selected = (self.state.ui.list_selected + 1).min(last);
             }
             Action::PrevPr => {
-                self.state.selected = self.state.selected.saturating_sub(1);
+                self.state.ui.list_selected = self.state.ui.list_selected.saturating_sub(1);
             }
             Action::NextTab => {
                 if let Screen::Detail { tab, .. } = &mut self.state.screen {
@@ -112,6 +119,7 @@ impl App {
                     pr_id,
                     tab: DetailTab::default(),
                 };
+                self.state.ui.diff = DiffViewState::default();
                 let (load_commits, load_diff) = {
                     let pr_data = self.state.cache.details.entry(pr_id).or_default();
                     let load_commits = matches!(pr_data.commits, LoadState::NotRequested);
@@ -142,8 +150,76 @@ impl App {
                 let pr_data = self.state.cache.details.entry(pr_id).or_default();
                 pr_data.diff = LoadState::Loaded(diff);
             }
+            Action::DiffCursorDown => {
+                let rows = self.current_visible_rows();
+                let last = rows.len().saturating_sub(1);
+                let new_cursor = (self.state.ui.diff.cursor + 1).min(last);
+                self.state.ui.diff.cursor = new_cursor;
+                if let Some(TreeRow::File { file_index, .. }) = rows.get(new_cursor) {
+                    self.state.ui.diff.focused_file = *file_index;
+                }
+            }
+            Action::DiffCursorUp => {
+                let new_cursor = self.state.ui.diff.cursor.saturating_sub(1);
+                self.state.ui.diff.cursor = new_cursor;
+                let rows = self.current_visible_rows();
+                if let Some(TreeRow::File { file_index, .. }) = rows.get(new_cursor) {
+                    self.state.ui.diff.focused_file = *file_index;
+                }
+            }
+            Action::DiffToggleAtCursor => {
+                let rows = self.current_visible_rows();
+                if let Some(row) = rows.get(self.state.ui.diff.cursor) {
+                    match row {
+                        TreeRow::Dir {
+                            path, expanded, ..
+                        } => {
+                            if *expanded {
+                                self.state.ui.diff.collapsed.insert(path.clone());
+                            } else {
+                                self.state.ui.diff.collapsed.remove(path);
+                            }
+                        }
+                        TreeRow::File { file_index, .. } => {
+                            self.state.ui.diff.focused_file = *file_index;
+                        }
+                    }
+                }
+            }
+            Action::DiffCollapseAtCursor => {
+                let rows = self.current_visible_rows();
+                if let Some(TreeRow::Dir { path, .. }) = rows.get(self.state.ui.diff.cursor) {
+                    self.state.ui.diff.collapsed.insert(path.clone());
+                }
+            }
+            Action::DiffExpandAtCursor => {
+                let rows = self.current_visible_rows();
+                if let Some(TreeRow::Dir { path, .. }) = rows.get(self.state.ui.diff.cursor) {
+                    self.state.ui.diff.collapsed.remove(path);
+                }
+            }
         }
         ControlFlow::Continue(())
+    }
+
+    fn current_visible_rows(&self) -> Vec<TreeRow> {
+        let pr_id = match self.state.screen {
+            Screen::Detail { pr_id, .. } => pr_id,
+            _ => return Vec::new(),
+        };
+        let files = self
+            .state
+            .cache
+            .details
+            .get(&pr_id)
+            .and_then(|d| match &d.diff {
+                LoadState::Loaded(diff) => Some(&diff.files[..]),
+                _ => None,
+            });
+        match files {
+            Some(files) => build_visible_rows(files, &self.state.ui.diff.collapsed),
+            None => Vec::new(),
+        }
     }
 
     fn spawn_load_prs(&self) {
