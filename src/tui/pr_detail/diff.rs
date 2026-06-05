@@ -19,28 +19,24 @@ use crate::{
 };
 
 pub fn render(frame: &mut Frame, pr: &PullRequest, state: &AppState, area: Rect) {
-    let outer_block = Block::default().borders(Borders::ALL).title(" Diff ");
-    let inner = outer_block.inner(area);
-    frame.render_widget(outer_block, area);
-
     let diff_state = state.cache.details.get(&pr.id).map(|d| &d.diff);
 
     match diff_state {
         None | Some(LoadState::NotRequested) | Some(LoadState::Loading) => {
             let paragraph = Paragraph::new(format!("{} Loading diff...", spinner_frame()))
                 .style(Style::default().fg(Color::Yellow));
-            frame.render_widget(paragraph, inner);
+            frame.render_widget(paragraph, area);
         }
         Some(LoadState::Loaded(diff)) if diff.files.is_empty() => {
             let paragraph =
                 Paragraph::new("(no diff)").style(Style::default().fg(Color::DarkGray));
-            frame.render_widget(paragraph, inner);
+            frame.render_widget(paragraph, area);
         }
         Some(LoadState::Loaded(diff)) => {
             let chunks = Layout::default()
                 .direction(Direction::Horizontal)
                 .constraints([Constraint::Percentage(35), Constraint::Percentage(65)])
-                .split(inner);
+                .split(area);
 
             let rows = build_visible_rows(&diff.files, &state.ui.diff.collapsed);
             render_tree(frame, &rows, state.ui.diff.cursor, chunks[0]);
