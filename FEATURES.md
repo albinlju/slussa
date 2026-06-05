@@ -19,7 +19,7 @@ Mostly completing tabs that already exist as placeholders.
   right, syntax highlighting.
 - [ ] **Checks/CI status.** "Builds". Fetch via `gh pr checks <n>` →
   a list with green/red/yellow per check + link. Also show a summary icon in the PR list.
-  [ ] **Description** Should be above the tabs
+  [x] **Description** Should be above the tabs
 - [ ] **Overview** Today description is shown. Fetch review
   comments and threads (`gh pr view <n> --comments`). Show author + timestamp + body,
   ideally threaded.
