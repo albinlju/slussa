@@ -5,7 +5,7 @@ use ratatui::{Frame, crossterm::event::KeyCode};
 
 use crate::{
     app::state::{AppState, Screen},
-    domain::{commit::Commit, pr::PullRequest},
+    domain::{commit::Commit, diff::Diff, pr::PullRequest},
 };
 
 #[derive(Debug)]
@@ -20,6 +20,7 @@ pub enum Action {
     OpenPr(u64),
     PrsLoaded(Vec<PullRequest>),
     CommitsLoaded(u64, Vec<Commit>),
+    DiffLoaded(u64, Diff),
 }
 
 pub fn render(frame: &mut Frame, state: &AppState) {
