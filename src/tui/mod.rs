@@ -21,6 +21,11 @@ pub enum Action {
     PrsLoaded(Vec<PullRequest>),
     CommitsLoaded(u64, Vec<Commit>),
     DiffLoaded(u64, Diff),
+    DiffCursorDown,
+    DiffCursorUp,
+    DiffToggleAtCursor,
+    DiffCollapseAtCursor,
+    DiffExpandAtCursor,
 }
 
 pub fn render(frame: &mut Frame, state: &AppState) {

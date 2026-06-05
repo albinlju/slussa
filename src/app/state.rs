@@ -1,4 +1,4 @@
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 
 use crate::domain::commit::Commit;
 use crate::domain::diff::Diff;
@@ -8,8 +8,21 @@ use crate::tui::pr_detail::DetailTab;
 #[derive(Debug, Default)]
 pub struct AppState {
     pub cache: Cache,
-    pub selected: usize,
+    pub ui: UiMemory,
     pub screen: Screen,
+}
+
+#[derive(Debug, Default)]
+pub struct UiMemory {
+    pub list_selected: usize,
+    pub diff: DiffViewState,
+}
+
+#[derive(Debug, Default)]
+pub struct DiffViewState {
+    pub cursor: usize,
+    pub focused_file: usize,
+    pub collapsed: HashSet<String>,
 }
 
 #[derive(Debug, Default)]
