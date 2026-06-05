@@ -3,7 +3,7 @@ use ratatui::{
     layout::Rect,
     style::{Color, Style},
     text::{Line, Span},
-    widgets::{Block, Borders, List, ListItem, Paragraph},
+    widgets::{List, ListItem, Paragraph},
 };
 
 use crate::{
@@ -13,20 +13,17 @@ use crate::{
 };
 
 pub fn render(frame: &mut Frame, pr: &PullRequest, state: &AppState, area: Rect) {
-    let block = Block::default().borders(Borders::ALL).title(" Commits ");
     let commits_state = state.cache.details.get(&pr.id).map(|d| &d.commits);
 
     match commits_state {
         None | Some(LoadState::NotRequested) | Some(LoadState::Loading) => {
             let paragraph = Paragraph::new(format!("{}  Loading commits...", spinner_frame()))
-                .style(Style::default().fg(Color::Yellow))
-                .block(block);
+                .style(Style::default().fg(Color::Yellow));
             frame.render_widget(paragraph, area);
         }
         Some(LoadState::Loaded(commits)) if commits.is_empty() => {
-            let paragraph = Paragraph::new("(no commits)")
-                .style(Style::default().fg(Color::DarkGray))
-                .block(block);
+            let paragraph =
+                Paragraph::new("(no commits)").style(Style::default().fg(Color::DarkGray));
             frame.render_widget(paragraph, area);
         }
         Some(LoadState::Loaded(commits)) => {
@@ -50,7 +47,7 @@ pub fn render(frame: &mut Frame, pr: &PullRequest, state: &AppState, area: Rect)
                 })
                 .collect();
 
-            let list = List::new(items).block(block);
+            let list = List::new(items);
             frame.render_widget(list, area);
         }
     }
