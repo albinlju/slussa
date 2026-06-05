@@ -16,26 +16,21 @@ use crate::{
 #[derive(Debug, Default, Clone, Copy, PartialEq, Eq)]
 pub enum DetailTab {
     #[default]
-    Conversation,
+    Overview,
+    Diff,
     Commits,
     Checks,
-    Files,
 }
 
 impl DetailTab {
-    pub const ALL: [Self; 4] = [
-        Self::Conversation,
-        Self::Commits,
-        Self::Checks,
-        Self::Files,
-    ];
+    pub const ALL: [Self; 4] = [Self::Overview, Self::Diff, Self::Commits, Self::Checks];
 
     pub fn label(self) -> &'static str {
         match self {
-            Self::Conversation => "Conversation",
+            Self::Overview => "Overview",
+            Self::Diff => "Diff",
             Self::Commits => "Commits",
             Self::Checks => "Checks",
-            Self::Files => "Files Changed",
         }
     }
 
@@ -93,15 +88,9 @@ fn render_header(frame: &mut Frame, pr: &PullRequest, area: Rect) {
             Style::default().fg(Color::Cyan),
         ),
         Span::raw("  wants to merge  "),
-        Span::styled(
-            pr.source_branch.clone(),
-            Style::default().fg(Color::Green),
-        ),
+        Span::styled(pr.source_branch.clone(), Style::default().fg(Color::Green)),
         Span::raw(" → "),
-        Span::styled(
-            pr.target_branch.clone(),
-            Style::default().fg(Color::Yellow),
-        ),
+        Span::styled(pr.target_branch.clone(), Style::default().fg(Color::Yellow)),
     ]);
 
     let paragraph = Paragraph::new(vec![title_line, meta_line]).block(
@@ -138,14 +127,14 @@ fn render_content(
     area: Rect,
 ) {
     match tab {
-        DetailTab::Conversation => render_conversation(frame, pr, area),
+        DetailTab::Overview => render_overview(frame, pr, area),
+        DetailTab::Diff => render_diff(frame, pr, state, area),
         DetailTab::Commits => render_commits(frame, pr, state, area),
         DetailTab::Checks => render_placeholder(frame, "Checks — TODO", area),
-        DetailTab::Files => render_placeholder(frame, "Files Changed — TODO", area),
     }
 }
 
-fn render_conversation(frame: &mut Frame, pr: &PullRequest, area: Rect) {
+fn render_overview(frame: &mut Frame, pr: &PullRequest, area: Rect) {
     let body = pr
         .description
         .clone()
@@ -153,12 +142,65 @@ fn render_conversation(frame: &mut Frame, pr: &PullRequest, area: Rect) {
 
     let paragraph = Paragraph::new(body)
         .wrap(Wrap { trim: false })
-        .block(
-            Block::default()
-                .borders(Borders::ALL)
-                .title(" Description "),
-        );
+        .block(Block::default().borders(Borders::ALL));
     frame.render_widget(paragraph, area);
+}
+
+fn render_diff(frame: &mut Frame, pr: &PullRequest, state: &AppState, area: Rect) {
+    let block = Block::default().borders(Borders::ALL).title(" Diff ");
+    let diff_state = state.cache.details.get(&pr.id).map(|d| &d.diff);
+
+    match diff_state {
+        None | Some(LoadState::NotRequested) | Some(LoadState::Loading) => {
+            let paragraph = Paragraph::new(format!("{} Loading diff...", spinner_frame()))
+                .style(Style::default().fg(Color::Yellow))
+                .block(block);
+            frame.render_widget(paragraph, area);
+        }
+        Some(LoadState::Loaded(diff)) if diff.files.is_empty() => {
+            let paragraph = Paragraph::new("(no diff)")
+                .style(Style::default().fg(Color::DarkGray))
+                .block(block);
+            frame.render_widget(paragraph, area);
+        }
+        Some(LoadState::Loaded(diff)) => {
+            let mut lines: Vec<Line> = Vec::new();
+            for file in &diff.files {
+                lines.push(Line::styled(
+                    file.path.clone(),
+                    Style::default()
+                        .fg(Color::Magenta)
+                        .add_modifier(Modifier::BOLD),
+                ));
+                for hunk in &file.hunks {
+                    lines.push(Line::styled(
+                        format!("@@ -{} +{} @@", hunk.old_start, hunk.new_start),
+                        Style::default().fg(Color::Cyan),
+                    ));
+                    for diff_line in &hunk.lines {
+                        let (prefix, content, color) = match diff_line {
+                            crate::domain::diff::DiffLine::Added(c) => {
+                                ("+", c.as_str(), Color::Green)
+                            }
+                            crate::domain::diff::DiffLine::Removed(c) => {
+                                ("-", c.as_str(), Color::Red)
+                            }
+                            crate::domain::diff::DiffLine::Context(c) => {
+                                (" ", c.as_str(), Color::Reset)
+                            }
+                        };
+                        lines.push(Line::styled(
+                            format!("{}{}", prefix, content),
+                            Style::default().fg(color),
+                        ));
+                    }
+                }
+                lines.push(Line::raw(""));
+            }
+            let paragraph = Paragraph::new(lines).block(block);
+            frame.render_widget(paragraph, area);
+        }
+    }
 }
 
 fn render_placeholder(frame: &mut Frame, text: &str, area: Rect) {

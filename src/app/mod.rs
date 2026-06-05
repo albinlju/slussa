@@ -112,10 +112,23 @@ impl App {
                     pr_id,
                     tab: DetailTab::default(),
                 };
-                let pr_data = self.state.cache.details.entry(pr_id).or_default();
-                if matches!(pr_data.commits, LoadState::NotRequested) {
-                    pr_data.commits = LoadState::Loading;
+                let (load_commits, load_diff) = {
+                    let pr_data = self.state.cache.details.entry(pr_id).or_default();
+                    let load_commits = matches!(pr_data.commits, LoadState::NotRequested);
+                    let load_diff = matches!(pr_data.diff, LoadState::NotRequested);
+                    if load_commits {
+                        pr_data.commits = LoadState::Loading;
+                    }
+                    if load_diff {
+                        pr_data.diff = LoadState::Loading;
+                    }
+                    (load_commits, load_diff)
+                };
+                if load_commits {
                     self.spawn_load_commits(pr_id);
+                }
+                if load_diff {
+                    self.spawn_load_diff(pr_id);
                 }
             }
             Action::PrsLoaded(prs) => {
@@ -124,6 +137,10 @@ impl App {
             Action::CommitsLoaded(pr_id, commits) => {
                 let pr_data = self.state.cache.details.entry(pr_id).or_default();
                 pr_data.commits = LoadState::Loaded(commits);
+            }
+            Action::DiffLoaded(pr_id, diff) => {
+                let pr_data = self.state.cache.details.entry(pr_id).or_default();
+                pr_data.diff = LoadState::Loaded(diff);
             }
         }
         ControlFlow::Continue(())
@@ -146,6 +163,16 @@ impl App {
                 .await
                 .unwrap_or_default();
             tx.send(Action::CommitsLoaded(pr_id, commits)).ok();
+        });
+    }
+
+    fn spawn_load_diff(&self, pr_id: u64) {
+        let tx = self.action_tx.clone();
+        tokio::spawn(async move {
+            let diff = task::spawn_blocking(move || github::fetch_diff(pr_id))
+                .await
+                .unwrap_or_default();
+            tx.send(Action::DiffLoaded(pr_id, diff)).ok();
         });
     }
 }

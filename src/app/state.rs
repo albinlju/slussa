@@ -1,6 +1,7 @@
 use std::collections::HashMap;
 
 use crate::domain::commit::Commit;
+use crate::domain::diff::Diff;
 use crate::domain::pr::PullRequest;
 use crate::tui::pr_detail::DetailTab;
 
@@ -20,6 +21,7 @@ pub struct Cache {
 #[derive(Debug, Default)]
 pub struct PrData {
     pub commits: LoadState<Vec<Commit>>,
+    pub diff: LoadState<Diff>,
 }
 
 #[derive(Debug, Default)]
