@@ -7,14 +7,14 @@ pub mod overview;
 use ratatui::{
     Frame,
     crossterm::event::KeyCode,
-    layout::{Constraint, Direction, Layout, Rect},
+    layout::{Constraint, Direction, Layout, Margin, Rect},
     style::{Color, Modifier, Style},
     text::{Line, Span},
-    widgets::{Block, Borders, Paragraph},
+    widgets::{Block, Borders, Paragraph, Scrollbar, ScrollbarOrientation, ScrollbarState, Wrap},
 };
 
 use crate::{
-    app::state::{AppState, LoadState},
+    app::state::{AppState, LoadState, Screen, UiMemory},
     domain::pr::PullRequest,
     tui::Action,
 };
@@ -54,7 +54,7 @@ impl DetailTab {
     }
 }
 
-pub fn render(frame: &mut Frame, state: &AppState, pr_id: u64, tab: DetailTab, area: Rect) {
+pub fn render(frame: &mut Frame, state: &mut AppState, pr_id: u64, tab: DetailTab, area: Rect) {
     let prs = match &state.cache.prs {
         LoadState::Loaded(prs) => prs,
         _ => return,
@@ -63,18 +63,152 @@ pub fn render(frame: &mut Frame, state: &AppState, pr_id: u64, tab: DetailTab, a
         return;
     };
 
-    let chunks = Layout::default()
-        .direction(Direction::Vertical)
-        .constraints([
-            Constraint::Length(4),
-            Constraint::Min(0),
-            Constraint::Length(1),
-        ])
-        .split(area);
+    if state.ui.description_expanded {
+        let chunks = Layout::default()
+            .direction(Direction::Vertical)
+            .constraints([
+                Constraint::Length(4),
+                Constraint::Min(0),
+                Constraint::Length(1),
+            ])
+            .split(area);
+        render_header(frame, pr, chunks[0]);
+        render_description_expanded(frame, pr, &mut state.ui, chunks[1]);
+        render_help_expanded(frame, chunks[2]);
+    } else {
+        let (desc_height, truncated) = compute_desc_layout(pr, area.width);
+        let chunks = Layout::default()
+            .direction(Direction::Vertical)
+            .constraints([
+                Constraint::Length(4),
+                Constraint::Length(desc_height),
+                Constraint::Min(0),
+                Constraint::Length(1),
+            ])
+            .split(area);
+        render_header(frame, pr, chunks[0]);
+        render_description(frame, pr, truncated, chunks[1]);
+        render_tabs_and_content(frame, pr, state, tab, chunks[2]);
+        render_help(frame, chunks[3]);
+    }
+}
 
-    render_header(frame, pr, chunks[0]);
-    render_tabs_and_content(frame, pr, state, tab, chunks[1]);
-    render_help(frame, chunks[2]);
+fn render_description(frame: &mut Frame, pr: &PullRequest, truncated: bool, area: Rect) {
+    let body = pr
+        .description
+        .clone()
+        .unwrap_or_else(|| "(ingen beskrivning)".to_string());
+
+    let mut block = Block::default()
+        .borders(Borders::ALL)
+        .title(" Description ");
+
+    if truncated {
+        block = block.title_bottom(
+            Line::from(vec![
+                Span::raw(" "),
+                Span::styled(
+                    "⇣ more",
+                    Style::default()
+                        .fg(Color::Yellow)
+                        .add_modifier(Modifier::BOLD),
+                ),
+                Span::styled(" · d to expand ", Style::default().fg(Color::DarkGray)),
+            ])
+            .right_aligned(),
+        );
+    }
+
+    let paragraph = Paragraph::new(body).wrap(Wrap { trim: false }).block(block);
+    frame.render_widget(paragraph, area);
+}
+
+fn render_description_expanded(
+    frame: &mut Frame,
+    pr: &PullRequest,
+    ui: &mut UiMemory,
+    area: Rect,
+) {
+    let body = pr
+        .description
+        .clone()
+        .unwrap_or_else(|| "(ingen beskrivning)".to_string());
+
+    let block = Block::default()
+        .borders(Borders::ALL)
+        .border_style(Style::default().fg(Color::Yellow))
+        .title(" Description ")
+        .title_bottom(
+            Line::from(" j/k scroll · d/esc collapse ")
+                .right_aligned()
+                .style(Style::default().fg(Color::DarkGray)),
+        );
+
+    let inner = block.inner(area);
+    let total_wrapped = count_wrapped_lines(&body, inner.width as usize);
+    let visible = inner.height as usize;
+    let max_scroll = total_wrapped.saturating_sub(visible) as u16;
+    let scroll = ui.description_scroll.min(max_scroll);
+    ui.description_scroll = scroll;
+
+    let paragraph = Paragraph::new(body)
+        .wrap(Wrap { trim: false })
+        .scroll((scroll, 0))
+        .block(block);
+    frame.render_widget(paragraph, area);
+
+    if max_scroll > 0 {
+        let mut scrollbar_state =
+            ScrollbarState::new(total_wrapped).position(scroll as usize);
+        let scrollbar = Scrollbar::new(ScrollbarOrientation::VerticalRight)
+            .begin_symbol(None)
+            .end_symbol(None)
+            .thumb_style(Style::default().fg(Color::Yellow))
+            .track_style(Style::default().fg(Color::DarkGray));
+        let sb_area = area.inner(Margin {
+            vertical: 1,
+            horizontal: 0,
+        });
+        frame.render_stateful_widget(scrollbar, sb_area, &mut scrollbar_state);
+    }
+}
+
+fn count_wrapped_lines(text: &str, width: usize) -> usize {
+    if width == 0 {
+        return 1;
+    }
+    if text.is_empty() {
+        return 1;
+    }
+    let mut total = 0usize;
+    for line in text.lines() {
+        let len = line.chars().count().max(1);
+        total += (len + width - 1) / width;
+    }
+    total.max(1)
+}
+
+const DESC_MAX_HEIGHT: u16 = 8;
+
+fn compute_desc_layout(pr: &PullRequest, available_width: u16) -> (u16, bool) {
+    let body = pr.description.as_deref().unwrap_or("(ingen beskrivning)");
+    let inner_width = available_width.saturating_sub(2) as usize;
+    if inner_width == 0 {
+        return (3, false);
+    }
+    let mut total_lines = 0usize;
+    for line in body.lines() {
+        let len = line.chars().count().max(1);
+        total_lines += (len + inner_width - 1) / inner_width;
+    }
+    if total_lines == 0 {
+        total_lines = 1;
+    }
+    let max_content_rows = (DESC_MAX_HEIGHT as usize).saturating_sub(2);
+    let truncated = total_lines > max_content_rows;
+    let content_rows = total_lines.min(max_content_rows);
+    let height = ((content_rows + 2).max(3)) as u16;
+    (height, truncated)
 }
 
 fn render_tabs_and_content(
@@ -245,7 +379,13 @@ fn render_content(
 }
 
 fn render_help(frame: &mut Frame, area: Rect) {
-    let help = Paragraph::new("  h/l: switch tab  esc: back  q: quit")
+    let help = Paragraph::new("  1-4 / h/l: tab  d: description  esc: back  q: quit")
+        .style(Style::default().fg(Color::DarkGray));
+    frame.render_widget(help, area);
+}
+
+fn render_help_expanded(frame: &mut Frame, area: Rect) {
+    let help = Paragraph::new("  j/k: scroll  d / esc: collapse  q: quit")
         .style(Style::default().fg(Color::DarkGray));
     frame.render_widget(help, area);
 }
@@ -256,16 +396,35 @@ pub(super) fn render_placeholder(frame: &mut Frame, text: &str, area: Rect) {
 }
 
 pub fn key_to_action(state: &AppState, key: KeyCode) -> Option<Action> {
+    if matches!(key, KeyCode::Char('q')) {
+        return Some(Action::Quit);
+    }
+
+    if state.ui.description_expanded {
+        return match key {
+            KeyCode::Esc | KeyCode::Char('d') => Some(Action::ToggleDescription),
+            KeyCode::Down | KeyCode::Char('j') => Some(Action::DescriptionScrollDown),
+            KeyCode::Up | KeyCode::Char('k') => Some(Action::DescriptionScrollUp),
+            _ => None,
+        };
+    }
+
     match key {
-        KeyCode::Char('q') => return Some(Action::Quit),
+        KeyCode::Char('d') => return Some(Action::ToggleDescription),
         KeyCode::Esc => return Some(Action::Back),
         KeyCode::Tab => return Some(Action::NextTab),
         KeyCode::BackTab => return Some(Action::PrevTab),
+        KeyCode::Char(c @ '1'..='4') => {
+            let idx = (c as u8 - b'1') as usize;
+            if let Some(&t) = DetailTab::ALL.get(idx) {
+                return Some(Action::SelectTab(t));
+            }
+        }
         _ => {}
     }
 
     let tab = match state.screen {
-        crate::app::state::Screen::Detail { tab, .. } => tab,
+        Screen::Detail { tab, .. } => tab,
         _ => return None,
     };
 

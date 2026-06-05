@@ -16,6 +16,8 @@ pub struct AppState {
 pub struct UiMemory {
     pub list_selected: usize,
     pub diff: DiffViewState,
+    pub description_expanded: bool,
+    pub description_scroll: u16,
 }
 
 #[derive(Debug, Default)]

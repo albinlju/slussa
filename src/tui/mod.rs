@@ -6,6 +6,7 @@ use ratatui::{Frame, crossterm::event::KeyCode};
 use crate::{
     app::state::{AppState, Screen},
     domain::{commit::Commit, diff::Diff, pr::PullRequest},
+    tui::pr_detail::DetailTab,
 };
 
 #[derive(Debug)]
@@ -17,6 +18,7 @@ pub enum Action {
     PrevPr,
     NextTab,
     PrevTab,
+    SelectTab(DetailTab),
     OpenPr(u64),
     PrsLoaded(Vec<PullRequest>),
     CommitsLoaded(u64, Vec<Commit>),
@@ -26,9 +28,12 @@ pub enum Action {
     DiffToggleAtCursor,
     DiffCollapseAtCursor,
     DiffExpandAtCursor,
+    ToggleDescription,
+    DescriptionScrollDown,
+    DescriptionScrollUp,
 }
 
-pub fn render(frame: &mut Frame, state: &AppState) {
+pub fn render(frame: &mut Frame, state: &mut AppState) {
     match state.screen {
         Screen::List => pr_list::render(frame, state, frame.area()),
         Screen::Detail { pr_id, tab } => {
