@@ -10,7 +10,7 @@ use ratatui::{
     layout::{Constraint, Direction, Layout, Rect},
     style::{Color, Modifier, Style},
     text::{Line, Span},
-    widgets::{Block, Borders, Paragraph, Tabs},
+    widgets::{Block, Borders, Paragraph},
 };
 
 use crate::{
@@ -67,16 +67,138 @@ pub fn render(frame: &mut Frame, state: &AppState, pr_id: u64, tab: DetailTab, a
         .direction(Direction::Vertical)
         .constraints([
             Constraint::Length(4),
-            Constraint::Length(3),
             Constraint::Min(0),
             Constraint::Length(1),
         ])
         .split(area);
 
     render_header(frame, pr, chunks[0]);
-    render_tabs(frame, tab, chunks[1]);
-    render_content(frame, pr, state, tab, chunks[2]);
-    render_help(frame, chunks[3]);
+    render_tabs_and_content(frame, pr, state, tab, chunks[1]);
+    render_help(frame, chunks[2]);
+}
+
+fn render_tabs_and_content(
+    frame: &mut Frame,
+    pr: &PullRequest,
+    state: &AppState,
+    tab: DetailTab,
+    area: Rect,
+) {
+    let labels: Vec<&str> = DetailTab::ALL.iter().map(|t| t.label()).collect();
+    let active_idx = tab.index();
+
+    let cell_widths: Vec<usize> = labels
+        .iter()
+        .enumerate()
+        .map(|(i, label)| {
+            if i == active_idx {
+                label.chars().count() + 4
+            } else {
+                label.chars().count() + 2
+            }
+        })
+        .collect();
+
+    let starts: Vec<usize> = {
+        let mut s = Vec::with_capacity(labels.len());
+        let mut col = 0;
+        for w in &cell_widths {
+            s.push(col);
+            col += w;
+        }
+        s
+    };
+
+    let area_w = area.width as usize;
+    let active_start = starts[active_idx];
+    let active_width = cell_widths[active_idx];
+
+    let chunks = Layout::default()
+        .direction(Direction::Vertical)
+        .constraints([Constraint::Length(3), Constraint::Min(0)])
+        .split(area);
+
+    let header_lines: Vec<Line> = vec![
+        Line::raw(build_top_row(area_w, active_start, active_width)),
+        build_label_row(&labels, active_idx),
+        Line::raw(build_join_row(area_w, active_start, active_width)),
+    ];
+    let header = Paragraph::new(header_lines);
+    frame.render_widget(header, chunks[0]);
+
+    let content_block = Block::default()
+        .borders(Borders::LEFT | Borders::RIGHT | Borders::BOTTOM);
+    let content_inner = content_block.inner(chunks[1]);
+    frame.render_widget(content_block, chunks[1]);
+
+    render_content(frame, pr, state, tab, content_inner);
+}
+
+fn build_top_row(area_w: usize, active_start: usize, active_width: usize) -> String {
+    let active_end = active_start + active_width.saturating_sub(1);
+    let mut s = String::with_capacity(area_w);
+    for col in 0..area_w {
+        let c = if col == active_start {
+            '┌'
+        } else if col == active_end {
+            '┐'
+        } else if col > active_start && col < active_end {
+            '─'
+        } else {
+            ' '
+        };
+        s.push(c);
+    }
+    s
+}
+
+fn build_label_row(labels: &[&str], active_idx: usize) -> Line<'static> {
+    let active_style = Style::default()
+        .fg(Color::Yellow)
+        .add_modifier(Modifier::BOLD);
+    let inactive_style = Style::default().fg(Color::DarkGray);
+
+    let mut spans: Vec<Span<'static>> = Vec::new();
+    for (i, label) in labels.iter().enumerate() {
+        if i == active_idx {
+            spans.push(Span::raw("│ "));
+            spans.push(Span::styled(label.to_string(), active_style));
+            spans.push(Span::raw(" │"));
+        } else {
+            spans.push(Span::raw(" "));
+            spans.push(Span::styled(label.to_string(), inactive_style));
+            spans.push(Span::raw(" "));
+        }
+    }
+    Line::from(spans)
+}
+
+fn build_join_row(area_w: usize, active_start: usize, active_width: usize) -> String {
+    let active_end = active_start + active_width.saturating_sub(1);
+    let last_col = area_w.saturating_sub(1);
+
+    let mut s = String::with_capacity(area_w);
+    for col in 0..area_w {
+        let c = if col == active_start && col == 0 {
+            '│'
+        } else if col == active_end && col == last_col {
+            '│'
+        } else if col == active_start {
+            '┘'
+        } else if col == active_end {
+            '└'
+        } else if col > active_start && col < active_end {
+            ' '
+        } else if col == 0 {
+            '┌'
+        } else if col == last_col {
+            '┐'
+        } else {
+            '─'
+        };
+        s.push(c);
+    }
+    s
 }
 
 fn render_header(frame: &mut Frame, pr: &PullRequest, area: Rect) {
@@ -107,24 +229,6 @@ fn render_header(frame: &mut Frame, pr: &PullRequest, area: Rect) {
     frame.render_widget(paragraph, area);
 }
 
-fn render_tabs(frame: &mut Frame, current: DetailTab, area: Rect) {
-    let titles: Vec<Line> = DetailTab::ALL
-        .iter()
-        .map(|t| Line::from(t.label()))
-        .collect();
-
-    let tabs = Tabs::new(titles)
-        .block(Block::default().borders(Borders::ALL))
-        .select(current.index())
-        .style(Style::default().fg(Color::DarkGray))
-        .highlight_style(
-            Style::default()
-                .fg(Color::Yellow)
-                .add_modifier(Modifier::BOLD),
-        );
-    frame.render_widget(tabs, area);
-}
-
 fn render_content(
     frame: &mut Frame,
     pr: &PullRequest,
@@ -147,9 +251,7 @@ fn render_help(frame: &mut Frame, area: Rect) {
 }
 
 pub(super) fn render_placeholder(frame: &mut Frame, text: &str, area: Rect) {
-    let paragraph = Paragraph::new(text)
-        .style(Style::default().fg(Color::DarkGray))
-        .block(Block::default().borders(Borders::ALL));
+    let paragraph = Paragraph::new(text).style(Style::default().fg(Color::DarkGray));
     frame.render_widget(paragraph, area);
 }
 
