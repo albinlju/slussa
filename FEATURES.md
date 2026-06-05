@@ -15,14 +15,12 @@ providers are intended. The search view is drafted in `SEARCH_SCREEN.md`.
 
 Mostly completing tabs that already exist as placeholders.
 
-- [ ] **Files Changed + diff view.** All three platforms put "Files changed" at the
-  heart of a review. Fetch via `gh pr diff <n>`. Start simple: raw diff in a
-  `Paragraph` with color on `+`/`-` lines. Later: file tree on the left, diff on the
+- [ x ] **diff view.** `gh pr diff <n>`. File tree on the left, diff on the
   right, syntax highlighting.
-- [ ] **Checks/CI status.** GitHub "Checks", GitLab "Pipelines", Bitbucket "Builds".
-  You already have `CiStatus`/`CiState` in the domain. Fetch via `gh pr checks <n>` →
+- [ ] **Checks/CI status.** "Builds". Fetch via `gh pr checks <n>` →
   a list with green/red/yellow per check + link. Also show a summary icon in the PR list.
-- [ ] **Conversation: real comments.** Today only the description is shown. Fetch review
+  [ ] **Description** Should be above the tabs
+- [ ] **Overview** Today description is shown. Fetch review
   comments and threads (`gh pr view <n> --comments`). Show author + timestamp + body,
   ideally threaded.
 - [ ] **Reviewers/approvals in the list.** The reviewer span already exists in `pr_list`
