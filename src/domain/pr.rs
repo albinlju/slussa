@@ -38,6 +38,9 @@ pub struct PullRequest {
     pub source_branch: String,
     pub target_branch: String,
     pub files_changed: Vec<String>,
+    pub additions: u32,
+    pub deletions: u32,
+    pub changed_files: u32,
     pub created: DateTime<Utc>,
     pub updated: DateTime<Utc>,
 }

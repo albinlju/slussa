@@ -6,14 +6,41 @@ use crate::domain::ci::{CiState, CiStatus};
 use crate::domain::pr::{PrStatus, PullRequest};
 use crate::domain::provider::ProviderKind;
 use crate::domain::repo::Repo;
+use crate::domain::review::{Reviewer, ReviewerState};
 use crate::domain::user::User;
 
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Default, Deserialize)]
 struct GhAuthor {
     #[serde(default)]
     login: String,
     #[serde(default)]
     name: Option<String>,
+}
+
+#[derive(Debug, Deserialize)]
+struct GhCommentSummary {}
+
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct GhReviewSummary {
+    #[serde(default)]
+    state: String,
+    #[serde(default)]
+    author: GhAuthor,
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct GhCheck {
+    /// Set for GitHub Actions check runs.
+    #[serde(default)]
+    conclusion: String,
+    /// Set for GitHub Actions check runs.
+    #[serde(default)]
+    status: String,
+    /// Set for external status checks.
+    #[serde(default)]
+    state: String,
 }
 
 #[derive(Debug, Deserialize)]
@@ -31,6 +58,18 @@ struct GhPr {
     base_ref_name: String,
     created_at: DateTime<Utc>,
     updated_at: DateTime<Utc>,
+    #[serde(default)]
+    additions: u32,
+    #[serde(default)]
+    deletions: u32,
+    #[serde(default)]
+    changed_files: u32,
+    #[serde(default)]
+    comments: Vec<GhCommentSummary>,
+    #[serde(default)]
+    latest_reviews: Vec<GhReviewSummary>,
+    #[serde(default)]
+    status_check_rollup: Vec<GhCheck>,
 }
 
 pub fn fetch_prs() -> Vec<PullRequest> {
@@ -39,7 +78,9 @@ pub fn fetch_prs() -> Vec<PullRequest> {
             "pr",
             "list",
             "--json",
-            "title,number,author,state,isDraft,headRefName,baseRefName,body,createdAt,updatedAt",
+            "title,number,author,state,isDraft,headRefName,baseRefName,body,\
+             createdAt,updatedAt,additions,deletions,changedFiles,comments,\
+             latestReviews,statusCheckRollup",
         ])
         .output()
         .expect("gh not installed");
@@ -53,6 +94,10 @@ pub fn fetch_prs() -> Vec<PullRequest> {
 }
 
 fn map_pr(gh: GhPr) -> PullRequest {
+    let ci_state = summarize_checks(&gh.status_check_rollup);
+    let reviewers = map_reviewers(gh.latest_reviews);
+    let comment_count = gh.comments.len() as u32;
+
     PullRequest {
         id: gh.number,
         title: gh.title,
@@ -71,7 +116,7 @@ fn map_pr(gh: GhPr) -> PullRequest {
             provider: ProviderKind::GitHub,
         },
         ci: CiStatus {
-            state: CiState::Unknown,
+            state: ci_state,
             description: None,
             url: None,
         },
@@ -85,13 +130,86 @@ fn map_pr(gh: GhPr) -> PullRequest {
                 _ => PrStatus::Open,
             }
         },
-        reviewers: vec![],
+        reviewers,
         build_status: None,
-        comment_count: 0,
+        comment_count,
         source_branch: gh.head_ref_name,
         target_branch: gh.base_ref_name,
         files_changed: vec![],
+        additions: gh.additions,
+        deletions: gh.deletions,
+        changed_files: gh.changed_files,
         created: gh.created_at,
         updated: gh.updated_at,
     }
+}
+
+fn summarize_checks(checks: &[GhCheck]) -> CiState {
+    if checks.is_empty() {
+        return CiState::Unknown;
+    }
+
+    let mut any_failure = false;
+    let mut any_pending = false;
+    let mut any_success = false;
+
+    for c in checks {
+        // Actions check runs use `status` + `conclusion`; external status checks
+        // use `state`. We treat any non-empty value as the outcome to inspect.
+        let outcome = if !c.conclusion.is_empty() {
+            c.conclusion.as_str()
+        } else if !c.state.is_empty() {
+            c.state.as_str()
+        } else {
+            ""
+        };
+
+        match outcome {
+            "FAILURE" | "ERROR" | "TIMED_OUT" | "CANCELLED" | "ACTION_REQUIRED" => {
+                any_failure = true
+            }
+            "SUCCESS" => any_success = true,
+            "PENDING" | "QUEUED" | "IN_PROGRESS" => any_pending = true,
+            _ => {}
+        }
+
+        if c.status == "IN_PROGRESS" || c.status == "QUEUED" {
+            any_pending = true;
+        }
+    }
+
+    if any_failure {
+        CiState::Failed
+    } else if any_pending {
+        CiState::Pending
+    } else if any_success {
+        CiState::Success
+    } else {
+        CiState::Unknown
+    }
+}
+
+fn map_reviewers(reviews: Vec<GhReviewSummary>) -> Vec<Reviewer> {
+    reviews
+        .into_iter()
+        .enumerate()
+        .map(|(idx, r)| {
+            let state = match r.state.as_str() {
+                "APPROVED" => ReviewerState::Approved,
+                "CHANGES_REQUESTED" => ReviewerState::ChangesRequested,
+                _ => ReviewerState::Commented,
+            };
+            Reviewer {
+                id: idx.to_string(),
+                author: User {
+                    id: r.author.login.clone(),
+                    username: r.author.login,
+                    display_name: r.author.name,
+                    avatar_url: None,
+                },
+                state,
+                body: None,
+            }
+        })
+        .collect()
 }

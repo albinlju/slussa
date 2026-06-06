@@ -48,7 +48,6 @@ impl App {
                     tab: DetailTab::default(),
                 };
                 self.state.ui.diff = DiffViewState::default();
-                self.state.ui.description_expanded = false;
                 self.state.ui.description_scroll = 0;
                 self.state.ui.overview_scroll = 0;
                 let (load_commits, load_diff, load_comments, load_threads) = {
@@ -150,10 +149,6 @@ impl App {
                 if let Some(TreeRow::Dir { path, .. }) = rows.get(self.state.ui.diff.cursor) {
                     self.state.ui.diff.collapsed.remove(path);
                 }
-            }
-            Action::ToggleDescription => {
-                self.state.ui.description_expanded = !self.state.ui.description_expanded;
-                self.state.ui.description_scroll = 0;
             }
             Action::DescriptionScrollDown => {
                 self.state.ui.description_scroll =

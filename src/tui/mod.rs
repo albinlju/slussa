@@ -34,7 +34,6 @@ pub enum Action {
     DiffToggleAtCursor,
     DiffCollapseAtCursor,
     DiffExpandAtCursor,
-    ToggleDescription,
     DescriptionScrollDown,
     DescriptionScrollUp,
     OverviewScrollDown,
