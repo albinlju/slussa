@@ -12,7 +12,7 @@ use ratatui::{
     layout::{Constraint, Direction, Layout, Rect},
     style::{Modifier, Style},
     text::{Line, Span},
-    widgets::{Block, Borders, Paragraph},
+    widgets::{Block, BorderType, Borders, Padding, Paragraph},
 };
 
 use crate::{
@@ -291,6 +291,7 @@ fn render_tabs_and_content(
 
     let block = Block::default()
         .borders(Borders::ALL)
+        .border_type(BorderType::Rounded)
         .border_style(Style::default().fg(theme.border));
     let inner = block.inner(chunks[1]);
     frame.render_widget(block, chunks[1]);
@@ -333,6 +334,8 @@ fn render_header(frame: &mut Frame, pr: &PullRequest, area: Rect) {
     let paragraph = Paragraph::new(vec![title_line, meta_line]).block(
         Block::default()
             .borders(Borders::ALL)
+            .padding(Padding::horizontal(2))
+            .border_type(BorderType::Rounded)
             .border_style(Style::default().fg(theme.border)),
     );
     frame.render_widget(paragraph, area);

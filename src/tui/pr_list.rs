@@ -10,7 +10,7 @@ use ratatui::{
     layout::{Constraint, Direction, Layout, Rect},
     style::{Modifier, Style},
     text::{Line, Span},
-    widgets::{Block, Borders, Clear, List, ListItem, ListState, Paragraph},
+    widgets::{Block, BorderType, Borders, Clear, List, ListItem, ListState, Paragraph},
 };
 
 pub fn render(frame: &mut Frame, state: &AppState, area: ratatui::layout::Rect) {
@@ -35,6 +35,7 @@ pub fn render(frame: &mut Frame, state: &AppState, area: ratatui::layout::Rect) 
             let outer_block = Block::default()
                 .borders(Borders::ALL)
                 .border_style(Style::default().fg(theme.border))
+                .border_type(BorderType::Rounded)
                 .title(format!(
                     " {} ({}) ",
                     state.ui.list_filter.label(),
@@ -48,9 +49,7 @@ pub fn render(frame: &mut Frame, state: &AppState, area: ratatui::layout::Rect) 
                 .constraints([Constraint::Length(1), Constraint::Min(0)])
                 .split(inner);
 
-            let header_style = Style::default()
-                .fg(theme.fg)
-                .add_modifier(Modifier::BOLD);
+            let header_style = Style::default().fg(theme.fg).add_modifier(Modifier::BOLD);
 
             // The List below shifts every row right by 2 cols to make room for
             // the highlight_symbol ("▶ "). We add the same `  ` prefix to the
@@ -220,7 +219,10 @@ fn row_for_pr(pr: &crate::domain::pr::PullRequest) -> ListItem<'static> {
         Span::raw(" "),
         Span::styled(minus, Style::default().fg(theme.diff_removed)),
         Span::raw(" ".repeat(diff_pad)),
-        Span::styled(format!("{:<6}", comm_text), Style::default().fg(theme.muted)),
+        Span::styled(
+            format!("{:<6}", comm_text),
+            Style::default().fg(theme.muted),
+        ),
         Span::styled(format!("{:<7}", rev_text), Style::default().fg(rev_color)),
         Span::styled(format!("{:<8}", age), Style::default().fg(theme.muted)),
     ]);
