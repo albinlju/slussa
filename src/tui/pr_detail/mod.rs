@@ -50,6 +50,17 @@ impl DetailTab {
         }
     }
 
+    /// Nerd Font glyphs (requires a Nerd Font in the terminal).
+    pub fn icon(self) -> &'static str {
+        match self {
+            Self::Description => "\u{f15c}", //  file-text
+            Self::Overview => "\u{f086}",    //  comments
+            Self::Diff => "\u{f440}",        //  diff
+            Self::Commits => "\u{f417}",     //  git-commit
+            Self::Builds => "\u{f085}",      //  cogs
+        }
+    }
+
     fn index(self) -> usize {
         Self::ALL.iter().position(|&t| t == self).unwrap_or(0)
     }
@@ -76,7 +87,7 @@ pub fn render(frame: &mut Frame, state: &mut AppState, pr_id: u64, tab: DetailTa
     let chunks = Layout::default()
         .direction(Direction::Vertical)
         .constraints([
-            Constraint::Length(4), // header
+            Constraint::Length(5), // header
             Constraint::Length(1), // spacer between header and tabs
             Constraint::Min(0),    // tabs + content
             Constraint::Length(1), // help
@@ -276,7 +287,10 @@ fn render_tabs_and_content(
         } else {
             inactive_style
         };
-        tab_spans.push(Span::styled(t.label(), style));
+        tab_spans.push(Span::styled(
+            format!("{}  {}", t.icon(), t.label()),
+            style,
+        ));
     }
 
     let chunks = Layout::default()
@@ -316,11 +330,20 @@ fn render_header(frame: &mut Frame, pr: &PullRequest, area: Rect) {
         ),
     ]);
 
+    // Powerline rounded half-circles (Nerd Font U+E0B6 / U+E0B4) flank the
+    // padded label to give the badge pill-shaped rounded ends. The edges have
+    // fg=status_color with no bg, so the rounded curve bleeds into whatever
+    // sits behind the header.
     let meta_line = Line::from(vec![
+        Span::styled("\u{e0b6}", Style::default().fg(status_color)),
         Span::styled(
-            format!(" {} ", pr.status.label()),
-            Style::default().fg(theme.fg).bg(status_color),
+            pr.status.label().to_string(),
+            Style::default()
+                .fg(theme.bg)
+                .bg(status_color)
+                .add_modifier(Modifier::BOLD),
         ),
+        Span::styled("\u{e0b4}", Style::default().fg(status_color)),
         Span::styled(
             format!(" @{}", pr.author.username),
             Style::default().fg(theme.info),
@@ -331,7 +354,7 @@ fn render_header(frame: &mut Frame, pr: &PullRequest, area: Rect) {
         Span::styled(pr.target_branch.clone(), Style::default().fg(theme.accent)),
     ]);
 
-    let paragraph = Paragraph::new(vec![title_line, meta_line]).block(
+    let paragraph = Paragraph::new(vec![title_line, Line::default(), meta_line]).block(
         Block::default()
             .borders(Borders::ALL)
             .padding(Padding::horizontal(2))
@@ -349,12 +372,24 @@ fn render_content(
     tab: DetailTab,
     area: Rect,
 ) {
+    // Description renders through glamour, which adds its own ~2-col left
+    // margin. The other tabs render text directly, so we inset their area to
+    // match the visual indent.
+    let inset = match tab {
+        DetailTab::Description => area,
+        _ => Rect {
+            x: area.x + 2,
+            y: area.y,
+            width: area.width.saturating_sub(2),
+            height: area.height,
+        },
+    };
     match tab {
-        DetailTab::Description => description::render(frame, pr, ui, area),
-        DetailTab::Overview => overview::render(frame, pr_data, ui, area),
-        DetailTab::Diff => diff::render(frame, pr, pr_data, &ui.diff, area),
-        DetailTab::Commits => commits::render(frame, pr_data, area),
-        DetailTab::Builds => checks::render(frame, area),
+        DetailTab::Description => description::render(frame, pr, ui, inset),
+        DetailTab::Overview => overview::render(frame, pr_data, ui, inset),
+        DetailTab::Diff => diff::render(frame, pr, pr_data, &ui.diff, inset),
+        DetailTab::Commits => commits::render(frame, pr_data, inset),
+        DetailTab::Builds => checks::render(frame, inset),
     }
 }
 
