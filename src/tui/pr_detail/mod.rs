@@ -1,5 +1,6 @@
 pub mod checks;
 pub mod commits;
+pub mod description;
 pub mod diff;
 pub mod file_tree;
 pub mod overview;
@@ -8,7 +9,7 @@ use ansi_to_tui::IntoText;
 use ratatui::{
     Frame,
     crossterm::event::KeyCode,
-    layout::{Constraint, Direction, Layout, Margin, Rect},
+    layout::{Constraint, Direction, Layout, Rect},
     style::{Color, Modifier, Style},
     text::{Line, Span},
     widgets::{Block, Borders, Paragraph},
@@ -23,6 +24,7 @@ use crate::{
 #[derive(Debug, Default, Clone, Copy, PartialEq, Eq)]
 pub enum DetailTab {
     #[default]
+    Description,
     Overview,
     Diff,
     Commits,
@@ -30,10 +32,17 @@ pub enum DetailTab {
 }
 
 impl DetailTab {
-    pub const ALL: [Self; 4] = [Self::Overview, Self::Diff, Self::Commits, Self::Builds];
+    pub const ALL: [Self; 5] = [
+        Self::Description,
+        Self::Overview,
+        Self::Diff,
+        Self::Commits,
+        Self::Builds,
+    ];
 
     pub fn label(self) -> &'static str {
         match self {
+            Self::Description => "Description",
             Self::Overview => "Overview",
             Self::Diff => "Diff",
             Self::Commits => "Commits",
@@ -64,41 +73,19 @@ pub fn render(frame: &mut Frame, state: &mut AppState, pr_id: u64, tab: DetailTa
         return;
     };
 
-    if state.ui.description_expanded {
-        let chunks = Layout::default()
-            .direction(Direction::Vertical)
-            .constraints([
-                Constraint::Length(4),
-                Constraint::Min(0),
-                Constraint::Length(1),
-            ])
-            .split(area);
-        render_header(frame, pr, chunks[0]);
-        render_description_expanded(frame, pr, &mut state.ui, chunks[1]);
-        render_help_expanded(frame, chunks[2]);
-    } else {
-        // Parse markdown once per frame and reuse the result for both the layout
-        // calculation and the actual rendering (inner width = full width - borders).
-        let lines = trim_blank_lines(render_markdown(
-            description_body(pr),
-            area.width.saturating_sub(2),
-        ));
-        let (desc_height, truncated) = desc_layout(lines.len());
-        let chunks = Layout::default()
-            .direction(Direction::Vertical)
-            .constraints([
-                Constraint::Length(4),
-                Constraint::Length(desc_height),
-                Constraint::Min(0),
-                Constraint::Length(1),
-            ])
-            .split(area);
-        render_header(frame, pr, chunks[0]);
-        render_description(frame, lines, truncated, chunks[1]);
-        let pr_data = state.cache.details.get(&pr.id);
-        render_tabs_and_content(frame, pr, pr_data, &mut state.ui, tab, chunks[2]);
-        render_help(frame, chunks[3]);
-    }
+    let chunks = Layout::default()
+        .direction(Direction::Vertical)
+        .constraints([
+            Constraint::Length(4), // header
+            Constraint::Min(0),    // tabs + content
+            Constraint::Length(1), // help
+        ])
+        .split(area);
+
+    render_header(frame, pr, chunks[0]);
+    let pr_data = state.cache.details.get(&pr.id);
+    render_tabs_and_content(frame, pr, pr_data, &mut state.ui, tab, chunks[1]);
+    render_help(frame, chunks[2]);
 }
 
 /// Render a PR description (markdown) into ratatui lines via charmed-glamour,
@@ -133,7 +120,7 @@ pub(super) fn render_markdown(body: &str, width: u16) -> Vec<Line<'static>> {
     }
 }
 
-fn description_body(pr: &PullRequest) -> &str {
+pub(super) fn description_body(pr: &PullRequest) -> &str {
     pr.description
         .as_deref()
         .map(str::trim)
@@ -260,73 +247,6 @@ pub(super) fn relative_age(
     }
 }
 
-fn render_description(frame: &mut Frame, lines: Vec<Line<'static>>, truncated: bool, area: Rect) {
-    let mut block = Block::default()
-        .borders(Borders::ALL)
-        .title(" Description ");
-
-    if truncated {
-        block = block.title_bottom(
-            Line::from(vec![
-                Span::raw(" "),
-                Span::styled(
-                    "⇣ more",
-                    Style::default()
-                        .fg(Color::Yellow)
-                        .add_modifier(Modifier::BOLD),
-                ),
-                Span::styled(" · d to expand ", Style::default().fg(Color::DarkGray)),
-            ])
-            .right_aligned(),
-        );
-    }
-
-    let paragraph = Paragraph::new(lines).block(block);
-    frame.render_widget(paragraph, area);
-}
-
-fn render_description_expanded(frame: &mut Frame, pr: &PullRequest, ui: &mut UiMemory, area: Rect) {
-    let block = Block::default()
-        .borders(Borders::ALL)
-        .border_style(Style::default().fg(Color::Yellow))
-        .title(" Description ")
-        .title_bottom(
-            Line::from(" j/k scroll · d/esc collapse ")
-                .right_aligned()
-                .style(Style::default().fg(Color::DarkGray)),
-        );
-
-    let inner = block.inner(area);
-    let lines = trim_blank_lines(render_markdown(description_body(pr), inner.width));
-    let total_wrapped = lines.len();
-    let visible = inner.height as usize;
-    let max_scroll = total_wrapped.saturating_sub(visible) as u16;
-    let scroll = ui.description_scroll.min(max_scroll);
-    ui.description_scroll = scroll;
-
-    let paragraph = Paragraph::new(lines).scroll((scroll, 0)).block(block);
-    frame.render_widget(paragraph, area);
-
-    if max_scroll > 0 {
-        let sb_area = area.inner(Margin {
-            vertical: 1,
-            horizontal: 0,
-        });
-        render_thumb_scrollbar(frame, scroll, max_scroll, sb_area);
-    }
-}
-
-const DESC_MAX_HEIGHT: u16 = 8;
-
-fn desc_layout(total_lines: usize) -> (u16, bool) {
-    let total_lines = total_lines.max(1);
-    let max_content_rows = (DESC_MAX_HEIGHT as usize).saturating_sub(2);
-    let truncated = total_lines > max_content_rows;
-    let content_rows = total_lines.min(max_content_rows);
-    let height = ((content_rows + 2).max(3)) as u16;
-    (height, truncated)
-}
-
 fn render_tabs_and_content(
     frame: &mut Frame,
     pr: &PullRequest,
@@ -335,120 +255,42 @@ fn render_tabs_and_content(
     tab: DetailTab,
     area: Rect,
 ) {
-    let labels: Vec<&str> = DetailTab::ALL.iter().map(|t| t.label()).collect();
     let active_idx = tab.index();
-
-    let cell_widths: Vec<usize> = labels
-        .iter()
-        .enumerate()
-        .map(|(i, label)| {
-            if i == active_idx {
-                label.chars().count() + 4
-            } else {
-                label.chars().count() + 2
-            }
-        })
-        .collect();
-
-    let starts: Vec<usize> = {
-        let mut s = Vec::with_capacity(labels.len());
-        let mut col = 0;
-        for w in &cell_widths {
-            s.push(col);
-            col += w;
-        }
-        s
-    };
-
-    let area_w = area.width as usize;
-    let active_start = starts[active_idx];
-    let active_width = cell_widths[active_idx];
-
-    let chunks = Layout::default()
-        .direction(Direction::Vertical)
-        .constraints([Constraint::Length(3), Constraint::Min(0)])
-        .split(area);
-
-    let header_lines: Vec<Line> = vec![
-        Line::raw(build_top_row(area_w, active_start, active_width)),
-        build_label_row(&labels, active_idx),
-        Line::raw(build_join_row(area_w, active_start, active_width)),
-    ];
-    let header = Paragraph::new(header_lines);
-    frame.render_widget(header, chunks[0]);
-
-    let content_block = Block::default().borders(Borders::LEFT | Borders::RIGHT | Borders::BOTTOM);
-    let content_inner = content_block.inner(chunks[1]);
-    frame.render_widget(content_block, chunks[1]);
-
-    render_content(frame, pr, pr_data, ui, tab, content_inner);
-}
-
-fn build_top_row(area_w: usize, active_start: usize, active_width: usize) -> String {
-    let active_end = active_start + active_width.saturating_sub(1);
-    let mut s = String::with_capacity(area_w);
-    for col in 0..area_w {
-        let c = if col == active_start {
-            '┌'
-        } else if col == active_end {
-            '┐'
-        } else if col > active_start && col < active_end {
-            '─'
-        } else {
-            ' '
-        };
-        s.push(c);
-    }
-    s
-}
-
-fn build_label_row(labels: &[&str], active_idx: usize) -> Line<'static> {
     let active_style = Style::default()
         .fg(Color::Yellow)
         .add_modifier(Modifier::BOLD);
     let inactive_style = Style::default().fg(Color::DarkGray);
+    let sep_style = Style::default().fg(Color::DarkGray);
 
-    let mut spans: Vec<Span<'static>> = Vec::new();
-    for (i, label) in labels.iter().enumerate() {
-        if i == active_idx {
-            spans.push(Span::raw("│ "));
-            spans.push(Span::styled(label.to_string(), active_style));
-            spans.push(Span::raw(" │"));
-        } else {
-            spans.push(Span::raw(" "));
-            spans.push(Span::styled(label.to_string(), inactive_style));
-            spans.push(Span::raw(" "));
+    let mut tab_spans: Vec<Span<'static>> = Vec::new();
+    tab_spans.push(Span::raw("  "));
+    for (i, t) in DetailTab::ALL.iter().enumerate() {
+        if i > 0 {
+            tab_spans.push(Span::styled(" · ", sep_style));
         }
-    }
-    Line::from(spans)
-}
-
-fn build_join_row(area_w: usize, active_start: usize, active_width: usize) -> String {
-    let active_end = active_start + active_width.saturating_sub(1);
-    let last_col = area_w.saturating_sub(1);
-
-    let mut s = String::with_capacity(area_w);
-    for col in 0..area_w {
-        let c = if col == active_start && col == 0 {
-            '│'
-        } else if col == active_end && col == last_col {
-            '│'
-        } else if col == active_start {
-            '┘'
-        } else if col == active_end {
-            '└'
-        } else if col > active_start && col < active_end {
-            ' '
-        } else if col == 0 {
-            '┌'
-        } else if col == last_col {
-            '┐'
+        let style = if i == active_idx {
+            active_style
         } else {
-            '─'
+            inactive_style
         };
-        s.push(c);
+        tab_spans.push(Span::styled(t.label(), style));
     }
-    s
+
+    let chunks = Layout::default()
+        .direction(Direction::Vertical)
+        .constraints([
+            Constraint::Length(1), // tabs row (no border, floating)
+            Constraint::Min(0),    // content with its own bordered box
+        ])
+        .split(area);
+
+    frame.render_widget(Paragraph::new(Line::from(tab_spans)), chunks[0]);
+
+    let block = Block::default().borders(Borders::ALL);
+    let inner = block.inner(chunks[1]);
+    frame.render_widget(block, chunks[1]);
+
+    render_content(frame, pr, pr_data, ui, tab, inner);
 }
 
 fn render_header(frame: &mut Frame, pr: &PullRequest, area: Rect) {
@@ -492,6 +334,7 @@ fn render_content(
     area: Rect,
 ) {
     match tab {
+        DetailTab::Description => description::render(frame, pr, ui, area),
         DetailTab::Overview => overview::render(frame, pr_data, ui, area),
         DetailTab::Diff => diff::render(frame, pr, pr_data, &ui.diff, area),
         DetailTab::Commits => commits::render(frame, pr_data, area),
@@ -500,13 +343,7 @@ fn render_content(
 }
 
 fn render_help(frame: &mut Frame, area: Rect) {
-    let help = Paragraph::new("  1-4 / h/l: tab  d: description  esc: back  q: quit")
-        .style(Style::default().fg(Color::DarkGray));
-    frame.render_widget(help, area);
-}
-
-fn render_help_expanded(frame: &mut Frame, area: Rect) {
-    let help = Paragraph::new("  j/k: scroll  d / esc: collapse  q: quit")
+    let help = Paragraph::new("  1-5 / h/l: tab  j/k: scroll  esc: back  q: quit")
         .style(Style::default().fg(Color::DarkGray));
     frame.render_widget(help, area);
 }
@@ -521,21 +358,11 @@ pub fn key_to_action(state: &AppState, key: KeyCode) -> Option<Action> {
         return Some(Action::Quit);
     }
 
-    if state.ui.description_expanded {
-        return match key {
-            KeyCode::Esc | KeyCode::Char('d') => Some(Action::ToggleDescription),
-            KeyCode::Down | KeyCode::Char('j') => Some(Action::DescriptionScrollDown),
-            KeyCode::Up | KeyCode::Char('k') => Some(Action::DescriptionScrollUp),
-            _ => None,
-        };
-    }
-
     match key {
-        KeyCode::Char('d') => return Some(Action::ToggleDescription),
         KeyCode::Esc => return Some(Action::Back),
         KeyCode::Tab => return Some(Action::NextTab),
         KeyCode::BackTab => return Some(Action::PrevTab),
-        KeyCode::Char(c @ '1'..='4') => {
+        KeyCode::Char(c @ '1'..='5') => {
             let idx = (c as u8 - b'1') as usize;
             if let Some(&t) = DetailTab::ALL.get(idx) {
                 return Some(Action::SelectTab(t));
@@ -561,6 +388,13 @@ pub fn key_to_action(state: &AppState, key: KeyCode) -> Option<Action> {
         DetailTab::Overview => match key {
             KeyCode::Down | KeyCode::Char('j') => Some(Action::OverviewScrollDown),
             KeyCode::Up | KeyCode::Char('k') => Some(Action::OverviewScrollUp),
+            KeyCode::Right | KeyCode::Char('l') => Some(Action::NextTab),
+            KeyCode::Left | KeyCode::Char('h') => Some(Action::PrevTab),
+            _ => None,
+        },
+        DetailTab::Description => match key {
+            KeyCode::Down | KeyCode::Char('j') => Some(Action::DescriptionScrollDown),
+            KeyCode::Up | KeyCode::Char('k') => Some(Action::DescriptionScrollUp),
             KeyCode::Right | KeyCode::Char('l') => Some(Action::NextTab),
             KeyCode::Left | KeyCode::Char('h') => Some(Action::PrevTab),
             _ => None,

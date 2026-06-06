@@ -20,7 +20,6 @@ pub struct UiMemory {
     pub filter_picker_open: bool,
     pub filter_picker_cursor: usize,
     pub diff: DiffViewState,
-    pub description_expanded: bool,
     pub description_scroll: u16,
     pub overview_scroll: u16,
 }

@@ -1,6 +1,6 @@
 use crate::{
     app::state::{AppState, LoadState, StatusFilter},
-    domain::review::ReviewerState,
+    domain::{ci::CiState, review::ReviewerState},
     tui::{Action, spinner_frame},
 };
 use chrono::Utc;
@@ -51,87 +51,25 @@ pub fn render(frame: &mut Frame, state: &AppState, area: ratatui::layout::Rect) 
                 .fg(Color::White)
                 .add_modifier(Modifier::BOLD);
 
+            // The List below shifts every row right by 2 cols to make room for
+            // the highlight_symbol ("▶ "). We add the same `  ` prefix to the
+            // header so the columns line up.
             let header = Paragraph::new(Line::from(vec![
                 Span::raw("  "),
-                Span::styled("  #       ", header_style),
-                Span::styled(format!("{:<9}", "Status"), header_style),
-                Span::styled(format!("{:<24}", "Author"), header_style),
-                Span::styled(format!("{:<47}", "Title"), header_style),
-                Span::styled(format!("{:<10}", "Age"), header_style),
-                Span::styled("Comments  Reviewers", header_style),
+                Span::styled(format!("{:<7}", "#"), header_style),
+                Span::styled(format!("{:<10}", "Status"), header_style),
+                Span::styled(format!("{:<18}", "Author"), header_style),
+                Span::styled(format!("{:<40}", "Title"), header_style),
+                Span::styled(format!("{:<3}", "CI"), header_style),
+                Span::styled(format!("{:<12}", "Diff"), header_style),
+                Span::styled(format!("{:<6}", "Comm"), header_style),
+                Span::styled(format!("{:<7}", "Rev"), header_style),
+                Span::styled(format!("{:<8}", "Age"), header_style),
             ]));
 
             frame.render_widget(header, content_chunks[0]);
 
-            let items: Vec<ListItem> = filtered
-                .iter()
-                .map(|pr| {
-                    let status_color = match pr.status {
-                        crate::domain::pr::PrStatus::Draft => Color::DarkGray,
-                        crate::domain::pr::PrStatus::Open => Color::Green,
-                        crate::domain::pr::PrStatus::Merged => Color::Magenta,
-                        crate::domain::pr::PrStatus::Declined => Color::Red,
-                    };
-
-                    let days_old = (Utc::now() - pr.created).num_days();
-                    let age = if days_old == 0 {
-                        "today".to_string()
-                    } else if days_old == 1 {
-                        "1d".to_string()
-                    } else {
-                        format!("{}d", days_old)
-                    };
-
-                    let reviewer_span = if pr.reviewers.is_empty() {
-                        Span::styled("  —", Style::default().fg(Color::DarkGray))
-                    } else {
-                        let approved = pr
-                            .reviewers
-                            .iter()
-                            .filter(|r| r.state == ReviewerState::Approved)
-                            .count();
-                        let total = pr.reviewers.len();
-                        let color = if approved == total {
-                            Color::Green
-                        } else {
-                            Color::Yellow
-                        };
-                        Span::styled(
-                            format!("  {}/{}", approved, total),
-                            Style::default().fg(color),
-                        )
-                    };
-
-                    let line = Line::from(vec![
-                        Span::styled(
-                            format!("  #{:<7}", pr.id),
-                            Style::default().fg(Color::DarkGray),
-                        ),
-                        Span::styled(
-                            format!("{:<9}", pr.status.label()),
-                            Style::default().fg(status_color),
-                        ),
-                        Span::styled(
-                            format!(
-                                "{:<24}",
-                                pr.author.username.chars().take(22).collect::<String>()
-                            ),
-                            Style::default().fg(Color::Cyan),
-                        ),
-                        Span::raw(format!(
-                            "{:<47}",
-                            pr.title.chars().take(45).collect::<String>()
-                        )),
-                        Span::styled(format!("{:<10}", age), Style::default().fg(Color::DarkGray)),
-                        Span::styled(
-                            format!("{:<10}", format!("{} 💬", pr.comment_count)),
-                            Style::default().fg(Color::DarkGray),
-                        ),
-                        reviewer_span,
-                    ]);
-                    ListItem::new(line)
-                })
-                .collect();
+            let items: Vec<ListItem> = filtered.iter().map(|pr| row_for_pr(pr)).collect();
 
             let mut list_state = ListState::default();
             list_state.select(Some(state.ui.list_selected));
@@ -200,6 +138,93 @@ fn render_filter_picker(frame: &mut Frame, state: &AppState, area: Rect) {
     let help = Paragraph::new(" j/k: nav  enter: apply  esc: cancel ")
         .style(Style::default().fg(Color::DarkGray));
     frame.render_widget(help, inner_chunks[1]);
+}
+
+fn row_for_pr(pr: &crate::domain::pr::PullRequest) -> ListItem<'static> {
+    let status_color = match pr.status {
+        crate::domain::pr::PrStatus::Draft => Color::DarkGray,
+        crate::domain::pr::PrStatus::Open => Color::Green,
+        crate::domain::pr::PrStatus::Merged => Color::Magenta,
+        crate::domain::pr::PrStatus::Declined => Color::Red,
+    };
+
+    let days_old = (Utc::now() - pr.created).num_days();
+    let age = if days_old == 0 {
+        "today".to_string()
+    } else if days_old == 1 {
+        "1d".to_string()
+    } else {
+        format!("{}d", days_old)
+    };
+
+    let (ci_sym, ci_color) = match pr.ci.state {
+        CiState::Success => ("✓", Color::Green),
+        CiState::Failed => ("✗", Color::Red),
+        CiState::Pending => ("●", Color::Yellow),
+        CiState::Unknown => ("—", Color::DarkGray),
+    };
+
+    // Diff column is 12 wide total. We render `+N` and `-N` as separate
+    // colored spans, so we compute the visible width manually to know how
+    // much trailing padding to add.
+    let plus = format!("+{}", pr.additions);
+    let minus = format!("-{}", pr.deletions);
+    let diff_visible = plus.chars().count() + 1 + minus.chars().count();
+    let diff_pad = 12usize.saturating_sub(diff_visible);
+
+    let comm_text = if pr.comment_count == 0 {
+        "—".to_string()
+    } else {
+        pr.comment_count.to_string()
+    };
+
+    let (rev_text, rev_color) = if pr.reviewers.is_empty() {
+        ("—".to_string(), Color::DarkGray)
+    } else {
+        let approved = pr
+            .reviewers
+            .iter()
+            .filter(|r| r.state == ReviewerState::Approved)
+            .count();
+        let total = pr.reviewers.len();
+        let any_blocking = pr
+            .reviewers
+            .iter()
+            .any(|r| r.state == ReviewerState::ChangesRequested);
+        let color = if any_blocking {
+            Color::Red
+        } else if approved == total {
+            Color::Green
+        } else {
+            Color::Yellow
+        };
+        (format!("{}/{}", approved, total), color)
+    };
+
+    let title: String = pr.title.chars().take(38).collect();
+    let author: String = pr.author.username.chars().take(16).collect();
+
+    let line = Line::from(vec![
+        Span::styled(
+            format!("#{:<6}", pr.id),
+            Style::default().fg(Color::DarkGray),
+        ),
+        Span::styled(
+            format!("{:<10}", pr.status.label()),
+            Style::default().fg(status_color),
+        ),
+        Span::styled(format!("{:<18}", author), Style::default().fg(Color::Cyan)),
+        Span::raw(format!("{:<40}", title)),
+        Span::styled(format!("{:<3}", ci_sym), Style::default().fg(ci_color)),
+        Span::styled(plus, Style::default().fg(Color::Green)),
+        Span::raw(" "),
+        Span::styled(minus, Style::default().fg(Color::Red)),
+        Span::raw(" ".repeat(diff_pad)),
+        Span::styled(format!("{:<6}", comm_text), Style::default().fg(Color::DarkGray)),
+        Span::styled(format!("{:<7}", rev_text), Style::default().fg(rev_color)),
+        Span::styled(format!("{:<8}", age), Style::default().fg(Color::DarkGray)),
+    ]);
+    ListItem::new(line)
 }
 
 pub fn key_to_action(state: &AppState, key: KeyCode) -> Option<Action> {
