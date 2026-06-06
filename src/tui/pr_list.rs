@@ -1,19 +1,20 @@
 use crate::{
     app::state::{AppState, LoadState, StatusFilter},
     domain::{ci::CiState, review::ReviewerState},
-    tui::{Action, spinner_frame},
+    tui::{Action, spinner_frame, theme},
 };
 use chrono::Utc;
 use ratatui::{
     Frame,
     crossterm::event::KeyCode,
     layout::{Constraint, Direction, Layout, Rect},
-    style::{Color, Modifier, Style},
+    style::{Modifier, Style},
     text::{Line, Span},
     widgets::{Block, Borders, Clear, List, ListItem, ListState, Paragraph},
 };
 
 pub fn render(frame: &mut Frame, state: &AppState, area: ratatui::layout::Rect) {
+    let theme = theme::current();
     let chunks = Layout::default()
         .direction(Direction::Vertical)
         .constraints([Constraint::Min(0), Constraint::Length(1)])
@@ -26,14 +27,14 @@ pub fn render(frame: &mut Frame, state: &AppState, area: ratatui::layout::Rect) 
                 spinner_frame()
             ))
             .block(Block::default().borders(Borders::ALL).title("tuipr"))
-            .style(Style::default().fg(Color::Yellow));
+            .style(Style::default().fg(theme.warning));
             frame.render_widget(loading, chunks[0]);
         }
         LoadState::Loaded(_) => {
             let filtered = state.filtered_prs();
             let outer_block = Block::default()
                 .borders(Borders::ALL)
-                .border_style(Style::default().fg(Color::Blue))
+                .border_style(Style::default().fg(theme.border))
                 .title(format!(
                     " {} ({}) ",
                     state.ui.list_filter.label(),
@@ -48,7 +49,7 @@ pub fn render(frame: &mut Frame, state: &AppState, area: ratatui::layout::Rect) 
                 .split(inner);
 
             let header_style = Style::default()
-                .fg(Color::White)
+                .fg(theme.fg)
                 .add_modifier(Modifier::BOLD);
 
             // The List below shifts every row right by 2 cols to make room for
@@ -77,7 +78,7 @@ pub fn render(frame: &mut Frame, state: &AppState, area: ratatui::layout::Rect) 
             let list = List::new(items)
                 .highlight_style(
                     Style::default()
-                        .bg(Color::DarkGray)
+                        .bg(theme.highlight_bg)
                         .add_modifier(Modifier::BOLD),
                 )
                 .highlight_symbol("▶ ");
@@ -87,7 +88,7 @@ pub fn render(frame: &mut Frame, state: &AppState, area: ratatui::layout::Rect) 
     }
 
     let status = Paragraph::new("  j/k: navigate  enter: open PR  f: filter  q: quit")
-        .style(Style::default().fg(Color::DarkGray));
+        .style(Style::default().fg(theme.muted));
     frame.render_widget(status, chunks[1]);
 
     if state.ui.filter_picker_open {
@@ -96,6 +97,7 @@ pub fn render(frame: &mut Frame, state: &AppState, area: ratatui::layout::Rect) 
 }
 
 fn render_filter_picker(frame: &mut Frame, state: &AppState, area: Rect) {
+    let theme = theme::current();
     let popup_width = 40u16.min(area.width);
     // 5 filters + 2 border rows + 1 help row = 8
     let popup_height = 8u16.min(area.height);
@@ -111,7 +113,7 @@ fn render_filter_picker(frame: &mut Frame, state: &AppState, area: Rect) {
     let block = Block::default()
         .borders(Borders::ALL)
         .title(" Filter ")
-        .border_style(Style::default().fg(Color::Yellow));
+        .border_style(Style::default().fg(theme.accent));
     let inner = block.inner(popup_area);
     frame.render_widget(block, popup_area);
 
@@ -129,23 +131,24 @@ fn render_filter_picker(frame: &mut Frame, state: &AppState, area: Rect) {
     let list = List::new(items)
         .highlight_style(
             Style::default()
-                .bg(Color::DarkGray)
+                .bg(theme.highlight_bg)
                 .add_modifier(Modifier::BOLD),
         )
         .highlight_symbol("▶ ");
     frame.render_stateful_widget(list, inner_chunks[0], &mut list_state);
 
     let help = Paragraph::new(" j/k: nav  enter: apply  esc: cancel ")
-        .style(Style::default().fg(Color::DarkGray));
+        .style(Style::default().fg(theme.muted));
     frame.render_widget(help, inner_chunks[1]);
 }
 
 fn row_for_pr(pr: &crate::domain::pr::PullRequest) -> ListItem<'static> {
+    let theme = theme::current();
     let status_color = match pr.status {
-        crate::domain::pr::PrStatus::Draft => Color::DarkGray,
-        crate::domain::pr::PrStatus::Open => Color::Green,
-        crate::domain::pr::PrStatus::Merged => Color::Magenta,
-        crate::domain::pr::PrStatus::Declined => Color::Red,
+        crate::domain::pr::PrStatus::Draft => theme.status_draft,
+        crate::domain::pr::PrStatus::Open => theme.status_open,
+        crate::domain::pr::PrStatus::Merged => theme.status_merged,
+        crate::domain::pr::PrStatus::Declined => theme.status_declined,
     };
 
     let days_old = (Utc::now() - pr.created).num_days();
@@ -158,10 +161,10 @@ fn row_for_pr(pr: &crate::domain::pr::PullRequest) -> ListItem<'static> {
     };
 
     let (ci_sym, ci_color) = match pr.ci.state {
-        CiState::Success => ("✓", Color::Green),
-        CiState::Failed => ("✗", Color::Red),
-        CiState::Pending => ("●", Color::Yellow),
-        CiState::Unknown => ("—", Color::DarkGray),
+        CiState::Success => ("✓", theme.success),
+        CiState::Failed => ("✗", theme.error),
+        CiState::Pending => ("●", theme.warning),
+        CiState::Unknown => ("—", theme.muted),
     };
 
     // Diff column is 12 wide total. We render `+N` and `-N` as separate
@@ -179,7 +182,7 @@ fn row_for_pr(pr: &crate::domain::pr::PullRequest) -> ListItem<'static> {
     };
 
     let (rev_text, rev_color) = if pr.reviewers.is_empty() {
-        ("—".to_string(), Color::DarkGray)
+        ("—".to_string(), theme.muted)
     } else {
         let approved = pr
             .reviewers
@@ -192,11 +195,11 @@ fn row_for_pr(pr: &crate::domain::pr::PullRequest) -> ListItem<'static> {
             .iter()
             .any(|r| r.state == ReviewerState::ChangesRequested);
         let color = if any_blocking {
-            Color::Red
+            theme.error
         } else if approved == total {
-            Color::Green
+            theme.success
         } else {
-            Color::Yellow
+            theme.warning
         };
         (format!("{}/{}", approved, total), color)
     };
@@ -205,24 +208,21 @@ fn row_for_pr(pr: &crate::domain::pr::PullRequest) -> ListItem<'static> {
     let author: String = pr.author.username.chars().take(16).collect();
 
     let line = Line::from(vec![
-        Span::styled(
-            format!("#{:<6}", pr.id),
-            Style::default().fg(Color::DarkGray),
-        ),
+        Span::styled(format!("#{:<6}", pr.id), Style::default().fg(theme.muted)),
         Span::styled(
             format!("{:<10}", pr.status.label()),
             Style::default().fg(status_color),
         ),
-        Span::styled(format!("{:<18}", author), Style::default().fg(Color::Cyan)),
+        Span::styled(format!("{:<18}", author), Style::default().fg(theme.info)),
         Span::raw(format!("{:<40}", title)),
         Span::styled(format!("{:<3}", ci_sym), Style::default().fg(ci_color)),
-        Span::styled(plus, Style::default().fg(Color::Green)),
+        Span::styled(plus, Style::default().fg(theme.diff_added)),
         Span::raw(" "),
-        Span::styled(minus, Style::default().fg(Color::Red)),
+        Span::styled(minus, Style::default().fg(theme.diff_removed)),
         Span::raw(" ".repeat(diff_pad)),
-        Span::styled(format!("{:<6}", comm_text), Style::default().fg(Color::DarkGray)),
+        Span::styled(format!("{:<6}", comm_text), Style::default().fg(theme.muted)),
         Span::styled(format!("{:<7}", rev_text), Style::default().fg(rev_color)),
-        Span::styled(format!("{:<8}", age), Style::default().fg(Color::DarkGray)),
+        Span::styled(format!("{:<8}", age), Style::default().fg(theme.muted)),
     ]);
     ListItem::new(line)
 }

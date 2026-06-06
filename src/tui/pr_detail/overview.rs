@@ -2,7 +2,7 @@ use chrono::{DateTime, Utc};
 use ratatui::{
     Frame,
     layout::Rect,
-    style::{Color, Modifier, Style},
+    style::{Modifier, Style},
     text::{Line, Span},
     widgets::Paragraph,
 };
@@ -15,11 +15,12 @@ use crate::{
             relative_age, render_inline_thread, render_markdown, render_thumb_scrollbar,
             trim_blank_lines,
         },
-        spinner_frame,
+        spinner_frame, theme,
     },
 };
 
 pub fn render(frame: &mut Frame, pr_data: Option<&PrData>, ui: &mut UiMemory, area: Rect) {
+    let theme = theme::current();
     let comments_state = pr_data.map(|d| &d.comments);
     let threads_state = pr_data.map(|d| &d.review_threads);
 
@@ -31,7 +32,7 @@ pub fn render(frame: &mut Frame, pr_data: Option<&PrData>, ui: &mut UiMemory, ar
     // other lands with content.
     if !comments_ready || !threads_ready {
         let p = Paragraph::new(format!("{}  Loading...", spinner_frame()))
-            .style(Style::default().fg(Color::Yellow));
+            .style(Style::default().fg(theme.warning));
         frame.render_widget(p, area);
         return;
     }
@@ -46,7 +47,7 @@ pub fn render(frame: &mut Frame, pr_data: Option<&PrData>, ui: &mut UiMemory, ar
     };
 
     if comments.is_empty() && threads.is_empty() {
-        let p = Paragraph::new("(no comments)").style(Style::default().fg(Color::DarkGray));
+        let p = Paragraph::new("(no comments)").style(Style::default().fg(theme.muted));
         frame.render_widget(p, area);
         return;
     }
@@ -99,6 +100,7 @@ fn build_overview_lines(
     threads: &[ReviewThread],
     width: u16,
 ) -> Vec<Line<'static>> {
+    let theme = theme::current();
     let mut events: Vec<Event<'_>> = Vec::with_capacity(comments.len() + threads.len());
     events.extend(comments.iter().map(Event::Issue));
     events.extend(threads.iter().map(Event::Review));
@@ -113,7 +115,7 @@ fn build_overview_lines(
             all.push(Line::raw(""));
             all.push(Line::styled(
                 "─".repeat(separator_width),
-                Style::default().fg(Color::DarkGray),
+                Style::default().fg(theme.muted),
             ));
             all.push(Line::raw(""));
         }
@@ -147,6 +149,7 @@ fn extend_review_thread(
     width: u16,
     now: DateTime<Utc>,
 ) {
+    let theme = theme::current();
     if thread.comments.is_empty() {
         return;
     }
@@ -158,11 +161,11 @@ fn extend_review_thread(
         Some(l) => format!("{}:{}", thread.path, l),
         None => thread.path.clone(),
     };
-    let mut anchor_spans = vec![Span::styled(location, Style::default().fg(Color::Yellow))];
+    let mut anchor_spans = vec![Span::styled(location, Style::default().fg(theme.accent))];
     if thread.resolved {
         anchor_spans.push(Span::styled(
             " · resolved",
-            Style::default().fg(Color::Green),
+            Style::default().fg(theme.success),
         ));
     }
     out.push(Line::from(anchor_spans));
@@ -180,34 +183,35 @@ fn issue_comment_header(
     created: DateTime<Utc>,
     now: DateTime<Utc>,
 ) -> Line<'static> {
+    let theme = theme::current();
     Line::from(vec![
         Span::styled(
             format!("@{}", username),
             Style::default()
-                .fg(Color::Cyan)
+                .fg(theme.info)
                 .add_modifier(Modifier::BOLD),
         ),
         Span::styled(
             format!(" · {}", relative_age(created, now)),
-            Style::default().fg(Color::DarkGray),
+            Style::default().fg(theme.muted),
         ),
     ])
 }
 
 fn diff_hunk_lines(hunk: &str) -> Vec<Line<'static>> {
+    let theme = theme::current();
     hunk.lines()
         .map(|line| {
             let style = if line.starts_with("@@") {
-                Style::default().fg(Color::Cyan)
+                Style::default().fg(theme.info)
             } else if line.starts_with('+') {
-                Style::default().fg(Color::Green)
+                Style::default().fg(theme.diff_added)
             } else if line.starts_with('-') {
-                Style::default().fg(Color::Red)
+                Style::default().fg(theme.diff_removed)
             } else {
-                Style::default().fg(Color::DarkGray)
+                Style::default().fg(theme.muted)
             };
             Line::styled(line.to_string(), style)
         })
         .collect()
 }
-

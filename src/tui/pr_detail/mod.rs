@@ -10,7 +10,7 @@ use ratatui::{
     Frame,
     crossterm::event::KeyCode,
     layout::{Constraint, Direction, Layout, Rect},
-    style::{Color, Modifier, Style},
+    style::{Modifier, Style},
     text::{Line, Span},
     widgets::{Block, Borders, Paragraph},
 };
@@ -18,7 +18,7 @@ use ratatui::{
 use crate::{
     app::state::{AppState, LoadState, PrData, Screen, UiMemory},
     domain::pr::PullRequest,
-    tui::Action,
+    tui::{Action, theme},
 };
 
 #[derive(Debug, Default, Clone, Copy, PartialEq, Eq)]
@@ -162,6 +162,7 @@ pub(super) fn render_thumb_scrollbar(frame: &mut Frame, scroll: u16, max_scroll:
     if max_scroll == 0 || area.height < 1 || area.width < 1 {
         return;
     }
+    let theme = theme::current();
     let track_len = area.height as usize;
     let thumb_size = 3usize.min(track_len);
     let max_thumb_top = track_len.saturating_sub(1);
@@ -170,9 +171,9 @@ pub(super) fn render_thumb_scrollbar(frame: &mut Frame, scroll: u16, max_scroll:
     let lines: Vec<Line<'static>> = (0..track_len)
         .map(|y| {
             if y >= thumb_top && y < thumb_top + thumb_size {
-                Line::styled("█", Style::default().fg(Color::Yellow))
+                Line::styled("█", Style::default().fg(theme.accent))
             } else {
-                Line::styled("│", Style::default().fg(Color::DarkGray))
+                Line::styled("│", Style::default().fg(theme.muted))
             }
         })
         .collect();
@@ -196,7 +197,7 @@ pub(super) fn render_inline_thread(
 ) -> Vec<Line<'static>> {
     let mut out: Vec<Line<'static>> = Vec::new();
     let body_width = width.saturating_sub(1);
-    let cyan = Style::default().fg(Color::Cyan);
+    let cyan = Style::default().fg(theme::current().info);
 
     for (i, comment) in thread.comments.iter().enumerate() {
         let age = relative_age(comment.created, now);
@@ -256,12 +257,13 @@ fn render_tabs_and_content(
     tab: DetailTab,
     area: Rect,
 ) {
+    let theme = theme::current();
     let active_idx = tab.index();
     let active_style = Style::default()
-        .fg(Color::Yellow)
+        .fg(theme.accent)
         .add_modifier(Modifier::BOLD);
-    let inactive_style = Style::default().fg(Color::DarkGray);
-    let sep_style = Style::default().fg(Color::DarkGray);
+    let inactive_style = Style::default().fg(theme.muted);
+    let sep_style = Style::default().fg(theme.muted);
 
     let mut tab_spans: Vec<Span<'static>> = Vec::new();
     tab_spans.push(Span::raw("  "));
@@ -287,7 +289,9 @@ fn render_tabs_and_content(
 
     frame.render_widget(Paragraph::new(Line::from(tab_spans)), chunks[0]);
 
-    let block = Block::default().borders(Borders::ALL);
+    let block = Block::default()
+        .borders(Borders::ALL)
+        .border_style(Style::default().fg(theme.border));
     let inner = block.inner(chunks[1]);
     frame.render_widget(block, chunks[1]);
 
@@ -295,8 +299,16 @@ fn render_tabs_and_content(
 }
 
 fn render_header(frame: &mut Frame, pr: &PullRequest, area: Rect) {
+    let theme = theme::current();
+    let status_color = match pr.status {
+        crate::domain::pr::PrStatus::Draft => theme.status_draft,
+        crate::domain::pr::PrStatus::Open => theme.status_open,
+        crate::domain::pr::PrStatus::Merged => theme.status_merged,
+        crate::domain::pr::PrStatus::Declined => theme.status_declined,
+    };
+
     let title_line = Line::from(vec![
-        Span::styled(format!("#{} ", pr.id), Style::default().fg(Color::DarkGray)),
+        Span::styled(format!("#{} ", pr.id), Style::default().fg(theme.muted)),
         Span::styled(
             pr.title.clone(),
             Style::default().add_modifier(Modifier::BOLD),
@@ -306,22 +318,22 @@ fn render_header(frame: &mut Frame, pr: &PullRequest, area: Rect) {
     let meta_line = Line::from(vec![
         Span::styled(
             format!(" {} ", pr.status.label()),
-            Style::default().fg(Color::White).bg(Color::Green),
+            Style::default().fg(theme.fg).bg(status_color),
         ),
         Span::styled(
             format!(" @{}", pr.author.username),
-            Style::default().fg(Color::Cyan),
+            Style::default().fg(theme.info),
         ),
         Span::raw("  wants to merge  "),
-        Span::styled(pr.source_branch.clone(), Style::default().fg(Color::Green)),
+        Span::styled(pr.source_branch.clone(), Style::default().fg(theme.success)),
         Span::raw(" → "),
-        Span::styled(pr.target_branch.clone(), Style::default().fg(Color::Yellow)),
+        Span::styled(pr.target_branch.clone(), Style::default().fg(theme.accent)),
     ]);
 
     let paragraph = Paragraph::new(vec![title_line, meta_line]).block(
         Block::default()
             .borders(Borders::ALL)
-            .border_style(Style::default().fg(Color::Blue)),
+            .border_style(Style::default().fg(theme.border)),
     );
     frame.render_widget(paragraph, area);
 }
@@ -345,12 +357,12 @@ fn render_content(
 
 fn render_help(frame: &mut Frame, area: Rect) {
     let help = Paragraph::new("  1-5 / h/l: tab  j/k: scroll  esc: back  q: quit")
-        .style(Style::default().fg(Color::DarkGray));
+        .style(Style::default().fg(theme::current().muted));
     frame.render_widget(help, area);
 }
 
 pub(super) fn render_placeholder(frame: &mut Frame, text: &str, area: Rect) {
-    let paragraph = Paragraph::new(text).style(Style::default().fg(Color::DarkGray));
+    let paragraph = Paragraph::new(text).style(Style::default().fg(theme::current().muted));
     frame.render_widget(paragraph, area);
 }
 

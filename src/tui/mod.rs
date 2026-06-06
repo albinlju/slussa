@@ -1,5 +1,6 @@
 pub mod pr_detail;
 pub mod pr_list;
+pub mod theme;
 
 use ratatui::{Frame, crossterm::event::KeyCode};
 
