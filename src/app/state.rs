@@ -1,5 +1,6 @@
 use std::collections::{HashMap, HashSet};
 
+use crate::domain::comment::{Comment, ReviewThread};
 use crate::domain::commit::Commit;
 use crate::domain::diff::Diff;
 use crate::domain::pr::PullRequest;
@@ -18,6 +19,7 @@ pub struct UiMemory {
     pub diff: DiffViewState,
     pub description_expanded: bool,
     pub description_scroll: u16,
+    pub overview_scroll: u16,
 }
 
 #[derive(Debug, Default)]
@@ -37,6 +39,8 @@ pub struct Cache {
 pub struct PrData {
     pub commits: LoadState<Vec<Commit>>,
     pub diff: LoadState<Diff>,
+    pub comments: LoadState<Vec<Comment>>,
+    pub review_threads: LoadState<Vec<ReviewThread>>,
 }
 
 #[derive(Debug, Default)]

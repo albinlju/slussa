@@ -35,8 +35,10 @@ pub fn fetch_commits(pr_number: u64) -> Vec<Commit> {
         .output()
         .expect("gh not installed");
 
-    let resp: GhCommitsResponse =
-        serde_json::from_slice(&output.stdout).expect("kunde inte parsa commits");
+    let resp: GhCommitsResponse = match serde_json::from_slice(&output.stdout) {
+        Ok(r) => r,
+        Err(_) => return Vec::new(),
+    };
 
     resp.commits.into_iter().map(map_commit).collect()
 }

@@ -10,12 +10,12 @@ use ratatui::{
     layout::{Constraint, Direction, Layout, Margin, Rect},
     style::{Color, Modifier, Style},
     text::{Line, Span},
-    widgets::{Block, Borders, Paragraph, Scrollbar, ScrollbarOrientation, ScrollbarState},
+    widgets::{Block, Borders, Paragraph},
 };
 use ansi_to_tui::IntoText;
 
 use crate::{
-    app::state::{AppState, LoadState, Screen, UiMemory},
+    app::state::{AppState, LoadState, PrData, Screen, UiMemory},
     domain::pr::PullRequest,
     tui::Action,
 };
@@ -79,7 +79,10 @@ pub fn render(frame: &mut Frame, state: &mut AppState, pr_id: u64, tab: DetailTa
     } else {
         // Parse markdown once per frame and reuse the result for both the layout
         // calculation and the actual rendering (inner width = full width - borders).
-        let lines = render_markdown(description_body(pr), area.width.saturating_sub(2));
+        let lines = trim_blank_lines(render_markdown(
+            description_body(pr),
+            area.width.saturating_sub(2),
+        ));
         let (desc_height, truncated) = desc_layout(lines.len());
         let chunks = Layout::default()
             .direction(Direction::Vertical)
@@ -92,7 +95,8 @@ pub fn render(frame: &mut Frame, state: &mut AppState, pr_id: u64, tab: DetailTa
             .split(area);
         render_header(frame, pr, chunks[0]);
         render_description(frame, lines, truncated, chunks[1]);
-        render_tabs_and_content(frame, pr, state, tab, chunks[2]);
+        let pr_data = state.cache.details.get(&pr.id);
+        render_tabs_and_content(frame, pr, pr_data, &mut state.ui, tab, chunks[2]);
         render_help(frame, chunks[3]);
     }
 }
@@ -106,7 +110,7 @@ pub fn render(frame: &mut Frame, state: &mut AppState, pr_id: u64, tab: DetailTa
 /// some pathological body would otherwise take down the whole TUI. We isolate
 /// it behind `catch_unwind` and fall back to the raw body, so rendering can
 /// never crash the app — defence-in-depth around a young dependency.
-fn render_markdown(body: &str, width: u16) -> Vec<Line<'static>> {
+pub(super) fn render_markdown(body: &str, width: u16) -> Vec<Line<'static>> {
     if width == 0 {
         return vec![Line::default()];
     }
@@ -135,6 +139,130 @@ fn description_body(pr: &PullRequest) -> &str {
         .map(str::trim)
         .filter(|s| !s.is_empty())
         .unwrap_or("(ingen beskrivning)")
+}
+
+/// glamour's Dark theme wraps the document with blank-line margins. For inline
+/// content (comments, replies) where vertical space is at a premium we strip
+/// those leading and trailing blanks so the body sits flush against whatever
+/// frames it.
+pub(super) fn trim_blank_lines(mut lines: Vec<Line<'static>>) -> Vec<Line<'static>> {
+    while lines.first().is_some_and(is_blank_line) {
+        lines.remove(0);
+    }
+    while lines.last().is_some_and(is_blank_line) {
+        lines.pop();
+    }
+    lines
+}
+
+fn is_blank_line(line: &Line<'static>) -> bool {
+    line.spans.is_empty() || line.spans.iter().all(|s| s.content.trim().is_empty())
+}
+
+/// A simple thumb-style scrollbar drawn in the rightmost column of `area`.
+///
+/// ratatui's built-in `Scrollbar` is mathematically correct but the thumb is
+/// sized proportionally to the visible content. For short scroll ranges that
+/// means the thumb is so large its *top* only inches down even at max scroll,
+/// which doesn't feel like "scrolled to the bottom" to most users.
+///
+/// We instead use a fixed 3-row thumb that slides from `0` to `track_len - 1`.
+/// The visible thumb compresses to 1-2 rows at the very bottom (the lower
+/// rows fall outside the track), which is a small visual cost for clear
+/// "I'm at the bottom" feedback.
+pub(super) fn render_thumb_scrollbar(
+    frame: &mut Frame,
+    scroll: u16,
+    max_scroll: u16,
+    area: Rect,
+) {
+    if max_scroll == 0 || area.height < 1 || area.width < 1 {
+        return;
+    }
+    let track_len = area.height as usize;
+    let thumb_size = 3usize.min(track_len);
+    let max_thumb_top = track_len.saturating_sub(1);
+    let thumb_top = (scroll as usize * max_thumb_top) / max_scroll as usize;
+
+    let lines: Vec<Line<'static>> = (0..track_len)
+        .map(|y| {
+            if y >= thumb_top && y < thumb_top + thumb_size {
+                Line::styled("█", Style::default().fg(Color::Yellow))
+            } else {
+                Line::styled("│", Style::default().fg(Color::DarkGray))
+            }
+        })
+        .collect();
+
+    let bar_area = Rect {
+        x: area.x + area.width.saturating_sub(1),
+        y: area.y,
+        width: 1,
+        height: area.height,
+    };
+    frame.render_widget(Paragraph::new(lines), bar_area);
+}
+
+/// Render a review thread as a `┃`-bar-prefixed block. Shared between the
+/// inline diff view and the Overview tab so review comments look identical in
+/// both places.
+pub(super) fn render_inline_thread(
+    thread: &crate::domain::comment::ReviewThread,
+    width: u16,
+    now: chrono::DateTime<chrono::Utc>,
+) -> Vec<Line<'static>> {
+    let mut out: Vec<Line<'static>> = Vec::new();
+    let body_width = width.saturating_sub(1);
+    let cyan = Style::default().fg(Color::Cyan);
+
+    for (i, comment) in thread.comments.iter().enumerate() {
+        let age = relative_age(comment.created, now);
+        let header_text = if i == 0 {
+            format!("┃ @{} · {}", comment.author.username, age)
+        } else {
+            format!("┃ ↳ @{} · {}", comment.author.username, age)
+        };
+        out.push(Line::styled(header_text, cyan));
+
+        let body_lines = trim_blank_lines(render_markdown(&comment.content, body_width));
+        for bline in body_lines {
+            let mut spans = vec![Span::styled("┃", cyan)];
+            spans.extend(bline.spans);
+            out.push(Line::from(spans));
+        }
+
+        if i + 1 < thread.comments.len() {
+            out.push(Line::styled("┃", cyan));
+        }
+    }
+
+    out
+}
+
+pub(super) fn relative_age(
+    when: chrono::DateTime<chrono::Utc>,
+    now: chrono::DateTime<chrono::Utc>,
+) -> String {
+    let delta = now - when;
+    let days = delta.num_days();
+    if days >= 1 {
+        if days == 1 {
+            "1d ago".to_string()
+        } else {
+            format!("{}d ago", days)
+        }
+    } else {
+        let hours = delta.num_hours();
+        if hours >= 1 {
+            if hours == 1 {
+                "1h ago".to_string()
+            } else {
+                format!("{}h ago", hours)
+            }
+        } else {
+            "just now".to_string()
+        }
+    }
 }
 
 fn render_description(
@@ -179,7 +307,7 @@ fn render_description_expanded(frame: &mut Frame, pr: &PullRequest, ui: &mut UiM
         );
 
     let inner = block.inner(area);
-    let lines = render_markdown(description_body(pr), inner.width);
+    let lines = trim_blank_lines(render_markdown(description_body(pr), inner.width));
     let total_wrapped = lines.len();
     let visible = inner.height as usize;
     let max_scroll = total_wrapped.saturating_sub(visible) as u16;
@@ -190,17 +318,11 @@ fn render_description_expanded(frame: &mut Frame, pr: &PullRequest, ui: &mut UiM
     frame.render_widget(paragraph, area);
 
     if max_scroll > 0 {
-        let mut scrollbar_state = ScrollbarState::new(total_wrapped).position(scroll as usize);
-        let scrollbar = Scrollbar::new(ScrollbarOrientation::VerticalRight)
-            .begin_symbol(None)
-            .end_symbol(None)
-            .thumb_style(Style::default().fg(Color::Yellow))
-            .track_style(Style::default().fg(Color::DarkGray));
         let sb_area = area.inner(Margin {
             vertical: 1,
             horizontal: 0,
         });
-        frame.render_stateful_widget(scrollbar, sb_area, &mut scrollbar_state);
+        render_thumb_scrollbar(frame, scroll, max_scroll, sb_area);
     }
 }
 
@@ -218,7 +340,8 @@ fn desc_layout(total_lines: usize) -> (u16, bool) {
 fn render_tabs_and_content(
     frame: &mut Frame,
     pr: &PullRequest,
-    state: &AppState,
+    pr_data: Option<&PrData>,
+    ui: &mut UiMemory,
     tab: DetailTab,
     area: Rect,
 ) {
@@ -268,7 +391,7 @@ fn render_tabs_and_content(
     let content_inner = content_block.inner(chunks[1]);
     frame.render_widget(content_block, chunks[1]);
 
-    render_content(frame, pr, state, tab, content_inner);
+    render_content(frame, pr, pr_data, ui, tab, content_inner);
 }
 
 fn build_top_row(area_w: usize, active_start: usize, active_width: usize) -> String {
@@ -369,14 +492,15 @@ fn render_header(frame: &mut Frame, pr: &PullRequest, area: Rect) {
 fn render_content(
     frame: &mut Frame,
     pr: &PullRequest,
-    state: &AppState,
+    pr_data: Option<&PrData>,
+    ui: &mut UiMemory,
     tab: DetailTab,
     area: Rect,
 ) {
     match tab {
-        DetailTab::Overview => overview::render(frame, pr, area),
-        DetailTab::Diff => diff::render(frame, pr, state, area),
-        DetailTab::Commits => commits::render(frame, pr, state, area),
+        DetailTab::Overview => overview::render(frame, pr_data, ui, area),
+        DetailTab::Diff => diff::render(frame, pr, pr_data, &ui.diff, area),
+        DetailTab::Commits => commits::render(frame, pr_data, area),
         DetailTab::Builds => checks::render(frame, area),
     }
 }
@@ -438,6 +562,13 @@ pub fn key_to_action(state: &AppState, key: KeyCode) -> Option<Action> {
             KeyCode::Enter | KeyCode::Char(' ') => Some(Action::DiffToggleAtCursor),
             KeyCode::Left | KeyCode::Char('h') => Some(Action::DiffCollapseAtCursor),
             KeyCode::Right | KeyCode::Char('l') => Some(Action::DiffExpandAtCursor),
+            _ => None,
+        },
+        DetailTab::Overview => match key {
+            KeyCode::Down | KeyCode::Char('j') => Some(Action::OverviewScrollDown),
+            KeyCode::Up | KeyCode::Char('k') => Some(Action::OverviewScrollUp),
+            KeyCode::Right | KeyCode::Char('l') => Some(Action::NextTab),
+            KeyCode::Left | KeyCode::Char('h') => Some(Action::PrevTab),
             _ => None,
         },
         _ => match key {

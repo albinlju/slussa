@@ -32,4 +32,24 @@ impl App {
             tx.send(Action::DiffLoaded(pr_id, diff)).ok();
         });
     }
+
+    pub(super) fn spawn_load_comments(&self, pr_id: u64) {
+        let tx = self.action_tx.clone();
+        tokio::spawn(async move {
+            let comments = task::spawn_blocking(move || github::fetch_comments(pr_id))
+                .await
+                .unwrap_or_default();
+            tx.send(Action::CommentsLoaded(pr_id, comments)).ok();
+        });
+    }
+
+    pub(super) fn spawn_load_review_threads(&self, pr_id: u64) {
+        let tx = self.action_tx.clone();
+        tokio::spawn(async move {
+            let threads = task::spawn_blocking(move || github::fetch_review_threads(pr_id))
+                .await
+                .unwrap_or_default();
+            tx.send(Action::ReviewThreadsLoaded(pr_id, threads)).ok();
+        });
+    }
 }
