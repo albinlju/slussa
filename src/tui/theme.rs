@@ -7,6 +7,9 @@ use ratatui::style::Color;
 pub struct Theme {
     /// Default foreground for body text.
     pub fg: Color,
+    /// Default background — also used as dark text on saturated accent
+    /// backgrounds (status badges) where light fg would have poor contrast.
+    pub bg: Color,
     /// Dimmed text — timestamps, separators, hints.
     pub muted: Color,
     /// Borders, structural chrome.
@@ -43,6 +46,7 @@ pub struct Theme {
 /// Gruvbox dark palette. See https://github.com/morhetz/gruvbox.
 pub const GRUVBOX: Theme = Theme {
     fg: Color::Rgb(0xeb, 0xdb, 0xb2),            // #ebdbb2 fg1
+    bg: Color::Rgb(0x28, 0x28, 0x28),            // #282828 bg0
     muted: Color::Rgb(0x92, 0x83, 0x74),         // #928374 gray
     border: Color::Rgb(0x66, 0x5c, 0x54),        // #665c54 bg3
     highlight_bg: Color::Rgb(0x50, 0x49, 0x45),  // #504945 bg2
