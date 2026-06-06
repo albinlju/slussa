@@ -4,7 +4,7 @@ use chrono::Utc;
 use ratatui::{
     Frame,
     layout::{Constraint, Direction, Layout, Rect},
-    style::{Color, Modifier, Style},
+    style::{Modifier, Style},
     text::{Line, Span},
     widgets::{Block, Borders, List, ListItem, ListState, Paragraph},
 };
@@ -21,7 +21,7 @@ use crate::{
             file_tree::{TreeRow, build_visible_rows},
             render_inline_thread,
         },
-        spinner_frame,
+        spinner_frame, theme,
     },
 };
 
@@ -40,14 +40,15 @@ pub fn render(
         })
         .unwrap_or(&[]);
 
+    let theme = theme::current();
     match diff_state {
         None | Some(LoadState::NotRequested) | Some(LoadState::Loading) => {
             let paragraph = Paragraph::new(format!("{} Loading diff...", spinner_frame()))
-                .style(Style::default().fg(Color::Yellow));
+                .style(Style::default().fg(theme.warning));
             frame.render_widget(paragraph, area);
         }
         Some(LoadState::Loaded(diff)) if diff.files.is_empty() => {
-            let paragraph = Paragraph::new("(no diff)").style(Style::default().fg(Color::DarkGray));
+            let paragraph = Paragraph::new("(no diff)").style(Style::default().fg(theme.muted));
             frame.render_widget(paragraph, area);
         }
         Some(LoadState::Loaded(diff)) => {
@@ -64,6 +65,7 @@ pub fn render(
 }
 
 fn render_tree(frame: &mut Frame, rows: &[TreeRow], cursor: usize, area: Rect) {
+    let theme = theme::current();
     let items: Vec<ListItem> = rows
         .iter()
         .map(|row| {
@@ -78,11 +80,11 @@ fn render_tree(frame: &mut Frame, rows: &[TreeRow], cursor: usize, area: Rect) {
                     let indent = "  ".repeat(*depth);
                     Line::from(vec![
                         Span::raw(indent),
-                        Span::styled(format!("{} ", marker), Style::default().fg(Color::DarkGray)),
+                        Span::styled(format!("{} ", marker), Style::default().fg(theme.muted)),
                         Span::styled(
                             format!("{}/", name),
                             Style::default()
-                                .fg(Color::Blue)
+                                .fg(theme.link)
                                 .add_modifier(Modifier::BOLD),
                         ),
                     ])
@@ -101,10 +103,14 @@ fn render_tree(frame: &mut Frame, rows: &[TreeRow], cursor: usize, area: Rect) {
     list_state.select(Some(bounded_cursor));
 
     let list = List::new(items)
-        .block(Block::default().borders(Borders::RIGHT))
+        .block(
+            Block::default()
+                .borders(Borders::RIGHT)
+                .border_style(Style::default().fg(theme.border)),
+        )
         .highlight_style(
             Style::default()
-                .bg(Color::DarkGray)
+                .bg(theme.highlight_bg)
                 .add_modifier(Modifier::BOLD),
         );
 
@@ -130,11 +136,12 @@ fn render_diff_pane(
 }
 
 fn file_to_lines(file: &FileDiff, threads: &[ReviewThread], width: u16) -> Vec<Line<'static>> {
+    let theme = theme::current();
     let mut lines: Vec<Line> = Vec::new();
     lines.push(Line::styled(
         file.path.clone(),
         Style::default()
-            .fg(Color::Magenta)
+            .fg(theme.purple)
             .add_modifier(Modifier::BOLD),
     ));
 
@@ -151,15 +158,15 @@ fn file_to_lines(file: &FileDiff, threads: &[ReviewThread], width: u16) -> Vec<L
     for hunk in &file.hunks {
         lines.push(Line::styled(
             format!("@@ -{} +{} @@", hunk.old_start, hunk.new_start),
-            Style::default().fg(Color::Cyan),
+            Style::default().fg(theme.info),
         ));
 
         let mut new_line_num = hunk.new_start;
         for diff_line in &hunk.lines {
             let (prefix, content, color) = match diff_line {
-                DiffLine::Added(c) => ("+", c.as_str(), Color::Green),
-                DiffLine::Removed(c) => ("-", c.as_str(), Color::Red),
-                DiffLine::Context(c) => (" ", c.as_str(), Color::Reset),
+                DiffLine::Added(c) => ("+", c.as_str(), theme.diff_added),
+                DiffLine::Removed(c) => ("-", c.as_str(), theme.diff_removed),
+                DiffLine::Context(c) => (" ", c.as_str(), theme.diff_context),
             };
             lines.push(Line::styled(
                 format!("{}{}", prefix, content),
