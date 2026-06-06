@@ -1,5 +1,5 @@
 use crate::{
-    app::state::{AppState, LoadState},
+    app::state::{AppState, LoadState, StatusFilter},
     domain::review::ReviewerState,
     tui::{Action, spinner_frame},
 };
@@ -7,10 +7,10 @@ use chrono::Utc;
 use ratatui::{
     Frame,
     crossterm::event::KeyCode,
-    layout::{Constraint, Direction, Layout},
+    layout::{Constraint, Direction, Layout, Rect},
     style::{Color, Modifier, Style},
     text::{Line, Span},
-    widgets::{Block, Borders, List, ListItem, ListState, Paragraph},
+    widgets::{Block, Borders, Clear, List, ListItem, ListState, Paragraph},
 };
 
 pub fn render(frame: &mut Frame, state: &AppState, area: ratatui::layout::Rect) {
@@ -29,10 +29,16 @@ pub fn render(frame: &mut Frame, state: &AppState, area: ratatui::layout::Rect) 
             .style(Style::default().fg(Color::Yellow));
             frame.render_widget(loading, chunks[0]);
         }
-        LoadState::Loaded(prs) => {
+        LoadState::Loaded(_) => {
+            let filtered = state.filtered_prs();
             let outer_block = Block::default()
                 .borders(Borders::ALL)
-                .border_style(Style::default().fg(Color::Blue));
+                .border_style(Style::default().fg(Color::Blue))
+                .title(format!(
+                    " {} ({}) ",
+                    state.ui.list_filter.label(),
+                    filtered.len()
+                ));
             let inner = outer_block.inner(chunks[0]);
             frame.render_widget(outer_block, chunks[0]);
 
@@ -57,7 +63,7 @@ pub fn render(frame: &mut Frame, state: &AppState, area: ratatui::layout::Rect) 
 
             frame.render_widget(header, content_chunks[0]);
 
-            let items: Vec<ListItem> = prs
+            let items: Vec<ListItem> = filtered
                 .iter()
                 .map(|pr| {
                     let status_color = match pr.status {
@@ -142,22 +148,81 @@ pub fn render(frame: &mut Frame, state: &AppState, area: ratatui::layout::Rect) 
         }
     }
 
-    let status = Paragraph::new("  j/k: navigate  enter: open PR  q: quit")
+    let status = Paragraph::new("  j/k: navigate  enter: open PR  f: filter  q: quit")
         .style(Style::default().fg(Color::DarkGray));
     frame.render_widget(status, chunks[1]);
+
+    if state.ui.filter_picker_open {
+        render_filter_picker(frame, state, area);
+    }
+}
+
+fn render_filter_picker(frame: &mut Frame, state: &AppState, area: Rect) {
+    let popup_width = 40u16.min(area.width);
+    // 5 filters + 2 border rows + 1 help row = 8
+    let popup_height = 8u16.min(area.height);
+    let popup_area = Rect {
+        x: area.x + area.width.saturating_sub(popup_width) / 2,
+        y: area.y + area.height.saturating_sub(popup_height) / 2,
+        width: popup_width,
+        height: popup_height,
+    };
+
+    frame.render_widget(Clear, popup_area);
+
+    let block = Block::default()
+        .borders(Borders::ALL)
+        .title(" Filter ")
+        .border_style(Style::default().fg(Color::Yellow));
+    let inner = block.inner(popup_area);
+    frame.render_widget(block, popup_area);
+
+    let inner_chunks = Layout::default()
+        .direction(Direction::Vertical)
+        .constraints([Constraint::Min(0), Constraint::Length(1)])
+        .split(inner);
+
+    let items: Vec<ListItem> = StatusFilter::CYCLE
+        .iter()
+        .map(|f| ListItem::new(Line::raw(f.label())))
+        .collect();
+    let mut list_state = ListState::default();
+    list_state.select(Some(state.ui.filter_picker_cursor));
+    let list = List::new(items)
+        .highlight_style(
+            Style::default()
+                .bg(Color::DarkGray)
+                .add_modifier(Modifier::BOLD),
+        )
+        .highlight_symbol("▶ ");
+    frame.render_stateful_widget(list, inner_chunks[0], &mut list_state);
+
+    let help = Paragraph::new(" j/k: nav  enter: apply  esc: cancel ")
+        .style(Style::default().fg(Color::DarkGray));
+    frame.render_widget(help, inner_chunks[1]);
 }
 
 pub fn key_to_action(state: &AppState, key: KeyCode) -> Option<Action> {
+    if state.ui.filter_picker_open {
+        return match key {
+            KeyCode::Char('q') => Some(Action::Quit),
+            KeyCode::Esc | KeyCode::Char('f') => Some(Action::CloseFilterPicker),
+            KeyCode::Down | KeyCode::Char('j') => Some(Action::FilterPickerNext),
+            KeyCode::Up | KeyCode::Char('k') => Some(Action::FilterPickerPrev),
+            KeyCode::Enter => Some(Action::ApplyFilter),
+            _ => None,
+        };
+    }
+
     match key {
         KeyCode::Char('q') => Some(Action::Quit),
+        KeyCode::Char('f') => Some(Action::OpenFilterPicker),
         KeyCode::Down | KeyCode::Char('j') => Some(Action::NextPr),
         KeyCode::Up | KeyCode::Char('k') => Some(Action::PrevPr),
-        KeyCode::Enter => match &state.cache.prs {
-            LoadState::Loaded(prs) => prs
-                .get(state.ui.list_selected)
-                .map(|p| Action::OpenPr(p.id)),
-            _ => None,
-        },
+        KeyCode::Enter => state
+            .filtered_prs()
+            .get(state.ui.list_selected)
+            .map(|p| Action::OpenPr(p.id)),
         _ => None,
     }
 }
