@@ -39,6 +39,11 @@ pub enum Action {
     DescriptionScrollUp,
     OverviewScrollDown,
     OverviewScrollUp,
+    OpenFilterPicker,
+    CloseFilterPicker,
+    FilterPickerNext,
+    FilterPickerPrev,
+    ApplyFilter,
 }
 
 pub fn render(frame: &mut Frame, state: &mut AppState) {
