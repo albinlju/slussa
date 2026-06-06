@@ -10,8 +10,9 @@ use ratatui::{
     layout::{Constraint, Direction, Layout, Margin, Rect},
     style::{Color, Modifier, Style},
     text::{Line, Span},
-    widgets::{Block, Borders, Paragraph, Scrollbar, ScrollbarOrientation, ScrollbarState, Wrap},
+    widgets::{Block, Borders, Paragraph, Scrollbar, ScrollbarOrientation, ScrollbarState},
 };
+use ansi_to_tui::IntoText;
 
 use crate::{
     app::state::{AppState, LoadState, Screen, UiMemory},
@@ -25,18 +26,18 @@ pub enum DetailTab {
     Overview,
     Diff,
     Commits,
-    Checks,
+    Builds,
 }
 
 impl DetailTab {
-    pub const ALL: [Self; 4] = [Self::Overview, Self::Diff, Self::Commits, Self::Checks];
+    pub const ALL: [Self; 4] = [Self::Overview, Self::Diff, Self::Commits, Self::Builds];
 
     pub fn label(self) -> &'static str {
         match self {
             Self::Overview => "Overview",
             Self::Diff => "Diff",
             Self::Commits => "Commits",
-            Self::Checks => "Checks",
+            Self::Builds => "Builds",
         }
     }
 
@@ -76,7 +77,10 @@ pub fn render(frame: &mut Frame, state: &mut AppState, pr_id: u64, tab: DetailTa
         render_description_expanded(frame, pr, &mut state.ui, chunks[1]);
         render_help_expanded(frame, chunks[2]);
     } else {
-        let (desc_height, truncated) = compute_desc_layout(pr, area.width);
+        // Parse markdown once per frame and reuse the result for both the layout
+        // calculation and the actual rendering (inner width = full width - borders).
+        let lines = render_markdown(description_body(pr), area.width.saturating_sub(2));
+        let (desc_height, truncated) = desc_layout(lines.len());
         let chunks = Layout::default()
             .direction(Direction::Vertical)
             .constraints([
@@ -87,18 +91,58 @@ pub fn render(frame: &mut Frame, state: &mut AppState, pr_id: u64, tab: DetailTa
             ])
             .split(area);
         render_header(frame, pr, chunks[0]);
-        render_description(frame, pr, truncated, chunks[1]);
+        render_description(frame, lines, truncated, chunks[1]);
         render_tabs_and_content(frame, pr, state, tab, chunks[2]);
         render_help(frame, chunks[3]);
     }
 }
 
-fn render_description(frame: &mut Frame, pr: &PullRequest, truncated: bool, area: Rect) {
-    let body = pr
-        .description
-        .clone()
-        .unwrap_or_else(|| "(ingen beskrivning)".to_string());
+/// Render a PR description (markdown) into ratatui lines via charmed-glamour,
+/// already wrapped to `width`. Glamour emits ANSI-styled text which we bridge
+/// into ratatui via `ansi-to-tui`. Glamour uses CommonMark/GFM, so `-`/`+`/`*`
+/// bullets, numbered lists and checkboxes all work without shims.
+///
+/// `glamour::render` returns a `String` rather than a `Result`, so a panic on
+/// some pathological body would otherwise take down the whole TUI. We isolate
+/// it behind `catch_unwind` and fall back to the raw body, so rendering can
+/// never crash the app — defence-in-depth around a young dependency.
+fn render_markdown(body: &str, width: u16) -> Vec<Line<'static>> {
+    if width == 0 {
+        return vec![Line::default()];
+    }
+    let rendered = std::panic::catch_unwind(|| {
+        let ansi = glamour::Renderer::new()
+            .with_style(glamour::Style::Dark)
+            .with_word_wrap(width as usize)
+            .render(body);
+        ansi.into_text().map(|text| text.lines)
+    });
+    let lines = match rendered {
+        Ok(Ok(lines)) => lines,
+        // ANSI bridge failed, or glamour panicked: fall back to the raw body.
+        _ => body.lines().map(|l| Line::raw(l.to_string())).collect(),
+    };
+    if lines.is_empty() {
+        vec![Line::default()]
+    } else {
+        lines
+    }
+}
 
+fn description_body(pr: &PullRequest) -> &str {
+    pr.description
+        .as_deref()
+        .map(str::trim)
+        .filter(|s| !s.is_empty())
+        .unwrap_or("(ingen beskrivning)")
+}
+
+fn render_description(
+    frame: &mut Frame,
+    lines: Vec<Line<'static>>,
+    truncated: bool,
+    area: Rect,
+) {
     let mut block = Block::default()
         .borders(Borders::ALL)
         .title(" Description ");
@@ -119,21 +163,11 @@ fn render_description(frame: &mut Frame, pr: &PullRequest, truncated: bool, area
         );
     }
 
-    let paragraph = Paragraph::new(body).wrap(Wrap { trim: false }).block(block);
+    let paragraph = Paragraph::new(lines).block(block);
     frame.render_widget(paragraph, area);
 }
 
-fn render_description_expanded(
-    frame: &mut Frame,
-    pr: &PullRequest,
-    ui: &mut UiMemory,
-    area: Rect,
-) {
-    let body = pr
-        .description
-        .clone()
-        .unwrap_or_else(|| "(ingen beskrivning)".to_string());
-
+fn render_description_expanded(frame: &mut Frame, pr: &PullRequest, ui: &mut UiMemory, area: Rect) {
     let block = Block::default()
         .borders(Borders::ALL)
         .border_style(Style::default().fg(Color::Yellow))
@@ -145,21 +179,18 @@ fn render_description_expanded(
         );
 
     let inner = block.inner(area);
-    let total_wrapped = count_wrapped_lines(&body, inner.width as usize);
+    let lines = render_markdown(description_body(pr), inner.width);
+    let total_wrapped = lines.len();
     let visible = inner.height as usize;
     let max_scroll = total_wrapped.saturating_sub(visible) as u16;
     let scroll = ui.description_scroll.min(max_scroll);
     ui.description_scroll = scroll;
 
-    let paragraph = Paragraph::new(body)
-        .wrap(Wrap { trim: false })
-        .scroll((scroll, 0))
-        .block(block);
+    let paragraph = Paragraph::new(lines).scroll((scroll, 0)).block(block);
     frame.render_widget(paragraph, area);
 
     if max_scroll > 0 {
-        let mut scrollbar_state =
-            ScrollbarState::new(total_wrapped).position(scroll as usize);
+        let mut scrollbar_state = ScrollbarState::new(total_wrapped).position(scroll as usize);
         let scrollbar = Scrollbar::new(ScrollbarOrientation::VerticalRight)
             .begin_symbol(None)
             .end_symbol(None)
@@ -173,37 +204,10 @@ fn render_description_expanded(
     }
 }
 
-fn count_wrapped_lines(text: &str, width: usize) -> usize {
-    if width == 0 {
-        return 1;
-    }
-    if text.is_empty() {
-        return 1;
-    }
-    let mut total = 0usize;
-    for line in text.lines() {
-        let len = line.chars().count().max(1);
-        total += (len + width - 1) / width;
-    }
-    total.max(1)
-}
-
 const DESC_MAX_HEIGHT: u16 = 8;
 
-fn compute_desc_layout(pr: &PullRequest, available_width: u16) -> (u16, bool) {
-    let body = pr.description.as_deref().unwrap_or("(ingen beskrivning)");
-    let inner_width = available_width.saturating_sub(2) as usize;
-    if inner_width == 0 {
-        return (3, false);
-    }
-    let mut total_lines = 0usize;
-    for line in body.lines() {
-        let len = line.chars().count().max(1);
-        total_lines += (len + inner_width - 1) / inner_width;
-    }
-    if total_lines == 0 {
-        total_lines = 1;
-    }
+fn desc_layout(total_lines: usize) -> (u16, bool) {
+    let total_lines = total_lines.max(1);
     let max_content_rows = (DESC_MAX_HEIGHT as usize).saturating_sub(2);
     let truncated = total_lines > max_content_rows;
     let content_rows = total_lines.min(max_content_rows);
@@ -260,8 +264,7 @@ fn render_tabs_and_content(
     let header = Paragraph::new(header_lines);
     frame.render_widget(header, chunks[0]);
 
-    let content_block = Block::default()
-        .borders(Borders::LEFT | Borders::RIGHT | Borders::BOTTOM);
+    let content_block = Block::default().borders(Borders::LEFT | Borders::RIGHT | Borders::BOTTOM);
     let content_inner = content_block.inner(chunks[1]);
     frame.render_widget(content_block, chunks[1]);
 
@@ -374,7 +377,7 @@ fn render_content(
         DetailTab::Overview => overview::render(frame, pr, area),
         DetailTab::Diff => diff::render(frame, pr, state, area),
         DetailTab::Commits => commits::render(frame, pr, state, area),
-        DetailTab::Checks => checks::render(frame, area),
+        DetailTab::Builds => checks::render(frame, area),
     }
 }
 

@@ -12,7 +12,6 @@ use crate::{
 #[derive(Debug)]
 pub enum Action {
     Quit,
-    Render,
     Back,
     NextPr,
     PrevPr,

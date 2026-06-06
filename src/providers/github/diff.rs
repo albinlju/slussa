@@ -19,11 +19,10 @@ fn parse_unified_diff(text: &str) -> Diff {
 
     for line in text.lines() {
         if let Some(rest) = line.strip_prefix("diff --git ") {
-            if let Some(hunk) = current_hunk.take() {
-                if let Some(f) = current_file.as_mut() {
+            if let Some(hunk) = current_hunk.take()
+                && let Some(f) = current_file.as_mut() {
                     f.hunks.push(hunk);
                 }
-            }
             if let Some(f) = current_file.take() {
                 files.push(f);
             }
@@ -37,11 +36,10 @@ fn parse_unified_diff(text: &str) -> Diff {
                 hunks: Vec::new(),
             });
         } else if line.starts_with("@@") {
-            if let Some(hunk) = current_hunk.take() {
-                if let Some(f) = current_file.as_mut() {
+            if let Some(hunk) = current_hunk.take()
+                && let Some(f) = current_file.as_mut() {
                     f.hunks.push(hunk);
                 }
-            }
             let (old_start, new_start) = parse_hunk_header(line);
             current_hunk = Some(Hunk {
                 old_start,
@@ -62,11 +60,10 @@ fn parse_unified_diff(text: &str) -> Diff {
         }
     }
 
-    if let Some(hunk) = current_hunk.take() {
-        if let Some(f) = current_file.as_mut() {
+    if let Some(hunk) = current_hunk.take()
+        && let Some(f) = current_file.as_mut() {
             f.hunks.push(hunk);
         }
-    }
     if let Some(f) = current_file.take() {
         files.push(f);
     }
