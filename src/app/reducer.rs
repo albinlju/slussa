@@ -15,7 +15,7 @@ use crate::{
 impl App {
     pub(super) fn apply(&mut self, action: Action) {
         match action {
-            Action::Quit | Action::Render => unreachable!("handled in run()"),
+            Action::Quit => unreachable!("handled in run()"),
             Action::Back => {
                 self.state.screen = Screen::List;
             }

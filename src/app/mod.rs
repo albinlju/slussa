@@ -39,37 +39,31 @@ impl App {
         self.state.cache.prs = LoadState::Loading;
         self.spawn_load_prs();
 
-        let render_tx = self.action_tx.clone();
-        tokio::spawn(async move {
-            let mut interval = time::interval(Duration::from_millis(16));
-            loop {
-                interval.tick().await;
-                if render_tx.send(Action::Render).is_err() {
-                    break;
-                }
-            }
-        });
+        // Draw on the interval tick directly instead of pumping `Render` actions
+        // through the unbounded action channel. With `Skip`, a slow frame just
+        // delays the next tick — frames can never queue up and back-pressure the
+        // app into getting slower and slower.
+        let mut interval = time::interval(Duration::from_millis(16));
+        interval.set_missed_tick_behavior(time::MissedTickBehavior::Skip);
 
         let mut events = EventStream::new();
         terminal.draw(|f| render(f, &mut self.state))?;
 
         loop {
             tokio::select! {
+                _ = interval.tick() => {
+                    terminal.draw(|f| render(f, &mut self.state))?;
+                }
                 Some(Ok(event)) = events.next() => {
-                    if let Event::Key(key) = event {
-                        if key.kind == KeyEventKind::Press {
-                            if let Some(action) = key_to_action(&self.state, key.code) {
+                    if let Event::Key(key) = event
+                        && key.kind == KeyEventKind::Press
+                            && let Some(action) = key_to_action(&self.state, key.code) {
                                 self.action_tx.send(action).ok();
                             }
-                        }
-                    }
                 }
                 Some(action) = self.action_rx.recv() => {
                     match action {
                         Action::Quit => return Ok(()),
-                        Action::Render => {
-                            terminal.draw(|f| render(f, &mut self.state))?;
-                        }
                         other => self.apply(other),
                     }
                 }
