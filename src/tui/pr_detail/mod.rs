@@ -77,6 +77,7 @@ pub fn render(frame: &mut Frame, state: &mut AppState, pr_id: u64, tab: DetailTa
         .direction(Direction::Vertical)
         .constraints([
             Constraint::Length(4), // header
+            Constraint::Length(1), // spacer between header and tabs
             Constraint::Min(0),    // tabs + content
             Constraint::Length(1), // help
         ])
@@ -84,8 +85,8 @@ pub fn render(frame: &mut Frame, state: &mut AppState, pr_id: u64, tab: DetailTa
 
     render_header(frame, pr, chunks[0]);
     let pr_data = state.cache.details.get(&pr.id);
-    render_tabs_and_content(frame, pr, pr_data, &mut state.ui, tab, chunks[1]);
-    render_help(frame, chunks[2]);
+    render_tabs_and_content(frame, pr, pr_data, &mut state.ui, tab, chunks[2]);
+    render_help(frame, chunks[3]);
 }
 
 /// Render a PR description (markdown) into ratatui lines via charmed-glamour,
