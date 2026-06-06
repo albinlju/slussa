@@ -3,7 +3,7 @@ use std::collections::{HashMap, HashSet};
 use crate::domain::comment::{Comment, ReviewThread};
 use crate::domain::commit::Commit;
 use crate::domain::diff::Diff;
-use crate::domain::pr::PullRequest;
+use crate::domain::pr::{PrStatus, PullRequest};
 use crate::tui::pr_detail::DetailTab;
 
 #[derive(Debug, Default)]
@@ -16,10 +16,54 @@ pub struct AppState {
 #[derive(Debug, Default)]
 pub struct UiMemory {
     pub list_selected: usize,
+    pub list_filter: StatusFilter,
+    pub filter_picker_open: bool,
+    pub filter_picker_cursor: usize,
     pub diff: DiffViewState,
     pub description_expanded: bool,
     pub description_scroll: u16,
     pub overview_scroll: u16,
+}
+
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+pub enum StatusFilter {
+    #[default]
+    Open,
+    Draft,
+    Merged,
+    Declined,
+    All,
+}
+
+impl StatusFilter {
+    pub const CYCLE: [Self; 5] = [
+        Self::Open,
+        Self::Draft,
+        Self::Merged,
+        Self::Declined,
+        Self::All,
+    ];
+
+    pub fn label(self) -> &'static str {
+        match self {
+            Self::Open => "Open",
+            Self::Draft => "Draft",
+            Self::Merged => "Merged",
+            Self::Declined => "Declined",
+            Self::All => "All",
+        }
+    }
+
+    pub fn matches(self, status: &PrStatus) -> bool {
+        match (self, status) {
+            (Self::All, _) => true,
+            (Self::Open, PrStatus::Open) => true,
+            (Self::Draft, PrStatus::Draft) => true,
+            (Self::Merged, PrStatus::Merged) => true,
+            (Self::Declined, PrStatus::Declined) => true,
+            _ => false,
+        }
+    }
 }
 
 #[derive(Debug, Default)]
@@ -59,4 +103,19 @@ pub enum Screen {
         pr_id: u64,
         tab: DetailTab,
     },
+}
+
+impl AppState {
+    /// PRs from the cache filtered by the current list filter. Returns
+    /// references so callers don't need to clone — the cursor and Enter
+    /// handler both index into this same slice ordering.
+    pub fn filtered_prs(&self) -> Vec<&PullRequest> {
+        match &self.cache.prs {
+            LoadState::Loaded(prs) => prs
+                .iter()
+                .filter(|pr| self.ui.list_filter.matches(&pr.status))
+                .collect(),
+            _ => Vec::new(),
+        }
+    }
 }

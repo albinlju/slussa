@@ -1,7 +1,7 @@
 use crate::{
     app::{
         App,
-        state::{DiffViewState, LoadState, Screen},
+        state::{DiffViewState, LoadState, Screen, StatusFilter},
     },
     tui::{
         Action,
@@ -20,10 +20,7 @@ impl App {
                 self.state.screen = Screen::List;
             }
             Action::NextPr => {
-                let len = match &self.state.cache.prs {
-                    LoadState::Loaded(prs) => prs.len(),
-                    _ => 0,
-                };
+                let len = self.state.filtered_prs().len();
                 let last = len.saturating_sub(1);
                 self.state.ui.list_selected = (self.state.ui.list_selected + 1).min(last);
             }
@@ -173,6 +170,38 @@ impl App {
             Action::OverviewScrollUp => {
                 self.state.ui.overview_scroll =
                     self.state.ui.overview_scroll.saturating_sub(1);
+            }
+            Action::OpenFilterPicker => {
+                // Start the picker cursor on the currently active filter so
+                // pressing Enter without moving keeps the same filter.
+                self.state.ui.filter_picker_cursor = StatusFilter::CYCLE
+                    .iter()
+                    .position(|&f| f == self.state.ui.list_filter)
+                    .unwrap_or(0);
+                self.state.ui.filter_picker_open = true;
+            }
+            Action::CloseFilterPicker => {
+                self.state.ui.filter_picker_open = false;
+            }
+            Action::FilterPickerNext => {
+                let last = StatusFilter::CYCLE.len().saturating_sub(1);
+                self.state.ui.filter_picker_cursor =
+                    (self.state.ui.filter_picker_cursor + 1).min(last);
+            }
+            Action::FilterPickerPrev => {
+                self.state.ui.filter_picker_cursor =
+                    self.state.ui.filter_picker_cursor.saturating_sub(1);
+            }
+            Action::ApplyFilter => {
+                let new_filter = StatusFilter::CYCLE
+                    .get(self.state.ui.filter_picker_cursor)
+                    .copied()
+                    .unwrap_or(StatusFilter::Open);
+                if new_filter != self.state.ui.list_filter {
+                    self.state.ui.list_filter = new_filter;
+                    self.state.ui.list_selected = 0;
+                }
+                self.state.ui.filter_picker_open = false;
             }
         }
     }
