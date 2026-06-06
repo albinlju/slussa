@@ -4,6 +4,7 @@ pub mod diff;
 pub mod file_tree;
 pub mod overview;
 
+use ansi_to_tui::IntoText;
 use ratatui::{
     Frame,
     crossterm::event::KeyCode,
@@ -12,7 +13,6 @@ use ratatui::{
     text::{Line, Span},
     widgets::{Block, Borders, Paragraph},
 };
-use ansi_to_tui::IntoText;
 
 use crate::{
     app::state::{AppState, LoadState, PrData, Screen, UiMemory},
@@ -170,12 +170,7 @@ fn is_blank_line(line: &Line<'static>) -> bool {
 /// The visible thumb compresses to 1-2 rows at the very bottom (the lower
 /// rows fall outside the track), which is a small visual cost for clear
 /// "I'm at the bottom" feedback.
-pub(super) fn render_thumb_scrollbar(
-    frame: &mut Frame,
-    scroll: u16,
-    max_scroll: u16,
-    area: Rect,
-) {
+pub(super) fn render_thumb_scrollbar(frame: &mut Frame, scroll: u16, max_scroll: u16, area: Rect) {
     if max_scroll == 0 || area.height < 1 || area.width < 1 {
         return;
     }
@@ -265,12 +260,7 @@ pub(super) fn relative_age(
     }
 }
 
-fn render_description(
-    frame: &mut Frame,
-    lines: Vec<Line<'static>>,
-    truncated: bool,
-    area: Rect,
-) {
+fn render_description(frame: &mut Frame, lines: Vec<Line<'static>>, truncated: bool, area: Rect) {
     let mut block = Block::default()
         .borders(Borders::ALL)
         .title(" Description ");
@@ -472,7 +462,11 @@ fn render_header(frame: &mut Frame, pr: &PullRequest, area: Rect) {
 
     let meta_line = Line::from(vec![
         Span::styled(
-            format!("@{}", pr.author.username),
+            format!(" {} ", pr.status.label()),
+            Style::default().fg(Color::White).bg(Color::Green),
+        ),
+        Span::styled(
+            format!(" @{}", pr.author.username),
             Style::default().fg(Color::Cyan),
         ),
         Span::raw("  wants to merge  "),
