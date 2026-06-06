@@ -7,13 +7,12 @@ use ratatui::{
 };
 
 use crate::{
-    app::state::{AppState, LoadState},
-    domain::pr::PullRequest,
+    app::state::{LoadState, PrData},
     tui::spinner_frame,
 };
 
-pub fn render(frame: &mut Frame, pr: &PullRequest, state: &AppState, area: Rect) {
-    let commits_state = state.cache.details.get(&pr.id).map(|d| &d.commits);
+pub fn render(frame: &mut Frame, pr_data: Option<&PrData>, area: Rect) {
+    let commits_state = pr_data.map(|d| &d.commits);
 
     match commits_state {
         None | Some(LoadState::NotRequested) | Some(LoadState::Loading) => {

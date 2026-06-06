@@ -44,8 +44,10 @@ pub fn fetch_prs() -> Vec<PullRequest> {
         .output()
         .expect("gh not installed");
 
-    let gh_prs: Vec<GhPr> =
-        serde_json::from_slice(&output.stdout).expect("kunde inte parsa gh-output");
+    let gh_prs: Vec<GhPr> = match serde_json::from_slice(&output.stdout) {
+        Ok(r) => r,
+        Err(_) => return Vec::new(),
+    };
 
     gh_prs.into_iter().map(map_pr).collect()
 }

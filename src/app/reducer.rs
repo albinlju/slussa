@@ -53,23 +53,38 @@ impl App {
                 self.state.ui.diff = DiffViewState::default();
                 self.state.ui.description_expanded = false;
                 self.state.ui.description_scroll = 0;
-                let (load_commits, load_diff) = {
+                self.state.ui.overview_scroll = 0;
+                let (load_commits, load_diff, load_comments, load_threads) = {
                     let pr_data = self.state.cache.details.entry(pr_id).or_default();
                     let load_commits = matches!(pr_data.commits, LoadState::NotRequested);
                     let load_diff = matches!(pr_data.diff, LoadState::NotRequested);
+                    let load_comments = matches!(pr_data.comments, LoadState::NotRequested);
+                    let load_threads = matches!(pr_data.review_threads, LoadState::NotRequested);
                     if load_commits {
                         pr_data.commits = LoadState::Loading;
                     }
                     if load_diff {
                         pr_data.diff = LoadState::Loading;
                     }
-                    (load_commits, load_diff)
+                    if load_comments {
+                        pr_data.comments = LoadState::Loading;
+                    }
+                    if load_threads {
+                        pr_data.review_threads = LoadState::Loading;
+                    }
+                    (load_commits, load_diff, load_comments, load_threads)
                 };
                 if load_commits {
                     self.spawn_load_commits(pr_id);
                 }
                 if load_diff {
                     self.spawn_load_diff(pr_id);
+                }
+                if load_comments {
+                    self.spawn_load_comments(pr_id);
+                }
+                if load_threads {
+                    self.spawn_load_review_threads(pr_id);
                 }
             }
             Action::PrsLoaded(prs) => {
@@ -82,6 +97,14 @@ impl App {
             Action::DiffLoaded(pr_id, diff) => {
                 let pr_data = self.state.cache.details.entry(pr_id).or_default();
                 pr_data.diff = LoadState::Loaded(diff);
+            }
+            Action::CommentsLoaded(pr_id, comments) => {
+                let pr_data = self.state.cache.details.entry(pr_id).or_default();
+                pr_data.comments = LoadState::Loaded(comments);
+            }
+            Action::ReviewThreadsLoaded(pr_id, threads) => {
+                let pr_data = self.state.cache.details.entry(pr_id).or_default();
+                pr_data.review_threads = LoadState::Loaded(threads);
             }
             Action::DiffCursorDown => {
                 let rows = self.current_visible_rows();
@@ -142,6 +165,14 @@ impl App {
             Action::DescriptionScrollUp => {
                 self.state.ui.description_scroll =
                     self.state.ui.description_scroll.saturating_sub(1);
+            }
+            Action::OverviewScrollDown => {
+                self.state.ui.overview_scroll =
+                    self.state.ui.overview_scroll.saturating_add(1);
+            }
+            Action::OverviewScrollUp => {
+                self.state.ui.overview_scroll =
+                    self.state.ui.overview_scroll.saturating_sub(1);
             }
         }
     }

@@ -5,7 +5,12 @@ use ratatui::{Frame, crossterm::event::KeyCode};
 
 use crate::{
     app::state::{AppState, Screen},
-    domain::{commit::Commit, diff::Diff, pr::PullRequest},
+    domain::{
+        comment::{Comment, ReviewThread},
+        commit::Commit,
+        diff::Diff,
+        pr::PullRequest,
+    },
     tui::pr_detail::DetailTab,
 };
 
@@ -22,6 +27,8 @@ pub enum Action {
     PrsLoaded(Vec<PullRequest>),
     CommitsLoaded(u64, Vec<Commit>),
     DiffLoaded(u64, Diff),
+    CommentsLoaded(u64, Vec<Comment>),
+    ReviewThreadsLoaded(u64, Vec<ReviewThread>),
     DiffCursorDown,
     DiffCursorUp,
     DiffToggleAtCursor,
@@ -30,6 +37,8 @@ pub enum Action {
     ToggleDescription,
     DescriptionScrollDown,
     DescriptionScrollUp,
+    OverviewScrollDown,
+    OverviewScrollUp,
 }
 
 pub fn render(frame: &mut Frame, state: &mut AppState) {
