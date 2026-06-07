@@ -7,8 +7,6 @@ use crate::{
 };
 
 pub fn render(frame: &mut Frame, pr: &PullRequest, ui: &mut UiMemory, area: Rect) {
-    // Reserve the rightmost column for the scrollbar so wrapped markdown
-    // doesn't get clipped or overlap the thumb.
     let content_width = area.width.saturating_sub(1);
     let lines = widgets::trim_blank_lines(widgets::markdown(description_body(pr), content_width));
 
@@ -18,7 +16,10 @@ pub fn render(frame: &mut Frame, pr: &PullRequest, ui: &mut UiMemory, area: Rect
     let scroll = ui.description_scroll.min(max_scroll);
     ui.description_scroll = scroll;
 
-    let content_area = Rect { width: content_width, ..area };
+    let content_area = Rect {
+        width: content_width,
+        ..area
+    };
     let paragraph = Paragraph::new(lines).scroll((scroll, 0));
     frame.render_widget(paragraph, content_area);
 

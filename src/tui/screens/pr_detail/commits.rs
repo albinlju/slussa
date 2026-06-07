@@ -19,8 +19,9 @@ pub fn render(frame: &mut Frame, pr_data: Option<&PrData>, area: Rect) {
 
     match commits_state {
         None | Some(LoadState::NotRequested) | Some(LoadState::Loading) => {
-            let paragraph = Paragraph::new(format!("{}  Loading commits...", widgets::spinner_frame()))
-                .style(Style::default().fg(theme.warning));
+            let paragraph =
+                Paragraph::new(format!("{}  Loading commits...", widgets::spinner_frame()))
+                    .style(Style::default().fg(theme.warning));
             frame.render_widget(paragraph, area);
         }
         Some(LoadState::Failed(msg)) => {
@@ -29,8 +30,7 @@ pub fn render(frame: &mut Frame, pr_data: Option<&PrData>, area: Rect) {
             frame.render_widget(paragraph, area);
         }
         Some(LoadState::Loaded(commits)) if commits.is_empty() => {
-            let paragraph =
-                Paragraph::new("(no commits)").style(Style::default().fg(theme.muted));
+            let paragraph = Paragraph::new("(no commits)").style(Style::default().fg(theme.muted));
             frame.render_widget(paragraph, area);
         }
         Some(LoadState::Loaded(commits)) => {
@@ -57,27 +57,24 @@ pub fn render(frame: &mut Frame, pr_data: Option<&PrData>, area: Rect) {
     }
 }
 
-fn build_commit_line(
-    c: &Commit,
-    is_last: bool,
-    now: DateTime<Utc>,
-    width: usize,
-) -> Line<'static> {
+fn build_commit_line(c: &Commit, is_last: bool, now: DateTime<Utc>, width: usize) -> Line<'static> {
     let theme = theme::current();
-    // ├─ for all but the last (oldest) commit, └─ to close the branch off
-    // at the bottom.
     let graph = if is_last { "└─ " } else { "├─ " };
     let short_oid: String = c.oid.chars().take(7).collect();
     let age = widgets::relative_age(c.authored_at, now);
 
-    // Right segment: "author  +N -M  · age". Built upfront so we can measure
-    // it with the spans themselves instead of summing hand-counted literals.
     let right_spans: Vec<Span<'static>> = vec![
         Span::styled(c.author_name.clone(), Style::default().fg(theme.info)),
         Span::raw("  "),
-        Span::styled(format!("+{}", c.additions), Style::default().fg(theme.diff_added)),
+        Span::styled(
+            format!("+{}", c.additions),
+            Style::default().fg(theme.diff_added),
+        ),
         Span::raw(" "),
-        Span::styled(format!("-{}", c.deletions), Style::default().fg(theme.diff_removed)),
+        Span::styled(
+            format!("-{}", c.deletions),
+            Style::default().fg(theme.diff_removed),
+        ),
         Span::styled("  · ", Style::default().fg(theme.muted)),
         Span::styled(age, Style::default().fg(theme.muted)),
     ];
@@ -88,7 +85,11 @@ fn build_commit_line(
         .saturating_sub(left_fixed + right_visible + 2) // 2-col min gap before right block
         .max(10);
     let headline: String = if c.headline.chars().count() > headline_max {
-        let mut s: String = c.headline.chars().take(headline_max.saturating_sub(1)).collect();
+        let mut s: String = c
+            .headline
+            .chars()
+            .take(headline_max.saturating_sub(1))
+            .collect();
         s.push('…');
         s
     } else {
