@@ -6,7 +6,7 @@ use ratatui::{
     layout::{Constraint, Direction, Layout, Rect},
     style::{Modifier, Style},
     text::{Line, Span},
-    widgets::{Block, Borders, List, ListItem, ListState, Paragraph},
+    widgets::{Block, BorderType, Borders, List, ListItem, ListState, Paragraph},
 };
 
 use crate::{
@@ -45,6 +45,11 @@ pub fn render(
         None | Some(LoadState::NotRequested) | Some(LoadState::Loading) => {
             let paragraph = Paragraph::new(format!("{} Loading diff...", spinner_frame()))
                 .style(Style::default().fg(theme.warning));
+            frame.render_widget(paragraph, area);
+        }
+        Some(LoadState::Failed(msg)) => {
+            let paragraph = Paragraph::new(format!("Couldn't load diff: {msg}"))
+                .style(Style::default().fg(theme.error));
             frame.render_widget(paragraph, area);
         }
         Some(LoadState::Loaded(diff)) if diff.files.is_empty() => {
@@ -111,6 +116,7 @@ fn render_tree(
     // corners line up at the same y as the diff box.
     let tree_block = Block::default()
         .borders(Borders::ALL)
+        .border_type(BorderType::Rounded)
         .border_style(Style::default().fg(theme.divider));
     let tree_inner = tree_block.inner(area);
     frame.render_widget(tree_block, area);
@@ -258,6 +264,7 @@ fn render_diff_pane(
     // the file path on the left and the +A -D stats on the right.
     let pane_block = Block::default()
         .borders(Borders::ALL)
+        .border_type(BorderType::Rounded)
         .border_style(Style::default().fg(theme.divider));
     let pane_inner = pane_block.inner(area);
     frame.render_widget(pane_block, area);

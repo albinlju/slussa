@@ -25,11 +25,11 @@ pub enum Action {
     PrevTab,
     SelectTab(DetailTab),
     OpenPr(u64),
-    PrsLoaded(Vec<PullRequest>),
-    CommitsLoaded(u64, Vec<Commit>),
-    DiffLoaded(u64, Diff),
-    CommentsLoaded(u64, Vec<Comment>),
-    ReviewThreadsLoaded(u64, Vec<ReviewThread>),
+    PrsLoaded(Result<Vec<PullRequest>, String>),
+    CommitsLoaded(u64, Result<Vec<Commit>, String>),
+    DiffLoaded(u64, Result<Diff, String>),
+    CommentsLoaded(u64, Result<Vec<Comment>, String>),
+    ReviewThreadsLoaded(u64, Result<Vec<ReviewThread>, String>),
     DiffCursorDown,
     DiffCursorUp,
     DiffToggleAtCursor,
@@ -73,4 +73,41 @@ pub fn spinner_frame() -> &'static str {
         .as_millis();
     let idx = (now / 100) as usize % SPINNER_FRAMES.len();
     SPINNER_FRAMES[idx]
+}
+
+/// Footer with left-side key hints and a right-side `donate / ?` block.
+/// Used by both pr_list and pr_detail so the bar stays consistent.
+pub fn render_footer(frame: &mut Frame, area: ratatui::layout::Rect, hints: &str) {
+    use ratatui::{
+        style::Style,
+        text::{Line, Span},
+        widgets::Paragraph,
+    };
+
+    let theme = crate::tui::theme::current();
+    let muted = Style::default().fg(theme.muted);
+
+    let left = format!("  {}", hints);
+    // Nerd Font glyphs: \u{f004} heart, \u{f059} question-circle.
+    let version = format!("v{}", env!("CARGO_PKG_VERSION"));
+    let right_spans = vec![
+        Span::styled("\u{f004}", Style::default().fg(theme.orange)),
+        Span::styled(" donate", muted),
+        Span::raw("    "),
+        Span::styled("\u{f059}", muted),
+        Span::styled(" help", muted),
+        Span::raw("    "),
+        Span::styled(version, muted),
+        Span::raw("  "),
+    ];
+
+    let left_w: usize = left.chars().count();
+    let right_w: usize = right_spans.iter().map(|s| s.content.chars().count()).sum();
+    let gap = (area.width as usize)
+        .saturating_sub(left_w + right_w)
+        .max(1);
+
+    let mut spans = vec![Span::styled(left, muted), Span::raw(" ".repeat(gap))];
+    spans.extend(right_spans);
+    frame.render_widget(Paragraph::new(Line::from(spans)), area);
 }

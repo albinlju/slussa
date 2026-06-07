@@ -83,24 +83,24 @@ impl App {
                     self.spawn_load_review_threads(pr_id);
                 }
             }
-            Action::PrsLoaded(prs) => {
-                self.state.cache.prs = LoadState::Loaded(prs);
+            Action::PrsLoaded(result) => {
+                self.state.cache.prs = into_load_state(result);
             }
-            Action::CommitsLoaded(pr_id, commits) => {
+            Action::CommitsLoaded(pr_id, result) => {
                 let pr_data = self.state.cache.details.entry(pr_id).or_default();
-                pr_data.commits = LoadState::Loaded(commits);
+                pr_data.commits = into_load_state(result);
             }
-            Action::DiffLoaded(pr_id, diff) => {
+            Action::DiffLoaded(pr_id, result) => {
                 let pr_data = self.state.cache.details.entry(pr_id).or_default();
-                pr_data.diff = LoadState::Loaded(diff);
+                pr_data.diff = into_load_state(result);
             }
-            Action::CommentsLoaded(pr_id, comments) => {
+            Action::CommentsLoaded(pr_id, result) => {
                 let pr_data = self.state.cache.details.entry(pr_id).or_default();
-                pr_data.comments = LoadState::Loaded(comments);
+                pr_data.comments = into_load_state(result);
             }
-            Action::ReviewThreadsLoaded(pr_id, threads) => {
+            Action::ReviewThreadsLoaded(pr_id, result) => {
                 let pr_data = self.state.cache.details.entry(pr_id).or_default();
-                pr_data.review_threads = LoadState::Loaded(threads);
+                pr_data.review_threads = into_load_state(result);
             }
             Action::DiffCursorDown => {
                 let rows = self.current_visible_rows();
@@ -201,6 +201,16 @@ impl App {
         }
     }
 
+}
+
+fn into_load_state<T>(result: Result<T, String>) -> LoadState<T> {
+    match result {
+        Ok(v) => LoadState::Loaded(v),
+        Err(e) => LoadState::Failed(e),
+    }
+}
+
+impl App {
     fn current_visible_rows(&self) -> Vec<TreeRow> {
         let pr_id = match self.state.screen {
             Screen::Detail { pr_id, .. } => pr_id,

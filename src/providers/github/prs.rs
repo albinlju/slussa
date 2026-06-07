@@ -1,6 +1,5 @@
 use chrono::{DateTime, Utc};
 use serde::Deserialize;
-use std::process::Command;
 
 use crate::domain::ci::{CiState, CiStatus};
 use crate::domain::pr::{PrStatus, PullRequest};
@@ -8,6 +7,7 @@ use crate::domain::provider::ProviderKind;
 use crate::domain::repo::Repo;
 use crate::domain::review::{Reviewer, ReviewerState};
 use crate::domain::user::User;
+use crate::providers::github::error::{FetchError, run_gh};
 
 #[derive(Debug, Default, Deserialize)]
 struct GhAuthor {
@@ -72,25 +72,18 @@ struct GhPr {
     status_check_rollup: Vec<GhCheck>,
 }
 
-pub fn fetch_prs() -> Vec<PullRequest> {
-    let output = Command::new("gh")
-        .args([
-            "pr",
-            "list",
-            "--json",
-            "title,number,author,state,isDraft,headRefName,baseRefName,body,\
-             createdAt,updatedAt,additions,deletions,changedFiles,comments,\
-             latestReviews,statusCheckRollup",
-        ])
-        .output()
-        .expect("gh not installed");
-
-    let gh_prs: Vec<GhPr> = match serde_json::from_slice(&output.stdout) {
-        Ok(r) => r,
-        Err(_) => return Vec::new(),
-    };
-
-    gh_prs.into_iter().map(map_pr).collect()
+pub fn fetch_prs() -> Result<Vec<PullRequest>, FetchError> {
+    let stdout = run_gh(&[
+        "pr",
+        "list",
+        "--json",
+        "title,number,author,state,isDraft,headRefName,baseRefName,body,\
+         createdAt,updatedAt,additions,deletions,changedFiles,comments,\
+         latestReviews,statusCheckRollup",
+    ])?;
+    let gh_prs: Vec<GhPr> =
+        serde_json::from_slice(&stdout).map_err(|e| FetchError::ParseFailed(e.to_string()))?;
+    Ok(gh_prs.into_iter().map(map_pr).collect())
 }
 
 fn map_pr(gh: GhPr) -> PullRequest {
