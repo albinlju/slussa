@@ -12,7 +12,8 @@ use crate::{
     domain::comment::{Comment, ReviewThread},
     tui::{
         pr_detail::{
-            relative_age, render_markdown, render_thumb_scrollbar, trim_blank_lines,
+            box_text_width, boxed, relative_age, render_markdown, render_thumb_scrollbar,
+            strip_glamour_margin, trim_blank_lines,
         },
         spinner_frame, theme,
     },
@@ -243,82 +244,6 @@ fn build_review_lines(
     }
 
     Some(boxed(header, body, width))
-}
-
-/// Text width available inside the box — outer minus 2 border cols and
-/// 2 cols of internal horizontal padding.
-fn box_text_width(outer: u16) -> u16 {
-    outer.saturating_sub(4)
-}
-
-/// Walk each line's spans and strip up to `n` leading whitespace cells from
-/// the start of the line. Used to peel off glamour's fixed document margin
-/// so wrapped markdown sits flush against the box padding.
-fn strip_glamour_margin(lines: Vec<Line<'static>>, n: usize) -> Vec<Line<'static>> {
-    lines.into_iter().map(|line| strip_line_left(line, n)).collect()
-}
-
-fn strip_line_left(line: Line<'static>, mut budget: usize) -> Line<'static> {
-    let line_style = line.style;
-    let mut out: Vec<Span<'static>> = Vec::with_capacity(line.spans.len());
-    let mut done = false;
-    for span in line.spans {
-        if done || budget == 0 {
-            out.push(span);
-            continue;
-        }
-        let chars: Vec<char> = span.content.chars().collect();
-        let strip_count = chars
-            .iter()
-            .take(budget)
-            .take_while(|c| c.is_whitespace())
-            .count();
-        budget -= strip_count;
-        if strip_count < chars.len() {
-            let remainder: String = chars.into_iter().skip(strip_count).collect();
-            out.push(Span::styled(remainder, span.style));
-            done = true;
-        }
-        // else: whole span was whitespace within the budget — drop it.
-    }
-    Line::from(out).style(line_style)
-}
-
-/// Wrap a header line + body lines in a `┌──┐ │ ├──┤ │ └──┘` frame at
-/// the given outer `width`. The first row inside is the header, separated
-/// from the body by a `├─┤` divider.
-fn boxed(header: Line<'static>, body: Vec<Line<'static>>, width: u16) -> Vec<Line<'static>> {
-    let theme = theme::current();
-    let style = Style::default().fg(theme.divider);
-    let inner = (width as usize).saturating_sub(2); // between left/right border
-    let text_w = inner.saturating_sub(2); // also minus 1-col padding on each side
-
-    let bar = |s: String| Line::from(Span::styled(s, style));
-
-    let mut out: Vec<Line<'static>> = Vec::new();
-    out.push(bar(format!("┌{}┐", "─".repeat(inner))));
-    out.push(wrap_box_line(header, text_w, style));
-    out.push(bar(format!("├{}┤", "─".repeat(inner))));
-    for line in body {
-        out.push(wrap_box_line(line, text_w, style));
-    }
-    out.push(bar(format!("└{}┘", "─".repeat(inner))));
-    out
-}
-
-fn wrap_box_line(line: Line<'static>, text_w: usize, border: Style) -> Line<'static> {
-    let visible: usize = line.spans.iter().map(|s| s.width()).sum();
-    let pad = text_w.saturating_sub(visible);
-    let line_style = line.style;
-    let mut spans: Vec<Span<'static>> = Vec::with_capacity(line.spans.len() + 3);
-    spans.push(Span::styled("│ ".to_string(), border));
-    for s in line.spans {
-        let merged = line_style.patch(s.style);
-        spans.push(Span::styled(s.content, merged));
-    }
-    spans.push(Span::raw(" ".repeat(pad + 1)));
-    spans.push(Span::styled("│".to_string(), border));
-    Line::from(spans)
 }
 
 fn issue_comment_header(
