@@ -2,7 +2,14 @@ pub mod pr_detail;
 pub mod pr_list;
 pub mod theme;
 
-use ratatui::{Frame, crossterm::event::KeyCode};
+use ratatui::{
+    Frame,
+    crossterm::event::KeyCode,
+    layout::Rect,
+    style::Style,
+    text::{Line, Span},
+    widgets::Paragraph,
+};
 
 use crate::{
     app::state::{AppState, Screen},
@@ -77,17 +84,11 @@ pub fn spinner_frame() -> &'static str {
 
 /// Footer with left-side key hints and a right-side `donate / ?` block.
 /// Used by both pr_list and pr_detail so the bar stays consistent.
-pub fn render_footer(frame: &mut Frame, area: ratatui::layout::Rect, hints: &str) {
-    use ratatui::{
-        style::Style,
-        text::{Line, Span},
-        widgets::Paragraph,
-    };
-
-    let theme = crate::tui::theme::current();
+pub fn render_footer(frame: &mut Frame, area: Rect, hints: &str) {
+    let theme = theme::current();
     let muted = Style::default().fg(theme.muted);
 
-    let left = format!("  {}", hints);
+    let left = format!("  {hints}");
     // Nerd Font glyphs: \u{f004} heart, \u{f059} question-circle.
     let version = format!("v{}", env!("CARGO_PKG_VERSION"));
     let right_spans = vec![
@@ -101,8 +102,10 @@ pub fn render_footer(frame: &mut Frame, area: ratatui::layout::Rect, hints: &str
         Span::raw("  "),
     ];
 
-    let left_w: usize = left.chars().count();
-    let right_w: usize = right_spans.iter().map(|s| s.content.chars().count()).sum();
+    // Use `Span::width()` (unicode display width) since the right segment
+    // has Nerd Font glyphs that may not be 1 char = 1 cell.
+    let left_w = left.chars().count();
+    let right_w: usize = right_spans.iter().map(|s| s.width()).sum();
     let gap = (area.width as usize)
         .saturating_sub(left_w + right_w)
         .max(1);

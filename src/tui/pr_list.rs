@@ -1,7 +1,11 @@
 use crate::{
     app::state::{AppState, LoadState, StatusFilter},
-    domain::{ci::CiState, review::ReviewerState},
-    tui::{Action, spinner_frame, theme},
+    domain::{
+        ci::CiState,
+        pr::{PrStatus, PullRequest},
+        review::ReviewerState,
+    },
+    tui::{Action, render_footer, spinner_frame, theme},
 };
 use chrono::Utc;
 use ratatui::{
@@ -56,7 +60,7 @@ impl ColWidths {
 }
 
 enum PrListView<'a> {
-    Loaded(Vec<&'a crate::domain::pr::PullRequest>),
+    Loaded(Vec<&'a PullRequest>),
     Loading,
     Failed(String),
 }
@@ -153,7 +157,7 @@ pub fn render(frame: &mut Frame, state: &AppState, area: ratatui::layout::Rect) 
         }
     }
 
-    crate::tui::render_footer(
+    render_footer(
         frame,
         chunks[1],
         "j/k: navigate  enter: open PR  f: filter  q: quit",
@@ -211,13 +215,13 @@ fn render_filter_picker(frame: &mut Frame, state: &AppState, area: Rect) {
     frame.render_widget(help, inner_chunks[1]);
 }
 
-fn row_for_pr(pr: &crate::domain::pr::PullRequest, widths: &ColWidths) -> ListItem<'static> {
+fn row_for_pr(pr: &PullRequest, widths: &ColWidths) -> ListItem<'static> {
     let theme = theme::current();
     let status_color = match pr.status {
-        crate::domain::pr::PrStatus::Draft => theme.status_draft,
-        crate::domain::pr::PrStatus::Open => theme.status_open,
-        crate::domain::pr::PrStatus::Merged => theme.status_merged,
-        crate::domain::pr::PrStatus::Declined => theme.status_declined,
+        PrStatus::Draft => theme.status_draft,
+        PrStatus::Open => theme.status_open,
+        PrStatus::Merged => theme.status_merged,
+        PrStatus::Declined => theme.status_declined,
     };
 
     let days_old = (Utc::now() - pr.created).num_days();
@@ -226,7 +230,7 @@ fn row_for_pr(pr: &crate::domain::pr::PullRequest, widths: &ColWidths) -> ListIt
     } else if days_old == 1 {
         "1d".to_string()
     } else {
-        format!("{}d", days_old)
+        format!("{days_old}d")
     };
 
     // Nerd Font CI status glyphs (requires a Nerd Font in the terminal).
@@ -271,7 +275,7 @@ fn row_for_pr(pr: &crate::domain::pr::PullRequest, widths: &ColWidths) -> ListIt
         } else {
             theme.warning
         };
-        (format!("{}/{}", approved, total), color)
+        (format!("{approved}/{total}"), color)
     };
 
     // Truncate title/author so they don't push later columns out of alignment
