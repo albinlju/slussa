@@ -176,7 +176,13 @@ impl EventStyle {
 fn build_issue_lines(c: &Comment, width: u16, now: DateTime<Utc>) -> Vec<Line<'static>> {
     let text_width = box_text_width(width);
     let header = issue_comment_header(&c.author.username, c.created, now);
-    let body = trim_blank_lines(render_markdown(&c.content, text_width));
+    // Glamour's Dark theme adds a 2-col document margin to every rendered
+    // line. Stripping it pulls the comment text flush against the box's
+    // inner padding instead of sitting another two cols in.
+    let body = trim_blank_lines(strip_glamour_margin(
+        render_markdown(&c.content, text_width + 2),
+        2,
+    ));
     boxed(header, body, width)
 }
 
@@ -211,7 +217,7 @@ fn build_review_lines(
     body.push(Line::raw(""));
 
     if !thread.diff_hunk.is_empty() {
-        body.extend(diff_hunk_lines(&thread.diff_hunk));
+        body.extend(styled_diff_hunk(&thread.diff_hunk, text_width));
         body.push(Line::raw(""));
     }
 
@@ -230,7 +236,10 @@ fn build_review_lines(
                 Span::styled(format!(" · {}", age), Style::default().fg(theme.muted)),
             ]));
         }
-        body.extend(trim_blank_lines(render_markdown(&comment.content, text_width)));
+        body.extend(trim_blank_lines(strip_glamour_margin(
+            render_markdown(&comment.content, text_width + 2),
+            2,
+        )));
     }
 
     Some(boxed(header, body, width))
@@ -242,6 +251,39 @@ fn box_text_width(outer: u16) -> u16 {
     outer.saturating_sub(4)
 }
 
+/// Walk each line's spans and strip up to `n` leading whitespace cells from
+/// the start of the line. Used to peel off glamour's fixed document margin
+/// so wrapped markdown sits flush against the box padding.
+fn strip_glamour_margin(lines: Vec<Line<'static>>, n: usize) -> Vec<Line<'static>> {
+    lines.into_iter().map(|line| strip_line_left(line, n)).collect()
+}
+
+fn strip_line_left(line: Line<'static>, mut budget: usize) -> Line<'static> {
+    let line_style = line.style;
+    let mut out: Vec<Span<'static>> = Vec::with_capacity(line.spans.len());
+    let mut done = false;
+    for span in line.spans {
+        if done || budget == 0 {
+            out.push(span);
+            continue;
+        }
+        let chars: Vec<char> = span.content.chars().collect();
+        let strip_count = chars
+            .iter()
+            .take(budget)
+            .take_while(|c| c.is_whitespace())
+            .count();
+        budget -= strip_count;
+        if strip_count < chars.len() {
+            let remainder: String = chars.into_iter().skip(strip_count).collect();
+            out.push(Span::styled(remainder, span.style));
+            done = true;
+        }
+        // else: whole span was whitespace within the budget — drop it.
+    }
+    Line::from(out).style(line_style)
+}
+
 /// Wrap a header line + body lines in a `┌──┐ │ ├──┤ │ └──┘` frame at
 /// the given outer `width`. The first row inside is the header, separated
 /// from the body by a `├─┤` divider.
@@ -251,32 +293,29 @@ fn boxed(header: Line<'static>, body: Vec<Line<'static>>, width: u16) -> Vec<Lin
     let inner = (width as usize).saturating_sub(2); // between left/right border
     let text_w = inner.saturating_sub(2); // also minus 1-col padding on each side
 
+    let bar = |s: String| Line::from(Span::styled(s, style));
+
     let mut out: Vec<Line<'static>> = Vec::new();
-    out.push(Line::styled(
-        format!("┌{}┐", "─".repeat(inner)),
-        style,
-    ));
+    out.push(bar(format!("┌{}┐", "─".repeat(inner))));
     out.push(wrap_box_line(header, text_w, style));
-    out.push(Line::styled(
-        format!("├{}┤", "─".repeat(inner)),
-        style,
-    ));
+    out.push(bar(format!("├{}┤", "─".repeat(inner))));
     for line in body {
         out.push(wrap_box_line(line, text_w, style));
     }
-    out.push(Line::styled(
-        format!("└{}┘", "─".repeat(inner)),
-        style,
-    ));
+    out.push(bar(format!("└{}┘", "─".repeat(inner))));
     out
 }
 
 fn wrap_box_line(line: Line<'static>, text_w: usize, border: Style) -> Line<'static> {
-    let visible: usize = line.spans.iter().map(|s| s.content.chars().count()).sum();
+    let visible: usize = line.spans.iter().map(|s| s.width()).sum();
     let pad = text_w.saturating_sub(visible);
+    let line_style = line.style;
     let mut spans: Vec<Span<'static>> = Vec::with_capacity(line.spans.len() + 3);
     spans.push(Span::styled("│ ".to_string(), border));
-    spans.extend(line.spans);
+    for s in line.spans {
+        let merged = line_style.patch(s.style);
+        spans.push(Span::styled(s.content, merged));
+    }
     spans.push(Span::raw(" ".repeat(pad + 1)));
     spans.push(Span::styled("│".to_string(), border));
     Line::from(spans)
@@ -303,20 +342,59 @@ fn issue_comment_header(
     ])
 }
 
-fn diff_hunk_lines(hunk: &str) -> Vec<Line<'static>> {
+/// Diff hunk styled to match the Diff tab — full-row bg tint on added/removed
+/// lines, strong-color prefix for `+`/`-`, plain muted for context. `width` is
+/// the row width inside the box bracket so the bg fill reaches the right edge.
+fn styled_diff_hunk(hunk: &str, width: u16) -> Vec<Line<'static>> {
     let theme = theme::current();
+    let row_w = width as usize;
     hunk.lines()
         .map(|line| {
-            let style = if line.starts_with("@@") {
-                Style::default().fg(theme.info)
-            } else if line.starts_with('+') {
-                Style::default().fg(theme.diff_added)
-            } else if line.starts_with('-') {
-                Style::default().fg(theme.diff_removed)
+            if line.starts_with("@@") {
+                Line::from(Span::styled(
+                    line.to_string(),
+                    Style::default().fg(theme.info),
+                ))
+            } else if let Some(content) = line.strip_prefix('+') {
+                let visible = 1 + content.chars().count();
+                let pad = row_w.saturating_sub(visible);
+                let bg = theme.diff_added_bg;
+                Line::from(vec![
+                    Span::styled(
+                        "+".to_string(),
+                        Style::default()
+                            .fg(theme.diff_added)
+                            .bg(bg)
+                            .add_modifier(Modifier::BOLD),
+                    ),
+                    Span::styled(
+                        format!("{}{}", content, " ".repeat(pad)),
+                        Style::default().fg(theme.fg).bg(bg),
+                    ),
+                ])
+            } else if let Some(content) = line.strip_prefix('-') {
+                let visible = 1 + content.chars().count();
+                let pad = row_w.saturating_sub(visible);
+                let bg = theme.diff_removed_bg;
+                Line::from(vec![
+                    Span::styled(
+                        "-".to_string(),
+                        Style::default()
+                            .fg(theme.diff_removed)
+                            .bg(bg)
+                            .add_modifier(Modifier::BOLD),
+                    ),
+                    Span::styled(
+                        format!("{}{}", content, " ".repeat(pad)),
+                        Style::default().fg(theme.muted).bg(bg),
+                    ),
+                ])
             } else {
-                Style::default().fg(theme.muted)
-            };
-            Line::styled(line.to_string(), style)
+                Line::from(Span::styled(
+                    line.to_string(),
+                    Style::default().fg(theme.diff_context),
+                ))
+            }
         })
         .collect()
 }
