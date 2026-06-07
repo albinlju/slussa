@@ -1,9 +1,3 @@
-//! Action enum hierarchy. `Action` is what the reducer consumes and what
-//! emitters (UI key handlers + background fetchers) produce. Each subdomain
-//! has its own action enum; the top-level `Action` just routes between
-//! them, so adding a new variant inside a domain doesn't ripple to the
-//! top-level dispatcher.
-
 use crate::{
     domain::{
         comment::{Comment, ReviewThread},

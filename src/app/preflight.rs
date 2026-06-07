@@ -1,21 +1,11 @@
-//! Startup checks that must pass before the TUI is allowed to come up.
-//!
-//! Run synchronously in `main` before raw mode so a failure can print a
-//! friendly stderr message and exit, instead of panicking inside the
-//! alternate screen and leaving the user's terminal broken.
-
 use std::fmt;
 use std::process::Command;
 
 #[derive(Debug)]
 pub enum PreflightError {
-    /// `git remote get-url origin` failed — not a git repo, or no `origin`.
     NotAGitRepo,
-    /// Remote URL parsed but the host isn't one we support yet.
     UnsupportedHost { host: String },
-    /// `gh` binary is not on PATH.
     GhMissing,
-    /// `gh auth status` reported the user is not logged in.
     GhNotAuthenticated { host: String },
 }
 
@@ -46,7 +36,6 @@ impl fmt::Display for PreflightError {
     }
 }
 
-/// Run all startup checks.
 pub fn preflight() -> Result<(), PreflightError> {
     let host = detect_repo_host()?;
     check_gh_installed()?;
@@ -54,9 +43,6 @@ pub fn preflight() -> Result<(), PreflightError> {
     Ok(())
 }
 
-/// Resolve the `origin` remote URL and return its host. Only `github.com`
-/// is accepted right now; anything else returns `UnsupportedHost` so we
-/// can degrade gracefully when Bitbucket/GitLab repos show up.
 fn detect_repo_host() -> Result<String, PreflightError> {
     let output = Command::new("git")
         .args(["remote", "get-url", "origin"])
@@ -73,8 +59,6 @@ fn detect_repo_host() -> Result<String, PreflightError> {
     Ok(host)
 }
 
-/// Pull the host out of a git remote URL. Supports both SSH
-/// (`git@host:owner/repo.git`) and HTTPS (`https://host/owner/repo.git`).
 fn parse_remote_host(url: &str) -> Option<String> {
     if let Some(rest) = url.strip_prefix("git@") {
         let (host, _) = rest.split_once(':')?;
