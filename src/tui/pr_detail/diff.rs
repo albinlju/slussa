@@ -272,19 +272,13 @@ fn render_diff_pane(
 
     render_pane_header(frame, &file.path, adds, dels, pane_chunks[0]);
 
-    // 2-col inset on each side inside the bordered pane so the body has the
-    // same breathing room as the rest of the detail layout. Row-background
-    // fills respect this inset since `file_to_lines` pads to passed width.
+    // Diff body fills the full `pane_inner` width so the row-background tint
+    // on +/- lines flows to the box's left/right borders. Each line's own
+    // padding handles the 2-col left/right gutter for the content itself.
     let body_area = pane_chunks[1];
-    let body = Rect {
-        x: body_area.x + 2,
-        y: body_area.y,
-        width: body_area.width.saturating_sub(4),
-        height: body_area.height,
-    };
-    let lines = file_to_lines(file, threads, body.width);
+    let lines = file_to_lines(file, threads, body_area.width);
     let paragraph = Paragraph::new(lines);
-    frame.render_widget(paragraph, body);
+    frame.render_widget(paragraph, body_area);
 }
 
 fn render_pane_header(frame: &mut Frame, path: &str, adds: u32, dels: u32, area: Rect) {
@@ -339,13 +333,19 @@ fn truncate_path_left(path: &str, max: usize) -> String {
     format!("…{}", tail)
 }
 
+/// 2-col gutter on each side of the diff body — the content (prefix +
+/// text) sits inside this gutter, but the background tint extends all the
+/// way across the row to the box's borders.
+const DIFF_GUTTER: usize = 2;
+
 /// Build a single diff line with full-row background fill.
 ///
 /// The prefix character ("+" / "-") gets the strong accent color; the rest of
 /// the line text uses a calmer fg (cream for added, gray for removed) so the
-/// prefix stays the visual focus. The whole row is padded with spaces so the
-/// subtle background tint reaches the right edge of the diff pane. Context
-/// lines have no background — only changed lines get the colored band.
+/// prefix stays the visual focus. The bg tint flows from the box's left
+/// border to its right border by padding the row to the full inner width
+/// — only the content position uses the 2-col gutter. Context lines have
+/// no background tint, only the gutter for alignment.
 fn styled_diff_line(diff_line: &DiffLine, width: u16) -> Line<'static> {
     let theme = theme::current();
     let (prefix, content) = match diff_line {
@@ -354,14 +354,16 @@ fn styled_diff_line(diff_line: &DiffLine, width: u16) -> Line<'static> {
         DiffLine::Context(c) => (" ", c.as_str()),
     };
 
-    let visible_len = 1 + content.chars().count();
+    let visible_len = DIFF_GUTTER + 1 + content.chars().count();
     let pad = (width as usize).saturating_sub(visible_len);
     let padding = " ".repeat(pad);
+    let gutter = " ".repeat(DIFF_GUTTER);
 
     match diff_line {
         DiffLine::Added(_) => {
             let bg = theme.diff_added_bg;
             Line::from(vec![
+                Span::styled(gutter, Style::default().bg(bg)),
                 Span::styled(
                     prefix.to_string(),
                     Style::default()
@@ -378,6 +380,7 @@ fn styled_diff_line(diff_line: &DiffLine, width: u16) -> Line<'static> {
         DiffLine::Removed(_) => {
             let bg = theme.diff_removed_bg;
             Line::from(vec![
+                Span::styled(gutter, Style::default().bg(bg)),
                 Span::styled(
                     prefix.to_string(),
                     Style::default()
@@ -392,7 +395,7 @@ fn styled_diff_line(diff_line: &DiffLine, width: u16) -> Line<'static> {
             ])
         }
         DiffLine::Context(_) => Line::styled(
-            format!("{}{}", prefix, content),
+            format!("{}{}{}", gutter, prefix, content),
             Style::default().fg(theme.diff_context),
         ),
     }
@@ -413,9 +416,16 @@ fn file_to_lines(file: &FileDiff, threads: &[ReviewThread], width: u16) -> Vec<L
 
     let now = Utc::now();
 
+    let gutter = " ".repeat(DIFF_GUTTER);
+    // Inline-thread box is rendered narrower than the diff row so the colored
+    // bg around it visibly flows past the box on both sides. Width subtracts
+    // 4 cols (2 each side); the box itself is then offset by 2 cols on its
+    // left when added to the lines.
+    let thread_width = width.saturating_sub(2 * DIFF_GUTTER as u16);
+
     for hunk in &file.hunks {
         lines.push(Line::styled(
-            format!("@@ -{} +{} @@", hunk.old_start, hunk.new_start),
+            format!("{}@@ -{} +{} @@", gutter, hunk.old_start, hunk.new_start),
             Style::default().fg(theme.info),
         ));
 
@@ -432,7 +442,14 @@ fn file_to_lines(file: &FileDiff, threads: &[ReviewThread], width: u16) -> Vec<L
             if let Some(ln) = current_line {
                 if let Some(threads_here) = comments_at.get(&ln) {
                     for thread in threads_here {
-                        lines.extend(render_inline_thread(thread, width, now));
+                        for tline in render_inline_thread(thread, thread_width, now) {
+                            let line_style = tline.style;
+                            let mut spans: Vec<Span<'static>> =
+                                Vec::with_capacity(tline.spans.len() + 1);
+                            spans.push(Span::raw(gutter.clone()));
+                            spans.extend(tline.spans);
+                            lines.push(Line::from(spans).style(line_style));
+                        }
                     }
                 }
             }
