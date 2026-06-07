@@ -92,6 +92,9 @@ pub enum LoadState<T> {
     NotRequested,
     Loading,
     Loaded(T),
+    /// Fetch ran but failed — message comes from the provider's `FetchError`
+    /// and is what we show the user in the relevant section.
+    Failed(String),
 }
 
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]

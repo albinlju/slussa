@@ -1,15 +1,11 @@
-use std::process::Command;
-
 use crate::domain::diff::{Diff, DiffLine, FileDiff, Hunk};
+use crate::providers::github::error::{FetchError, run_gh};
 
-pub fn fetch_diff(pr_number: u64) -> Diff {
-    let output = Command::new("gh")
-        .args(["pr", "diff", &pr_number.to_string()])
-        .output()
-        .expect("gh not installed");
-
-    let text = String::from_utf8_lossy(&output.stdout);
-    parse_unified_diff(&text)
+pub fn fetch_diff(pr_number: u64) -> Result<Diff, FetchError> {
+    let pr_arg = pr_number.to_string();
+    let stdout = run_gh(&["pr", "diff", &pr_arg])?;
+    let text = String::from_utf8_lossy(&stdout);
+    Ok(parse_unified_diff(&text))
 }
 
 fn parse_unified_diff(text: &str) -> Diff {

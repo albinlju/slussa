@@ -1,9 +1,9 @@
 use chrono::{DateTime, Utc};
 use serde::Deserialize;
-use std::process::Command;
 
 use crate::domain::comment::Comment;
 use crate::domain::user::User;
+use crate::providers::github::error::{FetchError, run_gh};
 
 #[derive(Debug, Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -30,25 +30,17 @@ struct GhCommentsResponse {
     comments: Vec<GhComment>,
 }
 
-pub fn fetch_comments(pr_number: u64) -> Vec<Comment> {
-    let output = Command::new("gh")
-        .args(["pr", "view", &pr_number.to_string(), "--json", "comments"])
-        .output()
-        .expect("gh not installed");
-
-    // Don't panic on parse failure — gh schema varies between PR types and
-    // we'd rather show an empty list than rip down the worker thread (which
-    // smears the panic across the terminal).
-    let resp: GhCommentsResponse = match serde_json::from_slice(&output.stdout) {
-        Ok(r) => r,
-        Err(_) => return Vec::new(),
-    };
-
-    resp.comments
+pub fn fetch_comments(pr_number: u64) -> Result<Vec<Comment>, FetchError> {
+    let pr_arg = pr_number.to_string();
+    let stdout = run_gh(&["pr", "view", &pr_arg, "--json", "comments"])?;
+    let resp: GhCommentsResponse =
+        serde_json::from_slice(&stdout).map_err(|e| FetchError::ParseFailed(e.to_string()))?;
+    Ok(resp
+        .comments
         .into_iter()
         .enumerate()
         .map(|(idx, gh)| map_comment(idx as u64, gh))
-        .collect()
+        .collect())
 }
 
 fn map_comment(idx: u64, gh: GhComment) -> Comment {

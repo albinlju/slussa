@@ -26,6 +26,11 @@ pub fn render(frame: &mut Frame, pr_data: Option<&PrData>, area: Rect) {
                 .style(Style::default().fg(theme.warning));
             frame.render_widget(paragraph, area);
         }
+        Some(LoadState::Failed(msg)) => {
+            let paragraph = Paragraph::new(format!("Couldn't load commits: {msg}"))
+                .style(Style::default().fg(theme.error));
+            frame.render_widget(paragraph, area);
+        }
         Some(LoadState::Loaded(commits)) if commits.is_empty() => {
             let paragraph =
                 Paragraph::new("(no commits)").style(Style::default().fg(theme.muted));

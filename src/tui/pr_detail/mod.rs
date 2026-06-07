@@ -12,7 +12,7 @@ use ratatui::{
     layout::{Constraint, Direction, Layout, Rect},
     style::{Modifier, Style},
     text::{Line, Span},
-    widgets::{Block, Borders, Padding, Paragraph},
+    widgets::{Block, BorderType, Borders, Padding, Paragraph},
 };
 
 use crate::{
@@ -94,6 +94,7 @@ pub fn render(frame: &mut Frame, state: &mut AppState, pr_id: u64, tab: DetailTa
 
     let outer = Block::default()
         .borders(Borders::ALL)
+        .border_type(BorderType::Rounded)
         .border_style(Style::default().fg(theme.border));
     let inner = outer.inner(outer_chunks[0]);
     frame.render_widget(outer, outer_chunks[0]);
@@ -298,13 +299,13 @@ pub(super) fn boxed(
     let bar = |s: String| Line::from(Span::styled(s, style));
 
     let mut out: Vec<Line<'static>> = Vec::new();
-    out.push(bar(format!("┌{}┐", "─".repeat(inner))));
+    out.push(bar(format!("╭{}╮", "─".repeat(inner))));
     out.push(wrap_box_line(header, text_w, style));
     out.push(bar(format!("├{}┤", "─".repeat(inner))));
     for line in body {
         out.push(wrap_box_line(line, text_w, style));
     }
-    out.push(bar(format!("└{}┘", "─".repeat(inner))));
+    out.push(bar(format!("╰{}╯", "─".repeat(inner))));
     out
 }
 
@@ -556,9 +557,11 @@ fn render_content(
 }
 
 fn render_help(frame: &mut Frame, area: Rect) {
-    let help = Paragraph::new("  1-5 / h/l: tab  j/k: scroll  esc: back  q: quit")
-        .style(Style::default().fg(theme::current().muted));
-    frame.render_widget(help, area);
+    crate::tui::render_footer(
+        frame,
+        area,
+        "1-5 / h/l: tab  j/k: scroll  esc: back  q: quit",
+    );
 }
 
 pub(super) fn render_placeholder(frame: &mut Frame, text: &str, area: Rect) {

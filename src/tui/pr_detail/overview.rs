@@ -28,6 +28,22 @@ pub fn render(frame: &mut Frame, pr_data: Option<&PrData>, ui: &mut UiMemory, ar
     let comments_state = pr_data.map(|d| &d.comments);
     let threads_state = pr_data.map(|d| &d.review_threads);
 
+    // Surface any failure right away — no point spinning when the fetch
+    // already errored out. Comments and threads each can fail independently
+    // since they're separate gh calls, so show whichever did.
+    if let Some(LoadState::Failed(msg)) = comments_state {
+        let p = Paragraph::new(format!("Couldn't load comments: {msg}"))
+            .style(Style::default().fg(theme.error));
+        frame.render_widget(p, area);
+        return;
+    }
+    if let Some(LoadState::Failed(msg)) = threads_state {
+        let p = Paragraph::new(format!("Couldn't load review threads: {msg}"))
+            .style(Style::default().fg(theme.error));
+        frame.render_widget(p, area);
+        return;
+    }
+
     let comments_ready = matches!(comments_state, Some(LoadState::Loaded(_)));
     let threads_ready = matches!(threads_state, Some(LoadState::Loaded(_)));
 

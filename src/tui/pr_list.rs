@@ -10,7 +10,7 @@ use ratatui::{
     layout::{Constraint, Direction, Layout, Rect},
     style::{Modifier, Style},
     text::{Line, Span},
-    widgets::{Block, Borders, Clear, List, ListItem, ListState, Paragraph},
+    widgets::{Block, BorderType, Borders, Clear, List, ListItem, ListState, Paragraph},
 };
 
 /// Fixed widths for every column except Title. Title flexes to absorb the
@@ -55,6 +55,12 @@ impl ColWidths {
     }
 }
 
+enum PrListView<'a> {
+    Loaded(Vec<&'a crate::domain::pr::PullRequest>),
+    Loading,
+    Failed(String),
+}
+
 pub fn render(frame: &mut Frame, state: &AppState, area: ratatui::layout::Rect) {
     let theme = theme::current();
     let chunks = Layout::default()
@@ -62,21 +68,24 @@ pub fn render(frame: &mut Frame, state: &AppState, area: ratatui::layout::Rect) 
         .constraints([Constraint::Min(0), Constraint::Length(1)])
         .split(area);
 
-    let loaded_prs = match &state.cache.prs {
-        LoadState::Loaded(_) => Some(state.filtered_prs()),
-        _ => None,
+    let load_view = match &state.cache.prs {
+        LoadState::Loaded(_) => PrListView::Loaded(state.filtered_prs()),
+        LoadState::Failed(msg) => PrListView::Failed(msg.clone()),
+        _ => PrListView::Loading,
     };
 
     // Same chrome regardless of load state — outer rounded block + header row.
     // Only the body content swaps between a spinner and the actual list. The
-    // title shows the filter label always, with either the count or "…" while
-    // loading so the badge keeps its shape.
-    let title_text = match &loaded_prs {
-        Some(prs) => format!(" {} ({}) ", state.ui.list_filter.label(), prs.len()),
-        None => format!(" {} (…) ", state.ui.list_filter.label()),
+    // title shows the filter label always, with either the count, "…" while
+    // loading, or a "!" badge on failure.
+    let title_text = match &load_view {
+        PrListView::Loaded(prs) => format!(" {} ({}) ", state.ui.list_filter.label(), prs.len()),
+        PrListView::Loading => format!(" {} (…) ", state.ui.list_filter.label()),
+        PrListView::Failed(_) => format!(" {} (!) ", state.ui.list_filter.label()),
     };
     let outer_block = Block::default()
         .borders(Borders::ALL)
+        .border_type(BorderType::Rounded)
         .border_style(Style::default().fg(theme.border))
         .title(Line::styled(
             title_text,
@@ -112,8 +121,8 @@ pub fn render(frame: &mut Frame, state: &AppState, area: ratatui::layout::Rect) 
     ]));
     frame.render_widget(header, content_chunks[0]);
 
-    match loaded_prs {
-        Some(filtered) => {
+    match load_view {
+        PrListView::Loaded(filtered) => {
             let items: Vec<ListItem> = filtered.iter().map(|pr| row_for_pr(pr, &widths)).collect();
 
             let mut list_state = ListState::default();
@@ -129,7 +138,7 @@ pub fn render(frame: &mut Frame, state: &AppState, area: ratatui::layout::Rect) 
 
             frame.render_stateful_widget(list, content_chunks[1], &mut list_state);
         }
-        None => {
+        PrListView::Loading => {
             let spinner = Paragraph::new(format!(
                 "  {}  Loading pull requests…",
                 spinner_frame()
@@ -137,11 +146,18 @@ pub fn render(frame: &mut Frame, state: &AppState, area: ratatui::layout::Rect) 
             .style(Style::default().fg(theme.warning));
             frame.render_widget(spinner, content_chunks[1]);
         }
+        PrListView::Failed(msg) => {
+            let err = Paragraph::new(format!("  Couldn't load pull requests: {msg}"))
+                .style(Style::default().fg(theme.error));
+            frame.render_widget(err, content_chunks[1]);
+        }
     }
 
-    let status = Paragraph::new("  j/k: navigate  enter: open PR  f: filter  q: quit")
-        .style(Style::default().fg(theme.muted));
-    frame.render_widget(status, chunks[1]);
+    crate::tui::render_footer(
+        frame,
+        chunks[1],
+        "j/k: navigate  enter: open PR  f: filter  q: quit",
+    );
 
     if state.ui.filter_picker_open {
         render_filter_picker(frame, state, area);
@@ -164,6 +180,7 @@ fn render_filter_picker(frame: &mut Frame, state: &AppState, area: Rect) {
 
     let block = Block::default()
         .borders(Borders::ALL)
+        .border_type(BorderType::Rounded)
         .title(" Filter ")
         .border_style(Style::default().fg(theme.accent));
     let inner = block.inner(popup_area);
