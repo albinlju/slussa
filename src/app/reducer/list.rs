@@ -4,9 +4,10 @@
 use crate::{
     app::{
         App,
+        action::ListAction,
         state::{DiffViewState, Screen, StatusFilter},
     },
-    tui::{ListAction, pr_detail::DetailTab},
+    tui::screens::pr_detail::DetailTab,
 };
 
 impl App {

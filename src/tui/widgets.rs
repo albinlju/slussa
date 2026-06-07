@@ -1,0 +1,249 @@
+use chrono::{DateTime, Utc};
+use ratatui::{
+    layout::Rect,
+    style::{Color, Modifier, Style},
+    text::{Line, Span},
+};
+
+use crate::tui::theme;
+
+const SPINNER_FRAMES: &[&str] = &["⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏"];
+
+pub(super) fn spinner_frame() -> &'static str {
+    let now = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .unwrap_or_default()
+        .as_millis();
+    let idx = (now / 100) as usize % SPINNER_FRAMES.len();
+    SPINNER_FRAMES[idx]
+}
+
+/// One-line footer with left-side key hints and a right-side `donate / ?`
+/// block. Shared between pr_list and pr_detail so the bar stays consistent.
+pub(super) fn footer(width: u16, hints: &str) -> Line<'static> {
+    let theme = theme::current();
+    let muted = Style::default().fg(theme.muted);
+
+    let left = format!("  {hints}");
+    // Nerd Font glyphs: \u{f004} heart, \u{f059} question-circle.
+    let version = format!("v{}", env!("CARGO_PKG_VERSION"));
+    let right_spans = vec![
+        Span::styled("\u{f004}", Style::default().fg(theme.orange)),
+        Span::styled(" donate", muted),
+        Span::raw("    "),
+        Span::styled("\u{f059}", muted),
+        Span::styled(" help", muted),
+        Span::raw("    "),
+        Span::styled(version, muted),
+        Span::raw("  "),
+    ];
+
+    // Use `Span::width()` (unicode display width) since the right segment
+    // has Nerd Font glyphs that may not be 1 char = 1 cell.
+    let left_w = left.chars().count();
+    let right_w: usize = right_spans.iter().map(|s| s.width()).sum();
+    let gap = (width as usize).saturating_sub(left_w + right_w).max(1);
+
+    let mut spans = vec![Span::styled(left, muted), Span::raw(" ".repeat(gap))];
+    spans.extend(right_spans);
+    Line::from(spans)
+}
+
+/// Vertical thumb-style scrollbar with a fixed 3-row thumb that slides from
+/// the top to `height - 1` as `scroll` runs from `0` to `max_scroll`.
+///
+/// ratatui's built-in `Scrollbar` sizes its thumb proportionally to visible
+/// content, which for short scroll ranges means the thumb's *top* only
+/// inches down even at max scroll — it doesn't feel like "at the bottom".
+/// A fixed thumb fixes that; it compresses to 1-2 rows at the very end
+/// (lower rows fall outside the track), a small visual cost for clear
+/// "I'm at the bottom" feedback.
+pub(super) fn scrollbar(scroll: u16, max_scroll: u16, height: u16) -> Vec<Line<'static>> {
+    if max_scroll == 0 || height == 0 {
+        return Vec::new();
+    }
+    let theme = theme::current();
+    let track_len = height as usize;
+    let thumb_size = 3usize.min(track_len);
+    let max_thumb_top = track_len.saturating_sub(1);
+    let thumb_top = (scroll as usize * max_thumb_top) / max_scroll as usize;
+
+    (0..track_len)
+        .map(|y| {
+            if y >= thumb_top && y < thumb_top + thumb_size {
+                Line::styled("█", Style::default().fg(theme.accent))
+            } else {
+                Line::styled("│", Style::default().fg(theme.muted))
+            }
+        })
+        .collect()
+}
+
+/// Rightmost-column slice of `area` — where the vertical scrollbar lives.
+pub(super) fn scrollbar_area(area: Rect) -> Rect {
+    Rect {
+        x: area.x + area.width.saturating_sub(1),
+        y: area.y,
+        width: 1,
+        height: area.height,
+    }
+}
+
+/// Markdown body → ratatui lines via charmed-glamour, already wrapped to
+/// `width`. Wraps the call in `catch_unwind` so a glamour panic falls back
+/// to raw body lines instead of taking down the TUI.
+pub(super) fn markdown(body: &str, width: u16) -> Vec<Line<'static>> {
+    if width == 0 {
+        return vec![Line::default()];
+    }
+    let rendered = std::panic::catch_unwind(|| {
+        let ansi = glamour::Renderer::new()
+            .with_style(glamour::Style::Dark)
+            .with_word_wrap(width as usize)
+            .render(body);
+        ansi_to_tui::IntoText::into_text(&ansi).map(|text| text.lines)
+    });
+    let lines = match rendered {
+        Ok(Ok(lines)) => lines,
+        // ANSI bridge failed, or glamour panicked: fall back to the raw body.
+        _ => body.lines().map(|l| Line::raw(l.to_string())).collect(),
+    };
+    if lines.is_empty() {
+        vec![Line::default()]
+    } else {
+        lines
+    }
+}
+
+pub(super) fn trim_blank_lines(mut lines: Vec<Line<'static>>) -> Vec<Line<'static>> {
+    while lines.first().is_some_and(is_blank_line) {
+        lines.remove(0);
+    }
+    while lines.last().is_some_and(is_blank_line) {
+        lines.pop();
+    }
+    lines
+}
+
+fn is_blank_line(line: &Line<'static>) -> bool {
+    line.spans.is_empty() || line.spans.iter().all(|s| s.content.trim().is_empty())
+}
+
+pub(super) fn strip_glamour_margin(lines: Vec<Line<'static>>, n: usize) -> Vec<Line<'static>> {
+    lines
+        .into_iter()
+        .map(|line| strip_line_left(line, n))
+        .collect()
+}
+
+fn strip_line_left(line: Line<'static>, mut budget: usize) -> Line<'static> {
+    let line_style = line.style;
+    let mut out: Vec<Span<'static>> = Vec::with_capacity(line.spans.len());
+    let mut done = false;
+    for span in line.spans {
+        if done || budget == 0 {
+            out.push(span);
+            continue;
+        }
+        let chars: Vec<char> = span.content.chars().collect();
+        let strip_count = chars
+            .iter()
+            .take(budget)
+            .take_while(|c| c.is_whitespace())
+            .count();
+        budget -= strip_count;
+        if strip_count < chars.len() {
+            let remainder: String = chars.into_iter().skip(strip_count).collect();
+            out.push(Span::styled(remainder, span.style));
+            done = true;
+        }
+    }
+    Line::from(out).style(line_style)
+}
+
+/// Outer width − 2 border cols − 2 cols of internal horizontal padding.
+pub(super) fn box_text_width(outer: u16) -> u16 {
+    outer.saturating_sub(4)
+}
+
+pub(super) fn boxed(
+    header: Line<'static>,
+    body: Vec<Line<'static>>,
+    width: u16,
+) -> Vec<Line<'static>> {
+    let theme = theme::current();
+    let style = Style::default().fg(theme.divider);
+    let inner = (width as usize).saturating_sub(2);
+    let text_w = inner.saturating_sub(2);
+
+    let bar = |s: String| Line::from(Span::styled(s, style));
+
+    let mut out: Vec<Line<'static>> = Vec::new();
+    out.push(bar(format!("╭{}╮", "─".repeat(inner))));
+    out.push(wrap_box_line(header, text_w, style));
+    out.push(bar(format!("├{}┤", "─".repeat(inner))));
+    for line in body {
+        out.push(wrap_box_line(line, text_w, style));
+    }
+    out.push(bar(format!("╰{}╯", "─".repeat(inner))));
+    out
+}
+
+fn wrap_box_line(line: Line<'static>, text_w: usize, border: Style) -> Line<'static> {
+    let visible: usize = line.spans.iter().map(|s| s.width()).sum();
+    let pad = text_w.saturating_sub(visible);
+    let line_style = line.style;
+    let mut spans: Vec<Span<'static>> = Vec::with_capacity(line.spans.len() + 3);
+    spans.push(Span::styled("│ ", border));
+    for s in line.spans {
+        let merged = line_style.patch(s.style);
+        spans.push(Span::styled(s.content, merged));
+    }
+    spans.push(Span::raw(" ".repeat(pad + 1)));
+    spans.push(Span::styled("│", border));
+    Line::from(spans)
+}
+
+pub(super) fn diff_bg_row(
+    gutter: &'static str,
+    prefix: &'static str,
+    content: &str,
+    prefix_fg: Color,
+    bg: Color,
+    text_fg: Color,
+    row_w: usize,
+) -> Line<'static> {
+    let visible = gutter.chars().count() + prefix.chars().count() + content.chars().count();
+    let pad = row_w.saturating_sub(visible);
+    let mut spans: Vec<Span<'static>> = Vec::with_capacity(3);
+    if !gutter.is_empty() {
+        spans.push(Span::styled(gutter, Style::default().bg(bg)));
+    }
+    spans.push(Span::styled(
+        prefix,
+        Style::default()
+            .fg(prefix_fg)
+            .bg(bg)
+            .add_modifier(Modifier::BOLD),
+    ));
+    spans.push(Span::styled(
+        format!("{content}{}", " ".repeat(pad)),
+        Style::default().fg(text_fg).bg(bg),
+    ));
+    Line::from(spans)
+}
+
+pub(super) fn relative_age(when: DateTime<Utc>, now: DateTime<Utc>) -> String {
+    let delta = now - when;
+    let days = delta.num_days();
+    if days >= 1 {
+        format!("{days}d ago")
+    } else {
+        let hours = delta.num_hours();
+        if hours >= 1 {
+            format!("{hours}h ago")
+        } else {
+            "just now".to_string()
+        }
+    }
+}

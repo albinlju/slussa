@@ -2,7 +2,7 @@
 //! with the fetch result. Each variant threads `Result<T, String>` through
 //! `LoadState`'s `From` impl so the cache flips into `Loaded` or `Failed`.
 
-use crate::{app::App, tui::LoadedAction};
+use crate::app::{App, action::LoadedAction};
 
 impl App {
     pub(super) fn apply_loaded(&mut self, action: LoadedAction) {

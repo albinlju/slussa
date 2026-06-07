@@ -1,7 +1,6 @@
 mod app;
+mod clients;
 mod domain;
-#[allow(dead_code)]
-mod providers;
 mod tui;
 
 use std::process::{Command, ExitCode};

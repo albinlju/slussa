@@ -1,9 +1,11 @@
 use tokio::task;
 
 use crate::{
-    app::App,
-    providers::github::{self, FetchError},
-    tui::{Action, LoadedAction},
+    app::{
+        App,
+        action::{Action, LoadedAction},
+    },
+    clients::github::{self, FetchError},
 };
 
 impl App {

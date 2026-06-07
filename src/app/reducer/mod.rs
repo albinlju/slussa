@@ -2,7 +2,7 @@
 //! and hands the inner sub-action enum to the matching submodule's handler.
 //! Add a new action subdomain by adding a variant here and a submodule.
 
-use crate::{app::App, tui::Action};
+use crate::app::{App, action::Action};
 
 pub mod detail;
 pub mod diff;

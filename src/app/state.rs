@@ -4,7 +4,7 @@ use crate::domain::comment::{Comment, ReviewThread};
 use crate::domain::commit::Commit;
 use crate::domain::diff::Diff;
 use crate::domain::pr::{PrStatus, PullRequest};
-use crate::tui::pr_detail::DetailTab;
+use crate::tui::screens::pr_detail::DetailTab;
 
 #[derive(Debug, Default)]
 pub struct AppState {

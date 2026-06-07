@@ -1,5 +1,5 @@
 use crate::domain::diff::{Diff, DiffLine, FileDiff, Hunk};
-use crate::providers::github::error::{FetchError, run_gh};
+use crate::clients::github::error::{FetchError, run_gh};
 
 // `fetch_diff` uses `run_gh` directly (no JSON helper) because gh returns
 // raw unified-diff text rather than structured JSON.

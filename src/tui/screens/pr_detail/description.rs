@@ -3,14 +3,14 @@ use ratatui::{Frame, layout::Rect, widgets::Paragraph};
 use crate::{
     app::state::UiMemory,
     domain::pr::PullRequest,
-    tui::pr_detail::{description_body, render_markdown, render_thumb_scrollbar, trim_blank_lines},
+    tui::{screens::pr_detail::description_body, widgets},
 };
 
 pub fn render(frame: &mut Frame, pr: &PullRequest, ui: &mut UiMemory, area: Rect) {
     // Reserve the rightmost column for the scrollbar so wrapped markdown
     // doesn't get clipped or overlap the thumb.
     let content_width = area.width.saturating_sub(1);
-    let lines = trim_blank_lines(render_markdown(description_body(pr), content_width));
+    let lines = widgets::trim_blank_lines(widgets::markdown(description_body(pr), content_width));
 
     let total = lines.len();
     let visible = area.height as usize;
@@ -23,6 +23,7 @@ pub fn render(frame: &mut Frame, pr: &PullRequest, ui: &mut UiMemory, area: Rect
     frame.render_widget(paragraph, content_area);
 
     if max_scroll > 0 {
-        render_thumb_scrollbar(frame, scroll, max_scroll, area);
+        let bar = widgets::scrollbar(scroll, max_scroll, area.height);
+        frame.render_widget(Paragraph::new(bar), widgets::scrollbar_area(area));
     }
 }

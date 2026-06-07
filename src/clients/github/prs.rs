@@ -7,7 +7,7 @@ use crate::domain::provider::ProviderKind;
 use crate::domain::repo::Repo;
 use crate::domain::review::{Reviewer, ReviewerState};
 use crate::domain::user::User;
-use crate::providers::github::error::{FetchError, run_gh_json};
+use crate::clients::github::error::{FetchError, run_gh_json};
 
 #[derive(Debug, Default, Deserialize)]
 struct GhAuthor {

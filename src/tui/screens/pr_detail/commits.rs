@@ -10,10 +10,7 @@ use ratatui::{
 use crate::{
     app::state::{LoadState, PrData},
     domain::commit::Commit,
-    tui::{
-        pr_detail::relative_age,
-        spinner_frame, theme,
-    },
+    tui::{theme, widgets},
 };
 
 pub fn render(frame: &mut Frame, pr_data: Option<&PrData>, area: Rect) {
@@ -22,7 +19,7 @@ pub fn render(frame: &mut Frame, pr_data: Option<&PrData>, area: Rect) {
 
     match commits_state {
         None | Some(LoadState::NotRequested) | Some(LoadState::Loading) => {
-            let paragraph = Paragraph::new(format!("{}  Loading commits...", spinner_frame()))
+            let paragraph = Paragraph::new(format!("{}  Loading commits...", widgets::spinner_frame()))
                 .style(Style::default().fg(theme.warning));
             frame.render_widget(paragraph, area);
         }
@@ -71,7 +68,7 @@ fn build_commit_line(
     // at the bottom.
     let graph = if is_last { "└─ " } else { "├─ " };
     let short_oid: String = c.oid.chars().take(7).collect();
-    let age = relative_age(c.authored_at, now);
+    let age = widgets::relative_age(c.authored_at, now);
 
     // Right segment: "author  +N -M  · age". Built upfront so we can measure
     // it with the spans themselves instead of summing hand-counted literals.

@@ -11,10 +11,14 @@ use tokio::{
 use tokio_stream::StreamExt;
 
 use crate::{
-    app::state::{AppState, LoadState},
-    tui::{Action, key_to_action, render},
+    app::{
+        action::Action,
+        state::{AppState, LoadState},
+    },
+    tui::{key_to_action, render},
 };
 
+pub mod action;
 pub mod fetchers;
 pub mod preflight;
 pub mod reducer;
