@@ -12,7 +12,7 @@ use ratatui::{
     layout::{Constraint, Direction, Layout, Rect},
     style::{Modifier, Style},
     text::{Line, Span},
-    widgets::{Block, BorderType, Borders, Padding, Paragraph},
+    widgets::{Block, Borders, Padding, Paragraph},
 };
 
 use crate::{
@@ -84,20 +84,33 @@ pub fn render(frame: &mut Frame, state: &mut AppState, pr_id: u64, tab: DetailTa
         return;
     };
 
+    // Outer yellow frame wraps the page but the help text lives below it —
+    // same chrome split as pr_list, so the footer sits outside the border.
+    let theme = theme::current();
+    let outer_chunks = Layout::default()
+        .direction(Direction::Vertical)
+        .constraints([Constraint::Min(0), Constraint::Length(1)])
+        .split(area);
+
+    let outer = Block::default()
+        .borders(Borders::ALL)
+        .border_style(Style::default().fg(theme.border));
+    let inner = outer.inner(outer_chunks[0]);
+    frame.render_widget(outer, outer_chunks[0]);
+
     let chunks = Layout::default()
         .direction(Direction::Vertical)
         .constraints([
-            Constraint::Length(5), // header
+            Constraint::Length(3), // header (title + blank + meta)
             Constraint::Length(1), // spacer between header and tabs
-            Constraint::Min(0),    // tabs + content
-            Constraint::Length(1), // help
+            Constraint::Min(0),    // tabs + divider + content
         ])
-        .split(area);
+        .split(inner);
 
     render_header(frame, pr, chunks[0]);
     let pr_data = state.cache.details.get(&pr.id);
     render_tabs_and_content(frame, pr, pr_data, &mut state.ui, tab, chunks[2]);
-    render_help(frame, chunks[3]);
+    render_help(frame, outer_chunks[1]);
 }
 
 /// Render a PR description (markdown) into ratatui lines via charmed-glamour,
@@ -296,21 +309,21 @@ fn render_tabs_and_content(
     let chunks = Layout::default()
         .direction(Direction::Vertical)
         .constraints([
-            Constraint::Length(1), // tabs row (no border, floating)
-            Constraint::Min(0),    // content with its own bordered box
+            Constraint::Length(3), // top divider + tabs row + bottom divider
+            Constraint::Min(0),    // content (outer frame handles the border)
         ])
         .split(area);
 
-    frame.render_widget(Paragraph::new(Line::from(tab_spans)), chunks[0]);
+    // Tabs sit sandwiched between two divider lines so the row reads as its
+    // own band, separated from both the header above and the content below.
+    let tabs_block = Block::default()
+        .borders(Borders::TOP | Borders::BOTTOM)
+        .border_style(Style::default().fg(theme.divider));
+    let tabs_inner = tabs_block.inner(chunks[0]);
+    frame.render_widget(tabs_block, chunks[0]);
+    frame.render_widget(Paragraph::new(Line::from(tab_spans)), tabs_inner);
 
-    let block = Block::default()
-        .borders(Borders::ALL)
-        .border_type(BorderType::Rounded)
-        .border_style(Style::default().fg(theme.border));
-    let inner = block.inner(chunks[1]);
-    frame.render_widget(block, chunks[1]);
-
-    render_content(frame, pr, pr_data, ui, tab, inner);
+    render_content(frame, pr, pr_data, ui, tab, chunks[1]);
 }
 
 fn render_header(frame: &mut Frame, pr: &PullRequest, area: Rect) {
@@ -354,13 +367,8 @@ fn render_header(frame: &mut Frame, pr: &PullRequest, area: Rect) {
         Span::styled(pr.target_branch.clone(), Style::default().fg(theme.accent)),
     ]);
 
-    let paragraph = Paragraph::new(vec![title_line, Line::default(), meta_line]).block(
-        Block::default()
-            .borders(Borders::ALL)
-            .padding(Padding::horizontal(2))
-            .border_type(BorderType::Rounded)
-            .border_style(Style::default().fg(theme.border)),
-    );
+    let paragraph = Paragraph::new(vec![title_line, Line::default(), meta_line])
+        .block(Block::default().padding(Padding::horizontal(2)));
     frame.render_widget(paragraph, area);
 }
 
@@ -372,15 +380,15 @@ fn render_content(
     tab: DetailTab,
     area: Rect,
 ) {
-    // Description renders through glamour, which adds its own ~2-col left
-    // margin. The other tabs render text directly, so we inset their area to
-    // match the visual indent.
+    // Description renders through glamour, which adds its own ~2-col
+    // left/right margins. The other tabs render text directly, so we inset
+    // their area on both sides to match the visual indent.
     let inset = match tab {
         DetailTab::Description => area,
         _ => Rect {
             x: area.x + 2,
             y: area.y,
-            width: area.width.saturating_sub(2),
+            width: area.width.saturating_sub(4),
             height: area.height,
         },
     };

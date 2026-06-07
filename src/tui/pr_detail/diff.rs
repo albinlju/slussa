@@ -52,20 +52,112 @@ pub fn render(
             frame.render_widget(paragraph, area);
         }
         Some(LoadState::Loaded(diff)) => {
+            // 1-col empty gap between tree and diff so the tree's content
+            // doesn't touch the diff box's left border, while we still rely
+            // on the diff's `│┌└` glyphs as the single visual divider.
             let chunks = Layout::default()
                 .direction(Direction::Horizontal)
-                .constraints([Constraint::Percentage(35), Constraint::Percentage(65)])
+                .constraints([
+                    Constraint::Percentage(28),
+                    Constraint::Length(1),
+                    Constraint::Min(0),
+                ])
                 .split(area);
 
+            // Per-file (+adds, -dels) counted from the hunk lines — FileDiff
+            // doesn't carry stats so we tally them here, then sum for the
+            // tree's header badge.
+            let file_stats: Vec<(u32, u32)> =
+                diff.files.iter().map(count_file_stats).collect();
+            let total_adds: u32 = file_stats.iter().map(|(a, _)| *a).sum();
+            let total_dels: u32 = file_stats.iter().map(|(_, d)| *d).sum();
+
             let rows = build_visible_rows(&diff.files, &ui_diff.collapsed);
-            render_tree(frame, &rows, ui_diff.cursor, chunks[0]);
-            render_diff_pane(frame, diff, ui_diff.focused_file, review_threads, chunks[1]);
+            render_tree(
+                frame,
+                &rows,
+                ui_diff.cursor,
+                &file_stats,
+                diff.files.len(),
+                total_adds,
+                total_dels,
+                chunks[0],
+            );
+            render_diff_pane(
+                frame,
+                diff,
+                ui_diff.focused_file,
+                &file_stats,
+                review_threads,
+                chunks[2],
+            );
         }
     }
 }
 
-fn render_tree(frame: &mut Frame, rows: &[TreeRow], cursor: usize, area: Rect) {
+fn render_tree(
+    frame: &mut Frame,
+    rows: &[TreeRow],
+    cursor: usize,
+    file_stats: &[(u32, u32)],
+    file_count: usize,
+    total_adds: u32,
+    total_dels: u32,
+    area: Rect,
+) {
     let theme = theme::current();
+
+    // Full box around the tree so it mirrors the diff pane's framing — the
+    // corners line up at the same y as the diff box.
+    let tree_block = Block::default()
+        .borders(Borders::ALL)
+        .border_style(Style::default().fg(theme.divider));
+    let tree_inner = tree_block.inner(area);
+    frame.render_widget(tree_block, area);
+
+    let tree_chunks = Layout::default()
+        .direction(Direction::Vertical)
+        .constraints([
+            Constraint::Length(2), // header row + bottom divider
+            Constraint::Min(0),    // file list
+        ])
+        .split(tree_inner);
+
+    // Header: "N files   +A -B" with a bottom divider line below.
+    let header_block = Block::default()
+        .borders(Borders::BOTTOM)
+        .border_style(Style::default().fg(theme.divider));
+    let header_inner = header_block.inner(tree_chunks[0]);
+    frame.render_widget(header_block, tree_chunks[0]);
+    let files_label = format!("{} files", file_count);
+    let plus = format!("+{}", total_adds);
+    let minus = format!("-{}", total_dels);
+    let header_w = header_inner.width as usize;
+    let visible_right = plus.chars().count() + 1 + minus.chars().count();
+    // Same trailing 1-col gap before the right edge as the file rows below,
+    // so the +A -D blocks vertically align.
+    let header_pad = header_w
+        .saturating_sub(files_label.chars().count() + visible_right + 1)
+        .max(1);
+    let header_line = Line::from(vec![
+        Span::styled(
+            files_label,
+            Style::default()
+                .fg(theme.fg)
+                .add_modifier(Modifier::BOLD),
+        ),
+        Span::raw(" ".repeat(header_pad)),
+        Span::styled(plus, Style::default().fg(theme.diff_added)),
+        Span::raw(" "),
+        Span::styled(minus, Style::default().fg(theme.diff_removed)),
+    ]);
+    frame.render_widget(Paragraph::new(header_line), header_inner);
+
+    // File-row width: inner is `tree_inner` and the list lives in
+    // `tree_chunks[1]` — both have the same width since the right border was
+    // consumed by `tree_block`.
+    let row_width = tree_chunks[1].width as usize;
+
     let items: Vec<ListItem> = rows
         .iter()
         .map(|row| {
@@ -89,9 +181,28 @@ fn render_tree(frame: &mut Frame, rows: &[TreeRow], cursor: usize, area: Rect) {
                         ),
                     ])
                 }
-                TreeRow::File { name, depth, .. } => {
+                TreeRow::File {
+                    name,
+                    depth,
+                    file_index,
+                } => {
+                    let (adds, dels) = file_stats.get(*file_index).copied().unwrap_or((0, 0));
                     let indent = "  ".repeat(*depth + 1);
-                    Line::from(vec![Span::raw(indent), Span::raw(name.clone())])
+                    let plus = format!("+{}", adds);
+                    let minus = format!("-{}", dels);
+                    let visible_left = indent.chars().count() + name.chars().count();
+                    let visible_right = plus.chars().count() + 1 + minus.chars().count();
+                    let pad = row_width
+                        .saturating_sub(visible_left + visible_right + 1)
+                        .max(1);
+                    Line::from(vec![
+                        Span::raw(indent),
+                        Span::raw(name.clone()),
+                        Span::raw(" ".repeat(pad)),
+                        Span::styled(plus, Style::default().fg(theme.diff_added)),
+                        Span::raw(" "),
+                        Span::styled(minus, Style::default().fg(theme.diff_removed)),
+                    ])
                 }
             };
             ListItem::new(line)
@@ -102,25 +213,35 @@ fn render_tree(frame: &mut Frame, rows: &[TreeRow], cursor: usize, area: Rect) {
     let mut list_state = ListState::default();
     list_state.select(Some(bounded_cursor));
 
-    let list = List::new(items)
-        .block(
-            Block::default()
-                .borders(Borders::RIGHT)
-                .border_style(Style::default().fg(theme.border)),
-        )
-        .highlight_style(
-            Style::default()
-                .bg(theme.highlight_bg)
-                .add_modifier(Modifier::BOLD),
-        );
+    let list = List::new(items).highlight_style(
+        Style::default()
+            .bg(theme.highlight_bg)
+            .add_modifier(Modifier::BOLD),
+    );
 
-    frame.render_stateful_widget(list, area, &mut list_state);
+    frame.render_stateful_widget(list, tree_chunks[1], &mut list_state);
+}
+
+fn count_file_stats(file: &FileDiff) -> (u32, u32) {
+    let mut adds = 0u32;
+    let mut dels = 0u32;
+    for hunk in &file.hunks {
+        for line in &hunk.lines {
+            match line {
+                DiffLine::Added(_) => adds += 1,
+                DiffLine::Removed(_) => dels += 1,
+                DiffLine::Context(_) => {}
+            }
+        }
+    }
+    (adds, dels)
 }
 
 fn render_diff_pane(
     frame: &mut Frame,
     diff: &Diff,
     focused_file: usize,
+    file_stats: &[(u32, u32)],
     threads: &[ReviewThread],
     area: Rect,
 ) {
@@ -129,21 +250,158 @@ fn render_diff_pane(
         Some(f) => f,
         None => return,
     };
+    let (adds, dels) = file_stats.get(bounded).copied().unwrap_or((0, 0));
 
-    let lines = file_to_lines(file, threads, area.width);
+    let theme = theme::current();
+
+    // Outer border around the diff pane, with an inner header band showing
+    // the file path on the left and the +A -D stats on the right.
+    let pane_block = Block::default()
+        .borders(Borders::ALL)
+        .border_style(Style::default().fg(theme.divider));
+    let pane_inner = pane_block.inner(area);
+    frame.render_widget(pane_block, area);
+
+    let pane_chunks = Layout::default()
+        .direction(Direction::Vertical)
+        .constraints([
+            Constraint::Length(2), // header row + bottom divider
+            Constraint::Min(0),    // diff body
+        ])
+        .split(pane_inner);
+
+    render_pane_header(frame, &file.path, adds, dels, pane_chunks[0]);
+
+    // 2-col inset on each side inside the bordered pane so the body has the
+    // same breathing room as the rest of the detail layout. Row-background
+    // fills respect this inset since `file_to_lines` pads to passed width.
+    let body_area = pane_chunks[1];
+    let body = Rect {
+        x: body_area.x + 2,
+        y: body_area.y,
+        width: body_area.width.saturating_sub(4),
+        height: body_area.height,
+    };
+    let lines = file_to_lines(file, threads, body.width);
     let paragraph = Paragraph::new(lines);
-    frame.render_widget(paragraph, area);
+    frame.render_widget(paragraph, body);
+}
+
+fn render_pane_header(frame: &mut Frame, path: &str, adds: u32, dels: u32, area: Rect) {
+    let theme = theme::current();
+
+    let header_block = Block::default()
+        .borders(Borders::BOTTOM)
+        .border_style(Style::default().fg(theme.divider));
+    let header_inner = header_block.inner(area);
+    frame.render_widget(header_block, area);
+
+    let plus = format!("+{}", adds);
+    let minus = format!("-{}", dels);
+    let stats_visible = plus.chars().count() + 1 + minus.chars().count();
+
+    let header_w = header_inner.width as usize;
+    // 2-col padding on each side inside the header band.
+    let inner_w = header_w.saturating_sub(4);
+    let max_path = inner_w.saturating_sub(stats_visible + 2);
+    let displayed_path = truncate_path_left(path, max_path);
+    let path_visible = displayed_path.chars().count();
+    let gap = inner_w
+        .saturating_sub(path_visible + stats_visible)
+        .max(1);
+
+    let line = Line::from(vec![
+        Span::raw("  "),
+        Span::styled(
+            displayed_path,
+            Style::default()
+                .fg(theme.fg)
+                .add_modifier(Modifier::BOLD),
+        ),
+        Span::raw(" ".repeat(gap)),
+        Span::styled(plus, Style::default().fg(theme.diff_added)),
+        Span::raw(" "),
+        Span::styled(minus, Style::default().fg(theme.diff_removed)),
+    ]);
+    frame.render_widget(Paragraph::new(line), header_inner);
+}
+
+/// Truncate from the left if the path exceeds `max`, keeping the filename
+/// visible and prefixing "…/" so the reader sees the end of the path.
+fn truncate_path_left(path: &str, max: usize) -> String {
+    let total = path.chars().count();
+    if total <= max || max < 2 {
+        return path.to_string();
+    }
+    let keep = max.saturating_sub(1);
+    let skip = total.saturating_sub(keep);
+    let tail: String = path.chars().skip(skip).collect();
+    format!("…{}", tail)
+}
+
+/// Build a single diff line with full-row background fill.
+///
+/// The prefix character ("+" / "-") gets the strong accent color; the rest of
+/// the line text uses a calmer fg (cream for added, gray for removed) so the
+/// prefix stays the visual focus. The whole row is padded with spaces so the
+/// subtle background tint reaches the right edge of the diff pane. Context
+/// lines have no background — only changed lines get the colored band.
+fn styled_diff_line(diff_line: &DiffLine, width: u16) -> Line<'static> {
+    let theme = theme::current();
+    let (prefix, content) = match diff_line {
+        DiffLine::Added(c) => ("+", c.as_str()),
+        DiffLine::Removed(c) => ("-", c.as_str()),
+        DiffLine::Context(c) => (" ", c.as_str()),
+    };
+
+    let visible_len = 1 + content.chars().count();
+    let pad = (width as usize).saturating_sub(visible_len);
+    let padding = " ".repeat(pad);
+
+    match diff_line {
+        DiffLine::Added(_) => {
+            let bg = theme.diff_added_bg;
+            Line::from(vec![
+                Span::styled(
+                    prefix.to_string(),
+                    Style::default()
+                        .fg(theme.diff_added)
+                        .bg(bg)
+                        .add_modifier(Modifier::BOLD),
+                ),
+                Span::styled(
+                    format!("{}{}", content, padding),
+                    Style::default().fg(theme.fg).bg(bg),
+                ),
+            ])
+        }
+        DiffLine::Removed(_) => {
+            let bg = theme.diff_removed_bg;
+            Line::from(vec![
+                Span::styled(
+                    prefix.to_string(),
+                    Style::default()
+                        .fg(theme.diff_removed)
+                        .bg(bg)
+                        .add_modifier(Modifier::BOLD),
+                ),
+                Span::styled(
+                    format!("{}{}", content, padding),
+                    Style::default().fg(theme.muted).bg(bg),
+                ),
+            ])
+        }
+        DiffLine::Context(_) => Line::styled(
+            format!("{}{}", prefix, content),
+            Style::default().fg(theme.diff_context),
+        ),
+    }
 }
 
 fn file_to_lines(file: &FileDiff, threads: &[ReviewThread], width: u16) -> Vec<Line<'static>> {
     let theme = theme::current();
     let mut lines: Vec<Line> = Vec::new();
-    lines.push(Line::styled(
-        file.path.clone(),
-        Style::default()
-            .fg(theme.purple)
-            .add_modifier(Modifier::BOLD),
-    ));
+    // File path lives in the pane header above us — don't repeat it here.
 
     // Build a lookup of (new file line number) -> threads anchored there.
     let mut comments_at: HashMap<usize, Vec<&ReviewThread>> = HashMap::new();
@@ -163,15 +421,7 @@ fn file_to_lines(file: &FileDiff, threads: &[ReviewThread], width: u16) -> Vec<L
 
         let mut new_line_num = hunk.new_start;
         for diff_line in &hunk.lines {
-            let (prefix, content, color) = match diff_line {
-                DiffLine::Added(c) => ("+", c.as_str(), theme.diff_added),
-                DiffLine::Removed(c) => ("-", c.as_str(), theme.diff_removed),
-                DiffLine::Context(c) => (" ", c.as_str(), theme.diff_context),
-            };
-            lines.push(Line::styled(
-                format!("{}{}", prefix, content),
-                Style::default().fg(color),
-            ));
+            lines.push(styled_diff_line(diff_line, width));
 
             // Removed lines have no new-file line number; comments anchored to a
             // "new" line number only correspond to Added/Context lines.
