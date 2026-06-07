@@ -219,32 +219,143 @@ pub(super) fn render_inline_thread(
     width: u16,
     now: chrono::DateTime<chrono::Utc>,
 ) -> Vec<Line<'static>> {
-    let mut out: Vec<Line<'static>> = Vec::new();
-    let body_width = width.saturating_sub(1);
-    let cyan = Style::default().fg(theme::current().info);
+    let theme = theme::current();
+    let text_w = box_text_width(width);
 
+    // Box header: status icon + label on the left, comment count on the right.
+    let (icon, label, accent) = if thread.resolved {
+        ("\u{f058}", "Resolved conversation", theme.success) //  check-circle
+    } else {
+        ("\u{f071}", "Unresolved", theme.warning) //  exclamation-triangle
+    };
+    let count = thread.comments.len();
+    let count_label = if count == 1 {
+        "1 comment".to_string()
+    } else {
+        format!("{} comments", count)
+    };
+
+    let left_visible = icon.chars().count() + 1 + label.chars().count();
+    let right_visible = count_label.chars().count();
+    let header_pad = (text_w as usize)
+        .saturating_sub(left_visible + right_visible)
+        .max(1);
+    let header = Line::from(vec![
+        Span::styled(
+            icon.to_string(),
+            Style::default().fg(accent).add_modifier(Modifier::BOLD),
+        ),
+        Span::raw(" "),
+        Span::styled(
+            label.to_string(),
+            Style::default().fg(theme.fg).add_modifier(Modifier::BOLD),
+        ),
+        Span::raw(" ".repeat(header_pad)),
+        Span::styled(count_label, Style::default().fg(theme.muted)),
+    ]);
+
+    let mut body: Vec<Line<'static>> = Vec::new();
     for (i, comment) in thread.comments.iter().enumerate() {
+        if i > 0 {
+            body.push(Line::raw(""));
+        }
         let age = relative_age(comment.created, now);
-        let header_text = if i == 0 {
-            format!("┃ @{} · {}", comment.author.username, age)
-        } else {
-            format!("┃ ↳ @{} · {}", comment.author.username, age)
-        };
-        out.push(Line::styled(header_text, cyan));
-
-        let body_lines = trim_blank_lines(render_markdown(&comment.content, body_width));
-        for bline in body_lines {
-            let mut spans = vec![Span::styled("┃", cyan)];
-            spans.extend(bline.spans);
-            out.push(Line::from(spans));
-        }
-
-        if i + 1 < thread.comments.len() {
-            out.push(Line::styled("┃", cyan));
-        }
+        body.push(Line::from(vec![
+            Span::styled(
+                comment.author.username.clone(),
+                Style::default().fg(theme.info).add_modifier(Modifier::BOLD),
+            ),
+            Span::styled(format!(" · {}", age), Style::default().fg(theme.muted)),
+        ]));
+        body.extend(trim_blank_lines(strip_glamour_margin(
+            render_markdown(&comment.content, text_w + 2),
+            2,
+        )));
     }
 
+    boxed(header, body, width)
+}
+
+/// Outer width − 2 border cols − 2 cols of internal horizontal padding.
+pub(super) fn box_text_width(outer: u16) -> u16 {
+    outer.saturating_sub(4)
+}
+
+/// Wrap `header + body` lines in a `┌─┐ │ ├─┤ │ └─┘` frame at the given
+/// outer `width`. The first row inside is the header, separated from the
+/// body by a `├─┤` divider line. Used by overview and the inline review
+/// threads in the diff pane.
+pub(super) fn boxed(
+    header: Line<'static>,
+    body: Vec<Line<'static>>,
+    width: u16,
+) -> Vec<Line<'static>> {
+    let theme = theme::current();
+    let style = Style::default().fg(theme.divider);
+    let inner = (width as usize).saturating_sub(2);
+    let text_w = inner.saturating_sub(2);
+
+    let bar = |s: String| Line::from(Span::styled(s, style));
+
+    let mut out: Vec<Line<'static>> = Vec::new();
+    out.push(bar(format!("┌{}┐", "─".repeat(inner))));
+    out.push(wrap_box_line(header, text_w, style));
+    out.push(bar(format!("├{}┤", "─".repeat(inner))));
+    for line in body {
+        out.push(wrap_box_line(line, text_w, style));
+    }
+    out.push(bar(format!("└{}┘", "─".repeat(inner))));
     out
+}
+
+fn wrap_box_line(line: Line<'static>, text_w: usize, border: Style) -> Line<'static> {
+    let visible: usize = line.spans.iter().map(|s| s.width()).sum();
+    let pad = text_w.saturating_sub(visible);
+    let line_style = line.style;
+    let mut spans: Vec<Span<'static>> = Vec::with_capacity(line.spans.len() + 3);
+    spans.push(Span::styled("│ ".to_string(), border));
+    for s in line.spans {
+        let merged = line_style.patch(s.style);
+        spans.push(Span::styled(s.content, merged));
+    }
+    spans.push(Span::raw(" ".repeat(pad + 1)));
+    spans.push(Span::styled("│".to_string(), border));
+    Line::from(spans)
+}
+
+/// Walk each line's spans and strip up to `n` leading whitespace cells from
+/// the start of the line. Used to peel off glamour's fixed document margin
+/// so wrapped markdown sits flush against the box padding.
+pub(super) fn strip_glamour_margin(
+    lines: Vec<Line<'static>>,
+    n: usize,
+) -> Vec<Line<'static>> {
+    lines.into_iter().map(|line| strip_line_left(line, n)).collect()
+}
+
+fn strip_line_left(line: Line<'static>, mut budget: usize) -> Line<'static> {
+    let line_style = line.style;
+    let mut out: Vec<Span<'static>> = Vec::with_capacity(line.spans.len());
+    let mut done = false;
+    for span in line.spans {
+        if done || budget == 0 {
+            out.push(span);
+            continue;
+        }
+        let chars: Vec<char> = span.content.chars().collect();
+        let strip_count = chars
+            .iter()
+            .take(budget)
+            .take_while(|c| c.is_whitespace())
+            .count();
+        budget -= strip_count;
+        if strip_count < chars.len() {
+            let remainder: String = chars.into_iter().skip(strip_count).collect();
+            out.push(Span::styled(remainder, span.style));
+            done = true;
+        }
+    }
+    Line::from(out).style(line_style)
 }
 
 pub(super) fn relative_age(
