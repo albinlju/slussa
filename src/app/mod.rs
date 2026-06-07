@@ -16,6 +16,7 @@ use crate::{
 };
 
 pub mod fetchers;
+pub mod preflight;
 pub mod reducer;
 pub mod state;
 
