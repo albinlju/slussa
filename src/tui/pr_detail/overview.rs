@@ -12,12 +12,15 @@ use crate::{
     domain::comment::{Comment, ReviewThread},
     tui::{
         pr_detail::{
-            relative_age, render_inline_thread, render_markdown, render_thumb_scrollbar,
-            trim_blank_lines,
+            relative_age, render_markdown, render_thumb_scrollbar, trim_blank_lines,
         },
         spinner_frame, theme,
     },
 };
+
+/// Width of the left timeline column (`● ` or `│ ` — glyph + a trailing
+/// space before content).
+const TIMELINE_COL: u16 = 2;
 
 pub fn render(frame: &mut Frame, pr_data: Option<&PrData>, ui: &mut UiMemory, area: Rect) {
     let theme = theme::current();
@@ -55,7 +58,7 @@ pub fn render(frame: &mut Frame, pr_data: Option<&PrData>, ui: &mut UiMemory, ar
     // Reserve rightmost column for the scrollbar so wrapped markdown doesn't
     // get clipped or overlap the thumb.
     let content_width = area.width.saturating_sub(1);
-    let lines = build_overview_lines(comments, threads, content_width);
+    let lines = build_overview_lines(comments, threads, content_width.saturating_sub(TIMELINE_COL));
 
     let total = lines.len();
     let visible = area.height as usize;
@@ -106,23 +109,44 @@ fn build_overview_lines(
     events.extend(threads.iter().map(Event::Review));
     events.sort_by_key(|e| e.timestamp());
 
-    let mut all: Vec<Line<'static>> = Vec::new();
     let now = Utc::now();
-    let separator_width = width as usize;
 
-    for (i, event) in events.iter().enumerate() {
-        if i > 0 {
-            all.push(Line::raw(""));
-            all.push(Line::styled(
-                "─".repeat(separator_width),
-                Style::default().fg(theme.muted),
-            ));
-            all.push(Line::raw(""));
-        }
-
+    // Render each event's content lines first (no left column), then assemble
+    // with the timeline column prepended — circle on the first line of each
+    // event, vertical connector on all other lines and on the gap rows
+    // between events.
+    let mut blocks: Vec<(EventStyle, Vec<Line<'static>>)> = Vec::with_capacity(events.len());
+    for event in &events {
         match event {
-            Event::Issue(c) => extend_issue_comment(&mut all, c, width, now),
-            Event::Review(t) => extend_review_thread(&mut all, t, width, now),
+            Event::Issue(c) => blocks.push((EventStyle::Comment, build_issue_lines(c, width, now))),
+            Event::Review(t) => {
+                if let Some(lines) = build_review_lines(t, width, now) {
+                    blocks.push((EventStyle::Review, lines));
+                }
+            }
+        }
+    }
+
+    let connector_style = Style::default().fg(theme.divider);
+    let connector = Span::styled("│ ".to_string(), connector_style);
+
+    let mut all: Vec<Line<'static>> = Vec::new();
+    for (i, (style, lines)) in blocks.into_iter().enumerate() {
+        if i > 0 {
+            all.push(Line::from(connector.clone()));
+            all.push(Line::from(connector.clone()));
+        }
+        let circle = Span::styled(
+            "● ".to_string(),
+            Style::default()
+                .fg(style.color(&theme))
+                .add_modifier(Modifier::BOLD),
+        );
+        for (j, line) in lines.into_iter().enumerate() {
+            let marker = if j == 0 { circle.clone() } else { connector.clone() };
+            let mut spans = vec![marker];
+            spans.extend(line.spans);
+            all.push(Line::from(spans));
         }
     }
 
@@ -132,31 +156,46 @@ fn build_overview_lines(
     all
 }
 
-fn extend_issue_comment(
-    out: &mut Vec<Line<'static>>,
-    c: &Comment,
-    width: u16,
-    now: DateTime<Utc>,
-) {
-    out.push(issue_comment_header(&c.author.username, c.created, now));
-    out.push(Line::raw(""));
-    out.extend(trim_blank_lines(render_markdown(&c.content, width)));
+#[derive(Clone, Copy)]
+enum EventStyle {
+    /// Plain issue/discussion comment.
+    Comment,
+    /// Inline review comment anchored to a diff line.
+    Review,
 }
 
-fn extend_review_thread(
-    out: &mut Vec<Line<'static>>,
+impl EventStyle {
+    fn color(self, theme: &crate::tui::theme::Theme) -> ratatui::style::Color {
+        match self {
+            Self::Comment => theme.info,
+            Self::Review => theme.accent,
+        }
+    }
+}
+
+fn build_issue_lines(c: &Comment, width: u16, now: DateTime<Utc>) -> Vec<Line<'static>> {
+    let text_width = box_text_width(width);
+    let header = issue_comment_header(&c.author.username, c.created, now);
+    let body = trim_blank_lines(render_markdown(&c.content, text_width));
+    boxed(header, body, width)
+}
+
+fn build_review_lines(
     thread: &ReviewThread,
     width: u16,
     now: DateTime<Utc>,
-) {
+) -> Option<Vec<Line<'static>>> {
     let theme = theme::current();
     if thread.comments.is_empty() {
-        return;
+        return None;
     }
+    let text_width = box_text_width(width);
+    let first = thread.comments.first()?;
+    let header = issue_comment_header(&first.author.username, first.created, now);
 
-    // Anchor line: file path + optional line number + resolved badge. The
-    // @user attribution lives inside the bar-styled thread below to keep this
-    // visually consistent with the inline Diff-tab rendering.
+    let mut body: Vec<Line<'static>> = Vec::new();
+
+    // Anchor line: file path + optional line number + resolved badge.
     let location = match thread.line {
         Some(l) => format!("{}:{}", thread.path, l),
         None => thread.path.clone(),
@@ -168,14 +207,79 @@ fn extend_review_thread(
             Style::default().fg(theme.success),
         ));
     }
-    out.push(Line::from(anchor_spans));
-    out.push(Line::raw(""));
+    body.push(Line::from(anchor_spans));
+    body.push(Line::raw(""));
 
     if !thread.diff_hunk.is_empty() {
-        out.extend(diff_hunk_lines(&thread.diff_hunk));
+        body.extend(diff_hunk_lines(&thread.diff_hunk));
+        body.push(Line::raw(""));
     }
 
-    out.extend(render_inline_thread(thread, width, now));
+    // First comment body + replies. The first author is already in the box
+    // header so we skip the per-comment header for them; replies still get
+    // a `↳ @user` line.
+    for (i, comment) in thread.comments.iter().enumerate() {
+        if i > 0 {
+            body.push(Line::raw(""));
+            let age = relative_age(comment.created, now);
+            body.push(Line::from(vec![
+                Span::styled(
+                    format!("↳ @{}", comment.author.username),
+                    Style::default().fg(theme.info).add_modifier(Modifier::BOLD),
+                ),
+                Span::styled(format!(" · {}", age), Style::default().fg(theme.muted)),
+            ]));
+        }
+        body.extend(trim_blank_lines(render_markdown(&comment.content, text_width)));
+    }
+
+    Some(boxed(header, body, width))
+}
+
+/// Text width available inside the box — outer minus 2 border cols and
+/// 2 cols of internal horizontal padding.
+fn box_text_width(outer: u16) -> u16 {
+    outer.saturating_sub(4)
+}
+
+/// Wrap a header line + body lines in a `┌──┐ │ ├──┤ │ └──┘` frame at
+/// the given outer `width`. The first row inside is the header, separated
+/// from the body by a `├─┤` divider.
+fn boxed(header: Line<'static>, body: Vec<Line<'static>>, width: u16) -> Vec<Line<'static>> {
+    let theme = theme::current();
+    let style = Style::default().fg(theme.divider);
+    let inner = (width as usize).saturating_sub(2); // between left/right border
+    let text_w = inner.saturating_sub(2); // also minus 1-col padding on each side
+
+    let mut out: Vec<Line<'static>> = Vec::new();
+    out.push(Line::styled(
+        format!("┌{}┐", "─".repeat(inner)),
+        style,
+    ));
+    out.push(wrap_box_line(header, text_w, style));
+    out.push(Line::styled(
+        format!("├{}┤", "─".repeat(inner)),
+        style,
+    ));
+    for line in body {
+        out.push(wrap_box_line(line, text_w, style));
+    }
+    out.push(Line::styled(
+        format!("└{}┘", "─".repeat(inner)),
+        style,
+    ));
+    out
+}
+
+fn wrap_box_line(line: Line<'static>, text_w: usize, border: Style) -> Line<'static> {
+    let visible: usize = line.spans.iter().map(|s| s.content.chars().count()).sum();
+    let pad = text_w.saturating_sub(visible);
+    let mut spans: Vec<Span<'static>> = Vec::with_capacity(line.spans.len() + 3);
+    spans.push(Span::styled("│ ".to_string(), border));
+    spans.extend(line.spans);
+    spans.push(Span::raw(" ".repeat(pad + 1)));
+    spans.push(Span::styled("│".to_string(), border));
+    Line::from(spans)
 }
 
 fn issue_comment_header(
@@ -186,11 +290,12 @@ fn issue_comment_header(
     let theme = theme::current();
     Line::from(vec![
         Span::styled(
-            format!("@{}", username),
+            username.to_string(),
             Style::default()
                 .fg(theme.info)
                 .add_modifier(Modifier::BOLD),
         ),
+        Span::styled(" commented", Style::default().fg(theme.muted)),
         Span::styled(
             format!(" · {}", relative_age(created, now)),
             Style::default().fg(theme.muted),
