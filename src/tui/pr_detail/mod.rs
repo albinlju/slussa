@@ -347,7 +347,7 @@ fn render_header(frame: &mut Frame, pr: &PullRequest, area: Rect) {
     // padded label to give the badge pill-shaped rounded ends. The edges have
     // fg=status_color with no bg, so the rounded curve bleeds into whatever
     // sits behind the header.
-    let meta_line = Line::from(vec![
+    let left_spans: Vec<Span<'static>> = vec![
         Span::styled("\u{e0b6}", Style::default().fg(status_color)),
         Span::styled(
             pr.status.label().to_string(),
@@ -365,11 +365,54 @@ fn render_header(frame: &mut Frame, pr: &PullRequest, area: Rect) {
         Span::styled(pr.source_branch.clone(), Style::default().fg(theme.success)),
         Span::raw(" → "),
         Span::styled(pr.target_branch.clone(), Style::default().fg(theme.accent)),
-    ]);
+    ];
+    let right_spans = build_reviewer_spans(pr);
+
+    // 2-col padding on each side (matches `Padding::horizontal(2)` on the
+    // block below) so the right segment ends 2 cols before the area edge.
+    let content_width = (area.width as usize).saturating_sub(4);
+    let left_visible: usize = left_spans.iter().map(|s| s.content.chars().count()).sum();
+    let right_visible: usize = right_spans.iter().map(|s| s.content.chars().count()).sum();
+    let gap = content_width
+        .saturating_sub(left_visible + right_visible)
+        .max(1);
+
+    let mut meta_spans = left_spans;
+    if !right_spans.is_empty() {
+        meta_spans.push(Span::raw(" ".repeat(gap)));
+        meta_spans.extend(right_spans);
+    }
+    let meta_line = Line::from(meta_spans);
 
     let paragraph = Paragraph::new(vec![title_line, Line::default(), meta_line])
         .block(Block::default().padding(Padding::horizontal(2)));
     frame.render_widget(paragraph, area);
+}
+
+fn build_reviewer_spans(pr: &PullRequest) -> Vec<Span<'static>> {
+    use crate::domain::review::ReviewerState;
+    let theme = theme::current();
+    if pr.reviewers.is_empty() {
+        return Vec::new();
+    }
+    let mut spans: Vec<Span<'static>> = Vec::new();
+    for (i, reviewer) in pr.reviewers.iter().enumerate() {
+        if i > 0 {
+            spans.push(Span::raw("  "));
+        }
+        let (icon, color) = match reviewer.state {
+            ReviewerState::Approved => ("\u{f058}", theme.success), //  check-circle
+            ReviewerState::ChangesRequested => ("\u{f057}", theme.error), //  times-circle
+            ReviewerState::Commented => ("\u{f075}", theme.info),   //  comment
+        };
+        spans.push(Span::styled(
+            format!("@{}", reviewer.author.username),
+            Style::default().fg(theme.info),
+        ));
+        spans.push(Span::raw(" "));
+        spans.push(Span::styled(icon.to_string(), Style::default().fg(color)));
+    }
+    spans
 }
 
 fn render_content(
