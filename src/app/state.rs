@@ -97,6 +97,28 @@ pub enum LoadState<T> {
     Failed(String),
 }
 
+impl<T> LoadState<T> {
+    /// Flip from `NotRequested` to `Loading`, returning whether the caller
+    /// should kick off a fetch. No-op for already-loading/loaded/failed.
+    pub fn start_loading(&mut self) -> bool {
+        if matches!(self, LoadState::NotRequested) {
+            *self = LoadState::Loading;
+            true
+        } else {
+            false
+        }
+    }
+}
+
+impl<T> From<Result<T, String>> for LoadState<T> {
+    fn from(result: Result<T, String>) -> Self {
+        match result {
+            Ok(v) => LoadState::Loaded(v),
+            Err(e) => LoadState::Failed(e),
+        }
+    }
+}
+
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
 pub enum Screen {
     #[default]

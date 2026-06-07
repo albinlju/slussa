@@ -58,9 +58,10 @@ impl App {
                 Some(Ok(event)) = events.next() => {
                     if let Event::Key(key) = event
                         && key.kind == KeyEventKind::Press
-                            && let Some(action) = key_to_action(&self.state, key.code) {
-                                self.action_tx.send(action).ok();
-                            }
+                        && let Some(action) = key_to_action(&self.state, key.code)
+                    {
+                        self.action_tx.send(action).ok();
+                    }
                 }
                 Some(action) = self.action_rx.recv() => {
                     match action {

@@ -1,33 +1,17 @@
 //! Startup checks that must pass before the TUI is allowed to come up.
 //!
-//! We run these synchronously in `main` (before raw mode is entered) so a
-//! failure can print a friendly stderr message and exit cleanly instead of
-//! panicking inside the alternate screen and leaving the user's terminal
-//! in a broken state.
+//! Run synchronously in `main` before raw mode so a failure can print a
+//! friendly stderr message and exit, instead of panicking inside the
+//! alternate screen and leaving the user's terminal broken.
 
 use std::fmt;
 use std::process::Command;
-
-/// Where the current repo's remote lives and which owner/repo it's under.
-/// We don't currently thread this into provider calls (gh substitutes
-/// `{owner}/{repo}` from the cwd) but it lets us verify the repo is on a
-/// supported host before launching the TUI.
-#[derive(Debug, Clone)]
-pub struct RepoContext {
-    pub host: String,
-    // Reserved for the upcoming layer 2/3 where providers stop relying on
-    // gh's implicit `{owner}/{repo}` substitution.
-    #[allow(dead_code)]
-    pub owner: String,
-    #[allow(dead_code)]
-    pub repo: String,
-}
 
 #[derive(Debug)]
 pub enum PreflightError {
     /// `git remote get-url origin` failed — not a git repo, or no `origin`.
     NotAGitRepo,
-    /// The remote URL parsed but the host isn't one we support yet.
+    /// Remote URL parsed but the host isn't one we support yet.
     UnsupportedHost { host: String },
     /// `gh` binary is not on PATH.
     GhMissing,
@@ -45,10 +29,9 @@ impl fmt::Display for PreflightError {
             ),
             Self::UnsupportedHost { host } => write!(
                 f,
-                "only GitHub repos are supported for now — this repo's remote is on `{}`.\n\
+                "only GitHub repos are supported for now — this repo's remote is on `{host}`.\n\
                  Bitbucket support is on the roadmap — open an issue at \
                  https://github.com/albinljung/tuipr/issues if you'd like to help.",
-                host
             ),
             Self::GhMissing => write!(
                 f,
@@ -57,73 +40,52 @@ impl fmt::Display for PreflightError {
             ),
             Self::GhNotAuthenticated { host } => write!(
                 f,
-                "the GitHub CLI (`gh`) is installed but not authenticated for {}.\n\
+                "the GitHub CLI (`gh`) is installed but not authenticated for {host}.\n\
                  Run `gh auth login` then re-run tuipr.",
-                host
             ),
         }
     }
 }
 
-/// Run all startup checks. Returns the resolved repo context on success.
-pub fn preflight() -> Result<RepoContext, PreflightError> {
-    let ctx = detect_repo()?;
+/// Run all startup checks.
+pub fn preflight() -> Result<(), PreflightError> {
+    let host = detect_repo_host()?;
     check_gh_installed()?;
-    check_gh_auth(&ctx.host)?;
-    Ok(ctx)
+    check_gh_auth(&host)?;
+    Ok(())
 }
 
-/// Resolve the `origin` remote URL and parse out (host, owner, repo).
-///
-/// Supports both SSH (`git@github.com:owner/repo.git`) and HTTPS
-/// (`https://github.com/owner/repo[.git]`) URLs. Only `github.com` is
-/// accepted for now; anything else returns `UnsupportedHost` so we can
-/// degrade gracefully when Bitbucket/GitLab repos show up.
-fn detect_repo() -> Result<RepoContext, PreflightError> {
+/// Resolve the `origin` remote URL and return its host. Only `github.com`
+/// is accepted right now; anything else returns `UnsupportedHost` so we
+/// can degrade gracefully when Bitbucket/GitLab repos show up.
+fn detect_repo_host() -> Result<String, PreflightError> {
     let output = Command::new("git")
         .args(["remote", "get-url", "origin"])
         .output()
         .map_err(|_| PreflightError::NotAGitRepo)?;
-
     if !output.status.success() {
         return Err(PreflightError::NotAGitRepo);
     }
-
     let url = String::from_utf8_lossy(&output.stdout).trim().to_string();
-    let (host, owner, repo) = parse_remote_url(&url).ok_or(PreflightError::NotAGitRepo)?;
-
+    let host = parse_remote_host(&url).ok_or(PreflightError::NotAGitRepo)?;
     if host != "github.com" {
         return Err(PreflightError::UnsupportedHost { host });
     }
-    Ok(RepoContext { host, owner, repo })
+    Ok(host)
 }
 
-fn parse_remote_url(url: &str) -> Option<(String, String, String)> {
-    // SSH form: git@host:owner/repo(.git)
+/// Pull the host out of a git remote URL. Supports both SSH
+/// (`git@host:owner/repo.git`) and HTTPS (`https://host/owner/repo.git`).
+fn parse_remote_host(url: &str) -> Option<String> {
     if let Some(rest) = url.strip_prefix("git@") {
-        let (host, path) = rest.split_once(':')?;
-        let (owner, repo) = split_owner_repo(path)?;
-        return Some((host.to_string(), owner, repo));
+        let (host, _) = rest.split_once(':')?;
+        return Some(host.to_string());
     }
-    // HTTPS form: https://host/owner/repo(.git)
-    if let Some(rest) = url
+    let rest = url
         .strip_prefix("https://")
-        .or_else(|| url.strip_prefix("http://"))
-    {
-        let (host, path) = rest.split_once('/')?;
-        let (owner, repo) = split_owner_repo(path)?;
-        return Some((host.to_string(), owner, repo));
-    }
-    None
-}
-
-fn split_owner_repo(path: &str) -> Option<(String, String)> {
-    let trimmed = path.trim_end_matches('/').trim_end_matches(".git");
-    let (owner, repo) = trimmed.split_once('/')?;
-    if owner.is_empty() || repo.is_empty() {
-        return None;
-    }
-    Some((owner.to_string(), repo.to_string()))
+        .or_else(|| url.strip_prefix("http://"))?;
+    let (host, _) = rest.split_once('/')?;
+    Some(host.to_string())
 }
 
 fn check_gh_installed() -> Result<(), PreflightError> {
@@ -139,7 +101,6 @@ fn check_gh_auth(host: &str) -> Result<(), PreflightError> {
         .args(["auth", "status", "-h", host])
         .output()
         .map_err(|_| PreflightError::GhMissing)?;
-
     if output.status.success() {
         Ok(())
     } else {
@@ -154,29 +115,31 @@ mod tests {
     use super::*;
 
     #[test]
-    fn parses_ssh_url() {
-        let parsed = parse_remote_url("git@github.com:albinljung/tuipr.git").unwrap();
-        assert_eq!(parsed.0, "github.com");
-        assert_eq!(parsed.1, "albinljung");
-        assert_eq!(parsed.2, "tuipr");
+    fn parses_ssh_host() {
+        assert_eq!(
+            parse_remote_host("git@github.com:albinljung/tuipr.git").as_deref(),
+            Some("github.com")
+        );
     }
 
     #[test]
-    fn parses_https_url_with_dot_git() {
-        let parsed = parse_remote_url("https://github.com/albinljung/tuipr.git").unwrap();
-        assert_eq!(parsed.0, "github.com");
-        assert_eq!(parsed.1, "albinljung");
-        assert_eq!(parsed.2, "tuipr");
+    fn parses_https_host() {
+        assert_eq!(
+            parse_remote_host("https://github.com/albinljung/tuipr.git").as_deref(),
+            Some("github.com")
+        );
     }
 
     #[test]
-    fn parses_https_url_without_dot_git() {
-        let parsed = parse_remote_url("https://github.com/albinljung/tuipr").unwrap();
-        assert_eq!(parsed.2, "tuipr");
+    fn parses_https_host_without_dot_git() {
+        assert_eq!(
+            parse_remote_host("https://github.com/albinljung/tuipr").as_deref(),
+            Some("github.com")
+        );
     }
 
     #[test]
     fn rejects_garbage_url() {
-        assert!(parse_remote_url("not-a-url").is_none());
+        assert!(parse_remote_host("not-a-url").is_none());
     }
 }
