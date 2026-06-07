@@ -5,7 +5,7 @@ use crate::{
         pr::{PrStatus, PullRequest},
         review::ReviewerState,
     },
-    tui::{Action, render_footer, spinner_frame, theme},
+    tui::{Action, ListAction, render_footer, spinner_frame, theme},
 };
 use chrono::Utc;
 use ratatui::{
@@ -327,23 +327,23 @@ pub(super) fn key_to_action(state: &AppState, key: KeyCode) -> Option<Action> {
     if state.ui.filter_picker_open {
         return match key {
             KeyCode::Char('q') => Some(Action::Quit),
-            KeyCode::Esc | KeyCode::Char('f') => Some(Action::CloseFilterPicker),
-            KeyCode::Down | KeyCode::Char('j') => Some(Action::FilterPickerNext),
-            KeyCode::Up | KeyCode::Char('k') => Some(Action::FilterPickerPrev),
-            KeyCode::Enter => Some(Action::ApplyFilter),
+            KeyCode::Esc | KeyCode::Char('f') => Some(Action::List(ListAction::CloseFilterPicker)),
+            KeyCode::Down | KeyCode::Char('j') => Some(Action::List(ListAction::FilterPickerNext)),
+            KeyCode::Up | KeyCode::Char('k') => Some(Action::List(ListAction::FilterPickerPrev)),
+            KeyCode::Enter => Some(Action::List(ListAction::ApplyFilter)),
             _ => None,
         };
     }
 
     match key {
         KeyCode::Char('q') => Some(Action::Quit),
-        KeyCode::Char('f') => Some(Action::OpenFilterPicker),
-        KeyCode::Down | KeyCode::Char('j') => Some(Action::NextPr),
-        KeyCode::Up | KeyCode::Char('k') => Some(Action::PrevPr),
+        KeyCode::Char('f') => Some(Action::List(ListAction::OpenFilterPicker)),
+        KeyCode::Down | KeyCode::Char('j') => Some(Action::List(ListAction::NextPr)),
+        KeyCode::Up | KeyCode::Char('k') => Some(Action::List(ListAction::PrevPr)),
         KeyCode::Enter => state
             .filtered_prs()
             .get(state.ui.list_selected)
-            .map(|p| Action::OpenPr(p.id)),
+            .map(|p| Action::List(ListAction::OpenPr(p.id))),
         _ => None,
     }
 }

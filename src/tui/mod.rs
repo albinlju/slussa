@@ -25,27 +25,17 @@ use crate::{
 #[derive(Debug)]
 pub enum Action {
     Quit,
-    Back,
+    List(ListAction),
+    Detail(DetailAction),
+    Diff(DiffAction),
+    Loaded(LoadedAction),
+}
+
+#[derive(Debug)]
+pub enum ListAction {
     NextPr,
     PrevPr,
-    NextTab,
-    PrevTab,
-    SelectTab(DetailTab),
     OpenPr(u64),
-    PrsLoaded(Result<Vec<PullRequest>, String>),
-    CommitsLoaded(u64, Result<Vec<Commit>, String>),
-    DiffLoaded(u64, Result<Diff, String>),
-    CommentsLoaded(u64, Result<Vec<Comment>, String>),
-    ReviewThreadsLoaded(u64, Result<Vec<ReviewThread>, String>),
-    DiffCursorDown,
-    DiffCursorUp,
-    DiffToggleAtCursor,
-    DiffCollapseAtCursor,
-    DiffExpandAtCursor,
-    DescriptionScrollDown,
-    DescriptionScrollUp,
-    OverviewScrollDown,
-    OverviewScrollUp,
     OpenFilterPicker,
     CloseFilterPicker,
     FilterPickerNext,
@@ -53,12 +43,40 @@ pub enum Action {
     ApplyFilter,
 }
 
+#[derive(Debug)]
+pub enum DetailAction {
+    Back,
+    NextTab,
+    PrevTab,
+    SelectTab(DetailTab),
+    DescriptionScrollDown,
+    DescriptionScrollUp,
+    OverviewScrollDown,
+    OverviewScrollUp,
+}
+
+#[derive(Debug)]
+pub enum DiffAction {
+    CursorDown,
+    CursorUp,
+    ToggleAtCursor,
+    CollapseAtCursor,
+    ExpandAtCursor,
+}
+
+#[derive(Debug)]
+pub enum LoadedAction {
+    Prs(Result<Vec<PullRequest>, String>),
+    Commits(u64, Result<Vec<Commit>, String>),
+    Diff(u64, Result<Diff, String>),
+    Comments(u64, Result<Vec<Comment>, String>),
+    ReviewThreads(u64, Result<Vec<ReviewThread>, String>),
+}
+
 pub fn render(frame: &mut Frame, state: &mut AppState) {
     match state.screen {
         Screen::List => pr_list::render(frame, state, frame.area()),
-        Screen::Detail { pr_id, tab } => {
-            pr_detail::render(frame, state, pr_id, tab, frame.area())
-        }
+        Screen::Detail { pr_id, tab } => pr_detail::render(frame, state, pr_id, tab, frame.area()),
     }
 }
 
@@ -69,9 +87,7 @@ pub fn key_to_action(state: &AppState, key: KeyCode) -> Option<Action> {
     }
 }
 
-const SPINNER_FRAMES: &[&str] = &[
-    "⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏",
-];
+const SPINNER_FRAMES: &[&str] = &["⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏"];
 
 pub fn spinner_frame() -> &'static str {
     let now = std::time::SystemTime::now()

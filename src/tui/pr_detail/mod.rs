@@ -23,7 +23,7 @@ use crate::{
         pr::{PrStatus, PullRequest},
         review::ReviewerState,
     },
-    tui::{Action, render_footer, theme},
+    tui::{Action, DetailAction, DiffAction, render_footer, theme},
 };
 
 #[derive(Debug, Default, Clone, Copy, PartialEq, Eq)]
@@ -609,13 +609,13 @@ pub(super) fn key_to_action(state: &AppState, key: KeyCode) -> Option<Action> {
     }
 
     match key {
-        KeyCode::Esc => return Some(Action::Back),
-        KeyCode::Tab => return Some(Action::NextTab),
-        KeyCode::BackTab => return Some(Action::PrevTab),
+        KeyCode::Esc => return Some(Action::Detail(DetailAction::Back)),
+        KeyCode::Tab => return Some(Action::Detail(DetailAction::NextTab)),
+        KeyCode::BackTab => return Some(Action::Detail(DetailAction::PrevTab)),
         KeyCode::Char(c @ '1'..='5') => {
             let idx = (c as u8 - b'1') as usize;
             if let Some(&t) = DetailTab::ALL.get(idx) {
-                return Some(Action::SelectTab(t));
+                return Some(Action::Detail(DetailAction::SelectTab(t)));
             }
         }
         _ => {}
@@ -628,30 +628,38 @@ pub(super) fn key_to_action(state: &AppState, key: KeyCode) -> Option<Action> {
 
     match tab {
         DetailTab::Diff => match key {
-            KeyCode::Down | KeyCode::Char('j') => Some(Action::DiffCursorDown),
-            KeyCode::Up | KeyCode::Char('k') => Some(Action::DiffCursorUp),
-            KeyCode::Enter | KeyCode::Char(' ') => Some(Action::DiffToggleAtCursor),
-            KeyCode::Left | KeyCode::Char('h') => Some(Action::DiffCollapseAtCursor),
-            KeyCode::Right | KeyCode::Char('l') => Some(Action::DiffExpandAtCursor),
+            KeyCode::Down | KeyCode::Char('j') => Some(Action::Diff(DiffAction::CursorDown)),
+            KeyCode::Up | KeyCode::Char('k') => Some(Action::Diff(DiffAction::CursorUp)),
+            KeyCode::Enter | KeyCode::Char(' ') => Some(Action::Diff(DiffAction::ToggleAtCursor)),
+            KeyCode::Left | KeyCode::Char('h') => Some(Action::Diff(DiffAction::CollapseAtCursor)),
+            KeyCode::Right | KeyCode::Char('l') => Some(Action::Diff(DiffAction::ExpandAtCursor)),
             _ => None,
         },
         DetailTab::Overview => match key {
-            KeyCode::Down | KeyCode::Char('j') => Some(Action::OverviewScrollDown),
-            KeyCode::Up | KeyCode::Char('k') => Some(Action::OverviewScrollUp),
-            KeyCode::Right | KeyCode::Char('l') => Some(Action::NextTab),
-            KeyCode::Left | KeyCode::Char('h') => Some(Action::PrevTab),
+            KeyCode::Down | KeyCode::Char('j') => {
+                Some(Action::Detail(DetailAction::OverviewScrollDown))
+            }
+            KeyCode::Up | KeyCode::Char('k') => {
+                Some(Action::Detail(DetailAction::OverviewScrollUp))
+            }
+            KeyCode::Right | KeyCode::Char('l') => Some(Action::Detail(DetailAction::NextTab)),
+            KeyCode::Left | KeyCode::Char('h') => Some(Action::Detail(DetailAction::PrevTab)),
             _ => None,
         },
         DetailTab::Description => match key {
-            KeyCode::Down | KeyCode::Char('j') => Some(Action::DescriptionScrollDown),
-            KeyCode::Up | KeyCode::Char('k') => Some(Action::DescriptionScrollUp),
-            KeyCode::Right | KeyCode::Char('l') => Some(Action::NextTab),
-            KeyCode::Left | KeyCode::Char('h') => Some(Action::PrevTab),
+            KeyCode::Down | KeyCode::Char('j') => {
+                Some(Action::Detail(DetailAction::DescriptionScrollDown))
+            }
+            KeyCode::Up | KeyCode::Char('k') => {
+                Some(Action::Detail(DetailAction::DescriptionScrollUp))
+            }
+            KeyCode::Right | KeyCode::Char('l') => Some(Action::Detail(DetailAction::NextTab)),
+            KeyCode::Left | KeyCode::Char('h') => Some(Action::Detail(DetailAction::PrevTab)),
             _ => None,
         },
         _ => match key {
-            KeyCode::Right | KeyCode::Char('l') => Some(Action::NextTab),
-            KeyCode::Left | KeyCode::Char('h') => Some(Action::PrevTab),
+            KeyCode::Right | KeyCode::Char('l') => Some(Action::Detail(DetailAction::NextTab)),
+            KeyCode::Left | KeyCode::Char('h') => Some(Action::Detail(DetailAction::PrevTab)),
             _ => None,
         },
     }
