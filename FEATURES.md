@@ -20,13 +20,11 @@ Mostly completing tabs that already exist as placeholders.
 - [ ] **Checks/CI status.** "Builds". Fetch via `gh pr checks <n>` →
   a list with green/red/yellow per check + link. Also show a summary icon in the PR list.
   [x] **Description** Should be above the tabs
-- [ ] **Overview** Today description is shown. Fetch review
+- [x] **Overview** Today description is shown. Fetch review
   comments and threads (`gh pr view <n> --comments`). Show author + timestamp + body,
   ideally threaded.
-- [ ] **Reviewers/approvals in the list.** The reviewer span already exists in `pr_list`
-  but the data isn't populated. Fetch review status (Approved / Changes requested /
-  Commented) and show `2/3 ✓`. GitLab/Bitbucket have approval *rules* (X required) —
-  show "N required".
+- [x] **Reviewers/approvals in the list.** The reviewer span already exists in `pr_list`
+  but the data isn't populated.
 
 ---
 
