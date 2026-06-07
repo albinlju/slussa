@@ -11,7 +11,7 @@ use ratatui::{
     Frame,
     crossterm::event::KeyCode,
     layout::{Constraint, Direction, Layout, Rect},
-    style::{Modifier, Style},
+    style::{Color, Modifier, Style},
     text::{Line, Span},
     widgets::{Block, BorderType, Borders, Padding, Paragraph},
 };
@@ -315,6 +315,39 @@ pub(super) fn boxed(
     }
     out.push(bar(format!("╰{}╯", "─".repeat(inner))));
     out
+}
+
+/// Build a single diff row with a full-row bg tint that reaches `row_w`. The
+/// optional `gutter` prefix carries the bg too so the band flows past the
+/// `+`/`-` mark. Shared between the Diff tab (2-col gutter) and the inline
+/// review-thread diff hunks in Overview (no gutter).
+pub(super) fn diff_bg_row(
+    gutter: &str,
+    prefix: &str,
+    content: &str,
+    prefix_fg: Color,
+    bg: Color,
+    text_fg: Color,
+    row_w: usize,
+) -> Line<'static> {
+    let visible = gutter.chars().count() + prefix.chars().count() + content.chars().count();
+    let pad = row_w.saturating_sub(visible);
+    let mut spans: Vec<Span<'static>> = Vec::with_capacity(3);
+    if !gutter.is_empty() {
+        spans.push(Span::styled(gutter.to_string(), Style::default().bg(bg)));
+    }
+    spans.push(Span::styled(
+        prefix.to_string(),
+        Style::default()
+            .fg(prefix_fg)
+            .bg(bg)
+            .add_modifier(Modifier::BOLD),
+    ));
+    spans.push(Span::styled(
+        format!("{content}{}", " ".repeat(pad)),
+        Style::default().fg(text_fg).bg(bg),
+    ));
+    Line::from(spans)
 }
 
 fn wrap_box_line(line: Line<'static>, text_w: usize, border: Style) -> Line<'static> {

@@ -2,7 +2,7 @@ use chrono::{DateTime, Utc};
 use ratatui::{
     Frame,
     layout::Rect,
-    style::{Modifier, Style},
+    style::{Color, Modifier, Style},
     text::{Line, Span},
     widgets::Paragraph,
 };
@@ -12,10 +12,11 @@ use crate::{
     domain::comment::{Comment, ReviewThread},
     tui::{
         pr_detail::{
-            box_text_width, boxed, relative_age, render_markdown, render_thumb_scrollbar,
-            strip_glamour_margin, trim_blank_lines,
+            box_text_width, boxed, diff_bg_row, relative_age, render_markdown,
+            render_thumb_scrollbar, strip_glamour_margin, trim_blank_lines,
         },
-        spinner_frame, theme,
+        spinner_frame,
+        theme::{self, Theme},
     },
 };
 
@@ -83,12 +84,7 @@ pub fn render(frame: &mut Frame, pr_data: Option<&PrData>, ui: &mut UiMemory, ar
     let scroll = ui.overview_scroll.min(max_scroll);
     ui.overview_scroll = scroll;
 
-    let content_area = Rect {
-        x: area.x,
-        y: area.y,
-        width: content_width,
-        height: area.height,
-    };
+    let content_area = Rect { width: content_width, ..area };
     let p = Paragraph::new(lines).scroll((scroll, 0));
     frame.render_widget(p, content_area);
 
@@ -182,7 +178,7 @@ enum EventStyle {
 }
 
 impl EventStyle {
-    fn color(self, theme: &crate::tui::theme::Theme) -> ratatui::style::Color {
+    fn color(self, theme: &Theme) -> Color {
         match self {
             Self::Comment => theme.info,
             Self::Review => theme.accent,
@@ -209,11 +205,8 @@ fn build_review_lines(
     now: DateTime<Utc>,
 ) -> Option<Vec<Line<'static>>> {
     let theme = theme::current();
-    if thread.comments.is_empty() {
-        return None;
-    }
-    let text_width = box_text_width(width);
     let first = thread.comments.first()?;
+    let text_width = box_text_width(width);
     let header = issue_comment_header(&first.author.username, first.created, now);
 
     let mut body: Vec<Line<'static>> = Vec::new();
@@ -250,7 +243,7 @@ fn build_review_lines(
                     format!("↳ @{}", comment.author.username),
                     Style::default().fg(theme.info).add_modifier(Modifier::BOLD),
                 ),
-                Span::styled(format!(" · {}", age), Style::default().fg(theme.muted)),
+                Span::styled(format!(" · {age}"), Style::default().fg(theme.muted)),
             ]));
         }
         body.extend(trim_blank_lines(strip_glamour_margin(
@@ -268,6 +261,7 @@ fn issue_comment_header(
     now: DateTime<Utc>,
 ) -> Line<'static> {
     let theme = theme::current();
+    let age = relative_age(created, now);
     Line::from(vec![
         Span::styled(
             username.to_string(),
@@ -276,10 +270,7 @@ fn issue_comment_header(
                 .add_modifier(Modifier::BOLD),
         ),
         Span::styled(" commented", Style::default().fg(theme.muted)),
-        Span::styled(
-            format!(" · {}", relative_age(created, now)),
-            Style::default().fg(theme.muted),
-        ),
+        Span::styled(format!(" · {age}"), Style::default().fg(theme.muted)),
     ])
 }
 
@@ -292,50 +283,26 @@ fn styled_diff_hunk(hunk: &str, width: u16) -> Vec<Line<'static>> {
     hunk.lines()
         .map(|line| {
             if line.starts_with("@@") {
-                Line::from(Span::styled(
+                return Line::from(Span::styled(
                     line.to_string(),
                     Style::default().fg(theme.info),
-                ))
-            } else if let Some(content) = line.strip_prefix('+') {
-                let visible = 1 + content.chars().count();
-                let pad = row_w.saturating_sub(visible);
-                let bg = theme.diff_added_bg;
-                Line::from(vec![
-                    Span::styled(
-                        "+".to_string(),
-                        Style::default()
-                            .fg(theme.diff_added)
-                            .bg(bg)
-                            .add_modifier(Modifier::BOLD),
-                    ),
-                    Span::styled(
-                        format!("{}{}", content, " ".repeat(pad)),
-                        Style::default().fg(theme.fg).bg(bg),
-                    ),
-                ])
-            } else if let Some(content) = line.strip_prefix('-') {
-                let visible = 1 + content.chars().count();
-                let pad = row_w.saturating_sub(visible);
-                let bg = theme.diff_removed_bg;
-                Line::from(vec![
-                    Span::styled(
-                        "-".to_string(),
-                        Style::default()
-                            .fg(theme.diff_removed)
-                            .bg(bg)
-                            .add_modifier(Modifier::BOLD),
-                    ),
-                    Span::styled(
-                        format!("{}{}", content, " ".repeat(pad)),
-                        Style::default().fg(theme.muted).bg(bg),
-                    ),
-                ])
-            } else {
-                Line::from(Span::styled(
-                    line.to_string(),
-                    Style::default().fg(theme.diff_context),
-                ))
+                ));
             }
+            if let Some(content) = line.strip_prefix('+') {
+                return diff_bg_row(
+                    "", "+", content, theme.diff_added, theme.diff_added_bg, theme.fg, row_w,
+                );
+            }
+            if let Some(content) = line.strip_prefix('-') {
+                return diff_bg_row(
+                    "", "-", content, theme.diff_removed, theme.diff_removed_bg, theme.muted,
+                    row_w,
+                );
+            }
+            Line::from(Span::styled(
+                line.to_string(),
+                Style::default().fg(theme.diff_context),
+            ))
         })
         .collect()
 }
