@@ -10,8 +10,50 @@ use ratatui::{
     layout::{Constraint, Direction, Layout, Rect},
     style::{Modifier, Style},
     text::{Line, Span},
-    widgets::{Block, BorderType, Borders, Clear, List, ListItem, ListState, Paragraph},
+    widgets::{Block, Borders, Clear, List, ListItem, ListState, Paragraph},
 };
+
+/// Fixed widths for every column except Title. Title flexes to absorb the
+/// remaining width so the header and rows fill the inner area edge-to-edge.
+struct ColWidths {
+    id: usize,
+    status: usize,
+    author: usize,
+    title: usize,
+    ci: usize,
+    diff: usize,
+    comments: usize,
+    reviews: usize,
+    age: usize,
+}
+
+impl ColWidths {
+    /// 2-col leading "▶ "/"  " prefix is added by the List widget — subtract
+    /// it from the available inner width before allocating to Title.
+    fn for_inner(inner_width: u16) -> Self {
+        let id = 7;
+        let status = 10;
+        let author = 18;
+        let ci = 4;
+        let diff = 12;
+        let comments = 10;
+        let reviews = 9;
+        let age = 8;
+        let fixed = 2 + id + status + author + ci + diff + comments + reviews + age;
+        let title = (inner_width as usize).saturating_sub(fixed).max(20);
+        Self {
+            id,
+            status,
+            author,
+            title,
+            ci,
+            diff,
+            comments,
+            reviews,
+            age,
+        }
+    }
+}
 
 pub fn render(frame: &mut Frame, state: &AppState, area: ratatui::layout::Rect) {
     let theme = theme::current();
@@ -20,56 +62,59 @@ pub fn render(frame: &mut Frame, state: &AppState, area: ratatui::layout::Rect) 
         .constraints([Constraint::Min(0), Constraint::Length(1)])
         .split(area);
 
-    match &state.cache.prs {
-        LoadState::NotRequested | LoadState::Loading => {
-            let loading = Paragraph::new(format!(
-                "\n\n  {}  Loading pull requests...",
-                spinner_frame()
-            ))
-            .block(Block::default().borders(Borders::ALL).title("tuipr"))
-            .style(Style::default().fg(theme.warning));
-            frame.render_widget(loading, chunks[0]);
-        }
-        LoadState::Loaded(_) => {
-            let filtered = state.filtered_prs();
-            let outer_block = Block::default()
-                .borders(Borders::ALL)
-                .border_style(Style::default().fg(theme.border))
-                .border_type(BorderType::Rounded)
-                .title(format!(
-                    " {} ({}) ",
-                    state.ui.list_filter.label(),
-                    filtered.len()
-                ));
-            let inner = outer_block.inner(chunks[0]);
-            frame.render_widget(outer_block, chunks[0]);
+    let loaded_prs = match &state.cache.prs {
+        LoadState::Loaded(_) => Some(state.filtered_prs()),
+        _ => None,
+    };
 
-            let content_chunks = Layout::default()
-                .direction(Direction::Vertical)
-                .constraints([Constraint::Length(1), Constraint::Min(0)])
-                .split(inner);
+    // Same chrome regardless of load state — outer rounded block + header row.
+    // Only the body content swaps between a spinner and the actual list. The
+    // title shows the filter label always, with either the count or "…" while
+    // loading so the badge keeps its shape.
+    let title_text = match &loaded_prs {
+        Some(prs) => format!(" {} ({}) ", state.ui.list_filter.label(), prs.len()),
+        None => format!(" {} (…) ", state.ui.list_filter.label()),
+    };
+    let outer_block = Block::default()
+        .borders(Borders::ALL)
+        .border_style(Style::default().fg(theme.border))
+        .title(Line::styled(
+            title_text,
+            Style::default()
+                .fg(theme.orange)
+                .add_modifier(Modifier::BOLD),
+        ));
+    let inner = outer_block.inner(chunks[0]);
+    frame.render_widget(outer_block, chunks[0]);
 
-            let header_style = Style::default().fg(theme.fg).add_modifier(Modifier::BOLD);
+    let content_chunks = Layout::default()
+        .direction(Direction::Vertical)
+        .constraints([Constraint::Length(1), Constraint::Min(0)])
+        .split(inner);
 
-            // The List below shifts every row right by 2 cols to make room for
-            // the highlight_symbol ("▶ "). We add the same `  ` prefix to the
-            // header so the columns line up.
-            let header = Paragraph::new(Line::from(vec![
-                Span::raw("  "),
-                Span::styled(format!("{:<7}", "#"), header_style),
-                Span::styled(format!("{:<10}", "Status"), header_style),
-                Span::styled(format!("{:<18}", "Author"), header_style),
-                Span::styled(format!("{:<40}", "Title"), header_style),
-                Span::styled(format!("{:<3}", "CI"), header_style),
-                Span::styled(format!("{:<12}", "Diff"), header_style),
-                Span::styled(format!("{:<6}", "Comm"), header_style),
-                Span::styled(format!("{:<7}", "Rev"), header_style),
-                Span::styled(format!("{:<8}", "Age"), header_style),
-            ]));
+    let widths = ColWidths::for_inner(inner.width);
+    let header_style = Style::default().fg(theme.fg).add_modifier(Modifier::BOLD);
 
-            frame.render_widget(header, content_chunks[0]);
+    // The List below shifts every row right by 2 cols to make room for
+    // the highlight_symbol ("▶ "). We add the same `  ` prefix to the
+    // header so the columns line up.
+    let header = Paragraph::new(Line::from(vec![
+        Span::raw("  "),
+        Span::styled(format!("{:<w$}", "#", w = widths.id), header_style),
+        Span::styled(format!("{:<w$}", "Status", w = widths.status), header_style),
+        Span::styled(format!("{:<w$}", "Author", w = widths.author), header_style),
+        Span::styled(format!("{:<w$}", "Title", w = widths.title), header_style),
+        Span::styled(format!("{:<w$}", "CI", w = widths.ci), header_style),
+        Span::styled(format!("{:<w$}", "Diff", w = widths.diff), header_style),
+        Span::styled(format!("{:<w$}", "Comments", w = widths.comments), header_style),
+        Span::styled(format!("{:<w$}", "Reviews", w = widths.reviews), header_style),
+        Span::styled(format!("{:<w$}", "Age", w = widths.age), header_style),
+    ]));
+    frame.render_widget(header, content_chunks[0]);
 
-            let items: Vec<ListItem> = filtered.iter().map(|pr| row_for_pr(pr)).collect();
+    match loaded_prs {
+        Some(filtered) => {
+            let items: Vec<ListItem> = filtered.iter().map(|pr| row_for_pr(pr, &widths)).collect();
 
             let mut list_state = ListState::default();
             list_state.select(Some(state.ui.list_selected));
@@ -83,6 +128,14 @@ pub fn render(frame: &mut Frame, state: &AppState, area: ratatui::layout::Rect) 
                 .highlight_symbol("▶ ");
 
             frame.render_stateful_widget(list, content_chunks[1], &mut list_state);
+        }
+        None => {
+            let spinner = Paragraph::new(format!(
+                "  {}  Loading pull requests…",
+                spinner_frame()
+            ))
+            .style(Style::default().fg(theme.warning));
+            frame.render_widget(spinner, content_chunks[1]);
         }
     }
 
@@ -141,7 +194,7 @@ fn render_filter_picker(frame: &mut Frame, state: &AppState, area: Rect) {
     frame.render_widget(help, inner_chunks[1]);
 }
 
-fn row_for_pr(pr: &crate::domain::pr::PullRequest) -> ListItem<'static> {
+fn row_for_pr(pr: &crate::domain::pr::PullRequest, widths: &ColWidths) -> ListItem<'static> {
     let theme = theme::current();
     let status_color = match pr.status {
         crate::domain::pr::PrStatus::Draft => theme.status_draft,
@@ -159,20 +212,21 @@ fn row_for_pr(pr: &crate::domain::pr::PullRequest) -> ListItem<'static> {
         format!("{}d", days_old)
     };
 
+    // Nerd Font CI status glyphs (requires a Nerd Font in the terminal).
     let (ci_sym, ci_color) = match pr.ci.state {
-        CiState::Success => ("✓", theme.success),
-        CiState::Failed => ("✗", theme.error),
-        CiState::Pending => ("●", theme.warning),
-        CiState::Unknown => ("—", theme.muted),
+        CiState::Success => ("\u{f058}", theme.success), //  check-circle
+        CiState::Failed => ("\u{f057}", theme.error),    //  times-circle
+        CiState::Pending => ("\u{f017}", theme.warning), //  clock
+        CiState::Unknown => ("\u{f042}", theme.muted),   //  adjust (half circle — neutral/not run)
     };
 
-    // Diff column is 12 wide total. We render `+N` and `-N` as separate
-    // colored spans, so we compute the visible width manually to know how
-    // much trailing padding to add.
+    // Diff column renders `+N` and `-N` as separate colored spans, so we
+    // compute the visible width manually to know how much trailing padding
+    // to add.
     let plus = format!("+{}", pr.additions);
     let minus = format!("-{}", pr.deletions);
     let diff_visible = plus.chars().count() + 1 + minus.chars().count();
-    let diff_pad = 12usize.saturating_sub(diff_visible);
+    let diff_pad = widths.diff.saturating_sub(diff_visible);
 
     let comm_text = if pr.comment_count == 0 {
         "—".to_string()
@@ -203,28 +257,47 @@ fn row_for_pr(pr: &crate::domain::pr::PullRequest) -> ListItem<'static> {
         (format!("{}/{}", approved, total), color)
     };
 
-    let title: String = pr.title.chars().take(38).collect();
-    let author: String = pr.author.username.chars().take(16).collect();
+    // Truncate title/author so they don't push later columns out of alignment
+    // when the data is wider than the column.
+    let title_max = widths.title.saturating_sub(2);
+    let author_max = widths.author.saturating_sub(2);
+    let title: String = pr.title.chars().take(title_max).collect();
+    let author: String = pr.author.username.chars().take(author_max).collect();
 
     let line = Line::from(vec![
-        Span::styled(format!("#{:<6}", pr.id), Style::default().fg(theme.muted)),
         Span::styled(
-            format!("{:<10}", pr.status.label()),
+            format!("#{:<w$}", pr.id, w = widths.id - 1),
+            Style::default().fg(theme.muted),
+        ),
+        Span::styled(
+            format!("{:<w$}", pr.status.label(), w = widths.status),
             Style::default().fg(status_color),
         ),
-        Span::styled(format!("{:<18}", author), Style::default().fg(theme.info)),
-        Span::raw(format!("{:<40}", title)),
-        Span::styled(format!("{:<3}", ci_sym), Style::default().fg(ci_color)),
+        Span::styled(
+            format!("{:<w$}", author, w = widths.author),
+            Style::default().fg(theme.info),
+        ),
+        Span::raw(format!("{:<w$}", title, w = widths.title)),
+        Span::styled(
+            format!("{:<w$}", ci_sym, w = widths.ci),
+            Style::default().fg(ci_color),
+        ),
         Span::styled(plus, Style::default().fg(theme.diff_added)),
         Span::raw(" "),
         Span::styled(minus, Style::default().fg(theme.diff_removed)),
         Span::raw(" ".repeat(diff_pad)),
         Span::styled(
-            format!("{:<6}", comm_text),
+            format!("{:<w$}", comm_text, w = widths.comments),
             Style::default().fg(theme.muted),
         ),
-        Span::styled(format!("{:<7}", rev_text), Style::default().fg(rev_color)),
-        Span::styled(format!("{:<8}", age), Style::default().fg(theme.muted)),
+        Span::styled(
+            format!("{:<w$}", rev_text, w = widths.reviews),
+            Style::default().fg(rev_color),
+        ),
+        Span::styled(
+            format!("{:<w$}", age, w = widths.age),
+            Style::default().fg(theme.muted),
+        ),
     ]);
     ListItem::new(line)
 }
