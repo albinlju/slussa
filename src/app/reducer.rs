@@ -50,26 +50,11 @@ impl App {
                 self.state.ui.diff = DiffViewState::default();
                 self.state.ui.description_scroll = 0;
                 self.state.ui.overview_scroll = 0;
-                let (load_commits, load_diff, load_comments, load_threads) = {
-                    let pr_data = self.state.cache.details.entry(pr_id).or_default();
-                    let load_commits = matches!(pr_data.commits, LoadState::NotRequested);
-                    let load_diff = matches!(pr_data.diff, LoadState::NotRequested);
-                    let load_comments = matches!(pr_data.comments, LoadState::NotRequested);
-                    let load_threads = matches!(pr_data.review_threads, LoadState::NotRequested);
-                    if load_commits {
-                        pr_data.commits = LoadState::Loading;
-                    }
-                    if load_diff {
-                        pr_data.diff = LoadState::Loading;
-                    }
-                    if load_comments {
-                        pr_data.comments = LoadState::Loading;
-                    }
-                    if load_threads {
-                        pr_data.review_threads = LoadState::Loading;
-                    }
-                    (load_commits, load_diff, load_comments, load_threads)
-                };
+                let pr_data = self.state.cache.details.entry(pr_id).or_default();
+                let load_commits = pr_data.commits.start_loading();
+                let load_diff = pr_data.diff.start_loading();
+                let load_comments = pr_data.comments.start_loading();
+                let load_threads = pr_data.review_threads.start_loading();
                 if load_commits {
                     self.spawn_load_commits(pr_id);
                 }
@@ -84,23 +69,23 @@ impl App {
                 }
             }
             Action::PrsLoaded(result) => {
-                self.state.cache.prs = into_load_state(result);
+                self.state.cache.prs = result.into();
             }
             Action::CommitsLoaded(pr_id, result) => {
                 let pr_data = self.state.cache.details.entry(pr_id).or_default();
-                pr_data.commits = into_load_state(result);
+                pr_data.commits = result.into();
             }
             Action::DiffLoaded(pr_id, result) => {
                 let pr_data = self.state.cache.details.entry(pr_id).or_default();
-                pr_data.diff = into_load_state(result);
+                pr_data.diff = result.into();
             }
             Action::CommentsLoaded(pr_id, result) => {
                 let pr_data = self.state.cache.details.entry(pr_id).or_default();
-                pr_data.comments = into_load_state(result);
+                pr_data.comments = result.into();
             }
             Action::ReviewThreadsLoaded(pr_id, result) => {
                 let pr_data = self.state.cache.details.entry(pr_id).or_default();
-                pr_data.review_threads = into_load_state(result);
+                pr_data.review_threads = result.into();
             }
             Action::DiffCursorDown => {
                 let rows = self.current_visible_rows();
@@ -201,16 +186,6 @@ impl App {
         }
     }
 
-}
-
-fn into_load_state<T>(result: Result<T, String>) -> LoadState<T> {
-    match result {
-        Ok(v) => LoadState::Loaded(v),
-        Err(e) => LoadState::Failed(e),
-    }
-}
-
-impl App {
     fn current_visible_rows(&self) -> Vec<TreeRow> {
         let pr_id = match self.state.screen {
             Screen::Detail { pr_id, .. } => pr_id,
