@@ -18,16 +18,13 @@ pub(super) fn spinner_frame() -> &'static str {
     SPINNER_FRAMES[idx]
 }
 
-/// One-line footer with left-side key hints and a right-side `donate / ?`
-/// block. Shared between pr_list and pr_detail so the bar stays consistent.
 pub(super) fn footer(width: u16, hints: &str) -> Line<'static> {
     let theme = theme::current();
     let muted = Style::default().fg(theme.muted);
-
-    let left = format!("  {hints}");
-    // Nerd Font glyphs: \u{f004} heart, \u{f059} question-circle.
+    let left = vec![Span::styled(format!("  {hints}"), muted)];
     let version = format!("v{}", env!("CARGO_PKG_VERSION"));
-    let right_spans = vec![
+    // Nerd Font glyphs: \u{f004} heart, \u{f059} question-circle.
+    let right = vec![
         Span::styled("\u{f004}", Style::default().fg(theme.orange)),
         Span::styled(" donate", muted),
         Span::raw("    "),
@@ -37,16 +34,24 @@ pub(super) fn footer(width: u16, hints: &str) -> Line<'static> {
         Span::styled(version, muted),
         Span::raw("  "),
     ];
+    Line::from(justify_between(left, right, width as usize))
+}
 
-    // Use `Span::width()` (unicode display width) since the right segment
-    // has Nerd Font glyphs that may not be 1 char = 1 cell.
-    let left_w = left.chars().count();
-    let right_w: usize = right_spans.iter().map(|s| s.width()).sum();
-    let gap = (width as usize).saturating_sub(left_w + right_w).max(1);
-
-    let mut spans = vec![Span::styled(left, muted), Span::raw(" ".repeat(gap))];
-    spans.extend(right_spans);
-    Line::from(spans)
+/// Build a `left ... pad ... right` span sequence that fills `width`. Widths
+/// are measured with `Span::width()` so Nerd Font glyphs land where they
+/// should. If left + right already exceed `width`, a single space keeps
+/// them visually separated.
+pub(super) fn justify_between(
+    mut left: Vec<Span<'static>>,
+    right: Vec<Span<'static>>,
+    width: usize,
+) -> Vec<Span<'static>> {
+    let left_w: usize = left.iter().map(|s| s.width()).sum();
+    let right_w: usize = right.iter().map(|s| s.width()).sum();
+    let pad = width.saturating_sub(left_w + right_w).max(1);
+    left.push(Span::raw(" ".repeat(pad)));
+    left.extend(right);
+    left
 }
 
 /// Vertical thumb-style scrollbar with a fixed 3-row thumb that slides from
@@ -129,39 +134,22 @@ fn is_blank_line(line: &Line<'static>) -> bool {
     line.spans.is_empty() || line.spans.iter().all(|s| s.content.trim().is_empty())
 }
 
+/// Strip `n` leading chars from each line's first span — peels off
+/// glamour's fixed-width document margin so the rendered markdown sits
+/// flush against whatever frames it.
 pub(super) fn strip_glamour_margin(lines: Vec<Line<'static>>, n: usize) -> Vec<Line<'static>> {
     lines
         .into_iter()
-        .map(|line| strip_line_left(line, n))
+        .map(|mut line| {
+            if let Some(first) = line.spans.first_mut() {
+                let trimmed: String = first.content.chars().skip(n).collect();
+                first.content = trimmed.into();
+            }
+            line
+        })
         .collect()
 }
 
-fn strip_line_left(line: Line<'static>, mut budget: usize) -> Line<'static> {
-    let line_style = line.style;
-    let mut out: Vec<Span<'static>> = Vec::with_capacity(line.spans.len());
-    let mut done = false;
-    for span in line.spans {
-        if done || budget == 0 {
-            out.push(span);
-            continue;
-        }
-        let chars: Vec<char> = span.content.chars().collect();
-        let strip_count = chars
-            .iter()
-            .take(budget)
-            .take_while(|c| c.is_whitespace())
-            .count();
-        budget -= strip_count;
-        if strip_count < chars.len() {
-            let remainder: String = chars.into_iter().skip(strip_count).collect();
-            out.push(Span::styled(remainder, span.style));
-            done = true;
-        }
-    }
-    Line::from(out).style(line_style)
-}
-
-/// Outer width − 2 border cols − 2 cols of internal horizontal padding.
 pub(super) fn box_text_width(outer: u16) -> u16 {
     outer.saturating_sub(4)
 }

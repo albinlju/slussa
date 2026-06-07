@@ -18,14 +18,12 @@ use crate::{
     domain::{
         comment::ReviewThread,
         diff::{DiffLine, FileDiff},
-        pr::PullRequest,
     },
     tui::{screens::pr_detail::file_tree::build_visible_rows, theme, widgets},
 };
 
 pub fn render(
     frame: &mut Frame,
-    _pr: &PullRequest,
     pr_data: Option<&PrData>,
     ui_diff: &DiffViewState,
     area: Rect,

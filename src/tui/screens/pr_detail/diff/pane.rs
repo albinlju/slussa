@@ -18,10 +18,7 @@ use crate::{
         comment::ReviewThread,
         diff::{Diff, DiffLine, FileDiff},
     },
-    tui::{
-        screens::pr_detail::render_inline_thread,
-        theme, widgets,
-    },
+    tui::{screens::pr_detail::render_inline_thread, theme, widgets},
 };
 
 /// 2-col gutter on each side of the diff body — the content (prefix +
@@ -81,29 +78,24 @@ fn render_pane_header(frame: &mut Frame, path: &str, adds: u32, dels: u32, area:
     let header_inner = header_block.inner(area);
     frame.render_widget(header_block, area);
 
-    let plus = format!("+{adds}");
-    let minus = format!("-{dels}");
-    let stats_visible = plus.chars().count() + 1 + minus.chars().count();
-
-    let header_w = header_inner.width as usize;
     // 2-col padding on each side inside the header band.
-    let inner_w = header_w.saturating_sub(4);
-    let max_path = inner_w.saturating_sub(stats_visible + 2);
-    let displayed_path = truncate_path_left(path, max_path);
-    let path_visible = displayed_path.chars().count();
-    let gap = inner_w.saturating_sub(path_visible + stats_visible).max(1);
+    let inner_w = (header_inner.width as usize).saturating_sub(4);
+    let stats_w = "+".len() + adds.to_string().len() + 1 + "-".len() + dels.to_string().len();
+    let displayed_path = truncate_path_left(path, inner_w.saturating_sub(stats_w + 2));
 
-    let line = Line::from(vec![
+    let left = vec![
         Span::raw("  "),
         Span::styled(
             displayed_path,
             Style::default().fg(theme.fg).add_modifier(Modifier::BOLD),
         ),
-        Span::raw(" ".repeat(gap)),
-        Span::styled(plus, Style::default().fg(theme.diff_added)),
+    ];
+    let right = vec![
+        Span::styled(format!("+{adds}"), Style::default().fg(theme.diff_added)),
         Span::raw(" "),
-        Span::styled(minus, Style::default().fg(theme.diff_removed)),
-    ]);
+        Span::styled(format!("-{dels}"), Style::default().fg(theme.diff_removed)),
+    ];
+    let line = Line::from(widgets::justify_between(left, right, inner_w + 2));
     frame.render_widget(Paragraph::new(line), header_inner);
 }
 
