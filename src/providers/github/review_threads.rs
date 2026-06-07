@@ -5,7 +5,7 @@ use serde::Deserialize;
 
 use crate::domain::comment::{Comment, ReviewThread};
 use crate::domain::user::User;
-use crate::providers::github::error::{FetchError, run_gh};
+use crate::providers::github::error::{FetchError, run_gh_json};
 
 #[derive(Debug, Deserialize)]
 struct GhUser {
@@ -44,10 +44,8 @@ struct GhPrComment {
 /// The `{owner}` and `{repo}` placeholders are substituted by gh automatically
 /// from the current repo context.
 pub fn fetch_review_threads(pr_number: u64) -> Result<Vec<ReviewThread>, FetchError> {
-    let endpoint = format!("repos/{{owner}}/{{repo}}/pulls/{}/comments", pr_number);
-    let stdout = run_gh(&["api", "--paginate", &endpoint])?;
-    let comments: Vec<GhPrComment> =
-        serde_json::from_slice(&stdout).map_err(|e| FetchError::ParseFailed(e.to_string()))?;
+    let endpoint = format!("repos/{{owner}}/{{repo}}/pulls/{pr_number}/comments");
+    let comments: Vec<GhPrComment> = run_gh_json(&["api", "--paginate", &endpoint])?;
 
     // Map each comment to its in_reply_to_id so we can chase to the thread root.
     let parent_map: HashMap<u64, Option<u64>> =

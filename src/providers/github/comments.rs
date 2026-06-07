@@ -3,7 +3,7 @@ use serde::Deserialize;
 
 use crate::domain::comment::Comment;
 use crate::domain::user::User;
-use crate::providers::github::error::{FetchError, run_gh};
+use crate::providers::github::error::{FetchError, run_gh_json};
 
 #[derive(Debug, Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -32,9 +32,8 @@ struct GhCommentsResponse {
 
 pub fn fetch_comments(pr_number: u64) -> Result<Vec<Comment>, FetchError> {
     let pr_arg = pr_number.to_string();
-    let stdout = run_gh(&["pr", "view", &pr_arg, "--json", "comments"])?;
     let resp: GhCommentsResponse =
-        serde_json::from_slice(&stdout).map_err(|e| FetchError::ParseFailed(e.to_string()))?;
+        run_gh_json(&["pr", "view", &pr_arg, "--json", "comments"])?;
     Ok(resp
         .comments
         .into_iter()

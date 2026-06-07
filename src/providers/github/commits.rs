@@ -2,7 +2,7 @@ use chrono::{DateTime, Utc};
 use serde::Deserialize;
 
 use crate::domain::commit::Commit;
-use crate::providers::github::error::{FetchError, run_gh, try_gh};
+use crate::providers::github::error::{FetchError, run_gh_json};
 
 #[derive(Debug, Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -31,9 +31,7 @@ struct GhCommitsResponse {
 
 pub fn fetch_commits(pr_number: u64) -> Result<Vec<Commit>, FetchError> {
     let pr_arg = pr_number.to_string();
-    let stdout = run_gh(&["pr", "view", &pr_arg, "--json", "commits"])?;
-    let resp: GhCommitsResponse =
-        serde_json::from_slice(&stdout).map_err(|e| FetchError::ParseFailed(e.to_string()))?;
+    let resp: GhCommitsResponse = run_gh_json(&["pr", "view", &pr_arg, "--json", "commits"])?;
 
     let mut commits: Vec<Commit> = resp.commits.into_iter().map(map_commit).collect();
 
@@ -74,9 +72,9 @@ struct GhStats {
 
 fn fetch_commit_stats(sha: &str) -> Option<(u32, u32)> {
     // Per-commit stats are best-effort — a single API hiccup shouldn't fail
-    // the whole commit list, so we use the swallowing `try_gh` variant.
-    let stdout = try_gh(&["api", &format!("repos/{{owner}}/{{repo}}/commits/{}", sha)])?;
-    let resp: GhCommitDetail = serde_json::from_slice(&stdout).ok()?;
+    // the whole commit list, so we discard the error here.
+    let resp: GhCommitDetail =
+        run_gh_json(&["api", &format!("repos/{{owner}}/{{repo}}/commits/{sha}")]).ok()?;
     Some((resp.stats.additions, resp.stats.deletions))
 }
 
