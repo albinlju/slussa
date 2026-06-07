@@ -1,6 +1,9 @@
 use crate::domain::diff::{Diff, DiffLine, FileDiff, Hunk};
 use crate::providers::github::error::{FetchError, run_gh};
 
+// `fetch_diff` uses `run_gh` directly (no JSON helper) because gh returns
+// raw unified-diff text rather than structured JSON.
+
 pub fn fetch_diff(pr_number: u64) -> Result<Diff, FetchError> {
     let pr_arg = pr_number.to_string();
     let stdout = run_gh(&["pr", "diff", &pr_arg])?;

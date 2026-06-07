@@ -7,7 +7,7 @@ use crate::domain::provider::ProviderKind;
 use crate::domain::repo::Repo;
 use crate::domain::review::{Reviewer, ReviewerState};
 use crate::domain::user::User;
-use crate::providers::github::error::{FetchError, run_gh};
+use crate::providers::github::error::{FetchError, run_gh_json};
 
 #[derive(Debug, Default, Deserialize)]
 struct GhAuthor {
@@ -73,7 +73,7 @@ struct GhPr {
 }
 
 pub fn fetch_prs() -> Result<Vec<PullRequest>, FetchError> {
-    let stdout = run_gh(&[
+    let gh_prs: Vec<GhPr> = run_gh_json(&[
         "pr",
         "list",
         "--json",
@@ -81,8 +81,6 @@ pub fn fetch_prs() -> Result<Vec<PullRequest>, FetchError> {
          createdAt,updatedAt,additions,deletions,changedFiles,comments,\
          latestReviews,statusCheckRollup",
     ])?;
-    let gh_prs: Vec<GhPr> =
-        serde_json::from_slice(&stdout).map_err(|e| FetchError::ParseFailed(e.to_string()))?;
     Ok(gh_prs.into_iter().map(map_pr).collect())
 }
 
