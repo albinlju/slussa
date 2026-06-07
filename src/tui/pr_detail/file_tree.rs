@@ -1,3 +1,4 @@
+use std::cmp::Ordering;
 use std::collections::HashSet;
 
 use crate::domain::diff::FileDiff;
@@ -26,6 +27,7 @@ pub fn build_visible_rows(files: &[FileDiff], collapsed: &HashSet<String>) -> Ve
     rows
 }
 
+#[derive(Default)]
 struct Node {
     name: String,
     full_path: String,
@@ -33,13 +35,14 @@ struct Node {
     file_index: Option<usize>,
 }
 
+impl Node {
+    fn is_dir(&self) -> bool {
+        self.file_index.is_none()
+    }
+}
+
 fn build_tree(files: &[FileDiff]) -> Node {
-    let mut root = Node {
-        name: String::new(),
-        full_path: String::new(),
-        children: Vec::new(),
-        file_index: None,
-    };
+    let mut root = Node::default();
     for (idx, file) in files.iter().enumerate() {
         let segments: Vec<&str> = file.path.split('/').filter(|s| !s.is_empty()).collect();
         insert(&mut root, &segments, idx);
@@ -71,7 +74,7 @@ fn insert(node: &mut Node, segments: &[&str], file_index: usize) {
         let pos = node
             .children
             .iter()
-            .position(|c| c.name == head && c.file_index.is_none());
+            .position(|c| c.name == head && c.is_dir());
         match pos {
             Some(idx) => insert(&mut node.children[idx], rest, file_index),
             None => {
@@ -89,10 +92,11 @@ fn insert(node: &mut Node, segments: &[&str], file_index: usize) {
 }
 
 fn sort_node(node: &mut Node) {
+    // Directories before files; within the same kind, sort alphabetically.
     node.children
-        .sort_by(|a, b| match (a.file_index.is_some(), b.file_index.is_some()) {
-            (false, true) => std::cmp::Ordering::Less,
-            (true, false) => std::cmp::Ordering::Greater,
+        .sort_by(|a, b| match (a.is_dir(), b.is_dir()) {
+            (true, false) => Ordering::Less,
+            (false, true) => Ordering::Greater,
             _ => a.name.cmp(&b.name),
         });
     for c in &mut node.children {

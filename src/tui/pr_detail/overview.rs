@@ -152,7 +152,7 @@ fn build_overview_lines(
         let circle = Span::styled(
             "● ".to_string(),
             Style::default()
-                .fg(style.color(&theme))
+                .fg(style.color(theme))
                 .add_modifier(Modifier::BOLD),
         );
         for (j, line) in lines.into_iter().enumerate() {
