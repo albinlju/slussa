@@ -65,7 +65,7 @@ enum PrListView<'a> {
     Failed(String),
 }
 
-pub fn render(frame: &mut Frame, state: &AppState, area: ratatui::layout::Rect) {
+pub(super) fn render(frame: &mut Frame, state: &AppState, area: ratatui::layout::Rect) {
     let theme = theme::current();
     let chunks = Layout::default()
         .direction(Direction::Vertical)
@@ -323,7 +323,7 @@ fn row_for_pr(pr: &PullRequest, widths: &ColWidths) -> ListItem<'static> {
     ListItem::new(line)
 }
 
-pub fn key_to_action(state: &AppState, key: KeyCode) -> Option<Action> {
+pub(super) fn key_to_action(state: &AppState, key: KeyCode) -> Option<Action> {
     if state.ui.filter_picker_open {
         return match key {
             KeyCode::Char('q') => Some(Action::Quit),

@@ -128,20 +128,18 @@ fn build_overview_lines(
     // with the timeline column prepended — circle on the first line of each
     // event, vertical connector on all other lines and on the gap rows
     // between events.
-    let mut blocks: Vec<(EventStyle, Vec<Line<'static>>)> = Vec::with_capacity(events.len());
-    for event in &events {
-        match event {
-            Event::Issue(c) => blocks.push((EventStyle::Comment, build_issue_lines(c, width, now))),
+    let blocks: Vec<(EventStyle, Vec<Line<'static>>)> = events
+        .iter()
+        .filter_map(|event| match event {
+            Event::Issue(c) => Some((EventStyle::Comment, build_issue_lines(c, width, now))),
             Event::Review(t) => {
-                if let Some(lines) = build_review_lines(t, width, now) {
-                    blocks.push((EventStyle::Review, lines));
-                }
+                build_review_lines(t, width, now).map(|l| (EventStyle::Review, l))
             }
-        }
-    }
+        })
+        .collect();
 
     let connector_style = Style::default().fg(theme.divider);
-    let connector = Span::styled("│ ".to_string(), connector_style);
+    let connector = Span::styled("│ ", connector_style);
 
     let mut all: Vec<Line<'static>> = Vec::new();
     for (i, (style, lines)) in blocks.into_iter().enumerate() {
@@ -150,7 +148,7 @@ fn build_overview_lines(
             all.push(Line::from(connector.clone()));
         }
         let circle = Span::styled(
-            "● ".to_string(),
+            "● ",
             Style::default()
                 .fg(style.color(theme))
                 .add_modifier(Modifier::BOLD),
