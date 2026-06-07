@@ -44,10 +44,6 @@ impl App {
         self.state.cache.prs = LoadState::Loading;
         self.spawn_load_prs();
 
-        // Draw on the interval tick directly instead of pumping `Render` actions
-        // through the unbounded action channel. With `Skip`, a slow frame just
-        // delays the next tick — frames can never queue up and back-pressure the
-        // app into getting slower and slower.
         let mut interval = time::interval(Duration::from_millis(16));
         interval.set_missed_tick_behavior(time::MissedTickBehavior::Skip);
 
