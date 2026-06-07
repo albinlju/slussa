@@ -5,25 +5,27 @@ pub mod diff;
 pub mod file_tree;
 pub mod overview;
 
-use ansi_to_tui::IntoText;
 use chrono::{DateTime, Utc};
 use ratatui::{
     Frame,
     crossterm::event::KeyCode,
     layout::{Constraint, Direction, Layout, Rect},
-    style::{Color, Modifier, Style},
+    style::{Modifier, Style},
     text::{Line, Span},
     widgets::{Block, BorderType, Borders, Padding, Paragraph},
 };
 
 use crate::{
-    app::state::{AppState, LoadState, PrData, Screen, UiMemory},
+    app::{
+        action::{Action, DetailAction, DiffAction},
+        state::{AppState, LoadState, PrData, Screen, UiMemory},
+    },
     domain::{
         comment::ReviewThread,
         pr::{PrStatus, PullRequest},
         review::ReviewerState,
     },
-    tui::{Action, DetailAction, DiffAction, render_footer, theme},
+    tui::{theme, widgets},
 };
 
 #[derive(Debug, Default, Clone, Copy, PartialEq, Eq)]
@@ -80,7 +82,7 @@ impl DetailTab {
     }
 }
 
-pub(super) fn render(
+pub(in crate::tui) fn render(
     frame: &mut Frame,
     state: &mut AppState,
     pr_id: u64,
@@ -124,102 +126,12 @@ pub(super) fn render(
     render_help(frame, outer_chunks[1]);
 }
 
-/// Render a PR description (markdown) into ratatui lines via charmed-glamour,
-/// already wrapped to `width`. Glamour emits ANSI-styled text which we bridge
-/// into ratatui via `ansi-to-tui`. Glamour uses CommonMark/GFM, so `-`/`+`/`*`
-/// bullets, numbered lists and checkboxes all work without shims.
-///
-/// `glamour::render` returns a `String` rather than a `Result`, so a panic on
-/// some pathological body would otherwise take down the whole TUI. We isolate
-/// it behind `catch_unwind` and fall back to the raw body, so rendering can
-/// never crash the app — defence-in-depth around a young dependency.
-pub(super) fn render_markdown(body: &str, width: u16) -> Vec<Line<'static>> {
-    if width == 0 {
-        return vec![Line::default()];
-    }
-    let rendered = std::panic::catch_unwind(|| {
-        let ansi = glamour::Renderer::new()
-            .with_style(glamour::Style::Dark)
-            .with_word_wrap(width as usize)
-            .render(body);
-        ansi.into_text().map(|text| text.lines)
-    });
-    let lines = match rendered {
-        Ok(Ok(lines)) => lines,
-        // ANSI bridge failed, or glamour panicked: fall back to the raw body.
-        _ => body.lines().map(|l| Line::raw(l.to_string())).collect(),
-    };
-    if lines.is_empty() {
-        vec![Line::default()]
-    } else {
-        lines
-    }
-}
-
 pub(super) fn description_body(pr: &PullRequest) -> &str {
     pr.description
         .as_deref()
         .map(str::trim)
         .filter(|s| !s.is_empty())
         .unwrap_or("(ingen beskrivning)")
-}
-
-/// glamour's Dark theme wraps the document with blank-line margins. For inline
-/// content (comments, replies) where vertical space is at a premium we strip
-/// those leading and trailing blanks so the body sits flush against whatever
-/// frames it.
-pub(super) fn trim_blank_lines(mut lines: Vec<Line<'static>>) -> Vec<Line<'static>> {
-    while lines.first().is_some_and(is_blank_line) {
-        lines.remove(0);
-    }
-    while lines.last().is_some_and(is_blank_line) {
-        lines.pop();
-    }
-    lines
-}
-
-fn is_blank_line(line: &Line<'static>) -> bool {
-    line.spans.is_empty() || line.spans.iter().all(|s| s.content.trim().is_empty())
-}
-
-/// A simple thumb-style scrollbar drawn in the rightmost column of `area`.
-///
-/// ratatui's built-in `Scrollbar` is mathematically correct but the thumb is
-/// sized proportionally to the visible content. For short scroll ranges that
-/// means the thumb is so large its *top* only inches down even at max scroll,
-/// which doesn't feel like "scrolled to the bottom" to most users.
-///
-/// We instead use a fixed 3-row thumb that slides from `0` to `track_len - 1`.
-/// The visible thumb compresses to 1-2 rows at the very bottom (the lower
-/// rows fall outside the track), which is a small visual cost for clear
-/// "I'm at the bottom" feedback.
-pub(super) fn render_thumb_scrollbar(frame: &mut Frame, scroll: u16, max_scroll: u16, area: Rect) {
-    if max_scroll == 0 || area.height < 1 || area.width < 1 {
-        return;
-    }
-    let theme = theme::current();
-    let track_len = area.height as usize;
-    let thumb_size = 3usize.min(track_len);
-    let max_thumb_top = track_len.saturating_sub(1);
-    let thumb_top = (scroll as usize * max_thumb_top) / max_scroll as usize;
-
-    let lines: Vec<Line<'static>> = (0..track_len)
-        .map(|y| {
-            if y >= thumb_top && y < thumb_top + thumb_size {
-                Line::styled("█", Style::default().fg(theme.accent))
-            } else {
-                Line::styled("│", Style::default().fg(theme.muted))
-            }
-        })
-        .collect();
-
-    let bar_area = Rect {
-        x: area.x + area.width.saturating_sub(1),
-        y: area.y,
-        width: 1,
-        height: area.height,
-    };
-    frame.render_widget(Paragraph::new(lines), bar_area);
 }
 
 /// Render a review thread as a `┃`-bar-prefixed block. Shared between the
@@ -231,7 +143,7 @@ pub(super) fn render_inline_thread(
     now: DateTime<Utc>,
 ) -> Vec<Line<'static>> {
     let theme = theme::current();
-    let text_w = box_text_width(width);
+    let text_w = widgets::box_text_width(width);
 
     // Box header: status icon + label on the left, comment count on the right.
     let (icon, label, accent) = if thread.resolved {
@@ -273,7 +185,7 @@ pub(super) fn render_inline_thread(
         if i > 0 {
             body.push(Line::raw(""));
         }
-        let age = relative_age(comment.created, now);
+        let age = widgets::relative_age(comment.created, now);
         body.push(Line::from(vec![
             Span::styled(
                 comment.author.username.clone(),
@@ -281,143 +193,13 @@ pub(super) fn render_inline_thread(
             ),
             Span::styled(format!(" · {age}"), Style::default().fg(theme.muted)),
         ]));
-        body.extend(trim_blank_lines(strip_glamour_margin(
-            render_markdown(&comment.content, text_w + 2),
+        body.extend(widgets::trim_blank_lines(widgets::strip_glamour_margin(
+            widgets::markdown(&comment.content, text_w + 2),
             2,
         )));
     }
 
-    boxed(header, body, width)
-}
-
-/// Outer width − 2 border cols − 2 cols of internal horizontal padding.
-pub(super) fn box_text_width(outer: u16) -> u16 {
-    outer.saturating_sub(4)
-}
-
-/// Wrap `header + body` lines in a `┌─┐ │ ├─┤ │ └─┘` frame at the given
-/// outer `width`. The first row inside is the header, separated from the
-/// body by a `├─┤` divider line. Used by overview and the inline review
-/// threads in the diff pane.
-pub(super) fn boxed(
-    header: Line<'static>,
-    body: Vec<Line<'static>>,
-    width: u16,
-) -> Vec<Line<'static>> {
-    let theme = theme::current();
-    let style = Style::default().fg(theme.divider);
-    let inner = (width as usize).saturating_sub(2);
-    let text_w = inner.saturating_sub(2);
-
-    let bar = |s: String| Line::from(Span::styled(s, style));
-
-    let mut out: Vec<Line<'static>> = Vec::new();
-    out.push(bar(format!("╭{}╮", "─".repeat(inner))));
-    out.push(wrap_box_line(header, text_w, style));
-    out.push(bar(format!("├{}┤", "─".repeat(inner))));
-    for line in body {
-        out.push(wrap_box_line(line, text_w, style));
-    }
-    out.push(bar(format!("╰{}╯", "─".repeat(inner))));
-    out
-}
-
-/// Build a single diff row with a full-row bg tint that reaches `row_w`. The
-/// optional `gutter` prefix carries the bg too so the band flows past the
-/// `+`/`-` mark. Shared between the Diff tab (2-col gutter) and the inline
-/// review-thread diff hunks in Overview (no gutter).
-pub(super) fn diff_bg_row(
-    gutter: &'static str,
-    prefix: &'static str,
-    content: &str,
-    prefix_fg: Color,
-    bg: Color,
-    text_fg: Color,
-    row_w: usize,
-) -> Line<'static> {
-    let visible = gutter.chars().count() + prefix.chars().count() + content.chars().count();
-    let pad = row_w.saturating_sub(visible);
-    let mut spans: Vec<Span<'static>> = Vec::with_capacity(3);
-    if !gutter.is_empty() {
-        spans.push(Span::styled(gutter, Style::default().bg(bg)));
-    }
-    spans.push(Span::styled(
-        prefix,
-        Style::default()
-            .fg(prefix_fg)
-            .bg(bg)
-            .add_modifier(Modifier::BOLD),
-    ));
-    spans.push(Span::styled(
-        format!("{content}{}", " ".repeat(pad)),
-        Style::default().fg(text_fg).bg(bg),
-    ));
-    Line::from(spans)
-}
-
-fn wrap_box_line(line: Line<'static>, text_w: usize, border: Style) -> Line<'static> {
-    let visible: usize = line.spans.iter().map(|s| s.width()).sum();
-    let pad = text_w.saturating_sub(visible);
-    let line_style = line.style;
-    let mut spans: Vec<Span<'static>> = Vec::with_capacity(line.spans.len() + 3);
-    spans.push(Span::styled("│ ", border));
-    for s in line.spans {
-        let merged = line_style.patch(s.style);
-        spans.push(Span::styled(s.content, merged));
-    }
-    spans.push(Span::raw(" ".repeat(pad + 1)));
-    spans.push(Span::styled("│", border));
-    Line::from(spans)
-}
-
-/// Walk each line's spans and strip up to `n` leading whitespace cells from
-/// the start of the line. Used to peel off glamour's fixed document margin
-/// so wrapped markdown sits flush against the box padding.
-pub(super) fn strip_glamour_margin(
-    lines: Vec<Line<'static>>,
-    n: usize,
-) -> Vec<Line<'static>> {
-    lines.into_iter().map(|line| strip_line_left(line, n)).collect()
-}
-
-fn strip_line_left(line: Line<'static>, mut budget: usize) -> Line<'static> {
-    let line_style = line.style;
-    let mut out: Vec<Span<'static>> = Vec::with_capacity(line.spans.len());
-    let mut done = false;
-    for span in line.spans {
-        if done || budget == 0 {
-            out.push(span);
-            continue;
-        }
-        let chars: Vec<char> = span.content.chars().collect();
-        let strip_count = chars
-            .iter()
-            .take(budget)
-            .take_while(|c| c.is_whitespace())
-            .count();
-        budget -= strip_count;
-        if strip_count < chars.len() {
-            let remainder: String = chars.into_iter().skip(strip_count).collect();
-            out.push(Span::styled(remainder, span.style));
-            done = true;
-        }
-    }
-    Line::from(out).style(line_style)
-}
-
-pub(super) fn relative_age(when: DateTime<Utc>, now: DateTime<Utc>) -> String {
-    let delta = now - when;
-    let days = delta.num_days();
-    if days >= 1 {
-        format!("{days}d ago")
-    } else {
-        let hours = delta.num_hours();
-        if hours >= 1 {
-            format!("{hours}h ago")
-        } else {
-            "just now".to_string()
-        }
-    }
+    widgets::boxed(header, body, width)
 }
 
 fn render_tabs_and_content(
@@ -591,11 +373,11 @@ fn render_content(
 }
 
 fn render_help(frame: &mut Frame, area: Rect) {
-    render_footer(
-        frame,
-        area,
+    let line = widgets::footer(
+        area.width,
         "1-5 / h/l: tab  j/k: scroll  esc: back  q: quit",
     );
+    frame.render_widget(Paragraph::new(line), area);
 }
 
 pub(super) fn render_placeholder(frame: &mut Frame, text: &str, area: Rect) {
@@ -603,7 +385,7 @@ pub(super) fn render_placeholder(frame: &mut Frame, text: &str, area: Rect) {
     frame.render_widget(paragraph, area);
 }
 
-pub(super) fn key_to_action(state: &AppState, key: KeyCode) -> Option<Action> {
+pub(in crate::tui) fn key_to_action(state: &AppState, key: KeyCode) -> Option<Action> {
     if matches!(key, KeyCode::Char('q')) {
         return Some(Action::Quit);
     }

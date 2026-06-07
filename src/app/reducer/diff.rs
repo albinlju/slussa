@@ -5,12 +5,10 @@
 use crate::{
     app::{
         App,
+        action::DiffAction,
         state::{LoadState, Screen},
     },
-    tui::{
-        DiffAction,
-        pr_detail::file_tree::{TreeRow, build_visible_rows},
-    },
+    tui::screens::pr_detail::file_tree::{TreeRow, build_visible_rows},
 };
 
 impl App {

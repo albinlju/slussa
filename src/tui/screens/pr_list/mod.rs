@@ -1,11 +1,14 @@
 use crate::{
-    app::state::{AppState, LoadState, StatusFilter},
+    app::{
+        action::{Action, ListAction},
+        state::{AppState, LoadState, StatusFilter},
+    },
     domain::{
         ci::CiState,
         pr::{PrStatus, PullRequest},
         review::ReviewerState,
     },
-    tui::{Action, ListAction, render_footer, spinner_frame, theme},
+    tui::{theme, widgets},
 };
 use chrono::Utc;
 use ratatui::{
@@ -32,8 +35,6 @@ struct ColWidths {
 }
 
 impl ColWidths {
-    /// 2-col leading "▶ "/"  " prefix is added by the List widget — subtract
-    /// it from the available inner width before allocating to Title.
     fn for_inner(inner_width: u16) -> Self {
         let id = 7;
         let status = 10;
@@ -65,7 +66,7 @@ enum PrListView<'a> {
     Failed(String),
 }
 
-pub(super) fn render(frame: &mut Frame, state: &AppState, area: ratatui::layout::Rect) {
+pub(in crate::tui) fn render(frame: &mut Frame, state: &AppState, area: ratatui::layout::Rect) {
     let theme = theme::current();
     let chunks = Layout::default()
         .direction(Direction::Vertical)
@@ -78,10 +79,6 @@ pub(super) fn render(frame: &mut Frame, state: &AppState, area: ratatui::layout:
         _ => PrListView::Loading,
     };
 
-    // Same chrome regardless of load state — outer rounded block + header row.
-    // Only the body content swaps between a spinner and the actual list. The
-    // title shows the filter label always, with either the count, "…" while
-    // loading, or a "!" badge on failure.
     let title_text = match &load_view {
         PrListView::Loaded(prs) => format!(" {} ({}) ", state.ui.list_filter.label(), prs.len()),
         PrListView::Loading => format!(" {} (…) ", state.ui.list_filter.label()),
@@ -108,9 +105,6 @@ pub(super) fn render(frame: &mut Frame, state: &AppState, area: ratatui::layout:
     let widths = ColWidths::for_inner(inner.width);
     let header_style = Style::default().fg(theme.fg).add_modifier(Modifier::BOLD);
 
-    // The List below shifts every row right by 2 cols to make room for
-    // the highlight_symbol ("▶ "). We add the same `  ` prefix to the
-    // header so the columns line up.
     let header = Paragraph::new(Line::from(vec![
         Span::raw("  "),
         Span::styled(format!("{:<w$}", "#", w = widths.id), header_style),
@@ -119,8 +113,14 @@ pub(super) fn render(frame: &mut Frame, state: &AppState, area: ratatui::layout:
         Span::styled(format!("{:<w$}", "Title", w = widths.title), header_style),
         Span::styled(format!("{:<w$}", "CI", w = widths.ci), header_style),
         Span::styled(format!("{:<w$}", "Diff", w = widths.diff), header_style),
-        Span::styled(format!("{:<w$}", "Comments", w = widths.comments), header_style),
-        Span::styled(format!("{:<w$}", "Reviews", w = widths.reviews), header_style),
+        Span::styled(
+            format!("{:<w$}", "Comments", w = widths.comments),
+            header_style,
+        ),
+        Span::styled(
+            format!("{:<w$}", "Reviews", w = widths.reviews),
+            header_style,
+        ),
         Span::styled(format!("{:<w$}", "Age", w = widths.age), header_style),
     ]));
     frame.render_widget(header, content_chunks[0]);
@@ -145,7 +145,7 @@ pub(super) fn render(frame: &mut Frame, state: &AppState, area: ratatui::layout:
         PrListView::Loading => {
             let spinner = Paragraph::new(format!(
                 "  {}  Loading pull requests…",
-                spinner_frame()
+                widgets::spinner_frame()
             ))
             .style(Style::default().fg(theme.warning));
             frame.render_widget(spinner, content_chunks[1]);
@@ -157,11 +157,11 @@ pub(super) fn render(frame: &mut Frame, state: &AppState, area: ratatui::layout:
         }
     }
 
-    render_footer(
-        frame,
-        chunks[1],
+    let footer = widgets::footer(
+        chunks[1].width,
         "j/k: navigate  enter: open PR  f: filter  q: quit",
     );
+    frame.render_widget(Paragraph::new(footer), chunks[1]);
 
     if state.ui.filter_picker_open {
         render_filter_picker(frame, state, area);
@@ -323,7 +323,7 @@ fn row_for_pr(pr: &PullRequest, widths: &ColWidths) -> ListItem<'static> {
     ListItem::new(line)
 }
 
-pub(super) fn key_to_action(state: &AppState, key: KeyCode) -> Option<Action> {
+pub(in crate::tui) fn key_to_action(state: &AppState, key: KeyCode) -> Option<Action> {
     if state.ui.filter_picker_open {
         return match key {
             KeyCode::Char('q') => Some(Action::Quit),

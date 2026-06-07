@@ -2,7 +2,7 @@ use chrono::{DateTime, Utc};
 use serde::Deserialize;
 
 use crate::domain::commit::Commit;
-use crate::providers::github::error::{FetchError, run_gh_json};
+use crate::clients::github::error::{FetchError, run_gh_json};
 
 #[derive(Debug, Deserialize)]
 #[serde(rename_all = "camelCase")]

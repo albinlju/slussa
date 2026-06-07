@@ -17,12 +17,11 @@ use crate::{
         pr::PullRequest,
     },
     tui::{
-        pr_detail::{
-            diff_bg_row,
+        screens::pr_detail::{
             file_tree::{TreeRow, build_visible_rows},
             render_inline_thread,
         },
-        spinner_frame, theme,
+        theme, widgets,
     },
 };
 
@@ -44,7 +43,7 @@ pub fn render(
     let theme = theme::current();
     match diff_state {
         None | Some(LoadState::NotRequested) | Some(LoadState::Loading) => {
-            let paragraph = Paragraph::new(format!("{} Loading diff...", spinner_frame()))
+            let paragraph = Paragraph::new(format!("{} Loading diff...", widgets::spinner_frame()))
                 .style(Style::default().fg(theme.warning));
             frame.render_widget(paragraph, area);
         }
@@ -343,7 +342,7 @@ fn styled_diff_line(diff_line: &DiffLine, width: u16) -> Line<'static> {
     let theme = theme::current();
     let row_w = width as usize;
     match diff_line {
-        DiffLine::Added(c) => diff_bg_row(
+        DiffLine::Added(c) => widgets::diff_bg_row(
             DIFF_GUTTER,
             "+",
             c,
@@ -352,7 +351,7 @@ fn styled_diff_line(diff_line: &DiffLine, width: u16) -> Line<'static> {
             theme.fg,
             row_w,
         ),
-        DiffLine::Removed(c) => diff_bg_row(
+        DiffLine::Removed(c) => widgets::diff_bg_row(
             DIFF_GUTTER,
             "-",
             c,

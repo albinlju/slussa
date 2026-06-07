@@ -3,7 +3,7 @@ use serde::Deserialize;
 
 use crate::domain::comment::Comment;
 use crate::domain::user::User;
-use crate::providers::github::error::{FetchError, run_gh_json};
+use crate::clients::github::error::{FetchError, run_gh_json};
 
 #[derive(Debug, Deserialize)]
 #[serde(rename_all = "camelCase")]

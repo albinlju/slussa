@@ -2,8 +2,8 @@
 //! and scrolling the long-form tabs (Description, Overview).
 
 use crate::{
-    app::{App, state::Screen},
-    tui::{DetailAction, pr_detail::DetailTab},
+    app::{App, action::DetailAction, state::Screen},
+    tui::screens::pr_detail::DetailTab,
 };
 
 impl App {

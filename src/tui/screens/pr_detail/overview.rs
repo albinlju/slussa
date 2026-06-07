@@ -11,12 +11,8 @@ use crate::{
     app::state::{LoadState, PrData, UiMemory},
     domain::comment::{Comment, ReviewThread},
     tui::{
-        pr_detail::{
-            box_text_width, boxed, diff_bg_row, relative_age, render_markdown,
-            render_thumb_scrollbar, strip_glamour_margin, trim_blank_lines,
-        },
-        spinner_frame,
         theme::{self, Theme},
+        widgets,
     },
 };
 
@@ -52,7 +48,7 @@ pub fn render(frame: &mut Frame, pr_data: Option<&PrData>, ui: &mut UiMemory, ar
     // we flash "(no comments)" the moment one source finishes empty before the
     // other lands with content.
     if !comments_ready || !threads_ready {
-        let p = Paragraph::new(format!("{}  Loading...", spinner_frame()))
+        let p = Paragraph::new(format!("{}  Loading...", widgets::spinner_frame()))
             .style(Style::default().fg(theme.warning));
         frame.render_widget(p, area);
         return;
@@ -89,7 +85,8 @@ pub fn render(frame: &mut Frame, pr_data: Option<&PrData>, ui: &mut UiMemory, ar
     frame.render_widget(p, content_area);
 
     if max_scroll > 0 {
-        render_thumb_scrollbar(frame, scroll, max_scroll, area);
+        let bar = widgets::scrollbar(scroll, max_scroll, area.height);
+        frame.render_widget(Paragraph::new(bar), widgets::scrollbar_area(area));
     }
 }
 
@@ -185,16 +182,16 @@ impl EventStyle {
 }
 
 fn build_issue_lines(c: &Comment, width: u16, now: DateTime<Utc>) -> Vec<Line<'static>> {
-    let text_width = box_text_width(width);
+    let text_width = widgets::box_text_width(width);
     let header = issue_comment_header(&c.author.username, c.created, now);
     // Glamour's Dark theme adds a 2-col document margin to every rendered
     // line. Stripping it pulls the comment text flush against the box's
     // inner padding instead of sitting another two cols in.
-    let body = trim_blank_lines(strip_glamour_margin(
-        render_markdown(&c.content, text_width + 2),
+    let body = widgets::trim_blank_lines(widgets::strip_glamour_margin(
+        widgets::markdown(&c.content, text_width + 2),
         2,
     ));
-    boxed(header, body, width)
+    widgets::boxed(header, body, width)
 }
 
 fn build_review_lines(
@@ -204,7 +201,7 @@ fn build_review_lines(
 ) -> Option<Vec<Line<'static>>> {
     let theme = theme::current();
     let first = thread.comments.first()?;
-    let text_width = box_text_width(width);
+    let text_width = widgets::box_text_width(width);
     let header = issue_comment_header(&first.author.username, first.created, now);
 
     let mut body: Vec<Line<'static>> = Vec::new();
@@ -235,7 +232,7 @@ fn build_review_lines(
     for (i, comment) in thread.comments.iter().enumerate() {
         if i > 0 {
             body.push(Line::raw(""));
-            let age = relative_age(comment.created, now);
+            let age = widgets::relative_age(comment.created, now);
             body.push(Line::from(vec![
                 Span::styled(
                     format!("↳ @{}", comment.author.username),
@@ -244,13 +241,13 @@ fn build_review_lines(
                 Span::styled(format!(" · {age}"), Style::default().fg(theme.muted)),
             ]));
         }
-        body.extend(trim_blank_lines(strip_glamour_margin(
-            render_markdown(&comment.content, text_width + 2),
+        body.extend(widgets::trim_blank_lines(widgets::strip_glamour_margin(
+            widgets::markdown(&comment.content, text_width + 2),
             2,
         )));
     }
 
-    Some(boxed(header, body, width))
+    Some(widgets::boxed(header, body, width))
 }
 
 fn issue_comment_header(
@@ -259,7 +256,7 @@ fn issue_comment_header(
     now: DateTime<Utc>,
 ) -> Line<'static> {
     let theme = theme::current();
-    let age = relative_age(created, now);
+    let age = widgets::relative_age(created, now);
     Line::from(vec![
         Span::styled(
             username.to_string(),
@@ -287,12 +284,12 @@ fn styled_diff_hunk(hunk: &str, width: u16) -> Vec<Line<'static>> {
                 ));
             }
             if let Some(content) = line.strip_prefix('+') {
-                return diff_bg_row(
+                return widgets::diff_bg_row(
                     "", "+", content, theme.diff_added, theme.diff_added_bg, theme.fg, row_w,
                 );
             }
             if let Some(content) = line.strip_prefix('-') {
-                return diff_bg_row(
+                return widgets::diff_bg_row(
                     "", "-", content, theme.diff_removed, theme.diff_removed_bg, theme.muted,
                     row_w,
                 );
