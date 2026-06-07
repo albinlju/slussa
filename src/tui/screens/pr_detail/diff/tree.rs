@@ -9,10 +9,7 @@ use ratatui::{
     widgets::{Block, BorderType, Borders, List, ListItem, ListState, Paragraph},
 };
 
-use crate::tui::{
-    screens::pr_detail::file_tree::TreeRow,
-    theme,
-};
+use crate::tui::{screens::pr_detail::file_tree::TreeRow, theme, widgets};
 
 pub(super) fn render(
     frame: &mut Frame,
@@ -47,26 +44,19 @@ pub(super) fn render(
         .border_style(Style::default().fg(theme.divider));
     let header_inner = header_block.inner(tree_chunks[0]);
     frame.render_widget(header_block, tree_chunks[0]);
-    let files_label = format!("{file_count} files");
-    let plus = format!("+{total_adds}");
-    let minus = format!("-{total_dels}");
-    let header_w = header_inner.width as usize;
-    let visible_right = plus.chars().count() + 1 + minus.chars().count();
-    // Same trailing 1-col gap before the right edge as the file rows below,
-    // so the +A -D blocks vertically align.
-    let header_pad = header_w
-        .saturating_sub(files_label.chars().count() + visible_right + 1)
-        .max(1);
-    let header_line = Line::from(vec![
-        Span::styled(
-            files_label,
-            Style::default().fg(theme.fg).add_modifier(Modifier::BOLD),
-        ),
-        Span::raw(" ".repeat(header_pad)),
-        Span::styled(plus, Style::default().fg(theme.diff_added)),
+    // The `- 1` keeps a trailing 1-col gap before the right edge so the
+    // +A -D blocks vertically align with the file rows below.
+    let row_width = (header_inner.width as usize).saturating_sub(1);
+    let left = vec![Span::styled(
+        format!("{file_count} files"),
+        Style::default().fg(theme.fg).add_modifier(Modifier::BOLD),
+    )];
+    let right = vec![
+        Span::styled(format!("+{total_adds}"), Style::default().fg(theme.diff_added)),
         Span::raw(" "),
-        Span::styled(minus, Style::default().fg(theme.diff_removed)),
-    ]);
+        Span::styled(format!("-{total_dels}"), Style::default().fg(theme.diff_removed)),
+    ];
+    let header_line = Line::from(widgets::justify_between(left, right, row_width));
     frame.render_widget(Paragraph::new(header_line), header_inner);
 
     let row_width = tree_chunks[1].width as usize;

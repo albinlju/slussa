@@ -158,7 +158,7 @@ pub(super) fn render_inline_thread(
         format!("{count} comments")
     };
 
-    let header_spans = vec![
+    let left = vec![
         Span::styled(
             icon,
             Style::default().fg(accent).add_modifier(Modifier::BOLD),
@@ -169,16 +169,8 @@ pub(super) fn render_inline_thread(
             Style::default().fg(theme.fg).add_modifier(Modifier::BOLD),
         ),
     ];
-    let count_span = Span::styled(count_label, Style::default().fg(theme.muted));
-    let left_visible: usize = header_spans.iter().map(|s| s.width()).sum();
-    let right_visible = count_span.width();
-    let header_pad = (text_w as usize)
-        .saturating_sub(left_visible + right_visible)
-        .max(1);
-    let mut header_line = header_spans;
-    header_line.push(Span::raw(" ".repeat(header_pad)));
-    header_line.push(count_span);
-    let header = Line::from(header_line);
+    let right = vec![Span::styled(count_label, Style::default().fg(theme.muted))];
+    let header = Line::from(widgets::justify_between(left, right, text_w as usize));
 
     let mut body: Vec<Line<'static>> = Vec::new();
     for (i, comment) in thread.comments.iter().enumerate() {
@@ -366,7 +358,7 @@ fn render_content(
     match tab {
         DetailTab::Description => description::render(frame, pr, ui, inset),
         DetailTab::Overview => overview::render(frame, pr_data, ui, inset),
-        DetailTab::Diff => diff::render(frame, pr, pr_data, &ui.diff, inset),
+        DetailTab::Diff => diff::render(frame, pr_data, &ui.diff, inset),
         DetailTab::Commits => commits::render(frame, pr_data, inset),
         DetailTab::Builds => checks::render(frame, inset),
     }
