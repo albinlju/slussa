@@ -18,6 +18,7 @@ use crate::{
     },
     tui::{
         pr_detail::{
+            diff_bg_row,
             file_tree::{TreeRow, build_visible_rows},
             render_inline_thread,
         },
@@ -135,9 +136,9 @@ fn render_tree(
         .border_style(Style::default().fg(theme.divider));
     let header_inner = header_block.inner(tree_chunks[0]);
     frame.render_widget(header_block, tree_chunks[0]);
-    let files_label = format!("{} files", file_count);
-    let plus = format!("+{}", total_adds);
-    let minus = format!("-{}", total_dels);
+    let files_label = format!("{file_count} files");
+    let plus = format!("+{total_adds}");
+    let minus = format!("-{total_dels}");
     let header_w = header_inner.width as usize;
     let visible_right = plus.chars().count() + 1 + minus.chars().count();
     // Same trailing 1-col gap before the right edge as the file rows below,
@@ -178,9 +179,9 @@ fn render_tree(
                     let indent = "  ".repeat(*depth);
                     Line::from(vec![
                         Span::raw(indent),
-                        Span::styled(format!("{} ", marker), Style::default().fg(theme.muted)),
+                        Span::styled(format!("{marker} "), Style::default().fg(theme.muted)),
                         Span::styled(
-                            format!("{}/", name),
+                            format!("{name}/"),
                             Style::default()
                                 .fg(theme.link)
                                 .add_modifier(Modifier::BOLD),
@@ -194,8 +195,8 @@ fn render_tree(
                 } => {
                     let (adds, dels) = file_stats.get(*file_index).copied().unwrap_or((0, 0));
                     let indent = "  ".repeat(*depth + 1);
-                    let plus = format!("+{}", adds);
-                    let minus = format!("-{}", dels);
+                    let plus = format!("+{adds}");
+                    let minus = format!("-{dels}");
                     let visible_left = indent.chars().count() + name.chars().count();
                     let visible_right = plus.chars().count() + 1 + minus.chars().count();
                     let pad = row_width
@@ -252,9 +253,8 @@ fn render_diff_pane(
     area: Rect,
 ) {
     let bounded = focused_file.min(diff.files.len().saturating_sub(1));
-    let file = match diff.files.get(bounded) {
-        Some(f) => f,
-        None => return,
+    let Some(file) = diff.files.get(bounded) else {
+        return;
     };
     let (adds, dels) = file_stats.get(bounded).copied().unwrap_or((0, 0));
 
@@ -297,8 +297,8 @@ fn render_pane_header(frame: &mut Frame, path: &str, adds: u32, dels: u32, area:
     let header_inner = header_block.inner(area);
     frame.render_widget(header_block, area);
 
-    let plus = format!("+{}", adds);
-    let minus = format!("-{}", dels);
+    let plus = format!("+{adds}");
+    let minus = format!("-{dels}");
     let stats_visible = plus.chars().count() + 1 + minus.chars().count();
 
     let header_w = header_inner.width as usize;
@@ -337,72 +337,42 @@ fn truncate_path_left(path: &str, max: usize) -> String {
     let keep = max.saturating_sub(1);
     let skip = total.saturating_sub(keep);
     let tail: String = path.chars().skip(skip).collect();
-    format!("…{}", tail)
+    format!("…{tail}")
 }
 
 /// 2-col gutter on each side of the diff body — the content (prefix +
 /// text) sits inside this gutter, but the background tint extends all the
 /// way across the row to the box's borders.
-const DIFF_GUTTER: usize = 2;
+const DIFF_GUTTER: &str = "  ";
+const DIFF_GUTTER_COLS: u16 = 2;
 
-/// Build a single diff line with full-row background fill.
-///
-/// The prefix character ("+" / "-") gets the strong accent color; the rest of
-/// the line text uses a calmer fg (cream for added, gray for removed) so the
-/// prefix stays the visual focus. The bg tint flows from the box's left
-/// border to its right border by padding the row to the full inner width
-/// — only the content position uses the 2-col gutter. Context lines have
-/// no background tint, only the gutter for alignment.
+/// Build a single diff line with full-row background fill via the shared
+/// `diff_bg_row` helper. Context lines have no bg tint, only the gutter
+/// for alignment with `+`/`-` rows above and below.
 fn styled_diff_line(diff_line: &DiffLine, width: u16) -> Line<'static> {
     let theme = theme::current();
-    let (prefix, content) = match diff_line {
-        DiffLine::Added(c) => ("+", c.as_str()),
-        DiffLine::Removed(c) => ("-", c.as_str()),
-        DiffLine::Context(c) => (" ", c.as_str()),
-    };
-
-    let visible_len = DIFF_GUTTER + 1 + content.chars().count();
-    let pad = (width as usize).saturating_sub(visible_len);
-    let padding = " ".repeat(pad);
-    let gutter = " ".repeat(DIFF_GUTTER);
-
+    let row_w = width as usize;
     match diff_line {
-        DiffLine::Added(_) => {
-            let bg = theme.diff_added_bg;
-            Line::from(vec![
-                Span::styled(gutter, Style::default().bg(bg)),
-                Span::styled(
-                    prefix.to_string(),
-                    Style::default()
-                        .fg(theme.diff_added)
-                        .bg(bg)
-                        .add_modifier(Modifier::BOLD),
-                ),
-                Span::styled(
-                    format!("{}{}", content, padding),
-                    Style::default().fg(theme.fg).bg(bg),
-                ),
-            ])
-        }
-        DiffLine::Removed(_) => {
-            let bg = theme.diff_removed_bg;
-            Line::from(vec![
-                Span::styled(gutter, Style::default().bg(bg)),
-                Span::styled(
-                    prefix.to_string(),
-                    Style::default()
-                        .fg(theme.diff_removed)
-                        .bg(bg)
-                        .add_modifier(Modifier::BOLD),
-                ),
-                Span::styled(
-                    format!("{}{}", content, padding),
-                    Style::default().fg(theme.muted).bg(bg),
-                ),
-            ])
-        }
-        DiffLine::Context(_) => Line::styled(
-            format!("{}{}{}", gutter, prefix, content),
+        DiffLine::Added(c) => diff_bg_row(
+            DIFF_GUTTER,
+            "+",
+            c,
+            theme.diff_added,
+            theme.diff_added_bg,
+            theme.fg,
+            row_w,
+        ),
+        DiffLine::Removed(c) => diff_bg_row(
+            DIFF_GUTTER,
+            "-",
+            c,
+            theme.diff_removed,
+            theme.diff_removed_bg,
+            theme.muted,
+            row_w,
+        ),
+        DiffLine::Context(c) => Line::styled(
+            format!("{DIFF_GUTTER} {c}"),
             Style::default().fg(theme.diff_context),
         ),
     }
@@ -423,16 +393,17 @@ fn file_to_lines(file: &FileDiff, threads: &[ReviewThread], width: u16) -> Vec<L
 
     let now = Utc::now();
 
-    let gutter = " ".repeat(DIFF_GUTTER);
     // Inline-thread box is rendered narrower than the diff row so the colored
     // bg around it visibly flows past the box on both sides. Width subtracts
     // 4 cols (2 each side); the box itself is then offset by 2 cols on its
     // left when added to the lines.
-    let thread_width = width.saturating_sub(2 * DIFF_GUTTER as u16);
+    let thread_width = width.saturating_sub(2 * DIFF_GUTTER_COLS);
 
     for hunk in &file.hunks {
+        let old_start = hunk.old_start;
+        let new_start = hunk.new_start;
         lines.push(Line::styled(
-            format!("{}@@ -{} +{} @@", gutter, hunk.old_start, hunk.new_start),
+            format!("{DIFF_GUTTER}@@ -{old_start} +{new_start} @@"),
             Style::default().fg(theme.info),
         ));
 
@@ -446,17 +417,17 @@ fn file_to_lines(file: &FileDiff, threads: &[ReviewThread], width: u16) -> Vec<L
                 DiffLine::Removed(_) => None,
                 _ => Some(new_line_num),
             };
-            if let Some(ln) = current_line {
-                if let Some(threads_here) = comments_at.get(&ln) {
-                    for thread in threads_here {
-                        for tline in render_inline_thread(thread, thread_width, now) {
-                            let line_style = tline.style;
-                            let mut spans: Vec<Span<'static>> =
-                                Vec::with_capacity(tline.spans.len() + 1);
-                            spans.push(Span::raw(gutter.clone()));
-                            spans.extend(tline.spans);
-                            lines.push(Line::from(spans).style(line_style));
-                        }
+            if let Some(ln) = current_line
+                && let Some(threads_here) = comments_at.get(&ln)
+            {
+                for thread in threads_here {
+                    for tline in render_inline_thread(thread, thread_width, now) {
+                        let line_style = tline.style;
+                        let mut spans: Vec<Span<'static>> =
+                            Vec::with_capacity(tline.spans.len() + 1);
+                        spans.push(Span::raw(DIFF_GUTTER));
+                        spans.extend(tline.spans);
+                        lines.push(Line::from(spans).style(line_style));
                     }
                 }
             }

@@ -18,12 +18,7 @@ pub fn render(frame: &mut Frame, pr: &PullRequest, ui: &mut UiMemory, area: Rect
     let scroll = ui.description_scroll.min(max_scroll);
     ui.description_scroll = scroll;
 
-    let content_area = Rect {
-        x: area.x,
-        y: area.y,
-        width: content_width,
-        height: area.height,
-    };
+    let content_area = Rect { width: content_width, ..area };
     let paragraph = Paragraph::new(lines).scroll((scroll, 0));
     frame.render_widget(paragraph, content_area);
 
