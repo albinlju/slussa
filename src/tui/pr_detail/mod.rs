@@ -6,6 +6,7 @@ pub mod file_tree;
 pub mod overview;
 
 use ansi_to_tui::IntoText;
+use chrono::{DateTime, Utc};
 use ratatui::{
     Frame,
     crossterm::event::KeyCode,
@@ -17,8 +18,12 @@ use ratatui::{
 
 use crate::{
     app::state::{AppState, LoadState, PrData, Screen, UiMemory},
-    domain::pr::PullRequest,
-    tui::{Action, theme},
+    domain::{
+        comment::ReviewThread,
+        pr::{PrStatus, PullRequest},
+        review::ReviewerState,
+    },
+    tui::{Action, render_footer, theme},
 };
 
 #[derive(Debug, Default, Clone, Copy, PartialEq, Eq)]
@@ -216,9 +221,9 @@ pub(super) fn render_thumb_scrollbar(frame: &mut Frame, scroll: u16, max_scroll:
 /// inline diff view and the Overview tab so review comments look identical in
 /// both places.
 pub(super) fn render_inline_thread(
-    thread: &crate::domain::comment::ReviewThread,
+    thread: &ReviewThread,
     width: u16,
-    now: chrono::DateTime<chrono::Utc>,
+    now: DateTime<Utc>,
 ) -> Vec<Line<'static>> {
     let theme = theme::current();
     let text_w = box_text_width(width);
@@ -233,15 +238,10 @@ pub(super) fn render_inline_thread(
     let count_label = if count == 1 {
         "1 comment".to_string()
     } else {
-        format!("{} comments", count)
+        format!("{count} comments")
     };
 
-    let left_visible = icon.chars().count() + 1 + label.chars().count();
-    let right_visible = count_label.chars().count();
-    let header_pad = (text_w as usize)
-        .saturating_sub(left_visible + right_visible)
-        .max(1);
-    let header = Line::from(vec![
+    let header_spans = vec![
         Span::styled(
             icon.to_string(),
             Style::default().fg(accent).add_modifier(Modifier::BOLD),
@@ -251,9 +251,17 @@ pub(super) fn render_inline_thread(
             label.to_string(),
             Style::default().fg(theme.fg).add_modifier(Modifier::BOLD),
         ),
-        Span::raw(" ".repeat(header_pad)),
-        Span::styled(count_label, Style::default().fg(theme.muted)),
-    ]);
+    ];
+    let count_span = Span::styled(count_label, Style::default().fg(theme.muted));
+    let left_visible: usize = header_spans.iter().map(|s| s.width()).sum();
+    let right_visible = count_span.width();
+    let header_pad = (text_w as usize)
+        .saturating_sub(left_visible + right_visible)
+        .max(1);
+    let mut header_line = header_spans;
+    header_line.push(Span::raw(" ".repeat(header_pad)));
+    header_line.push(count_span);
+    let header = Line::from(header_line);
 
     let mut body: Vec<Line<'static>> = Vec::new();
     for (i, comment) in thread.comments.iter().enumerate() {
@@ -266,7 +274,7 @@ pub(super) fn render_inline_thread(
                 comment.author.username.clone(),
                 Style::default().fg(theme.info).add_modifier(Modifier::BOLD),
             ),
-            Span::styled(format!(" · {}", age), Style::default().fg(theme.muted)),
+            Span::styled(format!(" · {age}"), Style::default().fg(theme.muted)),
         ]));
         body.extend(trim_blank_lines(strip_glamour_margin(
             render_markdown(&comment.content, text_w + 2),
@@ -359,26 +367,15 @@ fn strip_line_left(line: Line<'static>, mut budget: usize) -> Line<'static> {
     Line::from(out).style(line_style)
 }
 
-pub(super) fn relative_age(
-    when: chrono::DateTime<chrono::Utc>,
-    now: chrono::DateTime<chrono::Utc>,
-) -> String {
+pub(super) fn relative_age(when: DateTime<Utc>, now: DateTime<Utc>) -> String {
     let delta = now - when;
     let days = delta.num_days();
     if days >= 1 {
-        if days == 1 {
-            "1d ago".to_string()
-        } else {
-            format!("{}d ago", days)
-        }
+        format!("{days}d ago")
     } else {
         let hours = delta.num_hours();
         if hours >= 1 {
-            if hours == 1 {
-                "1h ago".to_string()
-            } else {
-                format!("{}h ago", hours)
-            }
+            format!("{hours}h ago")
         } else {
             "just now".to_string()
         }
@@ -441,10 +438,10 @@ fn render_tabs_and_content(
 fn render_header(frame: &mut Frame, pr: &PullRequest, area: Rect) {
     let theme = theme::current();
     let status_color = match pr.status {
-        crate::domain::pr::PrStatus::Draft => theme.status_draft,
-        crate::domain::pr::PrStatus::Open => theme.status_open,
-        crate::domain::pr::PrStatus::Merged => theme.status_merged,
-        crate::domain::pr::PrStatus::Declined => theme.status_declined,
+        PrStatus::Draft => theme.status_draft,
+        PrStatus::Open => theme.status_open,
+        PrStatus::Merged => theme.status_merged,
+        PrStatus::Declined => theme.status_declined,
     };
 
     let title_line = Line::from(vec![
@@ -483,8 +480,8 @@ fn render_header(frame: &mut Frame, pr: &PullRequest, area: Rect) {
     // 2-col padding on each side (matches `Padding::horizontal(2)` on the
     // block below) so the right segment ends 2 cols before the area edge.
     let content_width = (area.width as usize).saturating_sub(4);
-    let left_visible: usize = left_spans.iter().map(|s| s.content.chars().count()).sum();
-    let right_visible: usize = right_spans.iter().map(|s| s.content.chars().count()).sum();
+    let left_visible: usize = left_spans.iter().map(|s| s.width()).sum();
+    let right_visible: usize = right_spans.iter().map(|s| s.width()).sum();
     let gap = content_width
         .saturating_sub(left_visible + right_visible)
         .max(1);
@@ -502,7 +499,6 @@ fn render_header(frame: &mut Frame, pr: &PullRequest, area: Rect) {
 }
 
 fn build_reviewer_spans(pr: &PullRequest) -> Vec<Span<'static>> {
-    use crate::domain::review::ReviewerState;
     let theme = theme::current();
     if pr.reviewers.is_empty() {
         return Vec::new();
@@ -557,7 +553,7 @@ fn render_content(
 }
 
 fn render_help(frame: &mut Frame, area: Rect) {
-    crate::tui::render_footer(
+    render_footer(
         frame,
         area,
         "1-5 / h/l: tab  j/k: scroll  esc: back  q: quit",
