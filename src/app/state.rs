@@ -54,14 +54,14 @@ impl StatusFilter {
     }
 
     pub fn matches(self, status: &PrStatus) -> bool {
-        match (self, status) {
-            (Self::All, _) => true,
-            (Self::Open, PrStatus::Open) => true,
-            (Self::Draft, PrStatus::Draft) => true,
-            (Self::Merged, PrStatus::Merged) => true,
-            (Self::Declined, PrStatus::Declined) => true,
-            _ => false,
-        }
+        matches!(
+            (self, status),
+            (Self::All, _)
+                | (Self::Open, PrStatus::Open)
+                | (Self::Draft, PrStatus::Draft)
+                | (Self::Merged, PrStatus::Merged)
+                | (Self::Declined, PrStatus::Declined)
+        )
     }
 }
 

@@ -71,24 +71,13 @@ pub fn render(
                 .split(area);
 
             // Per-file (+adds, -dels) counted from the hunk lines — FileDiff
-            // doesn't carry stats so we tally them here, then sum for the
-            // tree's header badge.
+            // doesn't carry stats so we tally them here. Totals and the file
+            // count are derived inside `render_tree` from this same slice.
             let file_stats: Vec<(u32, u32)> =
                 diff.files.iter().map(count_file_stats).collect();
-            let total_adds: u32 = file_stats.iter().map(|(a, _)| *a).sum();
-            let total_dels: u32 = file_stats.iter().map(|(_, d)| *d).sum();
 
             let rows = build_visible_rows(&diff.files, &ui_diff.collapsed);
-            render_tree(
-                frame,
-                &rows,
-                ui_diff.cursor,
-                &file_stats,
-                diff.files.len(),
-                total_adds,
-                total_dels,
-                chunks[0],
-            );
+            render_tree(frame, &rows, ui_diff.cursor, &file_stats, chunks[0]);
             render_diff_pane(
                 frame,
                 diff,
@@ -106,12 +95,13 @@ fn render_tree(
     rows: &[TreeRow],
     cursor: usize,
     file_stats: &[(u32, u32)],
-    file_count: usize,
-    total_adds: u32,
-    total_dels: u32,
     area: Rect,
 ) {
     let theme = theme::current();
+    let file_count = file_stats.len();
+    let (total_adds, total_dels) = file_stats
+        .iter()
+        .fold((0u32, 0u32), |(a, d), (na, nd)| (a + na, d + nd));
 
     // Full box around the tree so it mirrors the diff pane's framing — the
     // corners line up at the same y as the diff box.

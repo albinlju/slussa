@@ -1,4 +1,4 @@
-use chrono::Utc;
+use chrono::{DateTime, Utc};
 use ratatui::{
     Frame,
     layout::Rect,
@@ -63,7 +63,7 @@ pub fn render(frame: &mut Frame, pr_data: Option<&PrData>, area: Rect) {
 fn build_commit_line(
     c: &Commit,
     is_last: bool,
-    now: chrono::DateTime<chrono::Utc>,
+    now: DateTime<Utc>,
     width: usize,
 ) -> Line<'static> {
     let theme = theme::current();
@@ -73,17 +73,18 @@ fn build_commit_line(
     let short_oid: String = c.oid.chars().take(7).collect();
     let age = relative_age(c.authored_at, now);
 
-    // Build the right side first so we know how much room the left side has.
-    // Right segment: "author  +N -M  · 2h ago"
-    let plus = format!("+{}", c.additions);
-    let minus = format!("-{}", c.deletions);
-    let right_visible = c.author_name.chars().count()
-        + 2                     // "  " between author and diff
-        + plus.chars().count()
-        + 1                     // space between +N and -M
-        + minus.chars().count()
-        + 4                     // "  · "
-        + age.chars().count();
+    // Right segment: "author  +N -M  · age". Built upfront so we can measure
+    // it with the spans themselves instead of summing hand-counted literals.
+    let right_spans: Vec<Span<'static>> = vec![
+        Span::styled(c.author_name.clone(), Style::default().fg(theme.info)),
+        Span::raw("  "),
+        Span::styled(format!("+{}", c.additions), Style::default().fg(theme.diff_added)),
+        Span::raw(" "),
+        Span::styled(format!("-{}", c.deletions), Style::default().fg(theme.diff_removed)),
+        Span::styled("  · ", Style::default().fg(theme.muted)),
+        Span::styled(age, Style::default().fg(theme.muted)),
+    ];
+    let right_visible: usize = right_spans.iter().map(|s| s.width()).sum();
 
     let left_fixed = graph.chars().count() + short_oid.chars().count() + 2; // 2 spaces after oid
     let headline_max = width
@@ -100,20 +101,14 @@ fn build_commit_line(
     let used = left_fixed + headline.chars().count() + right_visible;
     let pad = width.saturating_sub(used).max(2);
 
-    Line::from(vec![
-        Span::styled(graph.to_string(), Style::default().fg(theme.muted)),
-        Span::styled(
-            format!("{}  ", short_oid),
-            Style::default().fg(theme.accent),
-        ),
-        Span::raw(headline),
-        Span::raw(" ".repeat(pad)),
-        Span::styled(c.author_name.clone(), Style::default().fg(theme.info)),
-        Span::raw("  "),
-        Span::styled(plus, Style::default().fg(theme.diff_added)),
-        Span::raw(" "),
-        Span::styled(minus, Style::default().fg(theme.diff_removed)),
-        Span::styled("  · ", Style::default().fg(theme.muted)),
-        Span::styled(age, Style::default().fg(theme.muted)),
-    ])
+    let mut spans: Vec<Span<'static>> = Vec::with_capacity(4 + right_spans.len());
+    spans.push(Span::styled(graph.to_string(), Style::default().fg(theme.muted)));
+    spans.push(Span::styled(
+        format!("{short_oid}  "),
+        Style::default().fg(theme.accent),
+    ));
+    spans.push(Span::raw(headline));
+    spans.push(Span::raw(" ".repeat(pad)));
+    spans.extend(right_spans);
+    Line::from(spans)
 }
