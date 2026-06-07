@@ -7,10 +7,6 @@ use crate::{
 };
 
 impl App {
-    /// Run a `gh` fetch on a blocking worker, then route its `Result<T, _>`
-    /// through `make_action` onto the UI thread. Worker panics surface as
-    /// `ParseFailed("worker thread panicked: …")` so a Failed `LoadState`
-    /// shows the user something instead of an empty result.
     fn spawn_fetch<T, F, A>(&self, fetch: F, make_action: A)
     where
         T: Send + 'static,

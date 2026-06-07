@@ -80,10 +80,15 @@ impl DetailTab {
     }
 }
 
-pub fn render(frame: &mut Frame, state: &mut AppState, pr_id: u64, tab: DetailTab, area: Rect) {
-    let prs = match &state.cache.prs {
-        LoadState::Loaded(prs) => prs,
-        _ => return,
+pub(super) fn render(
+    frame: &mut Frame,
+    state: &mut AppState,
+    pr_id: u64,
+    tab: DetailTab,
+    area: Rect,
+) {
+    let LoadState::Loaded(prs) = &state.cache.prs else {
+        return;
     };
     let Some(pr) = prs.iter().find(|p| p.id == pr_id) else {
         return;
@@ -243,12 +248,12 @@ pub(super) fn render_inline_thread(
 
     let header_spans = vec![
         Span::styled(
-            icon.to_string(),
+            icon,
             Style::default().fg(accent).add_modifier(Modifier::BOLD),
         ),
         Span::raw(" "),
         Span::styled(
-            label.to_string(),
+            label,
             Style::default().fg(theme.fg).add_modifier(Modifier::BOLD),
         ),
     ];
@@ -322,8 +327,8 @@ pub(super) fn boxed(
 /// `+`/`-` mark. Shared between the Diff tab (2-col gutter) and the inline
 /// review-thread diff hunks in Overview (no gutter).
 pub(super) fn diff_bg_row(
-    gutter: &str,
-    prefix: &str,
+    gutter: &'static str,
+    prefix: &'static str,
     content: &str,
     prefix_fg: Color,
     bg: Color,
@@ -334,10 +339,10 @@ pub(super) fn diff_bg_row(
     let pad = row_w.saturating_sub(visible);
     let mut spans: Vec<Span<'static>> = Vec::with_capacity(3);
     if !gutter.is_empty() {
-        spans.push(Span::styled(gutter.to_string(), Style::default().bg(bg)));
+        spans.push(Span::styled(gutter, Style::default().bg(bg)));
     }
     spans.push(Span::styled(
-        prefix.to_string(),
+        prefix,
         Style::default()
             .fg(prefix_fg)
             .bg(bg)
@@ -355,13 +360,13 @@ fn wrap_box_line(line: Line<'static>, text_w: usize, border: Style) -> Line<'sta
     let pad = text_w.saturating_sub(visible);
     let line_style = line.style;
     let mut spans: Vec<Span<'static>> = Vec::with_capacity(line.spans.len() + 3);
-    spans.push(Span::styled("│ ".to_string(), border));
+    spans.push(Span::styled("│ ", border));
     for s in line.spans {
         let merged = line_style.patch(s.style);
         spans.push(Span::styled(s.content, merged));
     }
     spans.push(Span::raw(" ".repeat(pad + 1)));
-    spans.push(Span::styled("│".to_string(), border));
+    spans.push(Span::styled("│", border));
     Line::from(spans)
 }
 
@@ -551,7 +556,7 @@ fn build_reviewer_spans(pr: &PullRequest) -> Vec<Span<'static>> {
             Style::default().fg(theme.info),
         ));
         spans.push(Span::raw(" "));
-        spans.push(Span::styled(icon.to_string(), Style::default().fg(color)));
+        spans.push(Span::styled(icon, Style::default().fg(color)));
     }
     spans
 }
@@ -598,7 +603,7 @@ pub(super) fn render_placeholder(frame: &mut Frame, text: &str, area: Rect) {
     frame.render_widget(paragraph, area);
 }
 
-pub fn key_to_action(state: &AppState, key: KeyCode) -> Option<Action> {
+pub(super) fn key_to_action(state: &AppState, key: KeyCode) -> Option<Action> {
     if matches!(key, KeyCode::Char('q')) {
         return Some(Action::Quit);
     }

@@ -20,7 +20,6 @@ pub enum PreflightError {
 }
 
 impl fmt::Display for PreflightError {
-    // Messages don't repeat the `tuipr:` prefix — `main` adds it once.
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
             Self::NotAGitRepo => write!(

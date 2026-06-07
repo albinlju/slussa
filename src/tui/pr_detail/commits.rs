@@ -102,7 +102,7 @@ fn build_commit_line(
     let pad = width.saturating_sub(used).max(2);
 
     let mut spans: Vec<Span<'static>> = Vec::with_capacity(4 + right_spans.len());
-    spans.push(Span::styled(graph.to_string(), Style::default().fg(theme.muted)));
+    spans.push(Span::styled(graph, Style::default().fg(theme.muted)));
     spans.push(Span::styled(
         format!("{short_oid}  "),
         Style::default().fg(theme.accent),
