@@ -10,8 +10,7 @@ use crate::{
 impl App {
     pub(super) fn apply_list(&mut self, action: ListAction) {
         match action {
-            ListAction::NextPr => self.next_pr(),
-            ListAction::PrevPr => self.prev_pr(),
+            ListAction::MoveSelection(delta) => self.move_selection(delta),
             ListAction::OpenPr(pr_id) => self.open_pr(pr_id),
             ListAction::OpenFilterPicker => self.open_filter_picker(),
             ListAction::CloseFilterPicker => self.close_filter_picker(),
@@ -21,14 +20,15 @@ impl App {
         }
     }
 
-    fn next_pr(&mut self) {
+    fn move_selection(&mut self, delta: i16) {
         let len = self.state.filtered_prs().len();
-        let last = len.saturating_sub(1);
-        self.state.ui.list_selected = (self.state.ui.list_selected + 1).min(last);
-    }
-
-    fn prev_pr(&mut self) {
-        self.state.ui.list_selected = self.state.ui.list_selected.saturating_sub(1);
+        if len == 0 {
+            self.state.ui.list_selected = 0;
+            return;
+        }
+        let last = (len - 1) as i64;
+        let next = (self.state.ui.list_selected as i64 + delta as i64).clamp(0, last);
+        self.state.ui.list_selected = next as usize;
     }
 
     fn open_pr(&mut self, pr_id: u64) {

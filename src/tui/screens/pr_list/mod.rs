@@ -8,12 +8,12 @@ use crate::{
         pr::{PrStatus, PullRequest},
         review::ReviewerState,
     },
-    tui::{theme, widgets},
+    tui::{screens::half_page, theme, widgets},
 };
 use chrono::Utc;
 use ratatui::{
     Frame,
-    crossterm::event::KeyCode,
+    crossterm::event::{KeyCode, KeyEvent, KeyModifiers},
     layout::{Constraint, Direction, Layout, Rect},
     style::{Modifier, Style},
     text::{Line, Span},
@@ -66,8 +66,14 @@ enum PrListView<'a> {
     Failed(String),
 }
 
-pub(in crate::tui) fn render(frame: &mut Frame, state: &AppState, area: ratatui::layout::Rect) {
+pub(in crate::tui) fn render(frame: &mut Frame, state: &mut AppState, area: ratatui::layout::Rect) {
     let theme = theme::current();
+
+    // List body height = area minus the status bar (1), block border (2) and
+    // column header (1). Stored for half-page selection jumps. Written before
+    // the immutable borrows below.
+    state.ui.list_viewport = area.height.saturating_sub(4);
+
     let chunks = Layout::default()
         .direction(Direction::Vertical)
         .constraints([Constraint::Min(0), Constraint::Length(1)])
@@ -159,7 +165,7 @@ pub(in crate::tui) fn render(frame: &mut Frame, state: &AppState, area: ratatui:
 
     let footer = widgets::footer(
         chunks[1].width,
-        "j/k: navigate  enter: open PR  f: filter  q: quit",
+        "j/k: navigate  ^d/^u: page  enter: open PR  f: filter  q: quit",
     );
     frame.render_widget(Paragraph::new(footer), chunks[1]);
 
@@ -323,9 +329,9 @@ fn row_for_pr(pr: &PullRequest, widths: &ColWidths) -> ListItem<'static> {
     ListItem::new(line)
 }
 
-pub(in crate::tui) fn key_to_action(state: &AppState, key: KeyCode) -> Option<Action> {
+pub(in crate::tui) fn key_to_action(state: &AppState, key: KeyEvent) -> Option<Action> {
     if state.ui.filter_picker_open {
-        return match key {
+        return match key.code {
             KeyCode::Char('q') => Some(Action::Quit),
             KeyCode::Esc | KeyCode::Char('f') => Some(Action::List(ListAction::CloseFilterPicker)),
             KeyCode::Down | KeyCode::Char('j') => Some(Action::List(ListAction::FilterPickerNext)),
@@ -335,11 +341,22 @@ pub(in crate::tui) fn key_to_action(state: &AppState, key: KeyCode) -> Option<Ac
         };
     }
 
-    match key {
+    let half = half_page(state.ui.list_viewport);
+    if key.modifiers.contains(KeyModifiers::CONTROL) {
+        return match key.code {
+            KeyCode::Char('d') => Some(Action::List(ListAction::MoveSelection(half))),
+            KeyCode::Char('u') => Some(Action::List(ListAction::MoveSelection(-half))),
+            _ => None,
+        };
+    }
+
+    match key.code {
         KeyCode::Char('q') => Some(Action::Quit),
         KeyCode::Char('f') => Some(Action::List(ListAction::OpenFilterPicker)),
-        KeyCode::Down | KeyCode::Char('j') => Some(Action::List(ListAction::NextPr)),
-        KeyCode::Up | KeyCode::Char('k') => Some(Action::List(ListAction::PrevPr)),
+        KeyCode::Down | KeyCode::Char('j') => Some(Action::List(ListAction::MoveSelection(1))),
+        KeyCode::Up | KeyCode::Char('k') => Some(Action::List(ListAction::MoveSelection(-1))),
+        KeyCode::PageDown => Some(Action::List(ListAction::MoveSelection(half))),
+        KeyCode::PageUp => Some(Action::List(ListAction::MoveSelection(-half))),
         KeyCode::Enter => state
             .filtered_prs()
             .get(state.ui.list_selected)

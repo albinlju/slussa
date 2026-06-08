@@ -62,7 +62,7 @@ impl App {
                 Some(Ok(event)) = events.next() => {
                     if let Event::Key(key) = event
                         && key.kind == KeyEventKind::Press
-                        && let Some(action) = key_to_action(&self.state, key.code)
+                        && let Some(action) = key_to_action(&self.state, key)
                     {
                         self.action_tx.send(action).ok();
                     }

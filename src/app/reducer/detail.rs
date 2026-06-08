@@ -10,10 +10,13 @@ impl App {
             DetailAction::NextTab => self.next_tab(),
             DetailAction::PrevTab => self.prev_tab(),
             DetailAction::SelectTab(t) => self.select_tab(t),
-            DetailAction::DescriptionScrollDown => self.description_scroll_down(),
-            DetailAction::DescriptionScrollUp => self.description_scroll_up(),
-            DetailAction::OverviewScrollDown => self.overview_scroll_down(),
-            DetailAction::OverviewScrollUp => self.overview_scroll_up(),
+            DetailAction::DescriptionScroll(delta) => {
+                self.state.ui.description_scroll =
+                    super::scroll(self.state.ui.description_scroll, delta);
+            }
+            DetailAction::OverviewScroll(delta) => {
+                self.state.ui.overview_scroll = super::scroll(self.state.ui.overview_scroll, delta);
+            }
         }
     }
 
@@ -40,21 +43,5 @@ impl App {
             *tab = new_tab;
         }
         self.state.ui.diff.focus = DiffFocus::Tree;
-    }
-
-    fn description_scroll_down(&mut self) {
-        self.state.ui.description_scroll = self.state.ui.description_scroll.saturating_add(1);
-    }
-
-    fn description_scroll_up(&mut self) {
-        self.state.ui.description_scroll = self.state.ui.description_scroll.saturating_sub(1);
-    }
-
-    fn overview_scroll_down(&mut self) {
-        self.state.ui.overview_scroll = self.state.ui.overview_scroll.saturating_add(1);
-    }
-
-    fn overview_scroll_up(&mut self) {
-        self.state.ui.overview_scroll = self.state.ui.overview_scroll.saturating_sub(1);
     }
 }

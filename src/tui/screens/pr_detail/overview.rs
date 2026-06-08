@@ -241,6 +241,7 @@ fn render_timeline(frame: &mut Frame, pr_data: Option<&PrData>, ui: &mut UiMemor
     let max_scroll = total.saturating_sub(visible) as u16;
     let scroll = ui.overview_scroll.min(max_scroll);
     ui.overview_scroll = scroll;
+    ui.overview_viewport = area.height;
 
     let content_area = Rect { width: content_width, ..area };
     let p = Paragraph::new(lines).scroll((scroll, 0));
