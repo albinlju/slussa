@@ -85,6 +85,7 @@ pub fn fetch_review_threads(pr_number: u64) -> Result<Vec<ReviewThread>, FetchEr
         threads.push(ReviewThread {
             path,
             line,
+            old_line: None,
             diff_hunk,
             comments: domain_comments,
             resolved: false,
