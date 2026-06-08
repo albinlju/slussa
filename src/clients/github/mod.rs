@@ -1,3 +1,4 @@
+mod builds;
 mod cli;
 mod comments;
 mod commits;
@@ -5,6 +6,7 @@ mod diff;
 mod prs;
 mod review_threads;
 
+pub use builds::fetch_builds;
 pub use comments::fetch_comments;
 pub use commits::fetch_commits;
 pub use diff::fetch_diff;

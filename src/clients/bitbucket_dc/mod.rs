@@ -4,6 +4,7 @@
 //! mirror `clients::github`'s shape. `RepoCoords` and `Config` are the values
 //! that the `Backend::BitbucketDc` enum arm carries.
 
+mod builds;
 mod comments;
 mod commits;
 mod diff;
@@ -13,6 +14,7 @@ pub mod remote;
 mod review_threads;
 mod structured;
 
+pub use builds::fetch_builds;
 pub use comments::fetch_comments;
 pub use commits::fetch_commits;
 pub use diff::fetch_diff;

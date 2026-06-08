@@ -6,6 +6,7 @@ mod unified_diff;
 pub use error::FetchError;
 
 use crate::domain::{
+    ci::Build,
     comment::{Comment, ReviewThread},
     commit::Commit,
     diff::Diff,
@@ -57,6 +58,13 @@ impl Backend {
         match self {
             Self::GitHub => github::fetch_review_threads(pr_id),
             Self::BitbucketDc(c) => bitbucket_dc::fetch_review_threads(c, pr_id),
+        }
+    }
+
+    pub fn fetch_builds(&self, pr_id: u64) -> Result<Vec<Build>, FetchError> {
+        match self {
+            Self::GitHub => github::fetch_builds(pr_id),
+            Self::BitbucketDc(c) => bitbucket_dc::fetch_builds(c, pr_id),
         }
     }
 }

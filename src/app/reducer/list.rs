@@ -47,6 +47,7 @@ impl App {
         let load_diff = pr_data.diff.start_loading();
         let load_comments = pr_data.comments.start_loading();
         let load_threads = pr_data.review_threads.start_loading();
+        let load_builds = pr_data.builds.start_loading();
         if load_commits {
             self.spawn_load_commits(pr_id);
         }
@@ -58,6 +59,9 @@ impl App {
         }
         if load_threads {
             self.spawn_load_review_threads(pr_id);
+        }
+        if load_builds {
+            self.spawn_load_builds(pr_id);
         }
     }
 

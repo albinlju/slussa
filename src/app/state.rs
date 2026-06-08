@@ -1,5 +1,6 @@
 use std::collections::{HashMap, HashSet};
 
+use crate::domain::ci::Build;
 use crate::domain::comment::{Comment, ReviewThread};
 use crate::domain::commit::Commit;
 use crate::domain::diff::Diff;
@@ -85,6 +86,7 @@ pub struct PrData {
     pub diff: LoadState<Diff>,
     pub comments: LoadState<Vec<Comment>>,
     pub review_threads: LoadState<Vec<ReviewThread>>,
+    pub builds: LoadState<Vec<Build>>,
 }
 
 #[derive(Debug, Default)]
