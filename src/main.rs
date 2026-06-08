@@ -16,7 +16,22 @@ async fn main() -> ExitCode {
         eprintln!("tuipr: couldn't initialise logging: {err}");
     }
 
-    let args: Vec<String> = std::env::args().collect();
+    let mut args: Vec<String> = std::env::args().collect();
+    match pop_chdir_flag(&mut args) {
+        Ok(Some(dir)) => {
+            if let Err(err) = std::env::set_current_dir(&dir) {
+                eprintln!("tuipr: couldn't chdir to {dir}: {err}");
+                return ExitCode::from(1);
+            }
+            tracing::info!("changed working directory to {dir}");
+        }
+        Ok(None) => {}
+        Err(msg) => {
+            eprintln!("tuipr: {msg}");
+            return ExitCode::from(2);
+        }
+    }
+
     match args.get(1).map(String::as_str) {
         Some("auth") => return run_auth(&args[2..]),
         Some("--help" | "-h") => {
@@ -53,10 +68,28 @@ fn print_help() {
     println!(
         "tuipr — terminal UI for GitHub and Bitbucket Data Center pull requests\n\n\
          Usage:\n  \
-         tuipr               Open the PR browser for the current repo.\n  \
-         tuipr auth login    Store a Bitbucket Data Center PAT for the current repo's host.\n  \
-         tuipr --help        Show this message.\n"
+         tuipr                       Open the PR browser for the current repo.\n  \
+         tuipr -C <dir> [...]        Run as if started in <dir> (matches git/cargo -C).\n  \
+         tuipr auth login            Store a Bitbucket Data Center PAT for the current repo's host.\n  \
+         tuipr --help                Show this message.\n"
     );
+}
+
+/// Strip a `-C <dir>` flag out of `args` if present. Mirrors git/cargo
+/// semantics: it must appear before any subcommand and consumes both the
+/// flag and its argument. Returns `Err` for `-C` without a following dir.
+fn pop_chdir_flag(args: &mut Vec<String>) -> Result<Option<String>, String> {
+    for i in 1..args.len() {
+        if args[i] == "-C" {
+            if i + 1 >= args.len() {
+                return Err("`-C` requires a directory argument.".into());
+            }
+            let dir = args.remove(i + 1);
+            args.remove(i);
+            return Ok(Some(dir));
+        }
+    }
+    Ok(None)
 }
 
 fn run_auth(args: &[String]) -> ExitCode {
