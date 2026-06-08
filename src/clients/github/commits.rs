@@ -1,8 +1,8 @@
 use chrono::{DateTime, Utc};
 use serde::Deserialize;
 
-use crate::domain::commit::Commit;
 use crate::clients::github::error::{FetchError, run_gh_json};
+use crate::domain::commit::Commit;
 
 #[derive(Debug, Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -35,10 +35,6 @@ pub fn fetch_commits(pr_number: u64) -> Result<Vec<Commit>, FetchError> {
 
     let mut commits: Vec<Commit> = resp.commits.into_iter().map(map_commit).collect();
 
-    // `gh pr view --json commits` doesn't surface per-commit diff stats, so we
-    // fan out and fetch each commit's stats from the REST endpoint in parallel
-    // threads. The work is IO-bound (subprocess + network), so std::thread is
-    // simpler than introducing rayon for a handful of commits.
     let handles: Vec<_> = commits
         .iter()
         .map(|c| {
@@ -71,8 +67,6 @@ struct GhStats {
 }
 
 fn fetch_commit_stats(sha: &str) -> Option<(u32, u32)> {
-    // Per-commit stats are best-effort — a single API hiccup shouldn't fail
-    // the whole commit list, so we discard the error here.
     let resp: GhCommitDetail =
         run_gh_json(&["api", &format!("repos/{{owner}}/{{repo}}/commits/{sha}")]).ok()?;
     Some((resp.stats.additions, resp.stats.deletions))

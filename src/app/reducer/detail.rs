@@ -1,6 +1,3 @@
-//! Handlers for `DetailAction` — leaving back to the list, switching tabs,
-//! and scrolling the long-form tabs (Description, Overview).
-
 use crate::{
     app::{App, action::DetailAction, state::Screen},
     tui::screens::pr_detail::DetailTab,

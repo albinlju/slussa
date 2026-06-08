@@ -1,13 +1,13 @@
 use chrono::{DateTime, Utc};
 use serde::Deserialize;
 
+use crate::clients::github::error::{FetchError, run_gh_json};
 use crate::domain::ci::{CiState, CiStatus};
 use crate::domain::pr::{PrStatus, PullRequest};
 use crate::domain::provider::ProviderKind;
 use crate::domain::repo::Repo;
 use crate::domain::review::{Reviewer, ReviewerState};
 use crate::domain::user::User;
-use crate::clients::github::error::{FetchError, run_gh_json};
 
 #[derive(Debug, Default, Deserialize)]
 struct GhAuthor {
@@ -145,8 +145,6 @@ fn summarize_checks(checks: &[GhCheck]) -> CiState {
     let mut any_success = false;
 
     for c in checks {
-        // Actions check runs use `status` + `conclusion`; external status checks
-        // use `state`. We treat any non-empty value as the outcome to inspect.
         let outcome = if !c.conclusion.is_empty() {
             c.conclusion.as_str()
         } else if !c.state.is_empty() {

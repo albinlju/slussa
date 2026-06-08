@@ -31,6 +31,7 @@ pub(super) fn render(
     frame: &mut Frame,
     diff: &Diff,
     focused_file: usize,
+    pane_scroll: &mut u16,
     file_stats: &[(u32, u32)],
     threads: &[ReviewThread],
     area: Rect,
@@ -65,8 +66,20 @@ pub(super) fn render(
     // padding handles the 2-col left/right gutter for the content itself.
     let body_area = pane_chunks[1];
     let lines = file_to_lines(file, threads, body_area.width);
-    let paragraph = Paragraph::new(lines);
+
+    let total = lines.len();
+    let visible = body_area.height as usize;
+    let max_scroll = total.saturating_sub(visible) as u16;
+    let scroll = (*pane_scroll).min(max_scroll);
+    *pane_scroll = scroll;
+
+    let paragraph = Paragraph::new(lines).scroll((scroll, 0));
     frame.render_widget(paragraph, body_area);
+
+    if max_scroll > 0 {
+        let bar = widgets::scrollbar(scroll, max_scroll, body_area.height);
+        frame.render_widget(Paragraph::new(bar), widgets::scrollbar_area(body_area));
+    }
 }
 
 fn render_pane_header(frame: &mut Frame, path: &str, adds: u32, dels: u32, area: Rect) {
