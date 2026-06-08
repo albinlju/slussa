@@ -1,5 +1,5 @@
 use crate::{
-    app::{App, action::DetailAction, state::Screen},
+    app::{App, action::DetailAction, state::{DiffFocus, Screen}},
     tui::screens::pr_detail::DetailTab,
 };
 
@@ -25,18 +25,21 @@ impl App {
         if let Screen::Detail { tab, .. } = &mut self.state.screen {
             *tab = tab.next();
         }
+        self.state.ui.diff.focus = DiffFocus::Tree;
     }
 
     fn prev_tab(&mut self) {
         if let Screen::Detail { tab, .. } = &mut self.state.screen {
             *tab = tab.prev();
         }
+        self.state.ui.diff.focus = DiffFocus::Tree;
     }
 
     fn select_tab(&mut self, new_tab: DetailTab) {
         if let Screen::Detail { tab, .. } = &mut self.state.screen {
             *tab = new_tab;
         }
+        self.state.ui.diff.focus = DiffFocus::Tree;
     }
 
     fn description_scroll_down(&mut self) {

@@ -51,6 +51,11 @@ pub enum DiffAction {
     ExpandAtCursor,
     PaneScrollDown,
     PaneScrollUp,
+    /// Enter on a file row: focus that file and hand the keyboard to the pane.
+    /// On a directory row, falls back to toggling expansion.
+    EnterPane,
+    /// Return focus from the pane back to the tree.
+    FocusTree,
 }
 
 #[derive(Debug)]
