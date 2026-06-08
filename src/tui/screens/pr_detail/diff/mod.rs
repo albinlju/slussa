@@ -87,6 +87,7 @@ pub fn render(
                 diff,
                 ui_diff.focused_file,
                 &mut ui_diff.pane_scroll,
+                ui_diff.pane_cursor,
                 &file_stats,
                 review_threads,
                 !tree_focused,

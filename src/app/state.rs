@@ -78,6 +78,10 @@ pub struct DiffViewState {
     pub focused_file: usize,
     pub collapsed: HashSet<String>,
     pub pane_scroll: u16,
+    /// Cursor within the focused file's diff, as a logical diff-line index
+    /// (added/removed/context, in file order). The line a comment would anchor
+    /// to; the pane highlights it and scrolls to keep it visible.
+    pub pane_cursor: usize,
     /// Last-rendered body heights of the diff pane / file tree, for half-page
     /// scrolling and cursor jumps.
     pub pane_viewport: u16,
