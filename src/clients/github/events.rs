@@ -73,22 +73,22 @@ pub fn fetch_events(pr_number: u64) -> Result<Vec<TimelineEvent>, FetchError> {
 
     // Merge/close are mutually exclusive terminal states. gh doesn't attribute
     // an actor to either, so they go through unattributed.
-    if pr.state == "MERGED" {
-        if let Some(created) = pr.merged_at {
-            out.push(TimelineEvent {
-                actor: None,
-                kind: EventKind::Merged,
-                created,
-            });
-        }
-    } else if pr.state == "CLOSED" {
-        if let Some(created) = pr.closed_at {
-            out.push(TimelineEvent {
-                actor: None,
-                kind: EventKind::Declined,
-                created,
-            });
-        }
+    if pr.state == "MERGED"
+        && let Some(created) = pr.merged_at
+    {
+        out.push(TimelineEvent {
+            actor: None,
+            kind: EventKind::Merged,
+            created,
+        });
+    } else if pr.state == "CLOSED"
+        && let Some(created) = pr.closed_at
+    {
+        out.push(TimelineEvent {
+            actor: None,
+            kind: EventKind::Declined,
+            created,
+        });
     }
 
     Ok(out)

@@ -1,10 +1,9 @@
 use std::collections::{HashMap, HashSet};
 
+use crate::clients::ActivityBundle;
 use crate::domain::ci::Build;
-use crate::domain::comment::{Comment, ReviewThread};
 use crate::domain::commit::Commit;
 use crate::domain::diff::Diff;
-use crate::domain::event::TimelineEvent;
 use crate::domain::pr::{PrStatus, PullRequest};
 use crate::tui::screens::pr_detail::DetailTab;
 
@@ -93,10 +92,9 @@ pub struct Cache {
 pub struct PrData {
     pub commits: LoadState<Vec<Commit>>,
     pub diff: LoadState<Diff>,
-    pub comments: LoadState<Vec<Comment>>,
-    pub review_threads: LoadState<Vec<ReviewThread>>,
     pub builds: LoadState<Vec<Build>>,
-    pub events: LoadState<Vec<TimelineEvent>>,
+    /// Comments, lifecycle events, and inline review threads — one fetch.
+    pub activity: LoadState<ActivityBundle>,
 }
 
 #[derive(Debug, Default)]

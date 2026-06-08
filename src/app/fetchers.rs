@@ -53,22 +53,6 @@ impl App {
         );
     }
 
-    pub(super) fn spawn_load_comments(&self, pr_id: u64) {
-        let backend = self.backend.clone();
-        self.spawn_fetch(
-            move || backend.fetch_comments(pr_id),
-            move |r| Action::Loaded(LoadedAction::Comments(pr_id, r)),
-        );
-    }
-
-    pub(super) fn spawn_load_review_threads(&self, pr_id: u64) {
-        let backend = self.backend.clone();
-        self.spawn_fetch(
-            move || backend.fetch_review_threads(pr_id),
-            move |r| Action::Loaded(LoadedAction::ReviewThreads(pr_id, r)),
-        );
-    }
-
     pub(super) fn spawn_load_builds(&self, pr_id: u64) {
         let backend = self.backend.clone();
         self.spawn_fetch(
@@ -77,11 +61,11 @@ impl App {
         );
     }
 
-    pub(super) fn spawn_load_events(&self, pr_id: u64) {
+    pub(super) fn spawn_load_activity(&self, pr_id: u64) {
         let backend = self.backend.clone();
         self.spawn_fetch(
-            move || backend.fetch_events(pr_id),
-            move |r| Action::Loaded(LoadedAction::Events(pr_id, r)),
+            move || backend.fetch_activity(pr_id),
+            move |r| Action::Loaded(LoadedAction::Activity(pr_id, r)),
         );
     }
 }

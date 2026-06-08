@@ -1,12 +1,6 @@
 use crate::{
-    domain::{
-        ci::Build,
-        comment::{Comment, ReviewThread},
-        commit::Commit,
-        diff::Diff,
-        event::TimelineEvent,
-        pr::PullRequest,
-    },
+    clients::ActivityBundle,
+    domain::{ci::Build, commit::Commit, diff::Diff, pr::PullRequest},
     tui::screens::pr_detail::DetailTab,
 };
 
@@ -64,8 +58,6 @@ pub enum LoadedAction {
     Prs(Result<Vec<PullRequest>, String>),
     Commits(u64, Result<Vec<Commit>, String>),
     Diff(u64, Result<Diff, String>),
-    Comments(u64, Result<Vec<Comment>, String>),
-    ReviewThreads(u64, Result<Vec<ReviewThread>, String>),
     Builds(u64, Result<Vec<Build>, String>),
-    Events(u64, Result<Vec<TimelineEvent>, String>),
+    Activity(u64, Result<ActivityBundle, String>),
 }

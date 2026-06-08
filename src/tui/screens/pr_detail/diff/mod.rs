@@ -30,8 +30,8 @@ pub fn render(
 ) {
     let diff_state = pr_data.map(|d| &d.diff);
     let review_threads: &[ReviewThread] = pr_data
-        .and_then(|d| match &d.review_threads {
-            LoadState::Loaded(t) => Some(t.as_slice()),
+        .and_then(|d| match &d.activity {
+            LoadState::Loaded(b) => Some(b.threads.as_slice()),
             _ => None,
         })
         .unwrap_or(&[]);

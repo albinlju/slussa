@@ -17,25 +17,15 @@ impl App {
                 let pr_data = self.state.cache.details.entry(pr_id).or_default();
                 pr_data.diff = LoadState::from_result(r);
             }
-            LoadedAction::Comments(pr_id, r) => {
-                log_outcome("comments", Some(pr_id), &r);
-                let pr_data = self.state.cache.details.entry(pr_id).or_default();
-                pr_data.comments = LoadState::from_result(r);
-            }
-            LoadedAction::ReviewThreads(pr_id, r) => {
-                log_outcome("threads", Some(pr_id), &r);
-                let pr_data = self.state.cache.details.entry(pr_id).or_default();
-                pr_data.review_threads = LoadState::from_result(r);
-            }
             LoadedAction::Builds(pr_id, r) => {
                 log_outcome("builds", Some(pr_id), &r);
                 let pr_data = self.state.cache.details.entry(pr_id).or_default();
                 pr_data.builds = LoadState::from_result(r);
             }
-            LoadedAction::Events(pr_id, r) => {
-                log_outcome("events", Some(pr_id), &r);
+            LoadedAction::Activity(pr_id, r) => {
+                log_outcome("activity", Some(pr_id), &r);
                 let pr_data = self.state.cache.details.entry(pr_id).or_default();
-                pr_data.events = LoadState::from_result(r);
+                pr_data.activity = LoadState::from_result(r);
             }
         }
     }

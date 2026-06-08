@@ -1,21 +1,17 @@
+mod activities;
 mod builds;
-mod comments;
 mod commits;
 mod diff;
-mod events;
 mod http;
 mod prs;
 pub mod remote;
-mod review_threads;
 mod structured;
 
+pub use activities::fetch as fetch_activity;
 pub use builds::fetch_builds;
-pub use comments::fetch_comments;
 pub use commits::fetch_commits;
 pub use diff::fetch_diff;
-pub use events::fetch_events;
 pub use prs::fetch_prs;
-pub use review_threads::fetch_review_threads;
 
 /// Identifies a single repo on a Data Center instance — derived from `git
 /// remote get-url origin` at preflight time.

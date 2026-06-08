@@ -14,6 +14,17 @@ use crate::domain::{
     pr::PullRequest,
 };
 
+/// A PR's activity feed, parsed once and split three ways: general discussion
+/// comments, lifecycle events, and inline review threads. Both backends produce
+/// it from a single fetch — Bitbucket from one `/activities` call, GitHub from
+/// one bundling call — mirroring how `structured` projects the diff payload.
+#[derive(Debug, Default, Clone)]
+pub struct ActivityBundle {
+    pub comments: Vec<Comment>,
+    pub events: Vec<TimelineEvent>,
+    pub threads: Vec<ReviewThread>,
+}
+
 #[derive(Clone, Debug)]
 pub enum Backend {
     /// GitHub via the `gh` CLI. No client state — gh handles auth/session.
@@ -44,20 +55,6 @@ impl Backend {
         }
     }
 
-    pub fn fetch_comments(&self, pr_id: u64) -> Result<Vec<Comment>, FetchError> {
-        match self {
-            Self::GitHub => github::fetch_comments(pr_id),
-            Self::BitbucketDc(c) => bitbucket_dc::fetch_comments(c, pr_id),
-        }
-    }
-
-    pub fn fetch_review_threads(&self, pr_id: u64) -> Result<Vec<ReviewThread>, FetchError> {
-        match self {
-            Self::GitHub => github::fetch_review_threads(pr_id),
-            Self::BitbucketDc(c) => bitbucket_dc::fetch_review_threads(c, pr_id),
-        }
-    }
-
     pub fn fetch_builds(&self, pr_id: u64) -> Result<Vec<Build>, FetchError> {
         match self {
             Self::GitHub => github::fetch_builds(pr_id),
@@ -65,10 +62,11 @@ impl Backend {
         }
     }
 
-    pub fn fetch_events(&self, pr_id: u64) -> Result<Vec<TimelineEvent>, FetchError> {
+    /// Comments, events, and inline threads in one shot. See [`ActivityBundle`].
+    pub fn fetch_activity(&self, pr_id: u64) -> Result<ActivityBundle, FetchError> {
         match self {
-            Self::GitHub => github::fetch_events(pr_id),
-            Self::BitbucketDc(c) => bitbucket_dc::fetch_events(c, pr_id),
+            Self::GitHub => github::fetch_activity(pr_id),
+            Self::BitbucketDc(c) => bitbucket_dc::fetch_activity(c, pr_id),
         }
     }
 }
