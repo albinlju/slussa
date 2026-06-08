@@ -76,4 +76,12 @@ impl App {
             move |r| Action::Loaded(LoadedAction::Builds(pr_id, r)),
         );
     }
+
+    pub(super) fn spawn_load_events(&self, pr_id: u64) {
+        let backend = self.backend.clone();
+        self.spawn_fetch(
+            move || backend.fetch_events(pr_id),
+            move |r| Action::Loaded(LoadedAction::Events(pr_id, r)),
+        );
+    }
 }

@@ -48,6 +48,7 @@ impl App {
         let load_comments = pr_data.comments.start_loading();
         let load_threads = pr_data.review_threads.start_loading();
         let load_builds = pr_data.builds.start_loading();
+        let load_events = pr_data.events.start_loading();
         if load_commits {
             self.spawn_load_commits(pr_id);
         }
@@ -62,6 +63,9 @@ impl App {
         }
         if load_builds {
             self.spawn_load_builds(pr_id);
+        }
+        if load_events {
+            self.spawn_load_events(pr_id);
         }
     }
 

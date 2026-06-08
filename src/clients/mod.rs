@@ -10,6 +10,7 @@ use crate::domain::{
     comment::{Comment, ReviewThread},
     commit::Commit,
     diff::Diff,
+    event::TimelineEvent,
     pr::PullRequest,
 };
 
@@ -65,6 +66,13 @@ impl Backend {
         match self {
             Self::GitHub => github::fetch_builds(pr_id),
             Self::BitbucketDc(c) => bitbucket_dc::fetch_builds(c, pr_id),
+        }
+    }
+
+    pub fn fetch_events(&self, pr_id: u64) -> Result<Vec<TimelineEvent>, FetchError> {
+        match self {
+            Self::GitHub => github::fetch_events(pr_id),
+            Self::BitbucketDc(c) => bitbucket_dc::fetch_events(c, pr_id),
         }
     }
 }

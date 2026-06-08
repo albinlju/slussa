@@ -4,6 +4,7 @@ use crate::domain::ci::Build;
 use crate::domain::comment::{Comment, ReviewThread};
 use crate::domain::commit::Commit;
 use crate::domain::diff::Diff;
+use crate::domain::event::TimelineEvent;
 use crate::domain::pr::{PrStatus, PullRequest};
 use crate::tui::screens::pr_detail::DetailTab;
 
@@ -97,6 +98,7 @@ pub struct PrData {
     pub comments: LoadState<Vec<Comment>>,
     pub review_threads: LoadState<Vec<ReviewThread>>,
     pub builds: LoadState<Vec<Build>>,
+    pub events: LoadState<Vec<TimelineEvent>>,
 }
 
 #[derive(Debug, Default)]
