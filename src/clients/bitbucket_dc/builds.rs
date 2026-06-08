@@ -3,8 +3,8 @@
 //! commit, then pull the build statuses reported against that commit.
 //!
 //! Endpoints:
-//! - `GET .../pull-requests/{id}`            → `fromRef.latestCommit`
-//! - `GET .../commits/{commitId}/builds`     → paged build statuses
+//! - `GET /rest/api/1.0/.../pull-requests/{id}`        → `fromRef.latestCommit`
+//! - `GET /rest/build-status/1.0/commits/{commitId}`   → paged build statuses
 //!
 //! A build's `state` is one of SUCCESSFUL / FAILED / INPROGRESS / CANCELLED /
 //! UNKNOWN. `duration` (ms) and `name` are optional and only present on newer
@@ -59,10 +59,10 @@ pub fn fetch_builds(config: &Config, pr_id: u64) -> Result<Vec<Build>, FetchErro
         return Ok(Vec::new());
     }
 
-    let path = format!(
-        "/rest/api/1.0/projects/{}/repos/{}/commits/{commit}/builds?limit=100",
-        config.repo.project_key, config.repo.repo_slug
-    );
+    // Build statuses live in the build-status plugin API, keyed globally by
+    // commit hash — NOT under the core `/rest/api/1.0/.../commits/{id}/builds`
+    // route, which validates a required `key` param and 400s without it.
+    let path = format!("/rest/build-status/1.0/commits/{commit}?limit=100");
     let page: PagedBuilds = get_json(&config.repo.host, &path, &config.pat)?;
     Ok(page.values.into_iter().map(map_build).collect())
 }

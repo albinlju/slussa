@@ -117,7 +117,8 @@ fn build_overview_lines(
     let mut events: Vec<Event<'_>> = Vec::with_capacity(comments.len() + threads.len());
     events.extend(comments.iter().map(Event::Issue));
     events.extend(threads.iter().map(Event::Review));
-    events.sort_by_key(|e| e.timestamp());
+    // Newest first — most recent activity sits at the top of the timeline.
+    events.sort_by_key(|e| std::cmp::Reverse(e.timestamp()));
 
     let now = Utc::now();
 
