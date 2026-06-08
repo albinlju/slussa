@@ -10,26 +10,23 @@ use crate::app::App;
 use crate::app::preflight::{self, PreflightError};
 use crate::clients::Backend;
 
-#[tokio::main]
-async fn main() -> ExitCode {
+fn main() -> ExitCode {
     if let Err(err) = logging::init() {
         eprintln!("tuipr: couldn't initialise logging: {err}");
     }
 
     let mut args: Vec<String> = std::env::args().collect();
-    match pop_chdir_flag(&mut args) {
-        Ok(Some(dir)) => {
-            if let Err(err) = std::env::set_current_dir(&dir) {
-                eprintln!("tuipr: couldn't chdir to {dir}: {err}");
-                return ExitCode::from(1);
-            }
-            tracing::info!("changed working directory to {dir}");
-        }
-        Ok(None) => {}
-        Err(msg) => {
-            eprintln!("tuipr: {msg}");
+    if let Some(pos) = args.iter().position(|a| a == "-C") {
+        let Some(dir) = args.get(pos + 1).cloned() else {
+            eprintln!("tuipr: `-C` requires a directory argument.");
             return ExitCode::from(2);
+        };
+        args.drain(pos..=pos + 1);
+        if let Err(err) = std::env::set_current_dir(&dir) {
+            eprintln!("tuipr: couldn't chdir to {dir}: {err}");
+            return ExitCode::from(1);
         }
+        tracing::info!("changed working directory to {dir}");
     }
 
     match args.get(1).map(String::as_str) {
@@ -51,17 +48,33 @@ async fn main() -> ExitCode {
     };
     tracing::info!("preflight passed, starting tui");
 
-    let app = App::new(backend);
-    let mut terminal = ratatui::init();
-    let result = app.run(&mut terminal).await;
-    ratatui::restore();
-    match result {
-        Ok(()) => ExitCode::SUCCESS,
+    // Build a multi-thread runtime only here — main + preflight + auth stay
+    // sync so blocking HTTP calls (reqwest::blocking) don't trip tokio's
+    // nested-runtime guard. Only the TUI event loop needs async.
+    let rt = match tokio::runtime::Builder::new_multi_thread()
+        .enable_all()
+        .build()
+    {
+        Ok(rt) => rt,
         Err(err) => {
-            eprintln!("tuipr: {err}");
-            ExitCode::from(1)
+            eprintln!("tuipr: couldn't start runtime: {err}");
+            return ExitCode::from(1);
         }
-    }
+    };
+
+    rt.block_on(async move {
+        let app = App::new(backend);
+        let mut terminal = ratatui::init();
+        let result = app.run(&mut terminal).await;
+        ratatui::restore();
+        match result {
+            Ok(()) => ExitCode::SUCCESS,
+            Err(err) => {
+                eprintln!("tuipr: {err}");
+                ExitCode::from(1)
+            }
+        }
+    })
 }
 
 fn print_help() {
@@ -75,22 +88,6 @@ fn print_help() {
     );
 }
 
-/// Strip a `-C <dir>` flag out of `args` if present. Mirrors git/cargo
-/// semantics: it must appear before any subcommand and consumes both the
-/// flag and its argument. Returns `Err` for `-C` without a following dir.
-fn pop_chdir_flag(args: &mut Vec<String>) -> Result<Option<String>, String> {
-    for i in 1..args.len() {
-        if args[i] == "-C" {
-            if i + 1 >= args.len() {
-                return Err("`-C` requires a directory argument.".into());
-            }
-            let dir = args.remove(i + 1);
-            args.remove(i);
-            return Ok(Some(dir));
-        }
-    }
-    Ok(None)
-}
 
 fn run_auth(args: &[String]) -> ExitCode {
     match args.first().map(String::as_str) {
