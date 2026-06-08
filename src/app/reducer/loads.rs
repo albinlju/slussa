@@ -1,7 +1,3 @@
-//! Handlers for `LoadedAction` — the messages background fetchers send back
-//! with the fetch result. Each variant lands its `Result<T, String>` in the
-//! cache via `LoadState::from_result`.
-
 use crate::app::{App, action::LoadedAction, state::LoadState};
 
 impl App {

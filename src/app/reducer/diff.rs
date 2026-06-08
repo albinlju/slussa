@@ -1,7 +1,3 @@
-//! Handlers for `DiffAction` — cursor navigation in the file tree and
-//! expanding/collapsing directories. `current_visible_rows` is the local
-//! helper that lets cursor movement consult what's currently on screen.
-
 use crate::{
     app::{
         App,
@@ -19,6 +15,12 @@ impl App {
             DiffAction::ToggleAtCursor => self.diff_toggle_at_cursor(),
             DiffAction::CollapseAtCursor => self.diff_collapse_at_cursor(),
             DiffAction::ExpandAtCursor => self.diff_expand_at_cursor(),
+            DiffAction::PaneScrollDown => {
+                self.state.ui.diff.pane_scroll = self.state.ui.diff.pane_scroll.saturating_add(1);
+            }
+            DiffAction::PaneScrollUp => {
+                self.state.ui.diff.pane_scroll = self.state.ui.diff.pane_scroll.saturating_sub(1);
+            }
         }
     }
 
@@ -27,8 +29,11 @@ impl App {
         let last = rows.len().saturating_sub(1);
         let new_cursor = (self.state.ui.diff.cursor + 1).min(last);
         self.state.ui.diff.cursor = new_cursor;
-        if let Some(TreeRow::File { file_index, .. }) = rows.get(new_cursor) {
+        if let Some(TreeRow::File { file_index, .. }) = rows.get(new_cursor)
+            && *file_index != self.state.ui.diff.focused_file
+        {
             self.state.ui.diff.focused_file = *file_index;
+            self.state.ui.diff.pane_scroll = 0;
         }
     }
 
@@ -36,8 +41,11 @@ impl App {
         let new_cursor = self.state.ui.diff.cursor.saturating_sub(1);
         self.state.ui.diff.cursor = new_cursor;
         let rows = self.current_visible_rows();
-        if let Some(TreeRow::File { file_index, .. }) = rows.get(new_cursor) {
+        if let Some(TreeRow::File { file_index, .. }) = rows.get(new_cursor)
+            && *file_index != self.state.ui.diff.focused_file
+        {
             self.state.ui.diff.focused_file = *file_index;
+            self.state.ui.diff.pane_scroll = 0;
         }
     }
 
@@ -45,9 +53,7 @@ impl App {
         let rows = self.current_visible_rows();
         if let Some(row) = rows.get(self.state.ui.diff.cursor) {
             match row {
-                TreeRow::Dir {
-                    path, expanded, ..
-                } => {
+                TreeRow::Dir { path, expanded, .. } => {
                     if *expanded {
                         self.state.ui.diff.collapsed.insert(path.clone());
                     } else {
@@ -55,7 +61,10 @@ impl App {
                     }
                 }
                 TreeRow::File { file_index, .. } => {
-                    self.state.ui.diff.focused_file = *file_index;
+                    if *file_index != self.state.ui.diff.focused_file {
+                        self.state.ui.diff.focused_file = *file_index;
+                        self.state.ui.diff.pane_scroll = 0;
+                    }
                 }
             }
         }

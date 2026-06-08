@@ -1,15 +1,9 @@
-//! Error type and shared `gh` helpers for the GitHub provider.
-
 use std::fmt;
 
 #[derive(Debug)]
 pub enum FetchError {
-    /// `gh` binary couldn't be spawned at all.
     GhMissing,
-    /// `gh` ran but returned a non-zero exit code. Stderr is captured so we
-    /// can show the user what gh complained about.
     GhFailed { code: Option<i32>, stderr: String },
-    /// `gh`'s JSON output didn't match the schema we expect.
     ParseFailed(String),
 }
 
@@ -31,7 +25,6 @@ impl fmt::Display for FetchError {
     }
 }
 
-/// Run a `gh` subprocess and return its stdout.
 pub(super) fn run_gh(args: &[&str]) -> Result<Vec<u8>, FetchError> {
     tracing::debug!("gh {}", args.join(" "));
     let output = std::process::Command::new("gh")
@@ -52,7 +45,6 @@ pub(super) fn run_gh(args: &[&str]) -> Result<Vec<u8>, FetchError> {
     Ok(output.stdout)
 }
 
-/// Run a `gh` subprocess and deserialize its stdout as JSON into `T`.
 pub(super) fn run_gh_json<T: serde::de::DeserializeOwned>(args: &[&str]) -> Result<T, FetchError> {
     let stdout = run_gh(args)?;
     serde_json::from_slice(&stdout).map_err(|e| {

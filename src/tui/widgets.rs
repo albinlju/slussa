@@ -181,13 +181,23 @@ fn wrap_box_line(line: Line<'static>, text_w: usize, border: Style) -> Line<'sta
     let visible: usize = line.spans.iter().map(|s| s.width()).sum();
     let pad = text_w.saturating_sub(visible);
     let line_style = line.style;
-    let mut spans: Vec<Span<'static>> = Vec::with_capacity(line.spans.len() + 3);
-    spans.push(Span::styled("│ ", border));
+    // If the line's leading/trailing span carries a bg tint, extend it into
+    // the 1-col gap spaces so the fill reaches the inner borders. Otherwise
+    // the gap is plain.
+    let leading_bg = line.spans.first().and_then(|s| s.style.bg);
+    let trailing_bg = line.spans.last().and_then(|s| s.style.bg);
+    let pad_style = |bg: Option<ratatui::style::Color>| match bg {
+        Some(c) => Style::default().bg(c),
+        None => Style::default(),
+    };
+    let mut spans: Vec<Span<'static>> = Vec::with_capacity(line.spans.len() + 4);
+    spans.push(Span::styled("│", border));
+    spans.push(Span::styled(" ", pad_style(leading_bg)));
     for s in line.spans {
         let merged = line_style.patch(s.style);
         spans.push(Span::styled(s.content, merged));
     }
-    spans.push(Span::raw(" ".repeat(pad + 1)));
+    spans.push(Span::styled(" ".repeat(pad + 1), pad_style(trailing_bg)));
     spans.push(Span::styled("│", border));
     Line::from(spans)
 }

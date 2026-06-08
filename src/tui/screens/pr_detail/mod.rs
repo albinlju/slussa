@@ -358,7 +358,7 @@ fn render_content(
     match tab {
         DetailTab::Description => description::render(frame, pr, ui, inset),
         DetailTab::Overview => overview::render(frame, pr_data, ui, inset),
-        DetailTab::Diff => diff::render(frame, pr_data, &ui.diff, inset),
+        DetailTab::Diff => diff::render(frame, pr_data, &mut ui.diff, inset),
         DetailTab::Commits => commits::render(frame, pr_data, inset),
         DetailTab::Builds => checks::render(frame, inset),
     }
@@ -407,6 +407,10 @@ pub(in crate::tui) fn key_to_action(state: &AppState, key: KeyCode) -> Option<Ac
             KeyCode::Enter | KeyCode::Char(' ') => Some(Action::Diff(DiffAction::ToggleAtCursor)),
             KeyCode::Left | KeyCode::Char('h') => Some(Action::Diff(DiffAction::CollapseAtCursor)),
             KeyCode::Right | KeyCode::Char('l') => Some(Action::Diff(DiffAction::ExpandAtCursor)),
+            KeyCode::PageDown | KeyCode::Char('J') => {
+                Some(Action::Diff(DiffAction::PaneScrollDown))
+            }
+            KeyCode::PageUp | KeyCode::Char('K') => Some(Action::Diff(DiffAction::PaneScrollUp)),
             _ => None,
         },
         DetailTab::Overview => match key {

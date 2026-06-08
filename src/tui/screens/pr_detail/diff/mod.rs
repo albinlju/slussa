@@ -25,7 +25,7 @@ use crate::{
 pub fn render(
     frame: &mut Frame,
     pr_data: Option<&PrData>,
-    ui_diff: &DiffViewState,
+    ui_diff: &mut DiffViewState,
     area: Rect,
 ) {
     let diff_state = pr_data.map(|d| &d.diff);
@@ -72,6 +72,7 @@ pub fn render(
                 frame,
                 diff,
                 ui_diff.focused_file,
+                &mut ui_diff.pane_scroll,
                 &file_stats,
                 review_threads,
                 chunks[2],

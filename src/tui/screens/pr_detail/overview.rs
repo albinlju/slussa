@@ -206,7 +206,8 @@ fn build_review_lines(
 
     let mut body: Vec<Line<'static>> = Vec::new();
 
-    // Anchor line: file path + optional line number + resolved badge.
+    // Nested box: path:line as header, diff snippet as body. Sits inside the
+    // outer comment box; comment text follows underneath.
     let location = match thread.line {
         Some(l) => format!("{}:{}", thread.path, l),
         None => thread.path.clone(),
@@ -218,12 +219,14 @@ fn build_review_lines(
             Style::default().fg(theme.success),
         ));
     }
-    body.push(Line::from(anchor_spans));
-    body.push(Line::raw(""));
+    let inner_header = Line::from(anchor_spans);
 
-    if !thread.diff_hunk.is_empty() {
-        body.extend(styled_diff_hunk(&thread.diff_hunk, text_width));
-        body.push(Line::raw(""));
+    if thread.diff_hunk.is_empty() {
+        body.push(inner_header);
+    } else {
+        let inner_text_width = widgets::box_text_width(text_width);
+        let diff_lines = styled_diff_hunk(&thread.diff_hunk, inner_text_width);
+        body.extend(widgets::boxed(inner_header, diff_lines, text_width));
     }
 
     // First comment body + replies. The first author is already in the box
@@ -270,34 +273,106 @@ fn issue_comment_header(
 }
 
 /// Diff hunk styled to match the Diff tab — full-row bg tint on added/removed
-/// lines, strong-color prefix for `+`/`-`, plain muted for context. `width` is
-/// the row width inside the box bracket so the bg fill reaches the right edge.
+/// lines, strong-color prefix for `+`/`-`, plain muted for context. Each row
+/// is prefixed with its new-side line number (blank for removed lines).
 fn styled_diff_hunk(hunk: &str, width: u16) -> Vec<Line<'static>> {
     let theme = theme::current();
     let row_w = width as usize;
-    hunk.lines()
-        .map(|line| {
-            if line.starts_with("@@") {
-                return Line::from(Span::styled(
-                    line.to_string(),
-                    Style::default().fg(theme.info),
-                ));
-            }
-            if let Some(content) = line.strip_prefix('+') {
-                return widgets::diff_bg_row(
-                    "", "+", content, theme.diff_added, theme.diff_added_bg, theme.fg, row_w,
-                );
-            }
-            if let Some(content) = line.strip_prefix('-') {
-                return widgets::diff_bg_row(
-                    "", "-", content, theme.diff_removed, theme.diff_removed_bg, theme.muted,
-                    row_w,
-                );
-            }
-            Line::from(Span::styled(
-                line.to_string(),
-                Style::default().fg(theme.diff_context),
-            ))
-        })
-        .collect()
+
+    let new_start = parse_hunk_new_start(hunk).unwrap_or(1);
+    let advancing = hunk
+        .lines()
+        .filter(|l| !l.starts_with("@@") && !l.starts_with('-'))
+        .count() as u32;
+    let max_num = new_start + advancing.saturating_sub(1);
+    let num_width = max_num.to_string().len();
+
+    // Only changed lines (`+`/`-`) are rendered — context rows are walked just
+    // to keep `new_line` accurate for the `+`/`-` rows we do emit.
+    let mut new_line = new_start;
+    let mut out: Vec<Line<'static>> = Vec::new();
+    for raw in hunk.lines().filter(|l| !l.starts_with("@@")) {
+        if let Some(content) = raw.strip_prefix('+') {
+            out.push(numbered_diff_row(
+                Some(new_line),
+                num_width,
+                "+",
+                content,
+                theme.diff_added,
+                Some(theme.diff_added_bg),
+                theme.fg,
+                row_w,
+            ));
+            new_line += 1;
+        } else if let Some(content) = raw.strip_prefix('-') {
+            out.push(numbered_diff_row(
+                None,
+                num_width,
+                "-",
+                content,
+                theme.diff_removed,
+                Some(theme.diff_removed_bg),
+                theme.muted,
+                row_w,
+            ));
+        } else {
+            new_line += 1;
+        }
+    }
+    out
+}
+
+/// Parse `+C` from a `@@ -A,B +C,D @@` header to recover the starting line
+/// number on the new side. Falls back to `None` if the hunk doesn't begin
+/// with a recognizable header.
+fn parse_hunk_new_start(hunk: &str) -> Option<u32> {
+    let first = hunk.lines().next()?;
+    let plus = first.split_whitespace().find(|s| s.starts_with('+'))?;
+    let end = plus.find(',').unwrap_or(plus.len());
+    plus[1..end].parse().ok()
+}
+
+#[allow(clippy::too_many_arguments)]
+fn numbered_diff_row(
+    line_num: Option<u32>,
+    num_width: usize,
+    prefix: &'static str,
+    content: &str,
+    prefix_fg: Color,
+    bg: Option<Color>,
+    text_fg: Color,
+    row_w: usize,
+) -> Line<'static> {
+    let num_str = match line_num {
+        Some(n) => format!("{n:>num_width$}"),
+        None => " ".repeat(num_width),
+    };
+    // `{num} {prefix} {content}` — single space between each.
+    let gutter = format!(" {num_str} ");
+    let visible = gutter.chars().count() + prefix.chars().count() + 1 + content.chars().count();
+    let pad = row_w.saturating_sub(visible);
+
+    let gutter_style = match bg {
+        Some(bg) => Style::default().fg(theme::current().muted).bg(bg),
+        None => Style::default().fg(theme::current().muted),
+    };
+    let prefix_style = {
+        let s = Style::default()
+            .fg(prefix_fg)
+            .add_modifier(Modifier::BOLD);
+        match bg {
+            Some(bg) => s.bg(bg),
+            None => s,
+        }
+    };
+    let text_style = match bg {
+        Some(bg) => Style::default().fg(text_fg).bg(bg),
+        None => Style::default().fg(text_fg),
+    };
+
+    Line::from(vec![
+        Span::styled(gutter, gutter_style),
+        Span::styled(prefix, prefix_style),
+        Span::styled(format!(" {content}{}", " ".repeat(pad)), text_style),
+    ])
 }

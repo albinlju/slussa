@@ -1,6 +1,3 @@
-//! Handlers for `ListAction` — actions on the PR list screen (cursor
-//! navigation, opening a PR, filter-picker popup).
-
 use crate::{
     app::{
         App,
@@ -80,13 +77,11 @@ impl App {
 
     fn filter_picker_next(&mut self) {
         let last = StatusFilter::CYCLE.len().saturating_sub(1);
-        self.state.ui.filter_picker_cursor =
-            (self.state.ui.filter_picker_cursor + 1).min(last);
+        self.state.ui.filter_picker_cursor = (self.state.ui.filter_picker_cursor + 1).min(last);
     }
 
     fn filter_picker_prev(&mut self) {
-        self.state.ui.filter_picker_cursor =
-            self.state.ui.filter_picker_cursor.saturating_sub(1);
+        self.state.ui.filter_picker_cursor = self.state.ui.filter_picker_cursor.saturating_sub(1);
     }
 
     fn apply_filter(&mut self) {

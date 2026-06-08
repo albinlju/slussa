@@ -3,9 +3,9 @@ use std::collections::HashMap;
 use chrono::{DateTime, Utc};
 use serde::Deserialize;
 
+use crate::clients::github::error::{FetchError, run_gh_json};
 use crate::domain::comment::{Comment, ReviewThread};
 use crate::domain::user::User;
-use crate::clients::github::error::{FetchError, run_gh_json};
 
 #[derive(Debug, Deserialize)]
 struct GhUser {
@@ -35,23 +35,13 @@ struct GhPrComment {
     in_reply_to_id: Option<u64>,
 }
 
-/// Fetch inline review comments via the REST API. `gh pr view --json reviews`
-/// only returns the review-level bodies and the inline comments aren't fully
-/// surfaced. The REST endpoint gives us each comment with its path, line, and
-/// diff_hunk anchor — and `in_reply_to_id` lets us group replies back into
-/// threads ourselves.
-///
-/// The `{owner}` and `{repo}` placeholders are substituted by gh automatically
-/// from the current repo context.
 pub fn fetch_review_threads(pr_number: u64) -> Result<Vec<ReviewThread>, FetchError> {
     let endpoint = format!("repos/{{owner}}/{{repo}}/pulls/{pr_number}/comments");
     let comments: Vec<GhPrComment> = run_gh_json(&["api", "--paginate", &endpoint])?;
 
-    // Map each comment to its in_reply_to_id so we can chase to the thread root.
     let parent_map: HashMap<u64, Option<u64>> =
         comments.iter().map(|c| (c.id, c.in_reply_to_id)).collect();
 
-    // Group comments by the root id of their thread.
     let mut groups: HashMap<u64, Vec<GhPrComment>> = HashMap::new();
     for comment in comments {
         let root = find_root(comment.id, &parent_map);
@@ -100,17 +90,18 @@ pub fn fetch_review_threads(pr_number: u64) -> Result<Vec<ReviewThread>, FetchEr
         });
     }
 
-    // Sort threads chronologically by their root comment so Overview shows them
-    // in the order they were posted.
-    threads.sort_by_key(|t| t.comments.first().map(|c| c.created).unwrap_or_else(Utc::now));
+    threads.sort_by_key(|t| {
+        t.comments
+            .first()
+            .map(|c| c.created)
+            .unwrap_or_else(Utc::now)
+    });
 
     Ok(threads)
 }
 
 fn find_root(id: u64, parent_map: &HashMap<u64, Option<u64>>) -> u64 {
     let mut current = id;
-    // Cap the chase in case the data has a weird cycle. 100 is way past any
-    // realistic reply depth.
     for _ in 0..100 {
         match parent_map.get(&current) {
             Some(Some(parent)) => current = *parent,

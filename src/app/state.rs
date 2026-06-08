@@ -70,6 +70,7 @@ pub struct DiffViewState {
     pub cursor: usize,
     pub focused_file: usize,
     pub collapsed: HashSet<String>,
+    pub pane_scroll: u16,
 }
 
 #[derive(Debug, Default)]
@@ -92,14 +93,10 @@ pub enum LoadState<T> {
     NotRequested,
     Loading,
     Loaded(T),
-    /// Fetch ran but failed — message comes from the provider's `FetchError`
-    /// and is what we show the user in the relevant section.
     Failed(String),
 }
 
 impl<T> LoadState<T> {
-    /// Flip from `NotRequested` to `Loading`, returning whether the caller
-    /// should kick off a fetch.
     pub fn start_loading(&mut self) -> bool {
         if matches!(self, LoadState::NotRequested) {
             *self = LoadState::Loading;
@@ -109,7 +106,6 @@ impl<T> LoadState<T> {
         }
     }
 
-    /// Land a finished fetch — `Ok` becomes `Loaded`, `Err` becomes `Failed`.
     pub fn from_result(result: Result<T, String>) -> Self {
         match result {
             Ok(v) => LoadState::Loaded(v),
@@ -129,9 +125,6 @@ pub enum Screen {
 }
 
 impl AppState {
-    /// PRs from the cache filtered by the current list filter. Returns
-    /// references so callers don't need to clone — the cursor and Enter
-    /// handler both index into this same slice ordering.
     pub fn filtered_prs(&self) -> Vec<&PullRequest> {
         match &self.cache.prs {
             LoadState::Loaded(prs) => prs

@@ -1,8 +1,5 @@
-use crate::domain::diff::{Diff, DiffLine, FileDiff, Hunk};
 use crate::clients::github::error::{FetchError, run_gh};
-
-// `fetch_diff` uses `run_gh` directly (no JSON helper) because gh returns
-// raw unified-diff text rather than structured JSON.
+use crate::domain::diff::{Diff, DiffLine, FileDiff, Hunk};
 
 pub fn fetch_diff(pr_number: u64) -> Result<Diff, FetchError> {
     let pr_arg = pr_number.to_string();
@@ -19,9 +16,10 @@ fn parse_unified_diff(text: &str) -> Diff {
     for line in text.lines() {
         if let Some(rest) = line.strip_prefix("diff --git ") {
             if let Some(hunk) = current_hunk.take()
-                && let Some(f) = current_file.as_mut() {
-                    f.hunks.push(hunk);
-                }
+                && let Some(f) = current_file.as_mut()
+            {
+                f.hunks.push(hunk);
+            }
             if let Some(f) = current_file.take() {
                 files.push(f);
             }
@@ -36,9 +34,10 @@ fn parse_unified_diff(text: &str) -> Diff {
             });
         } else if line.starts_with("@@") {
             if let Some(hunk) = current_hunk.take()
-                && let Some(f) = current_file.as_mut() {
-                    f.hunks.push(hunk);
-                }
+                && let Some(f) = current_file.as_mut()
+            {
+                f.hunks.push(hunk);
+            }
             let (old_start, new_start) = parse_hunk_header(line);
             current_hunk = Some(Hunk {
                 old_start,
@@ -60,9 +59,10 @@ fn parse_unified_diff(text: &str) -> Diff {
     }
 
     if let Some(hunk) = current_hunk.take()
-        && let Some(f) = current_file.as_mut() {
-            f.hunks.push(hunk);
-        }
+        && let Some(f) = current_file.as_mut()
+    {
+        f.hunks.push(hunk);
+    }
     if let Some(f) = current_file.take() {
         files.push(f);
     }

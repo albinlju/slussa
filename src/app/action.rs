@@ -48,6 +48,8 @@ pub enum DiffAction {
     ToggleAtCursor,
     CollapseAtCursor,
     ExpandAtCursor,
+    PaneScrollDown,
+    PaneScrollUp,
 }
 
 #[derive(Debug)]
