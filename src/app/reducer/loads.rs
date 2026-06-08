@@ -32,6 +32,11 @@ impl App {
                 let pr_data = self.state.cache.details.entry(pr_id).or_default();
                 pr_data.builds = LoadState::from_result(r);
             }
+            LoadedAction::Events(pr_id, r) => {
+                log_outcome("events", Some(pr_id), &r);
+                let pr_data = self.state.cache.details.entry(pr_id).or_default();
+                pr_data.events = LoadState::from_result(r);
+            }
         }
     }
 }

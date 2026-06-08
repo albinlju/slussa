@@ -76,10 +76,34 @@ fn validate_pat(host: &str, pat: &str) -> Result<(), String> {
     if status.is_success() {
         return Ok(());
     }
+    // Surface the server's own message — Bitbucket usually explains *why*
+    // (expired, wrong scope, anonymous access disabled, …).
+    let body = response.text().unwrap_or_default();
+    let detail = server_message(&body);
     if status == reqwest::StatusCode::UNAUTHORIZED || status == reqwest::StatusCode::FORBIDDEN {
-        return Err("token rejected by server (401/403). Check it and try again.".into());
+        return Err(format!(
+            "token rejected by server ({}). {detail}\n\
+             Check that you pasted the whole token and it has Repository Read.",
+            status.as_u16()
+        ));
     }
-    Err(format!("server returned http {status}"))
+    Err(format!("server returned http {} — {detail}", status.as_u16()))
+}
+
+/// Pull the first `errors[].message` out of a Bitbucket JSON error body, or
+/// fall back to a trimmed snippet of the raw response.
+fn server_message(body: &str) -> String {
+    if let Ok(v) = serde_json::from_str::<serde_json::Value>(body)
+        && let Some(msg) = v["errors"][0]["message"].as_str()
+    {
+        return msg.to_string();
+    }
+    let snippet: String = body.trim().chars().take(160).collect();
+    if snippet.is_empty() {
+        "(no response body)".to_string()
+    } else {
+        snippet
+    }
 }
 
 fn read_origin_remote() -> Result<String, String> {

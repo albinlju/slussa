@@ -2,6 +2,7 @@ pub mod ci;
 pub mod comment;
 pub mod commit;
 pub mod diff;
+pub mod event;
 pub mod pr;
 pub mod provider;
 pub mod repo;

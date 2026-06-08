@@ -12,6 +12,7 @@ use crate::{
     domain::{
         ci::BuildState,
         comment::{Comment, ReviewThread},
+        event::{EventKind, TimelineEvent},
         pr::PullRequest,
         review::ReviewerState,
     },
@@ -243,9 +244,15 @@ fn render_timeline(frame: &mut Frame, pr_data: Option<&PrData>, ui: &mut UiMemor
         Some(LoadState::Loaded(t)) => t,
         _ => &[],
     };
+    // Lifecycle events are supplementary — render whatever's loaded, don't gate
+    // the whole timeline on them.
+    let events: &[TimelineEvent] = match pr_data.map(|d| &d.events) {
+        Some(LoadState::Loaded(e)) => e,
+        _ => &[],
+    };
 
-    if comments.is_empty() && threads.is_empty() {
-        let p = Paragraph::new("(no comments)").style(Style::default().fg(theme.muted));
+    if comments.is_empty() && threads.is_empty() && events.is_empty() {
+        let p = Paragraph::new("(no activity)").style(Style::default().fg(theme.muted));
         frame.render_widget(p, area);
         return;
     }
@@ -253,7 +260,8 @@ fn render_timeline(frame: &mut Frame, pr_data: Option<&PrData>, ui: &mut UiMemor
     // Reserve rightmost column for the scrollbar so wrapped markdown doesn't
     // get clipped or overlap the thumb.
     let content_width = area.width.saturating_sub(1);
-    let lines = build_overview_lines(comments, threads, content_width.saturating_sub(TIMELINE_COL));
+    let lines =
+        build_overview_lines(comments, threads, events, content_width.saturating_sub(TIMELINE_COL));
 
     let total = lines.len();
     let visible = area.height as usize;
@@ -274,6 +282,7 @@ fn render_timeline(frame: &mut Frame, pr_data: Option<&PrData>, ui: &mut UiMemor
 enum Event<'a> {
     Issue(&'a Comment),
     Review(&'a ReviewThread),
+    Activity(&'a TimelineEvent),
 }
 
 impl<'a> Event<'a> {
@@ -285,6 +294,7 @@ impl<'a> Event<'a> {
                 .first()
                 .map(|c| c.created)
                 .unwrap_or_else(Utc::now),
+            Event::Activity(e) => e.created,
         }
     }
 }
@@ -292,12 +302,15 @@ impl<'a> Event<'a> {
 fn build_overview_lines(
     comments: &[Comment],
     threads: &[ReviewThread],
+    activity: &[TimelineEvent],
     width: u16,
 ) -> Vec<Line<'static>> {
     let theme = theme::current();
-    let mut events: Vec<Event<'_>> = Vec::with_capacity(comments.len() + threads.len());
+    let mut events: Vec<Event<'_>> =
+        Vec::with_capacity(comments.len() + threads.len() + activity.len());
     events.extend(comments.iter().map(Event::Issue));
     events.extend(threads.iter().map(Event::Review));
+    events.extend(activity.iter().map(Event::Activity));
     // Newest first — most recent activity sits at the top of the timeline.
     events.sort_by_key(|e| std::cmp::Reverse(e.timestamp()));
 
@@ -313,6 +326,10 @@ fn build_overview_lines(
             Event::Issue(c) => Some((EventStyle::Comment, build_issue_lines(c, width, now))),
             Event::Review(t) => {
                 build_review_lines(t, width, now).map(|l| (EventStyle::Review, l))
+            }
+            Event::Activity(e) => {
+                let (color, line) = activity_line(e, now);
+                Some((EventStyle::Activity(color), vec![line]))
             }
         })
         .collect();
@@ -352,6 +369,8 @@ enum EventStyle {
     Comment,
     /// Inline review comment anchored to a diff line.
     Review,
+    /// Lifecycle event (approved, merged, …) — carries its own dot color.
+    Activity(Color),
 }
 
 impl EventStyle {
@@ -359,8 +378,40 @@ impl EventStyle {
         match self {
             Self::Comment => theme.info,
             Self::Review => theme.accent,
+            Self::Activity(c) => c,
         }
     }
+}
+
+/// A single-line lifecycle row: `@actor approved · 2d ago`. Returns the dot
+/// color alongside the line so the timeline circle matches the event kind.
+fn activity_line(event: &TimelineEvent, now: DateTime<Utc>) -> (Color, Line<'static>) {
+    let theme = theme::current();
+    let (verb, color) = match event.kind {
+        EventKind::Opened => ("opened this pull request", theme.info),
+        EventKind::ReadyForReview => ("marked this ready for review", theme.accent),
+        EventKind::Approved => ("approved these changes", theme.success),
+        EventKind::ChangesRequested => ("requested changes", theme.error),
+        EventKind::ReviewRemoved => ("dismissed their review", theme.muted),
+        EventKind::Merged => ("merged this pull request", theme.status_merged),
+        EventKind::Declined => ("declined this pull request", theme.status_declined),
+        EventKind::Reopened => ("reopened this pull request", theme.info),
+    };
+    let age = widgets::relative_age(event.created, now);
+    let mut spans: Vec<Span<'static>> = Vec::new();
+    if let Some(actor) = &event.actor {
+        spans.push(Span::styled(
+            format!("@{}", actor.username),
+            Style::default().fg(theme.info).add_modifier(Modifier::BOLD),
+        ));
+        spans.push(Span::raw(" "));
+    }
+    spans.push(Span::styled(verb.to_string(), Style::default().fg(color)));
+    spans.push(Span::styled(
+        format!(" · {age}"),
+        Style::default().fg(theme.muted),
+    ));
+    (color, Line::from(spans))
 }
 
 fn build_issue_lines(c: &Comment, width: u16, now: DateTime<Utc>) -> Vec<Line<'static>> {

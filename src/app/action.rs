@@ -4,6 +4,7 @@ use crate::{
         comment::{Comment, ReviewThread},
         commit::Commit,
         diff::Diff,
+        event::TimelineEvent,
         pr::PullRequest,
     },
     tui::screens::pr_detail::DetailTab,
@@ -66,4 +67,5 @@ pub enum LoadedAction {
     Comments(u64, Result<Vec<Comment>, String>),
     ReviewThreads(u64, Result<Vec<ReviewThread>, String>),
     Builds(u64, Result<Vec<Build>, String>),
+    Events(u64, Result<Vec<TimelineEvent>, String>),
 }
