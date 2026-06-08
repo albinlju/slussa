@@ -14,7 +14,7 @@ use ratatui::{
 };
 
 use crate::{
-    app::state::{DiffViewState, LoadState, PrData},
+    app::state::{DiffFocus, DiffViewState, LoadState, PrData},
     domain::{
         comment::ReviewThread,
         diff::{DiffLine, FileDiff},
@@ -66,8 +66,16 @@ pub fn render(
             // pass the slice down to both panel renderers.
             let file_stats: Vec<(u32, u32)> = diff.files.iter().map(count_file_stats).collect();
 
+            let tree_focused = matches!(ui_diff.focus, DiffFocus::Tree);
             let rows = build_visible_rows(&diff.files, &ui_diff.collapsed);
-            tree::render(frame, &rows, ui_diff.cursor, &file_stats, chunks[0]);
+            tree::render(
+                frame,
+                &rows,
+                ui_diff.cursor,
+                &file_stats,
+                tree_focused,
+                chunks[0],
+            );
             pane::render(
                 frame,
                 diff,
@@ -75,6 +83,7 @@ pub fn render(
                 &mut ui_diff.pane_scroll,
                 &file_stats,
                 review_threads,
+                !tree_focused,
                 chunks[2],
             );
         }

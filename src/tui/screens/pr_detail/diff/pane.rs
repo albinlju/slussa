@@ -34,6 +34,7 @@ pub(super) fn render(
     pane_scroll: &mut u16,
     file_stats: &[(u32, u32)],
     threads: &[ReviewThread],
+    focused: bool,
     area: Rect,
 ) {
     let bounded = focused_file.min(diff.files.len().saturating_sub(1));
@@ -44,10 +45,11 @@ pub(super) fn render(
 
     let theme = theme::current();
 
+    let border_color = if focused { theme.accent } else { theme.divider };
     let pane_block = Block::default()
         .borders(Borders::ALL)
         .border_type(BorderType::Rounded)
-        .border_style(Style::default().fg(theme.divider));
+        .border_style(Style::default().fg(border_color));
     let pane_inner = pane_block.inner(area);
     frame.render_widget(pane_block, area);
 
@@ -147,7 +149,7 @@ fn styled_diff_line(diff_line: &DiffLine, width: u16) -> Line<'static> {
             c,
             theme.diff_removed,
             theme.diff_removed_bg,
-            theme.muted,
+            theme.fg,
             row_w,
         ),
         DiffLine::Context(c) => Line::styled(

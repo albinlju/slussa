@@ -16,6 +16,7 @@ pub(super) fn render(
     rows: &[TreeRow],
     cursor: usize,
     file_stats: &[(u32, u32)],
+    focused: bool,
     area: Rect,
 ) {
     let theme = theme::current();
@@ -24,10 +25,11 @@ pub(super) fn render(
         .iter()
         .fold((0u32, 0u32), |(a, d), (na, nd)| (a + na, d + nd));
 
+    let border_color = if focused { theme.accent } else { theme.divider };
     let tree_block = Block::default()
         .borders(Borders::ALL)
         .border_type(BorderType::Rounded)
-        .border_style(Style::default().fg(theme.divider));
+        .border_style(Style::default().fg(border_color));
     let tree_inner = tree_block.inner(area);
     frame.render_widget(tree_block, area);
 

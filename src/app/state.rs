@@ -72,6 +72,16 @@ pub struct DiffViewState {
     pub focused_file: usize,
     pub collapsed: HashSet<String>,
     pub pane_scroll: u16,
+    /// Which side of the Diff tab has the keyboard — the file tree or the
+    /// diff pane. Enter on a file hands focus to the pane; Esc/h hands it back.
+    pub focus: DiffFocus,
+}
+
+#[derive(Debug, Default, Clone, Copy, PartialEq, Eq)]
+pub enum DiffFocus {
+    #[default]
+    Tree,
+    Pane,
 }
 
 #[derive(Debug, Default)]

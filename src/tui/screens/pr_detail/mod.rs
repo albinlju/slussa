@@ -18,7 +18,7 @@ use ratatui::{
 use crate::{
     app::{
         action::{Action, DetailAction, DiffAction},
-        state::{AppState, LoadState, PrData, Screen, UiMemory},
+        state::{AppState, DiffFocus, LoadState, PrData, Screen, UiMemory},
     },
     domain::{
         comment::ReviewThread,
@@ -96,8 +96,6 @@ pub(in crate::tui) fn render(
         return;
     };
 
-    // Outer yellow frame wraps the page but the help text lives below it —
-    // same chrome split as pr_list, so the footer sits outside the border.
     let theme = theme::current();
     let outer_chunks = Layout::default()
         .direction(Direction::Vertical)
@@ -121,9 +119,10 @@ pub(in crate::tui) fn render(
         .split(inner);
 
     render_header(frame, pr, chunks[0]);
+    let diff_focus = state.ui.diff.focus;
     let pr_data = state.cache.details.get(&pr.id);
     render_tabs_and_content(frame, pr, pr_data, &mut state.ui, tab, chunks[2]);
-    render_help(frame, outer_chunks[1]);
+    render_help(frame, tab, diff_focus, outer_chunks[1]);
 }
 
 pub(super) fn description_body(pr: &PullRequest) -> &str {
@@ -221,10 +220,7 @@ fn render_tabs_and_content(
         } else {
             inactive_style
         };
-        tab_spans.push(Span::styled(
-            format!("{}  {}", t.icon(), t.label()),
-            style,
-        ));
+        tab_spans.push(Span::styled(format!("{}  {}", t.icon(), t.label()), style));
     }
 
     let chunks = Layout::default()
@@ -264,10 +260,6 @@ fn render_header(frame: &mut Frame, pr: &PullRequest, area: Rect) {
         ),
     ]);
 
-    // Powerline rounded half-circles (Nerd Font U+E0B6 / U+E0B4) flank the
-    // padded label to give the badge pill-shaped rounded ends. The edges have
-    // fg=status_color with no bg, so the rounded curve bleeds into whatever
-    // sits behind the header.
     let left_spans: Vec<Span<'static>> = vec![
         Span::styled("\u{e0b6}", Style::default().fg(status_color)),
         Span::styled(
@@ -283,14 +275,12 @@ fn render_header(frame: &mut Frame, pr: &PullRequest, area: Rect) {
             Style::default().fg(theme.info),
         ),
         Span::raw("  wants to merge  "),
-        Span::styled(pr.source_branch.clone(), Style::default().fg(theme.success)),
+        Span::styled(pr.source_branch.clone(), Style::default().fg(theme.orange)),
         Span::raw(" → "),
         Span::styled(pr.target_branch.clone(), Style::default().fg(theme.accent)),
     ];
     let right_spans = build_reviewer_spans(pr);
 
-    // 2-col padding on each side (matches `Padding::horizontal(2)` on the
-    // block below) so the right segment ends 2 cols before the area edge.
     let content_width = (area.width as usize).saturating_sub(4);
     let left_visible: usize = left_spans.iter().map(|s| s.width()).sum();
     let right_visible: usize = right_spans.iter().map(|s| s.width()).sum();
@@ -364,11 +354,17 @@ fn render_content(
     }
 }
 
-fn render_help(frame: &mut Frame, area: Rect) {
-    let line = widgets::footer(
-        area.width,
-        "1-5 / h/l: tab  j/k: scroll  esc: back  q: quit",
-    );
+fn render_help(frame: &mut Frame, tab: DetailTab, diff_focus: DiffFocus, area: Rect) {
+    let hint = match (tab, diff_focus) {
+        (DetailTab::Diff, DiffFocus::Tree) => {
+            "j/k: files  enter: open diff  h/l: fold  tab: section  esc: back"
+        }
+        (DetailTab::Diff, DiffFocus::Pane) => {
+            "j/k: scroll  h/esc: tree  tab: section  q: quit"
+        }
+        _ => "1-5 / h/l: tab  j/k: scroll  esc: back  q: quit",
+    };
+    let line = widgets::footer(area.width, hint);
     frame.render_widget(Paragraph::new(line), area);
 }
 
@@ -377,8 +373,22 @@ pub(in crate::tui) fn key_to_action(state: &AppState, key: KeyCode) -> Option<Ac
         return Some(Action::Quit);
     }
 
+    let tab = match state.screen {
+        Screen::Detail { tab, .. } => tab,
+        _ => return None,
+    };
+    let diff_focus = state.ui.diff.focus;
+
+    // Esc steps back one level: from the diff pane to the tree, otherwise out
+    // of the detail view entirely.
+    if matches!(key, KeyCode::Esc) {
+        if tab == DetailTab::Diff && diff_focus == DiffFocus::Pane {
+            return Some(Action::Diff(DiffAction::FocusTree));
+        }
+        return Some(Action::Detail(DetailAction::Back));
+    }
+
     match key {
-        KeyCode::Esc => return Some(Action::Detail(DetailAction::Back)),
         KeyCode::Tab => return Some(Action::Detail(DetailAction::NextTab)),
         KeyCode::BackTab => return Some(Action::Detail(DetailAction::PrevTab)),
         KeyCode::Char(c @ '1'..='5') => {
@@ -390,22 +400,28 @@ pub(in crate::tui) fn key_to_action(state: &AppState, key: KeyCode) -> Option<Ac
         _ => {}
     }
 
-    let tab = match state.screen {
-        Screen::Detail { tab, .. } => tab,
-        _ => return None,
-    };
-
     match tab {
-        DetailTab::Diff => match key {
+        // Tree focus: navigate files, Enter jumps into the pane.
+        DetailTab::Diff if diff_focus == DiffFocus::Tree => match key {
             KeyCode::Down | KeyCode::Char('j') => Some(Action::Diff(DiffAction::CursorDown)),
             KeyCode::Up | KeyCode::Char('k') => Some(Action::Diff(DiffAction::CursorUp)),
-            KeyCode::Enter | KeyCode::Char(' ') => Some(Action::Diff(DiffAction::ToggleAtCursor)),
+            KeyCode::Enter => Some(Action::Diff(DiffAction::EnterPane)),
+            KeyCode::Char(' ') => Some(Action::Diff(DiffAction::ToggleAtCursor)),
             KeyCode::Left | KeyCode::Char('h') => Some(Action::Diff(DiffAction::CollapseAtCursor)),
             KeyCode::Right | KeyCode::Char('l') => Some(Action::Diff(DiffAction::ExpandAtCursor)),
+            _ => None,
+        },
+        // Pane focus: scroll the diff; Enter/h/Left hand focus back to the tree.
+        DetailTab::Diff => match key {
+            KeyCode::Down | KeyCode::Char('j') => Some(Action::Diff(DiffAction::PaneScrollDown)),
+            KeyCode::Up | KeyCode::Char('k') => Some(Action::Diff(DiffAction::PaneScrollUp)),
             KeyCode::PageDown | KeyCode::Char('J') => {
                 Some(Action::Diff(DiffAction::PaneScrollDown))
             }
             KeyCode::PageUp | KeyCode::Char('K') => Some(Action::Diff(DiffAction::PaneScrollUp)),
+            KeyCode::Enter | KeyCode::Left | KeyCode::Char('h') => {
+                Some(Action::Diff(DiffAction::FocusTree))
+            }
             _ => None,
         },
         DetailTab::Overview => match key {

@@ -2,7 +2,7 @@ use crate::{
     app::{
         App,
         action::DiffAction,
-        state::{LoadState, Screen},
+        state::{DiffFocus, LoadState, Screen},
     },
     tui::screens::pr_detail::file_tree::{TreeRow, build_visible_rows},
 };
@@ -21,6 +21,27 @@ impl App {
             DiffAction::PaneScrollUp => {
                 self.state.ui.diff.pane_scroll = self.state.ui.diff.pane_scroll.saturating_sub(1);
             }
+            DiffAction::EnterPane => self.diff_enter_pane(),
+            DiffAction::FocusTree => self.state.ui.diff.focus = DiffFocus::Tree,
+        }
+    }
+
+    /// Enter from the tree: on a file, focus it and move the keyboard into the
+    /// pane so the user can scroll the diff. On a directory, fall back to the
+    /// expand/collapse toggle.
+    fn diff_enter_pane(&mut self) {
+        let rows = self.current_visible_rows();
+        match rows.get(self.state.ui.diff.cursor) {
+            Some(TreeRow::File { file_index, .. }) => {
+                let file_index = *file_index;
+                if file_index != self.state.ui.diff.focused_file {
+                    self.state.ui.diff.focused_file = file_index;
+                    self.state.ui.diff.pane_scroll = 0;
+                }
+                self.state.ui.diff.focus = DiffFocus::Pane;
+            }
+            Some(TreeRow::Dir { .. }) => self.diff_toggle_at_cursor(),
+            None => {}
         }
     }
 
