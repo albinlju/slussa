@@ -23,7 +23,6 @@ use crate::{
     domain::{
         comment::ReviewThread,
         pr::{PrStatus, PullRequest},
-        review::ReviewerState,
     },
     tui::{theme, widgets},
 };
@@ -112,7 +111,7 @@ pub(in crate::tui) fn render(
     let chunks = Layout::default()
         .direction(Direction::Vertical)
         .constraints([
-            Constraint::Length(3), // header (title + blank + meta)
+            Constraint::Length(3), // title + blank + branch meta
             Constraint::Length(1), // spacer between header and tabs
             Constraint::Min(0),    // tabs + divider + content
         ])
@@ -279,50 +278,11 @@ fn render_header(frame: &mut Frame, pr: &PullRequest, area: Rect) {
         Span::raw(" → "),
         Span::styled(pr.target_branch.clone(), Style::default().fg(theme.accent)),
     ];
-    let right_spans = build_reviewer_spans(pr);
-
-    let content_width = (area.width as usize).saturating_sub(4);
-    let left_visible: usize = left_spans.iter().map(|s| s.width()).sum();
-    let right_visible: usize = right_spans.iter().map(|s| s.width()).sum();
-    let gap = content_width
-        .saturating_sub(left_visible + right_visible)
-        .max(1);
-
-    let mut meta_spans = left_spans;
-    if !right_spans.is_empty() {
-        meta_spans.push(Span::raw(" ".repeat(gap)));
-        meta_spans.extend(right_spans);
-    }
-    let meta_line = Line::from(meta_spans);
+    let meta_line = Line::from(left_spans);
 
     let paragraph = Paragraph::new(vec![title_line, Line::default(), meta_line])
         .block(Block::default().padding(Padding::horizontal(2)));
     frame.render_widget(paragraph, area);
-}
-
-fn build_reviewer_spans(pr: &PullRequest) -> Vec<Span<'static>> {
-    let theme = theme::current();
-    if pr.reviewers.is_empty() {
-        return Vec::new();
-    }
-    let mut spans: Vec<Span<'static>> = Vec::new();
-    for (i, reviewer) in pr.reviewers.iter().enumerate() {
-        if i > 0 {
-            spans.push(Span::raw("  "));
-        }
-        let (icon, color) = match reviewer.state {
-            ReviewerState::Approved => ("\u{f058}", theme.success), //  check-circle
-            ReviewerState::ChangesRequested => ("\u{f057}", theme.error), //  times-circle
-            ReviewerState::Commented => ("\u{f075}", theme.info),   //  comment
-        };
-        spans.push(Span::styled(
-            format!("@{}", reviewer.author.username),
-            Style::default().fg(theme.info),
-        ));
-        spans.push(Span::raw(" "));
-        spans.push(Span::styled(icon, Style::default().fg(color)));
-    }
-    spans
 }
 
 fn render_content(
@@ -347,7 +307,7 @@ fn render_content(
     };
     match tab {
         DetailTab::Description => description::render(frame, pr, ui, inset),
-        DetailTab::Overview => overview::render(frame, pr_data, ui, inset),
+        DetailTab::Overview => overview::render(frame, pr, pr_data, ui, inset),
         DetailTab::Diff => diff::render(frame, pr_data, &mut ui.diff, inset),
         DetailTab::Commits => commits::render(frame, pr_data, inset),
         DetailTab::Builds => checks::render(frame, pr_data, inset),

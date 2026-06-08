@@ -1,15 +1,20 @@
 use chrono::{DateTime, Utc};
 use ratatui::{
     Frame,
-    layout::Rect,
+    layout::{Constraint, Direction, Layout, Rect},
     style::{Color, Modifier, Style},
     text::{Line, Span},
-    widgets::Paragraph,
+    widgets::{Block, Borders, Padding, Paragraph, Wrap},
 };
 
 use crate::{
     app::state::{LoadState, PrData, UiMemory},
-    domain::comment::{Comment, ReviewThread},
+    domain::{
+        ci::BuildState,
+        comment::{Comment, ReviewThread},
+        pr::PullRequest,
+        review::ReviewerState,
+    },
     tui::{
         theme::{self, Theme},
         widgets,
@@ -20,7 +25,183 @@ use crate::{
 /// space before content).
 const TIMELINE_COL: u16 = 2;
 
-pub fn render(frame: &mut Frame, pr_data: Option<&PrData>, ui: &mut UiMemory, area: Rect) {
+const SIDEBAR_WIDTH: u16 = 30;
+
+pub fn render(
+    frame: &mut Frame,
+    pr: &PullRequest,
+    pr_data: Option<&PrData>,
+    ui: &mut UiMemory,
+    area: Rect,
+) {
+    // Wide enough → split off a right-hand metadata sidebar; otherwise the
+    // conversation timeline takes the full width.
+    let (timeline_area, sidebar_area) = if area.width >= 64 {
+        let chunks = Layout::default()
+            .direction(Direction::Horizontal)
+            .constraints([Constraint::Min(0), Constraint::Length(SIDEBAR_WIDTH)])
+            .split(area);
+        (chunks[0], Some(chunks[1]))
+    } else {
+        (area, None)
+    };
+
+    if let Some(sidebar) = sidebar_area {
+        render_sidebar(frame, pr, pr_data, sidebar);
+    }
+    render_timeline(frame, pr_data, ui, timeline_area);
+}
+
+fn section_heading(lines: &mut Vec<Line<'static>>, title: &str) {
+    let theme = theme::current();
+    lines.push(Line::from(Span::styled(
+        title.to_string(),
+        Style::default().fg(theme.muted).add_modifier(Modifier::BOLD),
+    )));
+}
+
+fn dim(text: &str) -> Line<'static> {
+    Line::from(Span::styled(
+        text.to_string(),
+        Style::default().fg(theme::current().muted),
+    ))
+}
+
+/// `3/5 passing` on the first line, the Builds tab's colored progress bar on
+/// the second. Spinner while loading, dash when there are none.
+fn builds_summary(pr_data: Option<&PrData>) -> Vec<Line<'static>> {
+    let theme = theme::current();
+    match pr_data.map(|d| &d.builds) {
+        Some(LoadState::Loaded(builds)) if !builds.is_empty() => {
+            let total = builds.len();
+            let passing = builds
+                .iter()
+                .filter(|b| b.state == BuildState::Successful)
+                .count();
+            let any_running = builds.iter().any(|b| b.state == BuildState::InProgress);
+            let any_failed = builds
+                .iter()
+                .any(|b| matches!(b.state, BuildState::Failed | BuildState::Cancelled));
+            let accent = if any_running {
+                theme.warning
+            } else if any_failed {
+                theme.error
+            } else if passing == total {
+                theme.success
+            } else {
+                theme.muted
+            };
+            vec![
+                Line::from(Span::styled(
+                    format!("{passing}/{total} passing"),
+                    Style::default().fg(accent).add_modifier(Modifier::BOLD),
+                )),
+                Line::from(super::checks::progress_bar(builds)),
+            ]
+        }
+        Some(LoadState::Loaded(_)) => vec![dim("no builds")],
+        Some(LoadState::Failed(_)) => vec![dim("unavailable")],
+        _ => vec![Line::from(Span::styled(
+            format!("{} loading…", widgets::spinner_frame()),
+            Style::default().fg(theme.warning),
+        ))],
+    }
+}
+
+fn render_sidebar(frame: &mut Frame, pr: &PullRequest, pr_data: Option<&PrData>, area: Rect) {
+    let theme = theme::current();
+    let block = Block::default()
+        .borders(Borders::LEFT)
+        .border_style(Style::default().fg(theme.divider))
+        .padding(Padding::horizontal(1));
+    let inner = block.inner(area);
+    frame.render_widget(block, area);
+
+    let now = Utc::now();
+    let mut lines: Vec<Line<'static>> = Vec::new();
+
+    section_heading(&mut lines, "Reviewers");
+    if pr.reviewers.is_empty() {
+        lines.push(dim("—"));
+    } else {
+        for r in &pr.reviewers {
+            // Status to the LEFT of the name: approved / denied / not responded.
+            let (icon, color) = match r.state {
+                ReviewerState::Approved => ("\u{f058}", theme.success), //  check-circle
+                ReviewerState::ChangesRequested => ("\u{f057}", theme.error), //  times-circle
+                // No approve/reject decision yet.
+                ReviewerState::Commented => ("\u{f10c}", theme.muted), //  circle-o
+            };
+            lines.push(Line::from(vec![
+                Span::styled(icon, Style::default().fg(color)),
+                Span::raw(" "),
+                Span::styled(
+                    format!("@{}", r.author.username),
+                    Style::default().fg(theme.info),
+                ),
+            ]));
+        }
+    }
+    lines.push(Line::default());
+
+    section_heading(&mut lines, "Builds");
+    lines.extend(builds_summary(pr_data));
+    lines.push(Line::default());
+
+    // Labels only render when the provider supplies them (GitHub); Bitbucket
+    // DC has none, so the section is hidden entirely.
+    if !pr.labels.is_empty() {
+        section_heading(&mut lines, "Labels");
+        for label in &pr.labels {
+            lines.push(Line::from(Span::styled(
+                label.clone(),
+                Style::default().fg(theme.accent),
+            )));
+        }
+        lines.push(Line::default());
+    }
+
+    section_heading(&mut lines, "Details");
+    let detail = |key: &str, value: Vec<Span<'static>>| -> Line<'static> {
+        let mut spans = vec![Span::styled(
+            format!("{key:<8}"),
+            Style::default().fg(theme.muted),
+        )];
+        spans.extend(value);
+        Line::from(spans)
+    };
+    let fg = Style::default().fg(theme.fg);
+    lines.push(detail(
+        "opened",
+        vec![Span::styled(widgets::relative_age(pr.created, now), fg)],
+    ));
+    lines.push(detail(
+        "updated",
+        vec![Span::styled(widgets::relative_age(pr.updated, now), fg)],
+    ));
+    lines.push(detail(
+        "diff",
+        vec![
+            Span::styled(
+                format!("+{}", pr.additions),
+                Style::default().fg(theme.diff_added),
+            ),
+            Span::raw(" "),
+            Span::styled(
+                format!("-{}", pr.deletions),
+                Style::default().fg(theme.diff_removed),
+            ),
+        ],
+    ));
+    lines.push(detail(
+        "files",
+        vec![Span::styled(pr.changed_files.to_string(), fg)],
+    ));
+
+    frame.render_widget(Paragraph::new(lines).wrap(Wrap { trim: false }), inner);
+}
+
+fn render_timeline(frame: &mut Frame, pr_data: Option<&PrData>, ui: &mut UiMemory, area: Rect) {
     let theme = theme::current();
     let comments_state = pr_data.map(|d| &d.comments);
     let threads_state = pr_data.map(|d| &d.review_threads);

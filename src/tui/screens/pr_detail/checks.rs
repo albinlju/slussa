@@ -97,8 +97,9 @@ fn summary_line(builds: &[Build]) -> Line<'static> {
     Line::from(spans)
 }
 
-/// One filled block per build, colored by its state.
-fn progress_bar(builds: &[Build]) -> Vec<Span<'static>> {
+/// One filled block per build, colored by its state. Shared with the Overview
+/// sidebar's Builds section.
+pub(super) fn progress_bar(builds: &[Build]) -> Vec<Span<'static>> {
     builds
         .iter()
         .map(|b| Span::styled("\u{25b0}", Style::default().fg(state_color(b.state))))

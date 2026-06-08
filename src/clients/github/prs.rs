@@ -22,6 +22,12 @@ struct GhAuthor {
 struct GhCommentSummary {}
 
 #[derive(Debug, Deserialize)]
+struct GhLabel {
+    #[serde(default)]
+    name: String,
+}
+
+#[derive(Debug, Deserialize)]
 #[serde(rename_all = "camelCase")]
 struct GhReviewSummary {
     #[serde(default)]
@@ -71,6 +77,8 @@ struct GhPr {
     latest_reviews: Vec<GhReviewSummary>,
     #[serde(default)]
     status_check_rollup: Vec<GhCheck>,
+    #[serde(default)]
+    labels: Vec<GhLabel>,
 }
 
 pub fn fetch_prs() -> Result<Vec<PullRequest>, FetchError> {
@@ -80,7 +88,7 @@ pub fn fetch_prs() -> Result<Vec<PullRequest>, FetchError> {
         "--json",
         "title,number,author,state,isDraft,headRefName,baseRefName,body,\
          createdAt,updatedAt,additions,deletions,changedFiles,comments,\
-         latestReviews,statusCheckRollup",
+         latestReviews,statusCheckRollup,labels",
     ])?;
     Ok(gh_prs.into_iter().map(map_pr).collect())
 }
@@ -123,6 +131,7 @@ fn map_pr(gh: GhPr) -> PullRequest {
             }
         },
         reviewers,
+        labels: gh.labels.into_iter().map(|l| l.name).collect(),
         build_status: None,
         comment_count,
         source_branch: gh.head_ref_name,

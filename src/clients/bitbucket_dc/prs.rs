@@ -114,6 +114,8 @@ fn map_pr(bb: BbPr) -> PullRequest {
         },
         status,
         reviewers: bb.reviewers.into_iter().map(map_reviewer).collect(),
+        // Bitbucket DC has no first-class label concept on PRs.
+        labels: Vec::new(),
         build_status: None,
         comment_count: bb.properties.comment_count,
         source_branch: bb.from_ref.display_id,
