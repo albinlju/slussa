@@ -31,6 +31,7 @@ fn main() -> ExitCode {
 
     match args.get(1).map(String::as_str) {
         Some("auth") => return run_auth(&args[2..]),
+        Some("keyring-test") => return run_keyring_test(),
         Some("--help" | "-h") => {
             print_help();
             return ExitCode::SUCCESS;
@@ -88,6 +89,66 @@ fn print_help() {
     );
 }
 
+
+/// Round-trips a throwaway entry through the OS keyring to confirm the
+/// platform backend is wired in. Useful for verifying the install before
+/// trusting it with a real PAT.
+fn run_keyring_test() -> ExitCode {
+    use keyring::Entry;
+
+    const SERVICE: &str = "tuipr";
+    const ACCOUNT: &str = "tuipr-keyring-test.localhost";
+    const SECRET: &str = "test-token-12345";
+
+    println!("Keyring test (service='{SERVICE}', account='{ACCOUNT}')");
+
+    let entry = match Entry::new(SERVICE, ACCOUNT) {
+        Ok(e) => e,
+        Err(err) => {
+            eprintln!("✗ Entry::new failed: {err}");
+            return ExitCode::from(1);
+        }
+    };
+
+    print!("  set_password... ");
+    if let Err(err) = entry.set_password(SECRET) {
+        eprintln!("✗ {err}");
+        return ExitCode::from(1);
+    }
+    println!("ok");
+
+    print!("  get_password... ");
+    let got = match entry.get_password() {
+        Ok(s) => {
+            println!("ok");
+            s
+        }
+        Err(err) => {
+            eprintln!("✗ {err}");
+            return ExitCode::from(1);
+        }
+    };
+
+    if got != SECRET {
+        eprintln!("✗ Round-trip mismatch: expected {SECRET:?}, got {got:?}");
+        return ExitCode::from(1);
+    }
+    println!("  round-trip values match");
+
+    print!("  delete_credential (cleanup)... ");
+    if let Err(err) = entry.delete_credential() {
+        println!("warn: cleanup failed: {err}");
+    } else {
+        println!("ok");
+    }
+
+    println!("\n✓ Keyring backend is working.");
+    println!(
+        "  Verify in Keychain Access (macOS) or with:\n  \
+         security find-generic-password -s {SERVICE} -a {ACCOUNT}"
+    );
+    ExitCode::SUCCESS
+}
 
 fn run_auth(args: &[String]) -> ExitCode {
     match args.first().map(String::as_str) {
