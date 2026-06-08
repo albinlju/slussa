@@ -1,25 +1,3 @@
-//! Bitbucket Data Center's `/diff` endpoint returns a *structured* JSON diff
-//! by default (not a raw unified-diff text). With `withComments=true` that
-//! same payload also carries every inline review comment, attached to the
-//! exact line it anchors to. We fetch it once and project it into both a
-//! [`Diff`] (for the Diff tab) and a list of [`ReviewThread`]s (the comments
-//! on the diff), so a single request feeds both fetchers.
-//!
-//! Shape (trimmed to what we read):
-//! ```json
-//! { "diffs": [ {
-//!     "source":      { "toString": "old/path" },   // null for added files
-//!     "destination": { "toString": "new/path" },   // null for deleted files
-//!     "hunks": [ {
-//!       "sourceLine": 10, "destinationLine": 10,
-//!       "segments": [ {
-//!         "type": "CONTEXT" | "ADDED" | "REMOVED",
-//!         "lines": [ {
-//!           "source": 10, "destination": 10, "line": "text",
-//!           "comments": [ { comment } ]            // only with withComments
-//!         } ] } ] } ] } ] }
-//! ```
-
 use chrono::{DateTime, TimeZone, Utc};
 use serde::Deserialize;
 
@@ -107,7 +85,6 @@ struct BbUser {
     display_name: Option<String>,
 }
 
-/// One fetch, two views: the parsed [`Diff`] and the inline [`ReviewThread`]s.
 pub(super) struct StructuredDiff {
     pub diff: Diff,
     pub threads: Vec<ReviewThread>,
@@ -312,6 +289,9 @@ mod tests {
         assert!(added.resolved);
         assert_eq!(added.comments.len(), 2);
         assert_eq!(added.comments[1].id, 3);
-        assert_eq!(added.comments[0].author.display_name.as_deref(), Some("Bob B"));
+        assert_eq!(
+            added.comments[0].author.display_name.as_deref(),
+            Some("Bob B")
+        );
     }
 }

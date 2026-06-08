@@ -1,8 +1,3 @@
-//! GitHub timeline events for the Overview tab. `gh pr view --json` gives us
-//! the review decisions plus the open/merge/close lifecycle in one call; we
-//! synthesise [`TimelineEvent`]s from them. (Draft → ready-for-review isn't
-//! exposed without the heavier timeline API, so it's omitted for now.)
-
 use chrono::{DateTime, Utc};
 use serde::Deserialize;
 

@@ -14,10 +14,6 @@ use crate::domain::{
     pr::PullRequest,
 };
 
-/// Provider dispatch — one variant per supported backend. App holds a
-/// `Backend` constructed at startup from preflight; every fetch hops through
-/// here so future Bitbucket arms slot in as new match arms without touching
-/// caller sites.
 #[derive(Clone, Debug)]
 pub enum Backend {
     /// GitHub via the `gh` CLI. No client state — gh handles auth/session.

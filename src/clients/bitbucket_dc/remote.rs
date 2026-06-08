@@ -1,22 +1,9 @@
-//! Parse `git remote get-url origin` output for Bitbucket Data Center repos.
-//!
-//! Supported forms:
-//! - SSH (port-form):  `ssh://git@bitbucket.kunden.se:7999/PROJ/repo.git`
-//! - SSH (host-form):  `git@bitbucket.kunden.se:PROJ/repo.git`
-//! - HTTPS:            `https://bitbucket.kunden.se/scm/PROJ/repo.git`
-//!
-//! Note: the `scm/` segment in HTTPS URLs is a Stash/Data Center oddity —
-//! the REST API base is the host root, *not* under `/scm/`.
-
 use super::RepoCoords;
 
 pub fn parse(remote: &str, host: &str) -> Option<RepoCoords> {
     let path = extract_path(remote)?;
     let parts: Vec<&str> = path.split('/').filter(|p| !p.is_empty()).collect();
 
-    // Layouts:
-    //   ssh:    ["PROJ", "repo.git"]
-    //   https:  ["scm", "PROJ", "repo.git"]
     let (project, repo) = match parts.as_slice() {
         [proj, repo] => (*proj, *repo),
         ["scm", proj, repo] => (*proj, *repo),

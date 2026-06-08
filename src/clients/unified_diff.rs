@@ -1,7 +1,3 @@
-//! Plain unified-diff parser — `git diff` / `gh pr diff` output and the body
-//! Bitbucket Data Center returns at `/pull-requests/{id}/diff` are the same
-//! format, so one parser serves both backends.
-
 use crate::domain::diff::{Diff, DiffLine, FileDiff, Hunk};
 
 pub fn parse(text: &str) -> Diff {

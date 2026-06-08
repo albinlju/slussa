@@ -1,15 +1,3 @@
-//! Inline review threads (comments on the diff). Two sources, merged:
-//!
-//! 1. The structured `/diff?withComments=true` payload ([`super::structured`])
-//!    — carries diff context, but only for comments whose line falls inside the
-//!    returned diff window.
-//! 2. The `/activities` feed — the authoritative list of every anchored inline
-//!    comment, including those the diff window left out. These have no diff
-//!    snippet but always show up.
-//!
-//! We take the structured threads first, then fill in any anchored comment the
-//! diff window missed, deduping on the root comment id.
-
 use std::collections::HashSet;
 
 use chrono::{DateTime, TimeZone, Utc};
@@ -23,10 +11,7 @@ use crate::domain::{
     user::User,
 };
 
-pub fn fetch_review_threads(
-    config: &Config,
-    pr_id: u64,
-) -> Result<Vec<ReviewThread>, FetchError> {
+pub fn fetch_review_threads(config: &Config, pr_id: u64) -> Result<Vec<ReviewThread>, FetchError> {
     let mut threads = structured::fetch(config, pr_id)?.threads;
 
     let mut seen: HashSet<u64> = threads
@@ -95,10 +80,7 @@ struct BbUser {
 
 /// Parse the anchored (inline) comments out of the activities feed into review
 /// threads. No diff snippet — just the file/line anchor and the comment text.
-fn anchored_activity_threads(
-    config: &Config,
-    pr_id: u64,
-) -> Result<Vec<ReviewThread>, FetchError> {
+fn anchored_activity_threads(config: &Config, pr_id: u64) -> Result<Vec<ReviewThread>, FetchError> {
     let path = format!(
         "/rest/api/1.0/projects/{}/repos/{}/pull-requests/{pr_id}/activities?limit=100",
         config.repo.project_key, config.repo.repo_slug
