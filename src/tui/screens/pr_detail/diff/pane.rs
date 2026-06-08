@@ -27,6 +27,7 @@ use crate::{
 const DIFF_GUTTER: &str = "  ";
 const DIFF_GUTTER_COLS: u16 = 2;
 
+#[allow(clippy::too_many_arguments)]
 pub(super) fn render(
     frame: &mut Frame,
     diff: &Diff,

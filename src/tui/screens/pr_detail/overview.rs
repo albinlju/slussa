@@ -204,54 +204,23 @@ fn render_sidebar(frame: &mut Frame, pr: &PullRequest, pr_data: Option<&PrData>,
 
 fn render_timeline(frame: &mut Frame, pr_data: Option<&PrData>, ui: &mut UiMemory, area: Rect) {
     let theme = theme::current();
-    let comments_state = pr_data.map(|d| &d.comments);
-    let threads_state = pr_data.map(|d| &d.review_threads);
-
-    // Surface any failure right away — no point spinning when the fetch
-    // already errored out. Comments and threads each can fail independently
-    // since they're separate gh calls, so show whichever did.
-    if let Some(LoadState::Failed(msg)) = comments_state {
-        let p = Paragraph::new(format!("Couldn't load comments: {msg}"))
-            .style(Style::default().fg(theme.error));
-        frame.render_widget(p, area);
-        return;
-    }
-    if let Some(LoadState::Failed(msg)) = threads_state {
-        let p = Paragraph::new(format!("Couldn't load review threads: {msg}"))
-            .style(Style::default().fg(theme.error));
-        frame.render_widget(p, area);
-        return;
-    }
-
-    let comments_ready = matches!(comments_state, Some(LoadState::Loaded(_)));
-    let threads_ready = matches!(threads_state, Some(LoadState::Loaded(_)));
-
-    // Wait until both fetches resolve before deciding "no comments". Otherwise
-    // we flash "(no comments)" the moment one source finishes empty before the
-    // other lands with content.
-    if !comments_ready || !threads_ready {
-        let p = Paragraph::new(format!("{}  Loading...", widgets::spinner_frame()))
-            .style(Style::default().fg(theme.warning));
-        frame.render_widget(p, area);
-        return;
-    }
-
-    let comments: &[Comment] = match comments_state {
-        Some(LoadState::Loaded(c)) => c,
-        _ => &[],
-    };
-    let threads: &[ReviewThread] = match threads_state {
-        Some(LoadState::Loaded(t)) => t,
-        _ => &[],
-    };
-    // Lifecycle events are supplementary — render whatever's loaded, don't gate
-    // the whole timeline on them.
-    let events: &[TimelineEvent] = match pr_data.map(|d| &d.events) {
-        Some(LoadState::Loaded(e)) => e,
-        _ => &[],
+    let bundle = match pr_data.map(|d| &d.activity) {
+        Some(LoadState::Loaded(b)) => b,
+        Some(LoadState::Failed(msg)) => {
+            let p = Paragraph::new(format!("Couldn't load activity: {msg}"))
+                .style(Style::default().fg(theme.error));
+            frame.render_widget(p, area);
+            return;
+        }
+        _ => {
+            let p = Paragraph::new(format!("{}  Loading...", widgets::spinner_frame()))
+                .style(Style::default().fg(theme.warning));
+            frame.render_widget(p, area);
+            return;
+        }
     };
 
-    if comments.is_empty() && threads.is_empty() && events.is_empty() {
+    if bundle.comments.is_empty() && bundle.threads.is_empty() && bundle.events.is_empty() {
         let p = Paragraph::new("(no activity)").style(Style::default().fg(theme.muted));
         frame.render_widget(p, area);
         return;
@@ -260,8 +229,12 @@ fn render_timeline(frame: &mut Frame, pr_data: Option<&PrData>, ui: &mut UiMemor
     // Reserve rightmost column for the scrollbar so wrapped markdown doesn't
     // get clipped or overlap the thumb.
     let content_width = area.width.saturating_sub(1);
-    let lines =
-        build_overview_lines(comments, threads, events, content_width.saturating_sub(TIMELINE_COL));
+    let lines = build_overview_lines(
+        &bundle.comments,
+        &bundle.threads,
+        &bundle.events,
+        content_width.saturating_sub(TIMELINE_COL),
+    );
 
     let total = lines.len();
     let visible = area.height as usize;
