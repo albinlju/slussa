@@ -38,8 +38,10 @@ impl fmt::Display for PreflightError {
 
 pub fn preflight() -> Result<(), PreflightError> {
     let host = detect_repo_host()?;
+    tracing::info!("detected git remote host: {host}");
     check_gh_installed()?;
     check_gh_auth(&host)?;
+    tracing::info!("gh auth ok for {host}");
     Ok(())
 }
 
