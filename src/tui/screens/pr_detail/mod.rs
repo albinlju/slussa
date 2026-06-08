@@ -360,7 +360,7 @@ fn render_content(
         DetailTab::Overview => overview::render(frame, pr_data, ui, inset),
         DetailTab::Diff => diff::render(frame, pr_data, &mut ui.diff, inset),
         DetailTab::Commits => commits::render(frame, pr_data, inset),
-        DetailTab::Builds => checks::render(frame, inset),
+        DetailTab::Builds => checks::render(frame, pr_data, inset),
     }
 }
 
@@ -370,11 +370,6 @@ fn render_help(frame: &mut Frame, area: Rect) {
         "1-5 / h/l: tab  j/k: scroll  esc: back  q: quit",
     );
     frame.render_widget(Paragraph::new(line), area);
-}
-
-pub(super) fn render_placeholder(frame: &mut Frame, text: &str, area: Rect) {
-    let paragraph = Paragraph::new(text).style(Style::default().fg(theme::current().muted));
-    frame.render_widget(paragraph, area);
 }
 
 pub(in crate::tui) fn key_to_action(state: &AppState, key: KeyCode) -> Option<Action> {

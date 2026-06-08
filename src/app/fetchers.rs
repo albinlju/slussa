@@ -68,4 +68,12 @@ impl App {
             move |r| Action::Loaded(LoadedAction::ReviewThreads(pr_id, r)),
         );
     }
+
+    pub(super) fn spawn_load_builds(&self, pr_id: u64) {
+        let backend = self.backend.clone();
+        self.spawn_fetch(
+            move || backend.fetch_builds(pr_id),
+            move |r| Action::Loaded(LoadedAction::Builds(pr_id, r)),
+        );
+    }
 }

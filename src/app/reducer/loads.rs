@@ -27,6 +27,11 @@ impl App {
                 let pr_data = self.state.cache.details.entry(pr_id).or_default();
                 pr_data.review_threads = LoadState::from_result(r);
             }
+            LoadedAction::Builds(pr_id, r) => {
+                log_outcome("builds", Some(pr_id), &r);
+                let pr_data = self.state.cache.details.entry(pr_id).or_default();
+                pr_data.builds = LoadState::from_result(r);
+            }
         }
     }
 }

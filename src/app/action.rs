@@ -1,5 +1,6 @@
 use crate::{
     domain::{
+        ci::Build,
         comment::{Comment, ReviewThread},
         commit::Commit,
         diff::Diff,
@@ -59,4 +60,5 @@ pub enum LoadedAction {
     Diff(u64, Result<Diff, String>),
     Comments(u64, Result<Vec<Comment>, String>),
     ReviewThreads(u64, Result<Vec<ReviewThread>, String>),
+    Builds(u64, Result<Vec<Build>, String>),
 }
