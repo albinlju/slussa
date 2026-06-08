@@ -1,7 +1,3 @@
-//! Lifecycle events (approved, merged, declined, …) from the same `/activities`
-//! feed that backs comments — here we keep the *non*-comment actions and map
-//! them to [`TimelineEvent`]s for the Overview timeline.
-
 use chrono::{DateTime, TimeZone, Utc};
 use serde::Deserialize;
 

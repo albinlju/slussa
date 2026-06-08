@@ -1,7 +1,3 @@
-//! Bitbucket Data Center exposes PR comments through the `/activities` feed —
-//! each activity is one event (commented, approved, merged, ...). We walk it
-//! and keep only the `COMMENT` activities for general (non-inline) comments.
-
 use chrono::{DateTime, TimeZone, Utc};
 use serde::Deserialize;
 

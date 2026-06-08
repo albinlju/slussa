@@ -1,12 +1,3 @@
-//! PAT storage via the system keyring (Keychain on macOS, Secret Service on
-//! Linux, Credential Manager on Windows). The keyring key is `tuipr` and the
-//! account is the host string, so multiple Data Center instances can coexist.
-//!
-//! `tuipr auth login` is wired through [`run_login`]: it reads the host from
-//! `git remote get-url origin`, walks the user through generating a PAT,
-//! validates the token via `/rest/api/1.0/application-properties`, and saves
-//! to the keyring on success.
-
 use std::io::Write;
 use std::process::Command;
 use std::time::Duration;
@@ -87,7 +78,10 @@ fn validate_pat(host: &str, pat: &str) -> Result<(), String> {
             status.as_u16()
         ));
     }
-    Err(format!("server returned http {} — {detail}", status.as_u16()))
+    Err(format!(
+        "server returned http {} — {detail}",
+        status.as_u16()
+    ))
 }
 
 /// Pull the first `errors[].message` out of a Bitbucket JSON error body, or

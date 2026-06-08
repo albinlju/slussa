@@ -26,9 +26,6 @@ impl App {
         }
     }
 
-    /// Enter from the tree: on a file, focus it and move the keyboard into the
-    /// pane so the user can scroll the diff. On a directory, fall back to the
-    /// expand/collapse toggle.
     fn diff_enter_pane(&mut self) {
         let rows = self.current_visible_rows();
         match rows.get(self.state.ui.diff.cursor) {

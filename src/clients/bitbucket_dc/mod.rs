@@ -1,9 +1,3 @@
-//! Bitbucket Data Center client (self-hosted, REST v1).
-//!
-//! The HTTP entrypoint and per-resource fetchers live in submodules so we can
-//! mirror `clients::github`'s shape. `RepoCoords` and `Config` are the values
-//! that the `Backend::BitbucketDc` enum arm carries.
-
 mod builds;
 mod comments;
 mod commits;
@@ -17,9 +11,9 @@ mod structured;
 
 pub use builds::fetch_builds;
 pub use comments::fetch_comments;
-pub use events::fetch_events;
 pub use commits::fetch_commits;
 pub use diff::fetch_diff;
+pub use events::fetch_events;
 pub use prs::fetch_prs;
 pub use review_threads::fetch_review_threads;
 

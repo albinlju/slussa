@@ -7,17 +7,29 @@ use crate::clients::{Backend, bitbucket_dc};
 #[derive(Debug)]
 pub enum PreflightError {
     NotAGitRepo,
-    UnsupportedHost { host: String },
+    UnsupportedHost {
+        host: String,
+    },
     GhMissing,
-    GhNotAuthenticated { host: String },
+    GhNotAuthenticated {
+        host: String,
+    },
     /// Couldn't figure out whether `host` is a Bitbucket Data Center instance
     /// — probe failed or returned an unexpected shape. Likely network or DNS.
-    UnknownHost { host: String, reason: String },
+    UnknownHost {
+        host: String,
+        reason: String,
+    },
     /// `host` is a Bitbucket Data Center but no PAT exists in the keyring yet.
-    DcNotAuthenticated { host: String },
+    DcNotAuthenticated {
+        host: String,
+    },
     /// Git remote URL has Bitbucket-shaped host but doesn't parse to a
     /// project + repo we can talk to.
-    DcUnparseableRemote { host: String, remote: String },
+    DcUnparseableRemote {
+        host: String,
+        remote: String,
+    },
 }
 
 impl fmt::Display for PreflightError {
@@ -99,9 +111,6 @@ pub fn preflight() -> Result<Backend, PreflightError> {
     }
 }
 
-/// Local marker — we route on this before constructing a real `Backend`
-/// because the `BitbucketDc` arm carries auth + repo info that we only have
-/// after probing and key-loading.
 enum Backend_ {
     GitHub,
     BitbucketDc,
@@ -112,13 +121,10 @@ fn classify_host(host: &str) -> Result<Backend_, PreflightError> {
         return Ok(Backend_::GitHub);
     }
     if host == "bitbucket.org" {
-        // Cloud detection is easy but the Cloud client isn't built yet —
-        // surface it explicitly rather than letting the DC probe fail.
         return Err(PreflightError::UnsupportedHost {
             host: host.to_string(),
         });
     }
-    // Probe for Data Center.
     match probe_bitbucket_dc(host) {
         Ok(true) => Ok(Backend_::BitbucketDc),
         Ok(false) => Err(PreflightError::UnsupportedHost {
