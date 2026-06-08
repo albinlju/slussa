@@ -1,5 +1,8 @@
 use std::fmt;
 use std::process::Command;
+use std::time::Duration;
+
+use crate::clients::{Backend, bitbucket_dc};
 
 #[derive(Debug)]
 pub enum PreflightError {
@@ -7,6 +10,14 @@ pub enum PreflightError {
     UnsupportedHost { host: String },
     GhMissing,
     GhNotAuthenticated { host: String },
+    /// Couldn't figure out whether `host` is a Bitbucket Data Center instance
+    /// — probe failed or returned an unexpected shape. Likely network or DNS.
+    UnknownHost { host: String, reason: String },
+    /// `host` is a Bitbucket Data Center but no PAT exists in the keyring yet.
+    DcNotAuthenticated { host: String },
+    /// Git remote URL has Bitbucket-shaped host but doesn't parse to a
+    /// project + repo we can talk to.
+    DcUnparseableRemote { host: String, remote: String },
 }
 
 impl fmt::Display for PreflightError {
@@ -18,8 +29,8 @@ impl fmt::Display for PreflightError {
             ),
             Self::UnsupportedHost { host } => write!(
                 f,
-                "only GitHub repos are supported for now — this repo's remote is on `{host}`.\n\
-                 Bitbucket support is on the roadmap — open an issue at \
+                "host `{host}` isn't a recognized GitHub or Bitbucket instance.\n\
+                 Bitbucket Cloud (bitbucket.org) support is on the roadmap — open an issue at \
                  https://github.com/albinljung/tuipr/issues if you'd like to help.",
             ),
             Self::GhMissing => write!(
@@ -32,20 +43,116 @@ impl fmt::Display for PreflightError {
                 "the GitHub CLI (`gh`) is installed but not authenticated for {host}.\n\
                  Run `gh auth login` then re-run tuipr.",
             ),
+            Self::UnknownHost { host, reason } => write!(
+                f,
+                "couldn't reach `{host}` to detect the backend: {reason}.\n\
+                 Check the host is reachable and re-run tuipr.",
+            ),
+            Self::DcNotAuthenticated { host } => write!(
+                f,
+                "not logged in to {host}.\n\
+                 Run: tuipr auth login",
+            ),
+            Self::DcUnparseableRemote { host, remote } => write!(
+                f,
+                "couldn't parse the `origin` remote `{remote}` into a Bitbucket project/repo \
+                 on `{host}`.\n\
+                 Expected shapes: ssh://git@host/PROJ/repo.git, git@host:PROJ/repo.git, \
+                 https://host/scm/PROJ/repo.git.",
+            ),
         }
     }
 }
 
-pub fn preflight() -> Result<(), PreflightError> {
-    let host = detect_repo_host()?;
+pub fn preflight() -> Result<Backend, PreflightError> {
+    let remote = read_origin_remote()?;
+    let host = parse_remote_host(&remote).ok_or(PreflightError::NotAGitRepo)?;
     tracing::info!("detected git remote host: {host}");
-    check_gh_installed()?;
-    check_gh_auth(&host)?;
-    tracing::info!("gh auth ok for {host}");
-    Ok(())
+
+    match classify_host(&host)? {
+        Backend_::GitHub => {
+            check_gh_installed()?;
+            check_gh_auth(&host)?;
+            tracing::info!("gh auth ok for {host}");
+            Ok(Backend::GitHub)
+        }
+        Backend_::BitbucketDc => {
+            let coords = bitbucket_dc::remote::parse(&remote, &host).ok_or_else(|| {
+                PreflightError::DcUnparseableRemote {
+                    host: host.clone(),
+                    remote: remote.clone(),
+                }
+            })?;
+            let pat = crate::app::auth::load_pat(&host)
+                .ok_or_else(|| PreflightError::DcNotAuthenticated { host: host.clone() })?;
+            tracing::info!(
+                "bitbucket dc preflight ok for {}/{}/{}",
+                host,
+                coords.project_key,
+                coords.repo_slug
+            );
+            Ok(Backend::BitbucketDc(bitbucket_dc::Config {
+                repo: coords,
+                pat,
+            }))
+        }
+    }
 }
 
-fn detect_repo_host() -> Result<String, PreflightError> {
+/// Local marker — we route on this before constructing a real `Backend`
+/// because the `BitbucketDc` arm carries auth + repo info that we only have
+/// after probing and key-loading.
+enum Backend_ {
+    GitHub,
+    BitbucketDc,
+}
+
+fn classify_host(host: &str) -> Result<Backend_, PreflightError> {
+    if host == "github.com" {
+        return Ok(Backend_::GitHub);
+    }
+    if host == "bitbucket.org" {
+        // Cloud detection is easy but the Cloud client isn't built yet —
+        // surface it explicitly rather than letting the DC probe fail.
+        return Err(PreflightError::UnsupportedHost {
+            host: host.to_string(),
+        });
+    }
+    // Probe for Data Center.
+    match probe_bitbucket_dc(host) {
+        Ok(true) => Ok(Backend_::BitbucketDc),
+        Ok(false) => Err(PreflightError::UnsupportedHost {
+            host: host.to_string(),
+        }),
+        Err(reason) => Err(PreflightError::UnknownHost {
+            host: host.to_string(),
+            reason,
+        }),
+    }
+}
+
+fn probe_bitbucket_dc(host: &str) -> Result<bool, String> {
+    let url = format!("https://{host}/rest/api/1.0/application-properties");
+    tracing::debug!("probing {url} for bitbucket dc");
+    let client = reqwest::blocking::Client::builder()
+        .timeout(Duration::from_secs(5))
+        .user_agent(concat!("tuipr/", env!("CARGO_PKG_VERSION")))
+        .build()
+        .map_err(|e| e.to_string())?;
+    let response = client.get(&url).send().map_err(|e| e.to_string())?;
+    if !response.status().is_success() {
+        return Ok(false);
+    }
+    let body: serde_json::Value = response.json().map_err(|e| e.to_string())?;
+    // DC's application-properties endpoint includes `displayName: "Bitbucket"`.
+    Ok(body
+        .get("displayName")
+        .and_then(|v| v.as_str())
+        .map(|s| s.to_lowercase().contains("bitbucket"))
+        .unwrap_or(false))
+}
+
+fn read_origin_remote() -> Result<String, PreflightError> {
     let output = Command::new("git")
         .args(["remote", "get-url", "origin"])
         .output()
@@ -53,15 +160,16 @@ fn detect_repo_host() -> Result<String, PreflightError> {
     if !output.status.success() {
         return Err(PreflightError::NotAGitRepo);
     }
-    let url = String::from_utf8_lossy(&output.stdout).trim().to_string();
-    let host = parse_remote_host(&url).ok_or(PreflightError::NotAGitRepo)?;
-    if host != "github.com" {
-        return Err(PreflightError::UnsupportedHost { host });
-    }
-    Ok(host)
+    Ok(String::from_utf8_lossy(&output.stdout).trim().to_string())
 }
 
 fn parse_remote_host(url: &str) -> Option<String> {
+    if let Some(rest) = url.strip_prefix("ssh://") {
+        let (authority, _) = rest.split_once('/')?;
+        let host_port = authority.rsplit('@').next().unwrap_or(authority);
+        let host = host_port.split(':').next().unwrap_or(host_port);
+        return Some(host.to_string());
+    }
     if let Some(rest) = url.strip_prefix("git@") {
         let (host, _) = rest.split_once(':')?;
         return Some(host.to_string());
@@ -120,6 +228,14 @@ mod tests {
         assert_eq!(
             parse_remote_host("https://github.com/albinljung/tuipr").as_deref(),
             Some("github.com")
+        );
+    }
+
+    #[test]
+    fn parses_ssh_url_with_port() {
+        assert_eq!(
+            parse_remote_host("ssh://git@bitbucket.kunden.se:7999/PLAT/payments.git").as_deref(),
+            Some("bitbucket.kunden.se")
         );
     }
 

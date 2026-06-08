@@ -15,10 +15,12 @@ use crate::{
         action::Action,
         state::{AppState, LoadState},
     },
+    clients::Backend,
     tui::{key_to_action, render},
 };
 
 pub mod action;
+pub mod auth;
 pub mod fetchers;
 pub mod preflight;
 pub mod reducer;
@@ -26,15 +28,17 @@ pub mod state;
 
 pub struct App {
     pub state: AppState,
+    pub(crate) backend: Backend,
     action_tx: UnboundedSender<Action>,
     action_rx: UnboundedReceiver<Action>,
 }
 
 impl App {
-    pub fn new() -> Self {
+    pub fn new(backend: Backend) -> Self {
         let (action_tx, action_rx) = mpsc::unbounded_channel();
         Self {
             state: AppState::default(),
+            backend,
             action_tx,
             action_rx,
         }

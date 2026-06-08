@@ -8,6 +8,7 @@ use std::process::{Command, ExitCode};
 
 use crate::app::App;
 use crate::app::preflight::{self, PreflightError};
+use crate::clients::Backend;
 
 #[tokio::main]
 async fn main() -> ExitCode {
@@ -15,14 +16,27 @@ async fn main() -> ExitCode {
         eprintln!("tuipr: couldn't initialise logging: {err}");
     }
 
-    if let Err(err) = ensure_ready() {
-        tracing::error!("preflight failed: {err}");
-        eprintln!("tuipr: {err}");
-        return ExitCode::from(1);
+    let args: Vec<String> = std::env::args().collect();
+    match args.get(1).map(String::as_str) {
+        Some("auth") => return run_auth(&args[2..]),
+        Some("--help" | "-h") => {
+            print_help();
+            return ExitCode::SUCCESS;
+        }
+        _ => {}
     }
+
+    let backend = match ensure_ready() {
+        Ok(b) => b,
+        Err(err) => {
+            tracing::error!("preflight failed: {err}");
+            eprintln!("tuipr: {err}");
+            return ExitCode::from(1);
+        }
+    };
     tracing::info!("preflight passed, starting tui");
 
-    let app = App::new();
+    let app = App::new(backend);
     let mut terminal = ratatui::init();
     let result = app.run(&mut terminal).await;
     ratatui::restore();
@@ -35,9 +49,35 @@ async fn main() -> ExitCode {
     }
 }
 
-fn ensure_ready() -> Result<(), PreflightError> {
+fn print_help() {
+    println!(
+        "tuipr — terminal UI for GitHub and Bitbucket Data Center pull requests\n\n\
+         Usage:\n  \
+         tuipr               Open the PR browser for the current repo.\n  \
+         tuipr auth login    Store a Bitbucket Data Center PAT for the current repo's host.\n  \
+         tuipr --help        Show this message.\n"
+    );
+}
+
+fn run_auth(args: &[String]) -> ExitCode {
+    match args.first().map(String::as_str) {
+        Some("login") | None => match app::auth::run_login() {
+            Ok(()) => ExitCode::SUCCESS,
+            Err(err) => {
+                eprintln!("tuipr: {err}");
+                ExitCode::from(1)
+            }
+        },
+        Some(other) => {
+            eprintln!("tuipr: unknown auth subcommand `{other}`. Try `tuipr auth login`.");
+            ExitCode::from(2)
+        }
+    }
+}
+
+fn ensure_ready() -> Result<Backend, PreflightError> {
     match preflight::preflight() {
-        Ok(_) => Ok(()),
+        Ok(backend) => Ok(backend),
         Err(PreflightError::GhNotAuthenticated { host }) => {
             eprintln!(
                 "tuipr: not logged in to {host}. Launching `gh auth login` — \
@@ -51,7 +91,7 @@ fn ensure_ready() -> Result<(), PreflightError> {
                 eprintln!("tuipr: `gh auth login` was cancelled or failed.\n");
                 return Err(PreflightError::GhNotAuthenticated { host });
             }
-            preflight::preflight().map(|_| ())
+            preflight::preflight()
         }
         Err(other) => Err(other),
     }

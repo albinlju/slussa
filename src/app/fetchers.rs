@@ -5,7 +5,7 @@ use crate::{
         App,
         action::{Action, LoadedAction},
     },
-    clients::github::{self, FetchError},
+    clients::FetchError,
 };
 
 impl App {
@@ -30,33 +30,41 @@ impl App {
     }
 
     pub(super) fn spawn_load_prs(&self) {
-        self.spawn_fetch(github::fetch_prs, |r| Action::Loaded(LoadedAction::Prs(r)));
+        let backend = self.backend.clone();
+        self.spawn_fetch(
+            move || backend.fetch_prs(),
+            |r| Action::Loaded(LoadedAction::Prs(r)),
+        );
     }
 
     pub(super) fn spawn_load_commits(&self, pr_id: u64) {
+        let backend = self.backend.clone();
         self.spawn_fetch(
-            move || github::fetch_commits(pr_id),
+            move || backend.fetch_commits(pr_id),
             move |r| Action::Loaded(LoadedAction::Commits(pr_id, r)),
         );
     }
 
     pub(super) fn spawn_load_diff(&self, pr_id: u64) {
+        let backend = self.backend.clone();
         self.spawn_fetch(
-            move || github::fetch_diff(pr_id),
+            move || backend.fetch_diff(pr_id),
             move |r| Action::Loaded(LoadedAction::Diff(pr_id, r)),
         );
     }
 
     pub(super) fn spawn_load_comments(&self, pr_id: u64) {
+        let backend = self.backend.clone();
         self.spawn_fetch(
-            move || github::fetch_comments(pr_id),
+            move || backend.fetch_comments(pr_id),
             move |r| Action::Loaded(LoadedAction::Comments(pr_id, r)),
         );
     }
 
     pub(super) fn spawn_load_review_threads(&self, pr_id: u64) {
+        let backend = self.backend.clone();
         self.spawn_fetch(
-            move || github::fetch_review_threads(pr_id),
+            move || backend.fetch_review_threads(pr_id),
             move |r| Action::Loaded(LoadedAction::ReviewThreads(pr_id, r)),
         );
     }
