@@ -33,6 +33,7 @@ pub struct PullRequest {
     pub ci: CiStatus,
     pub status: PrStatus,
     pub reviewers: Vec<Reviewer>,
+    pub labels: Vec<String>,
     pub build_status: Option<BuildStatus>,
     pub comment_count: u32,
     pub source_branch: String,
