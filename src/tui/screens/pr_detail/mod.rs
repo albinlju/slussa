@@ -320,7 +320,7 @@ fn render_help(frame: &mut Frame, tab: DetailTab, diff_focus: DiffFocus, area: R
             "j/k: files  ^d/^u: page  enter: open  h/l: fold  esc: back"
         }
         (DetailTab::Diff, DiffFocus::Pane) => {
-            "j/k: scroll  ^d/^u: page  h/esc: tree  q: quit"
+            "j/k: line  ^d/^u: page  h/esc: tree  q: quit"
         }
         _ => "1-5 / h/l: tab  j/k: scroll  ^d/^u: page  esc: back",
     };
@@ -389,12 +389,12 @@ pub(in crate::tui) fn key_to_action(state: &AppState, key: KeyEvent) -> Option<A
         },
         // Pane focus: scroll the diff; Enter/h/Left hand focus back to the tree.
         DetailTab::Diff => match key.code {
-            KeyCode::Down | KeyCode::Char('j') => Some(Action::Diff(DiffAction::PaneScroll(1))),
-            KeyCode::Up | KeyCode::Char('k') => Some(Action::Diff(DiffAction::PaneScroll(-1))),
-            KeyCode::PageDown => Some(Action::Diff(DiffAction::PaneScroll(half_page(
+            KeyCode::Down | KeyCode::Char('j') => Some(Action::Diff(DiffAction::MovePaneCursor(1))),
+            KeyCode::Up | KeyCode::Char('k') => Some(Action::Diff(DiffAction::MovePaneCursor(-1))),
+            KeyCode::PageDown => Some(Action::Diff(DiffAction::MovePaneCursor(half_page(
                 state.ui.diff.pane_viewport,
             )))),
-            KeyCode::PageUp => Some(Action::Diff(DiffAction::PaneScroll(-half_page(
+            KeyCode::PageUp => Some(Action::Diff(DiffAction::MovePaneCursor(-half_page(
                 state.ui.diff.pane_viewport,
             )))),
             KeyCode::Enter | KeyCode::Left | KeyCode::Char('h') => {
@@ -460,7 +460,7 @@ fn half_page_scroll(
             state.ui.overview_viewport,
         )))),
         DetailTab::Diff if diff_focus == DiffFocus::Pane => {
-            Some(Action::Diff(DiffAction::PaneScroll(step(state.ui.diff.pane_viewport))))
+            Some(Action::Diff(DiffAction::MovePaneCursor(step(state.ui.diff.pane_viewport))))
         }
         // Tree focus: jump the cursor by a half page.
         DetailTab::Diff => Some(Action::Diff(DiffAction::MoveCursor(step(

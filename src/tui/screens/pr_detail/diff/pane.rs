@@ -33,6 +33,7 @@ pub(super) fn render(
     diff: &Diff,
     focused_file: usize,
     pane_scroll: &mut u16,
+    pane_cursor: usize,
     file_stats: &[(u32, u32)],
     threads: &[ReviewThread],
     focused: bool,
@@ -62,18 +63,47 @@ pub(super) fn render(
         ])
         .split(pane_inner);
 
-    render_pane_header(frame, &file.path, adds, dels, pane_chunks[0]);
-
     // Diff body fills the full `pane_inner` width so the row-background tint
     // on +/- lines flows to the box's left/right borders. Each line's own
     // padding handles the 2-col left/right gutter for the content itself.
     let body_area = pane_chunks[1];
-    let lines = file_to_lines(file, threads, body_area.width);
+    let (mut lines, meta) = file_to_lines(file, threads, body_area.width);
+
+    // The cursor is only live when the pane has the keyboard; otherwise the
+    // tree owns navigation and we leave the body unmarked.
+    let cursor = if focused { meta.get(pane_cursor) } else { None };
+
+    render_pane_header(
+        frame,
+        &file.path,
+        adds,
+        dels,
+        cursor.map(|m| (m.line, m.removed)),
+        pane_chunks[0],
+    );
+
+    if let Some(m) = cursor
+        && m.rendered_row < lines.len()
+    {
+        let row = m.rendered_row;
+        lines[row] = highlight_row(std::mem::take(&mut lines[row]));
+    }
 
     let total = lines.len();
     let visible = body_area.height as usize;
     let max_scroll = total.saturating_sub(visible) as u16;
-    let scroll = (*pane_scroll).min(max_scroll);
+
+    // Keep the cursor row in view; otherwise honour the stored offset.
+    let mut scroll = (*pane_scroll).min(max_scroll) as usize;
+    if let Some(m) = cursor {
+        let cy = m.rendered_row;
+        if cy < scroll {
+            scroll = cy;
+        } else if visible > 0 && cy >= scroll + visible {
+            scroll = cy + 1 - visible;
+        }
+    }
+    let scroll = (scroll as u16).min(max_scroll);
     *pane_scroll = scroll;
 
     let paragraph = Paragraph::new(lines).scroll((scroll, 0));
@@ -85,7 +115,14 @@ pub(super) fn render(
     }
 }
 
-fn render_pane_header(frame: &mut Frame, path: &str, adds: u32, dels: u32, area: Rect) {
+fn render_pane_header(
+    frame: &mut Frame,
+    path: &str,
+    adds: u32,
+    dels: u32,
+    cursor: Option<(usize, bool)>,
+    area: Rect,
+) {
     let theme = theme::current();
 
     let header_block = Block::default()
@@ -99,13 +136,22 @@ fn render_pane_header(frame: &mut Frame, path: &str, adds: u32, dels: u32, area:
     let stats_w = "+".len() + adds.to_string().len() + 1 + "-".len() + dels.to_string().len();
     let displayed_path = truncate_path_left(path, inner_w.saturating_sub(stats_w + 2));
 
-    let left = vec![
+    let mut left = vec![
         Span::raw("  "),
         Span::styled(
             displayed_path,
             Style::default().fg(theme.fg).add_modifier(Modifier::BOLD),
         ),
     ];
+    // Show where the cursor sits / where a comment would anchor.
+    if let Some((line, removed)) = cursor {
+        let label = if removed {
+            format!("  L{line} (old)")
+        } else {
+            format!("  L{line}")
+        };
+        left.push(Span::styled(label, Style::default().fg(theme.muted)));
+    }
     let right = vec![
         Span::styled(format!("+{adds}"), Style::default().fg(theme.diff_added)),
         Span::raw(" "),
@@ -160,9 +206,25 @@ fn styled_diff_line(diff_line: &DiffLine, width: u16) -> Line<'static> {
     }
 }
 
-fn file_to_lines(file: &FileDiff, threads: &[ReviewThread], width: u16) -> Vec<Line<'static>> {
+/// Where a logical diff line landed once rendered, plus the anchor a comment on
+/// it would use. Indexed by diff-line order (matching `pane_cursor`); the pane
+/// uses it to highlight/scroll to the cursor and (later) to post comments.
+struct DiffLineMeta {
+    /// Index into the returned `Vec<Line>`.
+    rendered_row: usize,
+    /// File line number — new side, or old side for removed lines.
+    line: usize,
+    removed: bool,
+}
+
+fn file_to_lines(
+    file: &FileDiff,
+    threads: &[ReviewThread],
+    width: u16,
+) -> (Vec<Line<'static>>, Vec<DiffLineMeta>) {
     let theme = theme::current();
     let mut lines: Vec<Line> = Vec::new();
+    let mut meta: Vec<DiffLineMeta> = Vec::new();
     // File path lives in the pane header above us — don't repeat it here.
 
     // Build two lookups: threads on added/context lines key off the new-file
@@ -196,7 +258,17 @@ fn file_to_lines(file: &FileDiff, threads: &[ReviewThread], width: u16) -> Vec<L
         let mut new_line_num = hunk.new_start;
         let mut old_line_num = hunk.old_start;
         for diff_line in &hunk.lines {
+            let rendered_row = lines.len();
             lines.push(styled_diff_line(diff_line, width));
+            let (line, removed) = match diff_line {
+                DiffLine::Removed(_) => (old_line_num, true),
+                _ => (new_line_num, false),
+            };
+            meta.push(DiffLineMeta {
+                rendered_row,
+                line,
+                removed,
+            });
 
             // Anchor threads to the line just rendered: removed lines match on
             // the old-file line number, added/context on the new-file number.
@@ -221,7 +293,22 @@ fn file_to_lines(file: &FileDiff, threads: &[ReviewThread], width: u16) -> Vec<L
         }
     }
 
-    lines
+    (lines, meta)
+}
+
+/// Re-tint a whole row with the cursor highlight, keeping each span's fg so the
+/// `+`/`-` colors still read through.
+fn highlight_row(line: Line<'static>) -> Line<'static> {
+    let bg = theme::current().highlight_bg;
+    Line::from(
+        line.spans
+            .into_iter()
+            .map(|s| {
+                let style = s.style.bg(bg);
+                Span::styled(s.content, style)
+            })
+            .collect::<Vec<_>>(),
+    )
 }
 
 /// Render one review thread into the diff body, each line prefixed by the

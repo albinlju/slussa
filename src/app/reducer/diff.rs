@@ -14,11 +14,19 @@ impl App {
             DiffAction::ToggleAtCursor => self.diff_toggle_at_cursor(),
             DiffAction::CollapseAtCursor => self.diff_collapse_at_cursor(),
             DiffAction::ExpandAtCursor => self.diff_expand_at_cursor(),
-            DiffAction::PaneScroll(delta) => {
-                self.state.ui.diff.pane_scroll = super::scroll(self.state.ui.diff.pane_scroll, delta);
-            }
+            DiffAction::MovePaneCursor(delta) => self.diff_move_pane_cursor(delta),
             DiffAction::EnterPane => self.diff_enter_pane(),
             DiffAction::FocusTree => self.state.ui.diff.focus = DiffFocus::Tree,
+        }
+    }
+
+    /// Switch which file the pane shows, resetting its scroll + line cursor.
+    /// No-op when already on that file.
+    fn focus_file(&mut self, file_index: usize) {
+        if file_index != self.state.ui.diff.focused_file {
+            self.state.ui.diff.focused_file = file_index;
+            self.state.ui.diff.pane_scroll = 0;
+            self.state.ui.diff.pane_cursor = 0;
         }
     }
 
@@ -26,11 +34,7 @@ impl App {
         let rows = self.current_visible_rows();
         match rows.get(self.state.ui.diff.cursor) {
             Some(TreeRow::File { file_index, .. }) => {
-                let file_index = *file_index;
-                if file_index != self.state.ui.diff.focused_file {
-                    self.state.ui.diff.focused_file = file_index;
-                    self.state.ui.diff.pane_scroll = 0;
-                }
+                self.focus_file(*file_index);
                 self.state.ui.diff.focus = DiffFocus::Pane;
             }
             Some(TreeRow::Dir { .. }) => self.diff_toggle_at_cursor(),
@@ -46,13 +50,38 @@ impl App {
         let last = (rows.len() - 1) as i64;
         let new_cursor = (self.state.ui.diff.cursor as i64 + delta as i64).clamp(0, last) as usize;
         self.state.ui.diff.cursor = new_cursor;
-        // Landing on a file row focuses it in the pane (and resets its scroll).
-        if let Some(TreeRow::File { file_index, .. }) = rows.get(new_cursor)
-            && *file_index != self.state.ui.diff.focused_file
-        {
-            self.state.ui.diff.focused_file = *file_index;
-            self.state.ui.diff.pane_scroll = 0;
+        // Landing on a file row focuses it in the pane.
+        if let Some(TreeRow::File { file_index, .. }) = rows.get(new_cursor) {
+            self.focus_file(*file_index);
         }
+    }
+
+    /// Move the pane's line cursor, clamped to the focused file's diff lines.
+    fn diff_move_pane_cursor(&mut self, delta: i16) {
+        let count = self.focused_file_line_count();
+        if count == 0 {
+            self.state.ui.diff.pane_cursor = 0;
+            return;
+        }
+        let last = (count - 1) as i64;
+        let next = (self.state.ui.diff.pane_cursor as i64 + delta as i64).clamp(0, last);
+        self.state.ui.diff.pane_cursor = next as usize;
+    }
+
+    fn focused_file_line_count(&self) -> usize {
+        let Screen::Detail { pr_id, .. } = self.state.screen else {
+            return 0;
+        };
+        self.state
+            .cache
+            .details
+            .get(&pr_id)
+            .and_then(|d| match &d.diff {
+                LoadState::Loaded(diff) => diff.files.get(self.state.ui.diff.focused_file),
+                _ => None,
+            })
+            .map(|file| file.hunks.iter().map(|h| h.lines.len()).sum())
+            .unwrap_or(0)
     }
 
     fn diff_toggle_at_cursor(&mut self) {
@@ -66,12 +95,7 @@ impl App {
                         self.state.ui.diff.collapsed.remove(path);
                     }
                 }
-                TreeRow::File { file_index, .. } => {
-                    if *file_index != self.state.ui.diff.focused_file {
-                        self.state.ui.diff.focused_file = *file_index;
-                        self.state.ui.diff.pane_scroll = 0;
-                    }
-                }
+                TreeRow::File { file_index, .. } => self.focus_file(*file_index),
             }
         }
     }

@@ -46,8 +46,9 @@ pub enum DiffAction {
     ToggleAtCursor,
     CollapseAtCursor,
     ExpandAtCursor,
-    /// Scroll the diff pane by a signed line delta (negative = up).
-    PaneScroll(i16),
+    /// Move the diff-pane line cursor by a signed delta (negative = up). The
+    /// view auto-scrolls to keep it visible.
+    MovePaneCursor(i16),
     /// Enter on a file row: focus that file and hand the keyboard to the pane.
     /// On a directory row, falls back to toggling expansion.
     EnterPane,
