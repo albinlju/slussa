@@ -66,6 +66,12 @@ pub fn render(
             // pass the slice down to both panel renderers.
             let file_stats: Vec<(u32, u32)> = diff.files.iter().map(count_file_stats).collect();
 
+            // Body heights = each column minus its border (2) and header band
+            // (2); see `pane::render` / `tree::render`. Stored for half-page
+            // scrolling and cursor jumps.
+            ui_diff.pane_viewport = chunks[2].height.saturating_sub(4);
+            ui_diff.tree_viewport = chunks[0].height.saturating_sub(4);
+
             let tree_focused = matches!(ui_diff.focus, DiffFocus::Tree);
             let rows = build_visible_rows(&diff.files, &ui_diff.collapsed);
             tree::render(

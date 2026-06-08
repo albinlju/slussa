@@ -8,7 +8,7 @@ pub mod overview;
 use chrono::{DateTime, Utc};
 use ratatui::{
     Frame,
-    crossterm::event::KeyCode,
+    crossterm::event::{KeyCode, KeyEvent, KeyModifiers},
     layout::{Constraint, Direction, Layout, Rect},
     style::{Modifier, Style},
     text::{Line, Span},
@@ -24,7 +24,7 @@ use crate::{
         comment::ReviewThread,
         pr::{PrStatus, PullRequest},
     },
-    tui::{theme, widgets},
+    tui::{screens::half_page, theme, widgets},
 };
 
 #[derive(Debug, Default, Clone, Copy, PartialEq, Eq)]
@@ -317,19 +317,19 @@ fn render_content(
 fn render_help(frame: &mut Frame, tab: DetailTab, diff_focus: DiffFocus, area: Rect) {
     let hint = match (tab, diff_focus) {
         (DetailTab::Diff, DiffFocus::Tree) => {
-            "j/k: files  enter: open diff  h/l: fold  tab: section  esc: back"
+            "j/k: files  ^d/^u: page  enter: open  h/l: fold  esc: back"
         }
         (DetailTab::Diff, DiffFocus::Pane) => {
-            "j/k: scroll  h/esc: tree  tab: section  q: quit"
+            "j/k: scroll  ^d/^u: page  h/esc: tree  q: quit"
         }
-        _ => "1-5 / h/l: tab  j/k: scroll  esc: back  q: quit",
+        _ => "1-5 / h/l: tab  j/k: scroll  ^d/^u: page  esc: back",
     };
     let line = widgets::footer(area.width, hint);
     frame.render_widget(Paragraph::new(line), area);
 }
 
-pub(in crate::tui) fn key_to_action(state: &AppState, key: KeyCode) -> Option<Action> {
-    if matches!(key, KeyCode::Char('q')) {
+pub(in crate::tui) fn key_to_action(state: &AppState, key: KeyEvent) -> Option<Action> {
+    if key.code == KeyCode::Char('q') {
         return Some(Action::Quit);
     }
 
@@ -339,16 +339,26 @@ pub(in crate::tui) fn key_to_action(state: &AppState, key: KeyCode) -> Option<Ac
     };
     let diff_focus = state.ui.diff.focus;
 
+    // Ctrl+D / Ctrl+U: half-page scroll in whichever view is scrollable right
+    // now (description, overview, or the focused diff pane).
+    if key.modifiers.contains(KeyModifiers::CONTROL) {
+        match key.code {
+            KeyCode::Char('d') => return half_page_scroll(state, tab, diff_focus, true),
+            KeyCode::Char('u') => return half_page_scroll(state, tab, diff_focus, false),
+            _ => {}
+        }
+    }
+
     // Esc steps back one level: from the diff pane to the tree, otherwise out
     // of the detail view entirely.
-    if matches!(key, KeyCode::Esc) {
+    if key.code == KeyCode::Esc {
         if tab == DetailTab::Diff && diff_focus == DiffFocus::Pane {
             return Some(Action::Diff(DiffAction::FocusTree));
         }
         return Some(Action::Detail(DetailAction::Back));
     }
 
-    match key {
+    match key.code {
         KeyCode::Tab => return Some(Action::Detail(DetailAction::NextTab)),
         KeyCode::BackTab => return Some(Action::Detail(DetailAction::PrevTab)),
         KeyCode::Char(c @ '1'..='5') => {
@@ -362,9 +372,15 @@ pub(in crate::tui) fn key_to_action(state: &AppState, key: KeyCode) -> Option<Ac
 
     match tab {
         // Tree focus: navigate files, Enter jumps into the pane.
-        DetailTab::Diff if diff_focus == DiffFocus::Tree => match key {
-            KeyCode::Down | KeyCode::Char('j') => Some(Action::Diff(DiffAction::CursorDown)),
-            KeyCode::Up | KeyCode::Char('k') => Some(Action::Diff(DiffAction::CursorUp)),
+        DetailTab::Diff if diff_focus == DiffFocus::Tree => match key.code {
+            KeyCode::Down | KeyCode::Char('j') => Some(Action::Diff(DiffAction::MoveCursor(1))),
+            KeyCode::Up | KeyCode::Char('k') => Some(Action::Diff(DiffAction::MoveCursor(-1))),
+            KeyCode::PageDown => Some(Action::Diff(DiffAction::MoveCursor(half_page(
+                state.ui.diff.tree_viewport,
+            )))),
+            KeyCode::PageUp => Some(Action::Diff(DiffAction::MoveCursor(-half_page(
+                state.ui.diff.tree_viewport,
+            )))),
             KeyCode::Enter => Some(Action::Diff(DiffAction::EnterPane)),
             KeyCode::Char(' ') => Some(Action::Diff(DiffAction::ToggleAtCursor)),
             KeyCode::Left | KeyCode::Char('h') => Some(Action::Diff(DiffAction::CollapseAtCursor)),
@@ -372,44 +388,84 @@ pub(in crate::tui) fn key_to_action(state: &AppState, key: KeyCode) -> Option<Ac
             _ => None,
         },
         // Pane focus: scroll the diff; Enter/h/Left hand focus back to the tree.
-        DetailTab::Diff => match key {
-            KeyCode::Down | KeyCode::Char('j') => Some(Action::Diff(DiffAction::PaneScrollDown)),
-            KeyCode::Up | KeyCode::Char('k') => Some(Action::Diff(DiffAction::PaneScrollUp)),
-            KeyCode::PageDown | KeyCode::Char('J') => {
-                Some(Action::Diff(DiffAction::PaneScrollDown))
-            }
-            KeyCode::PageUp | KeyCode::Char('K') => Some(Action::Diff(DiffAction::PaneScrollUp)),
+        DetailTab::Diff => match key.code {
+            KeyCode::Down | KeyCode::Char('j') => Some(Action::Diff(DiffAction::PaneScroll(1))),
+            KeyCode::Up | KeyCode::Char('k') => Some(Action::Diff(DiffAction::PaneScroll(-1))),
+            KeyCode::PageDown => Some(Action::Diff(DiffAction::PaneScroll(half_page(
+                state.ui.diff.pane_viewport,
+            )))),
+            KeyCode::PageUp => Some(Action::Diff(DiffAction::PaneScroll(-half_page(
+                state.ui.diff.pane_viewport,
+            )))),
             KeyCode::Enter | KeyCode::Left | KeyCode::Char('h') => {
                 Some(Action::Diff(DiffAction::FocusTree))
             }
             _ => None,
         },
-        DetailTab::Overview => match key {
+        DetailTab::Overview => match key.code {
+            KeyCode::Down | KeyCode::Char('j') => Some(Action::Detail(DetailAction::OverviewScroll(1))),
+            KeyCode::Up | KeyCode::Char('k') => Some(Action::Detail(DetailAction::OverviewScroll(-1))),
+            KeyCode::PageDown => Some(Action::Detail(DetailAction::OverviewScroll(half_page(
+                state.ui.overview_viewport,
+            )))),
+            KeyCode::PageUp => Some(Action::Detail(DetailAction::OverviewScroll(-half_page(
+                state.ui.overview_viewport,
+            )))),
+            KeyCode::Right | KeyCode::Char('l') => Some(Action::Detail(DetailAction::NextTab)),
+            KeyCode::Left | KeyCode::Char('h') => Some(Action::Detail(DetailAction::PrevTab)),
+            _ => None,
+        },
+        DetailTab::Description => match key.code {
             KeyCode::Down | KeyCode::Char('j') => {
-                Some(Action::Detail(DetailAction::OverviewScrollDown))
+                Some(Action::Detail(DetailAction::DescriptionScroll(1)))
             }
             KeyCode::Up | KeyCode::Char('k') => {
-                Some(Action::Detail(DetailAction::OverviewScrollUp))
+                Some(Action::Detail(DetailAction::DescriptionScroll(-1)))
             }
+            KeyCode::PageDown => Some(Action::Detail(DetailAction::DescriptionScroll(half_page(
+                state.ui.description_viewport,
+            )))),
+            KeyCode::PageUp => Some(Action::Detail(DetailAction::DescriptionScroll(-half_page(
+                state.ui.description_viewport,
+            )))),
             KeyCode::Right | KeyCode::Char('l') => Some(Action::Detail(DetailAction::NextTab)),
             KeyCode::Left | KeyCode::Char('h') => Some(Action::Detail(DetailAction::PrevTab)),
             _ => None,
         },
-        DetailTab::Description => match key {
-            KeyCode::Down | KeyCode::Char('j') => {
-                Some(Action::Detail(DetailAction::DescriptionScrollDown))
-            }
-            KeyCode::Up | KeyCode::Char('k') => {
-                Some(Action::Detail(DetailAction::DescriptionScrollUp))
-            }
+        _ => match key.code {
             KeyCode::Right | KeyCode::Char('l') => Some(Action::Detail(DetailAction::NextTab)),
             KeyCode::Left | KeyCode::Char('h') => Some(Action::Detail(DetailAction::PrevTab)),
             _ => None,
         },
-        _ => match key {
-            KeyCode::Right | KeyCode::Char('l') => Some(Action::Detail(DetailAction::NextTab)),
-            KeyCode::Left | KeyCode::Char('h') => Some(Action::Detail(DetailAction::PrevTab)),
-            _ => None,
-        },
+    }
+}
+
+/// The scroll action Ctrl+D/U should fire, picked from whichever view is
+/// currently scrollable. `None` on non-scrolling contexts (e.g. the file tree).
+fn half_page_scroll(
+    state: &AppState,
+    tab: DetailTab,
+    diff_focus: DiffFocus,
+    down: bool,
+) -> Option<Action> {
+    let step = |viewport| {
+        let h = half_page(viewport);
+        if down { h } else { -h }
+    };
+    match tab {
+        DetailTab::Description => Some(Action::Detail(DetailAction::DescriptionScroll(step(
+            state.ui.description_viewport,
+        )))),
+        DetailTab::Overview => Some(Action::Detail(DetailAction::OverviewScroll(step(
+            state.ui.overview_viewport,
+        )))),
+        DetailTab::Diff if diff_focus == DiffFocus::Pane => {
+            Some(Action::Diff(DiffAction::PaneScroll(step(state.ui.diff.pane_viewport))))
+        }
+        // Tree focus: jump the cursor by a half page.
+        DetailTab::Diff => Some(Action::Diff(DiffAction::MoveCursor(step(
+            state.ui.diff.tree_viewport,
+        )))),
+        _ => None,
     }
 }

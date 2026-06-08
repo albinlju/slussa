@@ -10,16 +10,12 @@ use crate::{
 impl App {
     pub(super) fn apply_diff(&mut self, action: DiffAction) {
         match action {
-            DiffAction::CursorDown => self.diff_cursor_down(),
-            DiffAction::CursorUp => self.diff_cursor_up(),
+            DiffAction::MoveCursor(delta) => self.diff_move_cursor(delta),
             DiffAction::ToggleAtCursor => self.diff_toggle_at_cursor(),
             DiffAction::CollapseAtCursor => self.diff_collapse_at_cursor(),
             DiffAction::ExpandAtCursor => self.diff_expand_at_cursor(),
-            DiffAction::PaneScrollDown => {
-                self.state.ui.diff.pane_scroll = self.state.ui.diff.pane_scroll.saturating_add(1);
-            }
-            DiffAction::PaneScrollUp => {
-                self.state.ui.diff.pane_scroll = self.state.ui.diff.pane_scroll.saturating_sub(1);
+            DiffAction::PaneScroll(delta) => {
+                self.state.ui.diff.pane_scroll = super::scroll(self.state.ui.diff.pane_scroll, delta);
             }
             DiffAction::EnterPane => self.diff_enter_pane(),
             DiffAction::FocusTree => self.state.ui.diff.focus = DiffFocus::Tree,
@@ -42,23 +38,15 @@ impl App {
         }
     }
 
-    fn diff_cursor_down(&mut self) {
+    fn diff_move_cursor(&mut self, delta: i16) {
         let rows = self.current_visible_rows();
-        let last = rows.len().saturating_sub(1);
-        let new_cursor = (self.state.ui.diff.cursor + 1).min(last);
-        self.state.ui.diff.cursor = new_cursor;
-        if let Some(TreeRow::File { file_index, .. }) = rows.get(new_cursor)
-            && *file_index != self.state.ui.diff.focused_file
-        {
-            self.state.ui.diff.focused_file = *file_index;
-            self.state.ui.diff.pane_scroll = 0;
+        if rows.is_empty() {
+            return;
         }
-    }
-
-    fn diff_cursor_up(&mut self) {
-        let new_cursor = self.state.ui.diff.cursor.saturating_sub(1);
+        let last = (rows.len() - 1) as i64;
+        let new_cursor = (self.state.ui.diff.cursor as i64 + delta as i64).clamp(0, last) as usize;
         self.state.ui.diff.cursor = new_cursor;
-        let rows = self.current_visible_rows();
+        // Landing on a file row focuses it in the pane (and resets its scroll).
         if let Some(TreeRow::File { file_index, .. }) = rows.get(new_cursor)
             && *file_index != self.state.ui.diff.focused_file
         {

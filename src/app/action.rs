@@ -15,8 +15,9 @@ pub enum Action {
 
 #[derive(Debug)]
 pub enum ListAction {
-    NextPr,
-    PrevPr,
+    /// Move the selection by a signed row delta (negative = up). Serves j/k
+    /// (±1) and Ctrl+D/U / PageDown/Up (±half page).
+    MoveSelection(i16),
     OpenPr(u64),
     OpenFilterPicker,
     CloseFilterPicker,
@@ -31,21 +32,22 @@ pub enum DetailAction {
     NextTab,
     PrevTab,
     SelectTab(DetailTab),
-    DescriptionScrollDown,
-    DescriptionScrollUp,
-    OverviewScrollDown,
-    OverviewScrollUp,
+    /// Scroll by a signed line delta (negative = up). Lets one variant serve
+    /// j/k (±1) and Ctrl+D/U (±half page).
+    DescriptionScroll(i16),
+    OverviewScroll(i16),
 }
 
 #[derive(Debug)]
 pub enum DiffAction {
-    CursorDown,
-    CursorUp,
+    /// Move the tree cursor by a signed row delta (negative = up). Serves j/k
+    /// (±1) and Ctrl+D/U / PageDown/Up (±half page).
+    MoveCursor(i16),
     ToggleAtCursor,
     CollapseAtCursor,
     ExpandAtCursor,
-    PaneScrollDown,
-    PaneScrollUp,
+    /// Scroll the diff pane by a signed line delta (negative = up).
+    PaneScroll(i16),
     /// Enter on a file row: focus that file and hand the keyboard to the pane.
     /// On a directory row, falls back to toggling expansion.
     EnterPane,

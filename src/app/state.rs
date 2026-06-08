@@ -17,12 +17,18 @@ pub struct AppState {
 #[derive(Debug, Default)]
 pub struct UiMemory {
     pub list_selected: usize,
+    /// Last-rendered PR-list height, for half-page selection jumps.
+    pub list_viewport: u16,
     pub list_filter: StatusFilter,
     pub filter_picker_open: bool,
     pub filter_picker_cursor: usize,
     pub diff: DiffViewState,
     pub description_scroll: u16,
     pub overview_scroll: u16,
+    /// Last-rendered content height of the description / overview views, so
+    /// Ctrl+D/U can scroll by a half page.
+    pub description_viewport: u16,
+    pub overview_viewport: u16,
 }
 
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
@@ -72,6 +78,10 @@ pub struct DiffViewState {
     pub focused_file: usize,
     pub collapsed: HashSet<String>,
     pub pane_scroll: u16,
+    /// Last-rendered body heights of the diff pane / file tree, for half-page
+    /// scrolling and cursor jumps.
+    pub pane_viewport: u16,
+    pub tree_viewport: u16,
     pub focus: DiffFocus,
 }
 

@@ -15,6 +15,7 @@ pub fn render(frame: &mut Frame, pr: &PullRequest, ui: &mut UiMemory, area: Rect
     let max_scroll = total.saturating_sub(visible) as u16;
     let scroll = ui.description_scroll.min(max_scroll);
     ui.description_scroll = scroll;
+    ui.description_viewport = area.height;
 
     let content_area = Rect {
         width: content_width,
