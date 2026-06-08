@@ -1,7 +1,8 @@
 use chrono::{DateTime, Utc};
 use serde::Deserialize;
 
-use crate::clients::github::error::{FetchError, run_gh_json};
+use crate::clients::error::FetchError;
+use crate::clients::github::cli::run_gh_json;
 use crate::domain::commit::Commit;
 
 #[derive(Debug, Deserialize)]
