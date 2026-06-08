@@ -56,10 +56,7 @@ impl Backend {
     pub fn fetch_review_threads(&self, pr_id: u64) -> Result<Vec<ReviewThread>, FetchError> {
         match self {
             Self::GitHub => github::fetch_review_threads(pr_id),
-            // DC's "inline comment" model maps to ReviewThreads but the
-            // wiring isn't built yet — surfacing an empty list here lets the
-            // Overview tab render without "(failed to load)" until we add it.
-            Self::BitbucketDc(_) => Ok(Vec::new()),
+            Self::BitbucketDc(c) => bitbucket_dc::fetch_review_threads(c, pr_id),
         }
     }
 }

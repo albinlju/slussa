@@ -208,7 +208,7 @@ fn build_review_lines(
 
     // Nested box: path:line as header, diff snippet as body. Sits inside the
     // outer comment box; comment text follows underneath.
-    let location = match thread.line {
+    let location = match thread.line.or(thread.old_line) {
         Some(l) => format!("{}:{}", thread.path, l),
         None => thread.path.clone(),
     };

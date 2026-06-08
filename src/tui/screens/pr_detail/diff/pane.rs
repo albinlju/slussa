@@ -162,11 +162,15 @@ fn file_to_lines(file: &FileDiff, threads: &[ReviewThread], width: u16) -> Vec<L
     let mut lines: Vec<Line> = Vec::new();
     // File path lives in the pane header above us — don't repeat it here.
 
-    // Build a lookup of (new file line number) -> threads anchored there.
+    // Build two lookups: threads on added/context lines key off the new-file
+    // line number, threads on removed lines key off the old-file line number.
     let mut comments_at: HashMap<usize, Vec<&ReviewThread>> = HashMap::new();
+    let mut comments_at_old: HashMap<usize, Vec<&ReviewThread>> = HashMap::new();
     for thread in threads.iter().filter(|t| t.path == file.path) {
         if let Some(line) = thread.line {
             comments_at.entry(line).or_default().push(thread);
+        } else if let Some(old) = thread.old_line {
+            comments_at_old.entry(old).or_default().push(thread);
         }
     }
 
@@ -187,35 +191,49 @@ fn file_to_lines(file: &FileDiff, threads: &[ReviewThread], width: u16) -> Vec<L
         ));
 
         let mut new_line_num = hunk.new_start;
+        let mut old_line_num = hunk.old_start;
         for diff_line in &hunk.lines {
             lines.push(styled_diff_line(diff_line, width));
 
-            // Removed lines have no new-file line number; comments anchored to a
-            // "new" line number only correspond to Added/Context lines.
-            let current_line = match diff_line {
-                DiffLine::Removed(_) => None,
-                _ => Some(new_line_num),
+            // Anchor threads to the line just rendered: removed lines match on
+            // the old-file line number, added/context on the new-file number.
+            let threads_here = match diff_line {
+                DiffLine::Removed(_) => comments_at_old.get(&old_line_num),
+                _ => comments_at.get(&new_line_num),
             };
-            if let Some(ln) = current_line
-                && let Some(threads_here) = comments_at.get(&ln)
-            {
+            if let Some(threads_here) = threads_here {
                 for thread in threads_here {
-                    for tline in render_inline_thread(thread, thread_width, now) {
-                        let line_style = tline.style;
-                        let mut spans: Vec<Span<'static>> =
-                            Vec::with_capacity(tline.spans.len() + 1);
-                        spans.push(Span::raw(DIFF_GUTTER));
-                        spans.extend(tline.spans);
-                        lines.push(Line::from(spans).style(line_style));
-                    }
+                    push_thread_lines(&mut lines, thread, thread_width, now);
                 }
             }
 
-            if !matches!(diff_line, DiffLine::Removed(_)) {
-                new_line_num += 1;
+            match diff_line {
+                DiffLine::Added(_) => new_line_num += 1,
+                DiffLine::Removed(_) => old_line_num += 1,
+                DiffLine::Context(_) => {
+                    new_line_num += 1;
+                    old_line_num += 1;
+                }
             }
         }
     }
 
     lines
+}
+
+/// Render one review thread into the diff body, each line prefixed by the
+/// left gutter so the box aligns with the +/- rows above it.
+fn push_thread_lines(
+    lines: &mut Vec<Line<'static>>,
+    thread: &ReviewThread,
+    thread_width: u16,
+    now: chrono::DateTime<Utc>,
+) {
+    for tline in render_inline_thread(thread, thread_width, now) {
+        let line_style = tline.style;
+        let mut spans: Vec<Span<'static>> = Vec::with_capacity(tline.spans.len() + 1);
+        spans.push(Span::raw(DIFF_GUTTER));
+        spans.extend(tline.spans);
+        lines.push(Line::from(spans).style(line_style));
+    }
 }
