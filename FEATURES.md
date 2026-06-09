@@ -71,8 +71,3 @@
 - [ ] **Unified cross-provider list** with a provider icon per row.
 - [ ] **Normalized "requirements to merge"** — GitLab approvals, Bitbucket default reviewers / merge checks, GitHub branch protection → one shared model.
 
----
-
-Everything fits the existing TEA structure: new data → a `LoadState` field +
-`spawn_load_*`; new interaction → an `Action` + arm in `apply`; new view → a
-`Screen` + module.
