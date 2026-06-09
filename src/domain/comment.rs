@@ -26,7 +26,6 @@ pub struct ReviewThread {
     /// anchored to a removed line. The diff pane keys these off the old-side
     /// line counter so deleted-line comments still render in place.
     pub old_line: Option<usize>,
-    pub diff_hunk: String,
     pub comments: Vec<Comment>,
     pub resolved: bool,
 }

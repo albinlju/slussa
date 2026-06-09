@@ -12,6 +12,7 @@ use crate::{
     domain::{
         ci::BuildState,
         comment::{Comment, ReviewThread},
+        diff::{Diff, DiffLine},
         event::{EventKind, TimelineEvent},
         pr::PullRequest,
         review::ReviewerState,
@@ -226,6 +227,13 @@ fn render_timeline(frame: &mut Frame, pr_data: Option<&PrData>, ui: &mut UiMemor
         return;
     }
 
+    // Inline review snippets are pulled from the loaded diff (same source +
+    // styling for every provider).
+    let diff = pr_data.and_then(|d| match &d.diff {
+        LoadState::Loaded(diff) => Some(diff),
+        _ => None,
+    });
+
     // Reserve rightmost column for the scrollbar so wrapped markdown doesn't
     // get clipped or overlap the thumb.
     let content_width = area.width.saturating_sub(1);
@@ -233,6 +241,7 @@ fn render_timeline(frame: &mut Frame, pr_data: Option<&PrData>, ui: &mut UiMemor
         &bundle.comments,
         &bundle.threads,
         &bundle.events,
+        diff,
         content_width.saturating_sub(TIMELINE_COL),
     );
 
@@ -277,6 +286,7 @@ fn build_overview_lines(
     comments: &[Comment],
     threads: &[ReviewThread],
     activity: &[TimelineEvent],
+    diff: Option<&Diff>,
     width: u16,
 ) -> Vec<Line<'static>> {
     let theme = theme::current();
@@ -299,7 +309,7 @@ fn build_overview_lines(
         .filter_map(|event| match event {
             Event::Issue(c) => Some((EventStyle::Comment, build_issue_lines(c, width, now))),
             Event::Review(t) => {
-                build_review_lines(t, width, now).map(|l| (EventStyle::Review, l))
+                build_review_lines(t, diff, width, now).map(|l| (EventStyle::Review, l))
             }
             Event::Activity(e) => {
                 let (color, line) = activity_line(e, now);
@@ -403,6 +413,7 @@ fn build_issue_lines(c: &Comment, width: u16, now: DateTime<Utc>) -> Vec<Line<'s
 
 fn build_review_lines(
     thread: &ReviewThread,
+    diff: Option<&Diff>,
     width: u16,
     now: DateTime<Utc>,
 ) -> Option<Vec<Line<'static>>> {
@@ -428,12 +439,16 @@ fn build_review_lines(
     }
     let inner_header = Line::from(anchor_spans);
 
-    if thread.diff_hunk.is_empty() {
+    let inner_text_width = widgets::box_text_width(text_width);
+    let snippet = diff
+        .map(|d| diff_snippet(d, &thread.path, thread.line, thread.old_line, inner_text_width))
+        .unwrap_or_default();
+    if snippet.is_empty() {
+        // No diff context (diff not loaded, or an outdated comment) — show just
+        // the location.
         body.push(inner_header);
     } else {
-        let inner_text_width = widgets::box_text_width(text_width);
-        let diff_lines = styled_diff_hunk(&thread.diff_hunk, inner_text_width);
-        body.extend(widgets::boxed(inner_header, diff_lines, text_width));
+        body.extend(widgets::boxed(inner_header, snippet, text_width));
     }
 
     // First comment body + replies. The first author is already in the box
@@ -482,61 +497,105 @@ fn issue_comment_header(
 /// Diff hunk styled to match the Diff tab — full-row bg tint on added/removed
 /// lines, strong-color prefix for `+`/`-`, plain muted for context. Each row
 /// is prefixed with its new-side line number (blank for removed lines).
-fn styled_diff_hunk(hunk: &str, width: u16) -> Vec<Line<'static>> {
+/// Number of leading context lines to show above the anchored line.
+const SNIPPET_CONTEXT: usize = 3;
+
+/// A diff snippet around the line a review thread is anchored to, pulled from
+/// the already-loaded diff. Same source + styling for every provider, so
+/// threads look identical regardless of backend. Empty when the file/line
+/// isn't in the diff (e.g. an outdated comment, or the diff isn't loaded yet).
+fn diff_snippet(
+    diff: &Diff,
+    path: &str,
+    line: Option<usize>,
+    old_line: Option<usize>,
+    width: u16,
+) -> Vec<Line<'static>> {
     let theme = theme::current();
+    let Some(file) = diff.files.iter().find(|f| f.path == path) else {
+        return Vec::new();
+    };
+
+    // Flatten the file's diff lines, tracking both sides' line numbers.
+    struct Row<'a> {
+        dl: &'a DiffLine,
+        new_no: usize,
+        old_no: usize,
+    }
+    let mut rows: Vec<Row> = Vec::new();
+    for hunk in &file.hunks {
+        let mut new_no = hunk.new_start;
+        let mut old_no = hunk.old_start;
+        for dl in &hunk.lines {
+            rows.push(Row { dl, new_no, old_no });
+            match dl {
+                DiffLine::Added(_) => new_no += 1,
+                DiffLine::Removed(_) => old_no += 1,
+                DiffLine::Context(_) => {
+                    new_no += 1;
+                    old_no += 1;
+                }
+            }
+        }
+    }
+
+    // Locate the anchored line: by new-side number for added/context, by
+    // old-side number for removed.
+    let anchor = rows.iter().position(|r| match (line, old_line) {
+        (Some(l), _) => !matches!(r.dl, DiffLine::Removed(_)) && r.new_no == l,
+        (None, Some(o)) => matches!(r.dl, DiffLine::Removed(_)) && r.old_no == o,
+        _ => false,
+    });
+    let Some(anchor) = anchor else {
+        return Vec::new();
+    };
+
+    let window = &rows[anchor.saturating_sub(SNIPPET_CONTEXT)..=anchor];
+    let num_width = window
+        .iter()
+        .map(|r| r.new_no)
+        .max()
+        .unwrap_or(1)
+        .to_string()
+        .len();
     let row_w = width as usize;
 
-    let new_start = parse_hunk_new_start(hunk).unwrap_or(1);
-    let advancing = hunk
-        .lines()
-        .filter(|l| !l.starts_with("@@") && !l.starts_with('-'))
-        .count() as u32;
-    let max_num = new_start + advancing.saturating_sub(1);
-    let num_width = max_num.to_string().len();
-
-    // Only changed lines (`+`/`-`) are rendered — context rows are walked just
-    // to keep `new_line` accurate for the `+`/`-` rows we do emit.
-    let mut new_line = new_start;
-    let mut out: Vec<Line<'static>> = Vec::new();
-    for raw in hunk.lines().filter(|l| !l.starts_with("@@")) {
-        if let Some(content) = raw.strip_prefix('+') {
-            out.push(numbered_diff_row(
-                Some(new_line),
+    let lines: Vec<Line<'static>> = window
+        .iter()
+        .map(|r| match r.dl {
+            DiffLine::Added(c) => numbered_diff_row(
+                Some(r.new_no as u32),
                 num_width,
                 "+",
-                content,
+                c,
                 theme.diff_added,
                 Some(theme.diff_added_bg),
                 theme.fg,
                 row_w,
-            ));
-            new_line += 1;
-        } else if let Some(content) = raw.strip_prefix('-') {
-            out.push(numbered_diff_row(
+            ),
+            DiffLine::Removed(c) => numbered_diff_row(
                 None,
                 num_width,
                 "-",
-                content,
+                c,
                 theme.diff_removed,
                 Some(theme.diff_removed_bg),
                 theme.muted,
                 row_w,
-            ));
-        } else {
-            new_line += 1;
-        }
-    }
-    out
-}
-
-/// Parse `+C` from a `@@ -A,B +C,D @@` header to recover the starting line
-/// number on the new side. Falls back to `None` if the hunk doesn't begin
-/// with a recognizable header.
-fn parse_hunk_new_start(hunk: &str) -> Option<u32> {
-    let first = hunk.lines().next()?;
-    let plus = first.split_whitespace().find(|s| s.starts_with('+'))?;
-    let end = plus.find(',').unwrap_or(plus.len());
-    plus[1..end].parse().ok()
+            ),
+            DiffLine::Context(c) => numbered_diff_row(
+                Some(r.new_no as u32),
+                num_width,
+                " ",
+                c,
+                theme.muted,
+                None,
+                theme.diff_context,
+                row_w,
+            ),
+        })
+        .collect();
+    lines
 }
 
 #[allow(clippy::too_many_arguments)]

@@ -125,7 +125,6 @@ fn make_thread(anchor: Anchor, root: &BbComment) -> ReviewThread {
         path: anchor.path,
         line,
         old_line,
-        diff_hunk: String::new(),
         resolved: root.state.eq_ignore_ascii_case("RESOLVED"),
         comments,
     }
