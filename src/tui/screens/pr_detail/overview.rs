@@ -312,8 +312,8 @@ fn build_overview_lines(
                 build_review_lines(t, diff, width, now).map(|l| (EventStyle::Review, l))
             }
             Event::Activity(e) => {
-                let (color, line) = activity_line(e, now);
-                Some((EventStyle::Activity(color), vec![line]))
+                let (color, lines) = activity_lines(e, now);
+                Some((EventStyle::Activity(color), lines))
             }
         })
         .collect();
@@ -367,11 +367,48 @@ impl EventStyle {
     }
 }
 
-/// A single-line lifecycle row: `@actor approved · 2d ago`. Returns the dot
-/// color alongside the line so the timeline circle matches the event kind.
-fn activity_line(event: &TimelineEvent, now: DateTime<Utc>) -> (Color, Line<'static>) {
+/// Lifecycle rows for the timeline. Most events are one line
+/// (`@actor approved · 2d ago`); a push expands to a header plus one line per
+/// added commit. Returns the dot color so the timeline circle matches.
+fn activity_lines(event: &TimelineEvent, now: DateTime<Utc>) -> (Color, Vec<Line<'static>>) {
     let theme = theme::current();
-    let (verb, color) = match event.kind {
+    let age = widgets::relative_age(event.created, now);
+
+    // `@actor <verb> · age`, with the actor omitted when unattributed.
+    let header = |verb: String, color: Color| -> Line<'static> {
+        let mut spans: Vec<Span<'static>> = Vec::new();
+        if let Some(actor) = &event.actor {
+            spans.push(Span::styled(
+                format!("@{}", actor.username),
+                Style::default().fg(theme.info).add_modifier(Modifier::BOLD),
+            ));
+            spans.push(Span::raw(" "));
+        }
+        spans.push(Span::styled(verb, Style::default().fg(color)));
+        spans.push(Span::styled(
+            format!(" · {age}"),
+            Style::default().fg(theme.muted),
+        ));
+        Line::from(spans)
+    };
+
+    if let EventKind::Pushed(commits) = &event.kind {
+        let verb = if commits.len() == 1 {
+            "added 1 commit".to_string()
+        } else {
+            format!("added {} commits", commits.len())
+        };
+        let mut lines = vec![header(verb, theme.info)];
+        for c in commits {
+            lines.push(Line::from(vec![
+                Span::styled(format!("{}  ", c.id), Style::default().fg(theme.warning)),
+                Span::styled(c.message.clone(), Style::default().fg(theme.muted)),
+            ]));
+        }
+        return (theme.info, lines);
+    }
+
+    let (verb, color) = match &event.kind {
         EventKind::Opened => ("opened this pull request", theme.info),
         EventKind::ReadyForReview => ("marked this ready for review", theme.accent),
         EventKind::Approved => ("approved these changes", theme.success),
@@ -380,22 +417,9 @@ fn activity_line(event: &TimelineEvent, now: DateTime<Utc>) -> (Color, Line<'sta
         EventKind::Merged => ("merged this pull request", theme.status_merged),
         EventKind::Declined => ("declined this pull request", theme.status_declined),
         EventKind::Reopened => ("reopened this pull request", theme.info),
+        EventKind::Pushed(_) => unreachable!("handled above"),
     };
-    let age = widgets::relative_age(event.created, now);
-    let mut spans: Vec<Span<'static>> = Vec::new();
-    if let Some(actor) = &event.actor {
-        spans.push(Span::styled(
-            format!("@{}", actor.username),
-            Style::default().fg(theme.info).add_modifier(Modifier::BOLD),
-        ));
-        spans.push(Span::raw(" "));
-    }
-    spans.push(Span::styled(verb.to_string(), Style::default().fg(color)));
-    spans.push(Span::styled(
-        format!(" · {age}"),
-        Style::default().fg(theme.muted),
-    ));
-    (color, Line::from(spans))
+    (color, vec![header(verb.to_string(), color)])
 }
 
 fn build_issue_lines(c: &Comment, width: u16, now: DateTime<Utc>) -> Vec<Line<'static>> {
