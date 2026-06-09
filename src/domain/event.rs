@@ -6,7 +6,7 @@ use serde::{Deserialize, Serialize};
 /// changes. Comments and inline review threads are modelled separately
 /// ([`super::comment`]); these are the "X did Y" rows that thread through the
 /// Overview timeline alongside them.
-#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 pub enum EventKind {
     Opened,
     ReadyForReview,
@@ -17,6 +17,15 @@ pub enum EventKind {
     Merged,
     Declined,
     Reopened,
+    /// New commits pushed to the PR (Bitbucket RESCOPED), with the added
+    /// commits' short id + first message line for display.
+    Pushed(Vec<PushedCommit>),
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+pub struct PushedCommit {
+    pub id: String,
+    pub message: String,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
