@@ -22,7 +22,7 @@
 
 ## Backlog
 
-### Redifined
+### Refined
 
 - [ ] **Suggestions** — render GitHub/GitLab "suggested change" blocks specially.
 - [ ] **Reactions** — show emoji reactions on comments (Bitbucket DC has a reactions API).
@@ -39,7 +39,7 @@
 - [ ] **Build jobs auto update status** — Builds should re-fetch status automatically while open tab
 - [ ] **Approve / Request changes / Comment** — needs a small text-input mode.
 
-### Not redefined
+### Not refined
 
 - [ ] **Word-level (intra-line) diff** — highlight the changed words within a modified line.
 - [ ] **Expand context** — unfold more lines above/below a hunk (needs a full-file fetch).
