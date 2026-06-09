@@ -26,8 +26,6 @@ struct GhPrComment {
     #[serde(default)]
     path: String,
     #[serde(default)]
-    diff_hunk: String,
-    #[serde(default)]
     line: Option<usize>,
     #[serde(default)]
     original_line: Option<usize>,
@@ -61,7 +59,6 @@ pub fn fetch_review_threads(pr_number: u64) -> Result<Vec<ReviewThread>, FetchEr
 
         let path = first.path.clone();
         let line = first.line.or(first.original_line);
-        let diff_hunk = first.diff_hunk.clone();
 
         let domain_comments: Vec<Comment> = group
             .into_iter()
@@ -86,7 +83,6 @@ pub fn fetch_review_threads(pr_number: u64) -> Result<Vec<ReviewThread>, FetchEr
             path,
             line,
             old_line: None,
-            diff_hunk,
             comments: domain_comments,
             resolved: false,
         });
