@@ -319,7 +319,8 @@ fn render_content(
         }
         DetailTab::Commits => {
             if ui.commits.drilled.is_some() {
-                commits::render_commit_diff(frame, pr_data, &mut ui.commits, inset);
+                let threads = activity_threads(pr_data);
+                commits::render_commit_diff(frame, pr_data, threads, &mut ui.commits, inset);
             } else {
                 commits::render(frame, pr_data, &mut ui.commits, inset);
             }
