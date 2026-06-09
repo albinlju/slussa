@@ -86,7 +86,7 @@ pub(super) fn render(
         && m.rendered_row < lines.len()
     {
         let row = m.rendered_row;
-        lines[row] = highlight_row(std::mem::take(&mut lines[row]));
+        lines[row] = highlight_row(std::mem::take(&mut lines[row]), body_area.width as usize);
     }
 
     let total = lines.len();
@@ -297,18 +297,22 @@ fn file_to_lines(
 }
 
 /// Re-tint a whole row with the cursor highlight, keeping each span's fg so the
-/// `+`/`-` colors still read through.
-fn highlight_row(line: Line<'static>) -> Line<'static> {
+/// `+`/`-` colors still read through. Pads to `row_w` so the background fills
+/// the full row — context rows aren't padded otherwise and would only tint
+/// under their text.
+fn highlight_row(line: Line<'static>, row_w: usize) -> Line<'static> {
     let bg = theme::current().highlight_bg;
-    Line::from(
-        line.spans
-            .into_iter()
-            .map(|s| {
-                let style = s.style.bg(bg);
-                Span::styled(s.content, style)
-            })
-            .collect::<Vec<_>>(),
-    )
+    let visible: usize = line.spans.iter().map(|s| s.width()).sum();
+    let mut spans: Vec<Span<'static>> = line
+        .spans
+        .into_iter()
+        .map(|s| Span::styled(s.content, s.style.bg(bg)))
+        .collect();
+    let pad = row_w.saturating_sub(visible);
+    if pad > 0 {
+        spans.push(Span::styled(" ".repeat(pad), Style::default().bg(bg)));
+    }
+    Line::from(spans)
 }
 
 /// Render one review thread into the diff body, each line prefixed by the
