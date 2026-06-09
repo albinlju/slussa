@@ -9,7 +9,7 @@ use ratatui::{
 
 use crate::{
     app::state::{CommitsViewState, LoadState, PrData},
-    domain::commit::Commit,
+    domain::{comment::ReviewThread, commit::Commit},
     tui::{theme, widgets},
 };
 
@@ -57,6 +57,7 @@ pub fn render(frame: &mut Frame, pr_data: Option<&PrData>, cv: &mut CommitsViewS
 pub fn render_commit_diff(
     frame: &mut Frame,
     pr_data: Option<&PrData>,
+    threads: &[ReviewThread],
     cv: &mut CommitsViewState,
     area: Rect,
 ) {
@@ -71,9 +72,9 @@ pub fn render_commit_diff(
     render_commit_banner(frame, pr_data, &oid, chunks[0]);
 
     let diff_state = pr_data.and_then(|d| d.commit_diffs.get(&oid));
-    // No inline comments in the per-commit view yet — they anchor to the PR
-    // diff, not a single commit.
-    super::diff::render(frame, diff_state, &[], &mut cv.diff, chunks[1]);
+    // Pass the PR's review threads through: the pane anchors each to its
+    // (path, line), so a comment shows on any line this commit's diff renders.
+    super::diff::render(frame, diff_state, threads, &mut cv.diff, chunks[1]);
 }
 
 fn render_commit_banner(frame: &mut Frame, pr_data: Option<&PrData>, oid: &str, area: Rect) {
