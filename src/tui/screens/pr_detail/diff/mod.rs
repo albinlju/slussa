@@ -14,28 +14,25 @@ use ratatui::{
 };
 
 use crate::{
-    app::state::{DiffFocus, DiffViewState, LoadState, PrData},
+    app::state::{DiffFocus, DiffViewState, LoadState},
     domain::{
         comment::ReviewThread,
-        diff::{DiffLine, FileDiff},
+        diff::{Diff, DiffLine, FileDiff},
     },
     tui::{screens::pr_detail::file_tree::build_visible_rows, theme, widgets},
 };
 
+/// Renders a diff (file tree + pane) from whatever `LoadState` it's given —
+/// the full PR diff for the Diff tab, or a single commit's diff for the
+/// Commits drill-in. Threads are passed in explicitly (empty for the commit
+/// view, which has no inline comments yet).
 pub fn render(
     frame: &mut Frame,
-    pr_data: Option<&PrData>,
+    diff_state: Option<&LoadState<Diff>>,
+    review_threads: &[ReviewThread],
     ui_diff: &mut DiffViewState,
     area: Rect,
 ) {
-    let diff_state = pr_data.map(|d| &d.diff);
-    let review_threads: &[ReviewThread] = pr_data
-        .and_then(|d| match &d.activity {
-            LoadState::Loaded(b) => Some(b.threads.as_slice()),
-            _ => None,
-        })
-        .unwrap_or(&[]);
-
     let theme = theme::current();
     match diff_state {
         None | Some(LoadState::NotRequested) | Some(LoadState::Loading) => {

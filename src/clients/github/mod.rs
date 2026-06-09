@@ -11,5 +11,5 @@ mod review_threads;
 pub use activities::fetch as fetch_activity;
 pub use builds::fetch_builds;
 pub use commits::fetch_commits;
-pub use diff::fetch_diff;
+pub use diff::{fetch_commit_diff, fetch_diff};
 pub use prs::fetch_prs;

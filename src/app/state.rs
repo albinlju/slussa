@@ -23,6 +23,7 @@ pub struct UiMemory {
     pub filter_picker_open: bool,
     pub filter_picker_cursor: usize,
     pub diff: DiffViewState,
+    pub commits: CommitsViewState,
     pub description_scroll: u16,
     pub overview_scroll: u16,
     /// Last-rendered content height of the description / overview views, so
@@ -96,6 +97,23 @@ pub enum DiffFocus {
     Pane,
 }
 
+/// State for the Commits tab. Its resting state is the commit list; pressing
+/// Enter on a commit "drills in" to that commit's diff, rendered with the same
+/// widget as the Diff tab via [`DiffViewState`]. The drill-in is transient —
+/// leaving the tab clears `drilled` back to the list (see the reducer).
+#[derive(Debug, Default)]
+pub struct CommitsViewState {
+    /// Cursor in the commit list.
+    pub selected: usize,
+    /// Last-rendered list height, for half-page selection jumps.
+    pub viewport: u16,
+    /// `Some(oid)` while viewing a single commit's diff; `None` = list view.
+    pub drilled: Option<String>,
+    /// Diff-pane state used while drilled in, kept separate from the Diff
+    /// tab's own `diff` so the two views don't clobber each other's scroll.
+    pub diff: DiffViewState,
+}
+
 #[derive(Debug, Default)]
 pub struct Cache {
     pub prs: LoadState<Vec<PullRequest>>,
@@ -109,6 +127,9 @@ pub struct PrData {
     pub builds: LoadState<Vec<Build>>,
     /// Comments, lifecycle events, and inline review threads — one fetch.
     pub activity: LoadState<ActivityBundle>,
+    /// Per-commit diffs, fetched lazily when a commit is drilled into from the
+    /// Commits tab. Keyed by commit oid.
+    pub commit_diffs: HashMap<String, LoadState<Diff>>,
 }
 
 #[derive(Debug, Default)]
