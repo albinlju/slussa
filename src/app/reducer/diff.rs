@@ -94,9 +94,11 @@ impl App {
         }
     }
 
-    /// Move the pane's line cursor, clamped to the focused file's diff lines.
+    /// Move the pane's cursor over its navigable items (diff lines + inline
+    /// thread boxes). The item count comes from the pane's last render, so the
+    /// cursor can land on comment threads as well as lines.
     fn diff_move_pane_cursor(&mut self, delta: i16) {
-        let count = self.focused_file_line_count();
+        let count = self.diff_view().pane_items;
         if count == 0 {
             self.diff_view_mut().pane_cursor = 0;
             return;
@@ -104,14 +106,6 @@ impl App {
         let last = (count - 1) as i64;
         let next = (self.diff_view().pane_cursor as i64 + delta as i64).clamp(0, last);
         self.diff_view_mut().pane_cursor = next as usize;
-    }
-
-    fn focused_file_line_count(&self) -> usize {
-        let focused = self.diff_view().focused_file;
-        self.active_diff_files()
-            .and_then(|files| files.get(focused))
-            .map(|file| file.hunks.iter().map(|h| h.lines.len()).sum())
-            .unwrap_or(0)
     }
 
     fn diff_toggle_at_cursor(&mut self) {

@@ -63,6 +63,19 @@ pub fn render(
             // pass the slice down to both panel renderers.
             let file_stats: Vec<(u32, u32)> = diff.files.iter().map(count_file_stats).collect();
 
+            // Comment count per file (by file_index) for the tree's badge.
+            let comment_counts: Vec<usize> = diff
+                .files
+                .iter()
+                .map(|f| {
+                    review_threads
+                        .iter()
+                        .filter(|t| t.path == f.path)
+                        .map(|t| t.comments.len())
+                        .sum()
+                })
+                .collect();
+
             // Body heights = each column minus its border (2) and header band
             // (2); see `pane::render` / `tree::render`. Stored for half-page
             // scrolling and cursor jumps.
@@ -76,10 +89,11 @@ pub fn render(
                 &rows,
                 ui_diff.cursor,
                 &file_stats,
+                &comment_counts,
                 tree_focused,
                 chunks[0],
             );
-            pane::render(
+            ui_diff.pane_items = pane::render(
                 frame,
                 diff,
                 ui_diff.focused_file,

@@ -11,11 +11,13 @@ use ratatui::{
 
 use crate::tui::{screens::pr_detail::file_tree::TreeRow, theme, widgets};
 
+#[allow(clippy::too_many_arguments)]
 pub(super) fn render(
     frame: &mut Frame,
     rows: &[TreeRow],
     cursor: usize,
     file_stats: &[(u32, u32)],
+    comment_counts: &[usize],
     focused: bool,
     area: Rect,
 ) {
@@ -90,22 +92,40 @@ pub(super) fn render(
                     file_index,
                 } => {
                     let (adds, dels) = file_stats.get(*file_index).copied().unwrap_or((0, 0));
+                    let comments = comment_counts.get(*file_index).copied().unwrap_or(0);
                     let indent = "  ".repeat(*depth + 1);
-                    let plus = format!("+{adds}");
-                    let minus = format!("-{dels}");
+
+                    // Right group: comment badge (when any) + the +A -D stats.
+                    let mut right: Vec<Span<'static>> = Vec::new();
+                    if comments > 0 {
+                        right.push(Span::styled(
+                            format!("\u{f075} {comments}"), //  comment
+                            Style::default().fg(theme.info),
+                        ));
+                        right.push(Span::raw("  "));
+                    }
+                    right.push(Span::styled(
+                        format!("+{adds}"),
+                        Style::default().fg(theme.diff_added),
+                    ));
+                    right.push(Span::raw(" "));
+                    right.push(Span::styled(
+                        format!("-{dels}"),
+                        Style::default().fg(theme.diff_removed),
+                    ));
+
                     let visible_left = indent.chars().count() + name.chars().count();
-                    let visible_right = plus.chars().count() + 1 + minus.chars().count();
+                    let visible_right: usize = right.iter().map(|s| s.width()).sum();
                     let pad = row_width
                         .saturating_sub(visible_left + visible_right + 1)
                         .max(1);
-                    Line::from(vec![
+                    let mut spans = vec![
                         Span::raw(indent),
                         Span::raw(name.clone()),
                         Span::raw(" ".repeat(pad)),
-                        Span::styled(plus, Style::default().fg(theme.diff_added)),
-                        Span::raw(" "),
-                        Span::styled(minus, Style::default().fg(theme.diff_removed)),
-                    ])
+                    ];
+                    spans.extend(right);
+                    Line::from(spans)
                 }
             };
             ListItem::new(line)

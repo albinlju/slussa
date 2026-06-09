@@ -158,9 +158,9 @@ pub(super) fn boxed(
     header: Line<'static>,
     body: Vec<Line<'static>>,
     width: u16,
+    border: Color,
 ) -> Vec<Line<'static>> {
-    let theme = theme::current();
-    let style = Style::default().fg(theme.divider);
+    let style = Style::default().fg(border);
     let inner = (width as usize).saturating_sub(2);
     let text_w = inner.saturating_sub(2);
 

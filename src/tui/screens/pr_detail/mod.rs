@@ -144,9 +144,13 @@ pub(super) fn render_inline_thread(
     thread: &ReviewThread,
     width: u16,
     now: DateTime<Utc>,
+    active: bool,
 ) -> Vec<Line<'static>> {
     let theme = theme::current();
     let text_w = widgets::box_text_width(width);
+    // An active (cursor-focused) thread gets an accent border so it reads as
+    // the selected "row"; otherwise the muted divider color.
+    let border = if active { theme.accent } else { theme.divider };
 
     // Box header: status icon + label on the left, comment count on the right.
     let (icon, label, accent) = if thread.resolved {
@@ -194,7 +198,7 @@ pub(super) fn render_inline_thread(
         )));
     }
 
-    widgets::boxed(header, body, width)
+    widgets::boxed(header, body, width, border)
 }
 
 fn render_tabs_and_content(

@@ -432,7 +432,7 @@ fn build_issue_lines(c: &Comment, width: u16, now: DateTime<Utc>) -> Vec<Line<'s
         widgets::markdown(&c.content, text_width + 2),
         2,
     ));
-    widgets::boxed(header, body, width)
+    widgets::boxed(header, body, width, theme::current().divider)
 }
 
 fn build_review_lines(
@@ -472,7 +472,7 @@ fn build_review_lines(
         // the location.
         body.push(inner_header);
     } else {
-        body.extend(widgets::boxed(inner_header, snippet, text_width));
+        body.extend(widgets::boxed(inner_header, snippet, text_width, theme.divider));
     }
 
     // First comment body + replies. The first author is already in the box
@@ -496,7 +496,7 @@ fn build_review_lines(
         )));
     }
 
-    Some(widgets::boxed(header, body, width))
+    Some(widgets::boxed(header, body, width, theme.divider))
 }
 
 fn issue_comment_header(

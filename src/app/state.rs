@@ -87,6 +87,10 @@ pub struct DiffViewState {
     /// scrolling and cursor jumps.
     pub pane_viewport: u16,
     pub tree_viewport: u16,
+    /// Number of navigable items (diff lines + inline thread boxes) in the
+    /// focused file, written by the pane each render. The reducer clamps
+    /// `pane_cursor` against it so the cursor can step onto comment threads.
+    pub pane_items: usize,
     pub focus: DiffFocus,
 }
 

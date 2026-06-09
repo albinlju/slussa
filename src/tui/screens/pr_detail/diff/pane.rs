@@ -38,10 +38,10 @@ pub(super) fn render(
     threads: &[ReviewThread],
     focused: bool,
     area: Rect,
-) {
+) -> usize {
     let bounded = focused_file.min(diff.files.len().saturating_sub(1));
     let Some(file) = diff.files.get(bounded) else {
-        return;
+        return 0;
     };
     let (adds, dels) = file_stats.get(bounded).copied().unwrap_or((0, 0));
 
@@ -67,22 +67,28 @@ pub(super) fn render(
     // on +/- lines flows to the box's left/right borders. Each line's own
     // padding handles the 2-col left/right gutter for the content itself.
     let body_area = pane_chunks[1];
-    let (mut lines, meta) = file_to_lines(file, threads, body_area.width);
-
     // The cursor is only live when the pane has the keyboard; otherwise the
     // tree owns navigation and we leave the body unmarked.
-    let cursor = if focused { meta.get(pane_cursor) } else { None };
+    let active = focused.then_some(pane_cursor);
+    let (mut lines, meta) = file_to_lines(file, threads, body_area.width, active);
+    let cursor = active.and_then(|i| meta.get(i));
 
     render_pane_header(
         frame,
         &file.path,
         adds,
         dels,
-        cursor.map(|m| (m.line, m.removed)),
+        cursor.map(|m| {
+            let (line, removed) = m.line_removed();
+            (line, removed, matches!(m.kind, NavKind::Thread { .. }))
+        }),
         pane_chunks[0],
     );
 
+    // A diff-line cursor highlights its row; a thread cursor is already marked
+    // by its accent border, so we don't tint a row for it.
     if let Some(m) = cursor
+        && matches!(m.kind, NavKind::Line { .. })
         && m.rendered_row < lines.len()
     {
         let row = m.rendered_row;
@@ -93,14 +99,16 @@ pub(super) fn render(
     let visible = body_area.height as usize;
     let max_scroll = total.saturating_sub(visible) as u16;
 
-    // Keep the cursor row in view; otherwise honour the stored offset.
+    // Keep the cursor item in view (top and bottom for multi-row threads);
+    // otherwise honour the stored offset.
     let mut scroll = (*pane_scroll).min(max_scroll) as usize;
     if let Some(m) = cursor {
-        let cy = m.rendered_row;
-        if cy < scroll {
-            scroll = cy;
-        } else if visible > 0 && cy >= scroll + visible {
-            scroll = cy + 1 - visible;
+        let top = m.rendered_row;
+        let bottom = m.rendered_row + m.row_span.saturating_sub(1);
+        if top < scroll {
+            scroll = top;
+        } else if visible > 0 && bottom >= scroll + visible {
+            scroll = bottom + 1 - visible;
         }
     }
     let scroll = (scroll as u16).min(max_scroll);
@@ -113,6 +121,8 @@ pub(super) fn render(
         let bar = widgets::scrollbar(scroll, max_scroll, body_area.height);
         frame.render_widget(Paragraph::new(bar), widgets::scrollbar_area(body_area));
     }
+
+    meta.len()
 }
 
 fn render_pane_header(
@@ -120,7 +130,7 @@ fn render_pane_header(
     path: &str,
     adds: u32,
     dels: u32,
-    cursor: Option<(usize, bool)>,
+    cursor: Option<(usize, bool, bool)>,
     area: Rect,
 ) {
     let theme = theme::current();
@@ -144,8 +154,10 @@ fn render_pane_header(
         ),
     ];
     // Show where the cursor sits / where a comment would anchor.
-    if let Some((line, removed)) = cursor {
-        let label = if removed {
+    if let Some((line, removed, is_thread)) = cursor {
+        let label = if is_thread {
+            format!("  \u{f075} L{line}") //  comment on this line
+        } else if removed {
             format!("  L{line} (old)")
         } else {
             format!("  L{line}")
@@ -206,25 +218,42 @@ fn styled_diff_line(diff_line: &DiffLine, width: u16) -> Line<'static> {
     }
 }
 
-/// Where a logical diff line landed once rendered, plus the anchor a comment on
-/// it would use. Indexed by diff-line order (matching `pane_cursor`); the pane
-/// uses it to highlight/scroll to the cursor and (later) to post comments.
-struct DiffLineMeta {
-    /// Index into the returned `Vec<Line>`.
+/// What a navigable cursor item is: a diff line, or an inline thread box.
+/// Both carry the anchor line so the header can label the cursor.
+enum NavKind {
+    Line { line: usize, removed: bool },
+    Thread { line: usize, removed: bool },
+}
+
+/// A cursor stop in the pane: a diff line or a thread box. Indexed in render
+/// order, matching `pane_cursor`. `row_span` covers a thread box's height so
+/// scrolling can keep the whole box in view; the kind tells the renderer
+/// whether to tint a row or rely on the box's accent border.
+struct NavItem {
+    /// First rendered row of this item in the returned `Vec<Line>`.
     rendered_row: usize,
-    /// File line number — new side, or old side for removed lines.
-    line: usize,
-    removed: bool,
+    row_span: usize,
+    kind: NavKind,
+}
+
+impl NavItem {
+    /// Anchor line + whether it's an old-side (removed) line.
+    fn line_removed(&self) -> (usize, bool) {
+        match self.kind {
+            NavKind::Line { line, removed } | NavKind::Thread { line, removed } => (line, removed),
+        }
+    }
 }
 
 fn file_to_lines(
     file: &FileDiff,
     threads: &[ReviewThread],
     width: u16,
-) -> (Vec<Line<'static>>, Vec<DiffLineMeta>) {
+    active: Option<usize>,
+) -> (Vec<Line<'static>>, Vec<NavItem>) {
     let theme = theme::current();
     let mut lines: Vec<Line> = Vec::new();
-    let mut meta: Vec<DiffLineMeta> = Vec::new();
+    let mut meta: Vec<NavItem> = Vec::new();
     // File path lives in the pane header above us — don't repeat it here.
 
     // Build two lookups: threads on added/context lines key off the new-file
@@ -264,21 +293,35 @@ fn file_to_lines(
                 DiffLine::Removed(_) => (old_line_num, true),
                 _ => (new_line_num, false),
             };
-            meta.push(DiffLineMeta {
+            meta.push(NavItem {
                 rendered_row,
-                line,
-                removed,
+                row_span: 1,
+                kind: NavKind::Line { line, removed },
             });
 
             // Anchor threads to the line just rendered: removed lines match on
             // the old-file line number, added/context on the new-file number.
+            // Each thread is its own cursor stop, right after the line.
             let threads_here = match diff_line {
                 DiffLine::Removed(_) => comments_at_old.get(&old_line_num),
                 _ => comments_at.get(&new_line_num),
             };
             if let Some(threads_here) = threads_here {
                 for thread in threads_here {
-                    push_thread_lines(&mut lines, thread, thread_width, now);
+                    let idx = meta.len();
+                    let start = lines.len();
+                    let span = push_thread_lines(
+                        &mut lines,
+                        thread,
+                        thread_width,
+                        now,
+                        active == Some(idx),
+                    );
+                    meta.push(NavItem {
+                        rendered_row: start,
+                        row_span: span,
+                        kind: NavKind::Thread { line, removed },
+                    });
                 }
             }
 
@@ -316,18 +359,24 @@ fn highlight_row(line: Line<'static>, row_w: usize) -> Line<'static> {
 }
 
 /// Render one review thread into the diff body, each line prefixed by the
-/// left gutter so the box aligns with the +/- rows above it.
+/// left gutter so the box aligns with the +/- rows above it. Returns the
+/// number of rows pushed (the box's height) so the caller can record its
+/// `row_span`. `active` draws the box with an accent border.
 fn push_thread_lines(
     lines: &mut Vec<Line<'static>>,
     thread: &ReviewThread,
     thread_width: u16,
     now: chrono::DateTime<Utc>,
-) {
-    for tline in render_inline_thread(thread, thread_width, now) {
+    active: bool,
+) -> usize {
+    let rendered = render_inline_thread(thread, thread_width, now, active);
+    let count = rendered.len();
+    for tline in rendered {
         let line_style = tline.style;
         let mut spans: Vec<Span<'static>> = Vec::with_capacity(tline.spans.len() + 1);
         spans.push(Span::raw(DIFF_GUTTER));
         spans.extend(tline.spans);
         lines.push(Line::from(spans).style(line_style));
     }
+    count
 }
