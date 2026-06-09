@@ -22,6 +22,23 @@
 
 ## Backlog
 
+### Redifined
+
+- [ ] **Suggestions** — render GitHub/GitLab "suggested change" blocks specially.
+- [ ] **Reactions** — show emoji reactions on comments (Bitbucket DC has a reactions API).
+- [ ] **Fuzzy file finder / filter** in the diff tree (for big PRs).
+- [ ] **Merge conflict / mergeability status** — can it merge? conflicts? N commits behind base? required checks gating.
+- [ ] **Assignees, milestones, projects** (reviewers + labels are already shown).
+- [ ] **PR list search** — free text on title / author.
+- [ ] **Branch ahead / behind base** info.
+- [ ] **Mergeability in the pr list** — conflict / behind-base indicators.
+- [ ] **Labels in the list** — colored and filterable (shown in Overview today).
+- [ ] **Errors visible in the UI** instead of panics when a fetch/parse fails.
+- [ ] **Reply to / resolve a comment thread** — the cursor-focus groundwork is already in place.
+- [ ] **Manual / auto refresh** (`r`) — re-fetch without restarting.
+- [ ] **Build jobs auto update status** — Builds should re-fetch status automatically while open tab
+- [ ] **Approve / Request changes / Comment** — needs a small text-input mode.
+
 ### Not redefined
 
 - [ ] **Word-level (intra-line) diff** — highlight the changed words within a modified line.
@@ -30,41 +47,28 @@
 - [ ] **Rename / move display** — "renamed from X" instead of delete + add.
 - [ ] **Whitespace toggle** — ignore whitespace-only changes.
 - [ ] **Binary / image files** — a clear "(binary file)" instead of a broken diff.
-- [ ] **Suggestions** — render GitHub/GitLab "suggested change" blocks specially.
-- [ ] **Fuzzy file finder / filter** in the diff tree (for big PRs).
 - [ ] **Jump to next / prev unresolved thread** (`]c` / `[c`).
 - [ ] **Resolved / unresolved filter** in the Overview.
 - [ ] **Outdated comments** — mark comments whose line changed since they were made.
-- [ ] **Reactions** — show emoji reactions on comments (Bitbucket DC has a reactions API).
 - [ ] **Review as a group** — bundle a review's comments + summary + state (approved / changes requested), instead of loose timeline entries.
 - [ ] **Bitbucket "tasks"** — show the checkable to-do items on a PR.
-- [ ] **Merge conflict / mergeability status** — can it merge? conflicts? N commits behind base? required checks gating.
 - [ ] **Linked issues / cross-references** — "closes #123".
-- [ ] **Assignees, milestones, projects** (reviewers + labels are already shown).
-- [ ] **Branch ahead / behind base** info.
 - [ ] **Compact diff stats** (files / +/−) on PR list rows.
-- [ ] **PR list search** — free text on title / author.
 - [ ] **Structured filters** — `author:`, `label:`, `review:approved`, `is:draft`, `status:`.
 - [ ] **Sorting** — recently updated, created, comment count, CI status.
 - [ ] **"Mine" quick views** — Created / Assigned / Review requested / Mentioned.
-- [ ] **Labels in the list** — colored and filterable (shown in Overview today).
-- [ ] **Mergeability in the list** — conflict / behind-base indicators.
 - [ ] **Pagination / load more** — the list is currently capped at 50.
 - [ ] **Jump to PR by number** (`#123`).
-- [ ] **Manual / auto refresh** (`r`) — re-fetch without restarting.
 - [ ] **Unread / updated** — flag PRs with new activity since you last looked.
 - [ ] **Notifications inbox** — "what needs my attention" (review requested, mentioned, CI failed).
 - [ ] **Viewed-files tracking** — local "mark file reviewed" (GitHub's *Viewed*), saved per PR.
 - [ ] **Help overlay** (`?`) listing all keys.
 - [ ] **Status bar** — provider, repo, match count, loading spinner.
-- [ ] **Errors visible in the UI** instead of panics when a fetch/parse fails.
 - [ ] **Config** — repos / providers, default filters, keybindings, theme.
 - [ ] **Empty / loading / error states** per view (use `LoadState` everywhere).
 - [ ] **Open in browser** (`o`) — the PR / focused file / line. Cheapest big payoff. *(write-adjacent)*
 - [ ] **Copy** (`y`) — SHA / branch / PR URL / permalink to a line.
 - [ ] **Check out PR locally**.
-- [ ] **Approve / Request changes / Comment** — needs a small text-input mode.
-- [ ] **Reply to / resolve a comment thread** — the cursor-focus groundwork is already in place.
 - [ ] **Merge / Squash / Rebase** — only the strategies the repo allows.
 - [ ] **Draft ↔ Ready**.
 - [ ] **GitLab MR support** via `glab` (mirrors `gh` well).
