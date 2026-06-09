@@ -73,7 +73,21 @@ pub(super) fn fetch(config: &Config, pr_id: u64) -> Result<Diff, FetchError> {
         "/rest/api/1.0/projects/{}/repos/{}/pull-requests/{pr_id}/diff",
         config.repo.project_key, config.repo.repo_slug
     );
-    let response: BbDiffResponse = get_json(&config.repo.host, &path, &config.pat)?;
+    fetch_path(config, &path)
+}
+
+/// The diff a single commit introduced, from the same structured-diff endpoint
+/// scoped to a commit (defaults to diffing against the first parent).
+pub(super) fn fetch_commit(config: &Config, oid: &str) -> Result<Diff, FetchError> {
+    let path = format!(
+        "/rest/api/1.0/projects/{}/repos/{}/commits/{oid}/diff",
+        config.repo.project_key, config.repo.repo_slug
+    );
+    fetch_path(config, &path)
+}
+
+fn fetch_path(config: &Config, path: &str) -> Result<Diff, FetchError> {
+    let response: BbDiffResponse = get_json(&config.repo.host, path, &config.pat)?;
     Ok(project(response))
 }
 

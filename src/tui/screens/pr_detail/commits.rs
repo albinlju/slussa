@@ -1,23 +1,21 @@
 use chrono::{DateTime, Utc};
 use ratatui::{
     Frame,
-    layout::Rect,
-    style::Style,
+    layout::{Constraint, Direction, Layout, Rect},
+    style::{Modifier, Style},
     text::{Line, Span},
-    widgets::{List, ListItem, Paragraph},
+    widgets::{Block, Borders, List, ListItem, ListState, Paragraph},
 };
 
 use crate::{
-    app::state::{LoadState, PrData},
+    app::state::{CommitsViewState, LoadState, PrData},
     domain::commit::Commit,
     tui::{theme, widgets},
 };
 
-pub fn render(frame: &mut Frame, pr_data: Option<&PrData>, area: Rect) {
+pub fn render(frame: &mut Frame, pr_data: Option<&PrData>, cv: &mut CommitsViewState, area: Rect) {
     let theme = theme::current();
-    let commits_state = pr_data.map(|d| &d.commits);
-
-    match commits_state {
+    match pr_data.map(|d| &d.commits) {
         None | Some(LoadState::NotRequested) | Some(LoadState::Loading) => {
             let paragraph =
                 Paragraph::new(format!("{}  Loading commits...", widgets::spinner_frame()))
@@ -34,27 +32,87 @@ pub fn render(frame: &mut Frame, pr_data: Option<&PrData>, area: Rect) {
             frame.render_widget(paragraph, area);
         }
         Some(LoadState::Loaded(commits)) => {
+            cv.viewport = area.height;
             let last_idx = commits.len() - 1;
             let now = Utc::now();
             let width = area.width as usize;
-            let divider_style = Style::default().fg(theme.divider);
             let items: Vec<ListItem> = commits
                 .iter()
                 .enumerate()
-                .map(|(i, c)| {
-                    let is_last = i == last_idx;
-                    let mut lines = vec![build_commit_line(c, is_last, now, width)];
-                    if !is_last {
-                        lines.push(Line::styled("─".repeat(width), divider_style));
-                    }
-                    ListItem::new(lines)
-                })
+                .map(|(i, c)| ListItem::new(build_commit_line(c, i == last_idx, now, width)))
                 .collect();
 
-            let list = List::new(items);
-            frame.render_widget(list, area);
+            // ListState gives selection highlight + auto-scroll-to-selection.
+            let list = List::new(items)
+                .highlight_style(Style::default().bg(theme.highlight_bg));
+            let mut list_state = ListState::default();
+            list_state.select(Some(cv.selected.min(last_idx)));
+            frame.render_stateful_widget(list, area, &mut list_state);
         }
     }
+}
+
+/// The drill-in: a one-line banner identifying the commit, then that commit's
+/// diff rendered with the shared Diff-tab widget.
+pub fn render_commit_diff(
+    frame: &mut Frame,
+    pr_data: Option<&PrData>,
+    cv: &mut CommitsViewState,
+    area: Rect,
+) {
+    let Some(oid) = cv.drilled.clone() else {
+        return;
+    };
+    let chunks = Layout::default()
+        .direction(Direction::Vertical)
+        .constraints([Constraint::Length(2), Constraint::Min(0)])
+        .split(area);
+
+    render_commit_banner(frame, pr_data, &oid, chunks[0]);
+
+    let diff_state = pr_data.and_then(|d| d.commit_diffs.get(&oid));
+    // No inline comments in the per-commit view yet — they anchor to the PR
+    // diff, not a single commit.
+    super::diff::render(frame, diff_state, &[], &mut cv.diff, chunks[1]);
+}
+
+fn render_commit_banner(frame: &mut Frame, pr_data: Option<&PrData>, oid: &str, area: Rect) {
+    let theme = theme::current();
+    let block = Block::default()
+        .borders(Borders::BOTTOM)
+        .border_style(Style::default().fg(theme.divider));
+    let inner = block.inner(area);
+    frame.render_widget(block, area);
+
+    let commits = match pr_data.map(|d| &d.commits) {
+        Some(LoadState::Loaded(c)) => c.as_slice(),
+        _ => &[],
+    };
+    let found = commits.iter().enumerate().find(|(_, c)| c.oid == oid);
+    let total = commits.len();
+    let short: String = oid.chars().take(7).collect();
+
+    let mut left = vec![
+        Span::styled("\u{f417} ", Style::default().fg(theme.accent)), //  git-commit
+        Span::styled(
+            short,
+            Style::default().fg(theme.accent).add_modifier(Modifier::BOLD),
+        ),
+    ];
+    if let Some((idx, commit)) = found {
+        left.push(Span::styled(
+            format!("  {}/{}  ", idx + 1, total),
+            Style::default().fg(theme.muted),
+        ));
+        left.push(Span::styled(commit.headline.clone(), Style::default().fg(theme.fg)));
+    }
+    let right = vec![Span::styled(
+        "[ ]: prev/next   esc: list",
+        Style::default().fg(theme.muted),
+    )];
+
+    let line = Line::from(widgets::justify_between(left, right, inner.width as usize));
+    frame.render_widget(Paragraph::new(line), inner);
 }
 
 fn build_commit_line(c: &Commit, is_last: bool, now: DateTime<Utc>, width: usize) -> Line<'static> {

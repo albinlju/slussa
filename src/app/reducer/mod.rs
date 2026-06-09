@@ -1,5 +1,6 @@
 use crate::app::{App, action::Action};
 
+pub mod commits;
 pub mod detail;
 pub mod diff;
 pub mod list;
@@ -22,6 +23,7 @@ impl App {
             Action::List(a) => self.apply_list(a),
             Action::Detail(a) => self.apply_detail(a),
             Action::Diff(a) => self.apply_diff(a),
+            Action::Commits(a) => self.apply_commits(a),
             Action::Loaded(a) => self.apply_loaded(a),
         }
     }

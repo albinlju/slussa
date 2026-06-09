@@ -2,8 +2,9 @@ use crate::{
     app::{
         App,
         action::DiffAction,
-        state::{DiffFocus, LoadState, Screen},
+        state::{DiffFocus, DiffViewState, LoadState, Screen},
     },
+    domain::diff::FileDiff,
     tui::screens::pr_detail::file_tree::{TreeRow, build_visible_rows},
 };
 
@@ -16,26 +17,63 @@ impl App {
             DiffAction::ExpandAtCursor => self.diff_expand_at_cursor(),
             DiffAction::MovePaneCursor(delta) => self.diff_move_pane_cursor(delta),
             DiffAction::EnterPane => self.diff_enter_pane(),
-            DiffAction::FocusTree => self.state.ui.diff.focus = DiffFocus::Tree,
+            DiffAction::FocusTree => self.diff_view_mut().focus = DiffFocus::Tree,
+        }
+    }
+
+    /// The diff-pane state the keyboard currently drives: the Commits tab's
+    /// drill-in view when a commit is open, otherwise the Diff tab's own.
+    /// `DiffAction`s flow through here so one set of handlers serves both.
+    fn diff_view(&self) -> &DiffViewState {
+        if self.state.ui.commits.drilled.is_some() {
+            &self.state.ui.commits.diff
+        } else {
+            &self.state.ui.diff
+        }
+    }
+
+    fn diff_view_mut(&mut self) -> &mut DiffViewState {
+        if self.state.ui.commits.drilled.is_some() {
+            &mut self.state.ui.commits.diff
+        } else {
+            &mut self.state.ui.diff
+        }
+    }
+
+    /// Files of the diff currently on screen — the drilled-in commit's diff
+    /// when set, otherwise the full PR diff.
+    fn active_diff_files(&self) -> Option<&[FileDiff]> {
+        let Screen::Detail { pr_id, .. } = self.state.screen else {
+            return None;
+        };
+        let detail = self.state.cache.details.get(&pr_id)?;
+        let state = match &self.state.ui.commits.drilled {
+            Some(oid) => detail.commit_diffs.get(oid)?,
+            None => &detail.diff,
+        };
+        match state {
+            LoadState::Loaded(diff) => Some(&diff.files),
+            _ => None,
         }
     }
 
     /// Switch which file the pane shows, resetting its scroll + line cursor.
     /// No-op when already on that file.
     fn focus_file(&mut self, file_index: usize) {
-        if file_index != self.state.ui.diff.focused_file {
-            self.state.ui.diff.focused_file = file_index;
-            self.state.ui.diff.pane_scroll = 0;
-            self.state.ui.diff.pane_cursor = 0;
+        let view = self.diff_view_mut();
+        if file_index != view.focused_file {
+            view.focused_file = file_index;
+            view.pane_scroll = 0;
+            view.pane_cursor = 0;
         }
     }
 
     fn diff_enter_pane(&mut self) {
         let rows = self.current_visible_rows();
-        match rows.get(self.state.ui.diff.cursor) {
+        match rows.get(self.diff_view().cursor) {
             Some(TreeRow::File { file_index, .. }) => {
                 self.focus_file(*file_index);
-                self.state.ui.diff.focus = DiffFocus::Pane;
+                self.diff_view_mut().focus = DiffFocus::Pane;
             }
             Some(TreeRow::Dir { .. }) => self.diff_toggle_at_cursor(),
             None => {}
@@ -48,8 +86,8 @@ impl App {
             return;
         }
         let last = (rows.len() - 1) as i64;
-        let new_cursor = (self.state.ui.diff.cursor as i64 + delta as i64).clamp(0, last) as usize;
-        self.state.ui.diff.cursor = new_cursor;
+        let new_cursor = (self.diff_view().cursor as i64 + delta as i64).clamp(0, last) as usize;
+        self.diff_view_mut().cursor = new_cursor;
         // Landing on a file row focuses it in the pane.
         if let Some(TreeRow::File { file_index, .. }) = rows.get(new_cursor) {
             self.focus_file(*file_index);
@@ -60,75 +98,61 @@ impl App {
     fn diff_move_pane_cursor(&mut self, delta: i16) {
         let count = self.focused_file_line_count();
         if count == 0 {
-            self.state.ui.diff.pane_cursor = 0;
+            self.diff_view_mut().pane_cursor = 0;
             return;
         }
         let last = (count - 1) as i64;
-        let next = (self.state.ui.diff.pane_cursor as i64 + delta as i64).clamp(0, last);
-        self.state.ui.diff.pane_cursor = next as usize;
+        let next = (self.diff_view().pane_cursor as i64 + delta as i64).clamp(0, last);
+        self.diff_view_mut().pane_cursor = next as usize;
     }
 
     fn focused_file_line_count(&self) -> usize {
-        let Screen::Detail { pr_id, .. } = self.state.screen else {
-            return 0;
-        };
-        self.state
-            .cache
-            .details
-            .get(&pr_id)
-            .and_then(|d| match &d.diff {
-                LoadState::Loaded(diff) => diff.files.get(self.state.ui.diff.focused_file),
-                _ => None,
-            })
+        let focused = self.diff_view().focused_file;
+        self.active_diff_files()
+            .and_then(|files| files.get(focused))
             .map(|file| file.hunks.iter().map(|h| h.lines.len()).sum())
             .unwrap_or(0)
     }
 
     fn diff_toggle_at_cursor(&mut self) {
         let rows = self.current_visible_rows();
-        if let Some(row) = rows.get(self.state.ui.diff.cursor) {
-            match row {
-                TreeRow::Dir { path, expanded, .. } => {
-                    if *expanded {
-                        self.state.ui.diff.collapsed.insert(path.clone());
-                    } else {
-                        self.state.ui.diff.collapsed.remove(path);
-                    }
+        let Some(row) = rows.get(self.diff_view().cursor) else {
+            return;
+        };
+        match row {
+            TreeRow::Dir { path, expanded, .. } => {
+                let path = path.clone();
+                let expanded = *expanded;
+                let collapsed = &mut self.diff_view_mut().collapsed;
+                if expanded {
+                    collapsed.insert(path);
+                } else {
+                    collapsed.remove(&path);
                 }
-                TreeRow::File { file_index, .. } => self.focus_file(*file_index),
             }
+            TreeRow::File { file_index, .. } => self.focus_file(*file_index),
         }
     }
 
     fn diff_collapse_at_cursor(&mut self) {
         let rows = self.current_visible_rows();
-        if let Some(TreeRow::Dir { path, .. }) = rows.get(self.state.ui.diff.cursor) {
-            self.state.ui.diff.collapsed.insert(path.clone());
+        if let Some(TreeRow::Dir { path, .. }) = rows.get(self.diff_view().cursor) {
+            let path = path.clone();
+            self.diff_view_mut().collapsed.insert(path);
         }
     }
 
     fn diff_expand_at_cursor(&mut self) {
         let rows = self.current_visible_rows();
-        if let Some(TreeRow::Dir { path, .. }) = rows.get(self.state.ui.diff.cursor) {
-            self.state.ui.diff.collapsed.remove(path);
+        if let Some(TreeRow::Dir { path, .. }) = rows.get(self.diff_view().cursor) {
+            let path = path.clone();
+            self.diff_view_mut().collapsed.remove(&path);
         }
     }
 
     fn current_visible_rows(&self) -> Vec<TreeRow> {
-        let Screen::Detail { pr_id, .. } = self.state.screen else {
-            return Vec::new();
-        };
-        let files = self
-            .state
-            .cache
-            .details
-            .get(&pr_id)
-            .and_then(|d| match &d.diff {
-                LoadState::Loaded(diff) => Some(&diff.files[..]),
-                _ => None,
-            });
-        match files {
-            Some(files) => build_visible_rows(files, &self.state.ui.diff.collapsed),
+        match self.active_diff_files() {
+            Some(files) => build_visible_rows(files, &self.diff_view().collapsed),
             None => Vec::new(),
         }
     }

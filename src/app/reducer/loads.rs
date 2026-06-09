@@ -27,6 +27,13 @@ impl App {
                 let pr_data = self.state.cache.details.entry(pr_id).or_default();
                 pr_data.activity = LoadState::from_result(r);
             }
+            LoadedAction::CommitDiff(pr_id, oid, r) => {
+                log_outcome("commit-diff", Some(pr_id), &r);
+                let pr_data = self.state.cache.details.entry(pr_id).or_default();
+                pr_data
+                    .commit_diffs
+                    .insert(oid, LoadState::from_result(r));
+            }
         }
     }
 }

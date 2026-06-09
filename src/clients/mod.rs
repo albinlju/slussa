@@ -55,6 +55,16 @@ impl Backend {
         }
     }
 
+    /// The diff a single commit introduced (commit vs its first parent).
+    /// Used by the Commits tab's drill-in. The commit is identified globally
+    /// by `oid`, so no PR id is needed.
+    pub fn fetch_commit_diff(&self, oid: &str) -> Result<Diff, FetchError> {
+        match self {
+            Self::GitHub => github::fetch_commit_diff(oid),
+            Self::BitbucketDc(c) => bitbucket_dc::fetch_commit_diff(c, oid),
+        }
+    }
+
     pub fn fetch_builds(&self, pr_id: u64) -> Result<Vec<Build>, FetchError> {
         match self {
             Self::GitHub => github::fetch_builds(pr_id),

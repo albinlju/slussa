@@ -10,6 +10,7 @@ pub enum Action {
     List(ListAction),
     Detail(DetailAction),
     Diff(DiffAction),
+    Commits(CommitsAction),
     Loaded(LoadedAction),
 }
 
@@ -57,10 +58,25 @@ pub enum DiffAction {
 }
 
 #[derive(Debug)]
+pub enum CommitsAction {
+    /// Move the list cursor by a signed row delta (negative = up). Serves j/k
+    /// (±1) and Ctrl+D/U / PageDown/Up (±half page).
+    MoveSelection(i16),
+    /// Enter on the selected commit: drill into its diff.
+    Open,
+    /// Esc: leave the drilled-in diff, back to the commit list.
+    Back,
+    /// `[` / `]`: step to the previous/next commit while drilled in.
+    StepCommit(i16),
+}
+
+#[derive(Debug)]
 pub enum LoadedAction {
     Prs(Result<Vec<PullRequest>, String>),
     Commits(u64, Result<Vec<Commit>, String>),
     Diff(u64, Result<Diff, String>),
     Builds(u64, Result<Vec<Build>, String>),
     Activity(u64, Result<ActivityBundle, String>),
+    /// A single commit's diff, keyed by `(pr_id, oid)`.
+    CommitDiff(u64, String, Result<Diff, String>),
 }

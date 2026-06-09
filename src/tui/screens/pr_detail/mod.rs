@@ -17,8 +17,8 @@ use ratatui::{
 
 use crate::{
     app::{
-        action::{Action, DetailAction, DiffAction},
-        state::{AppState, DiffFocus, LoadState, PrData, Screen, UiMemory},
+        action::{Action, CommitsAction, DetailAction, DiffAction},
+        state::{AppState, DiffFocus, DiffViewState, LoadState, PrData, Screen, UiMemory},
     },
     domain::{
         comment::ReviewThread,
@@ -118,10 +118,15 @@ pub(in crate::tui) fn render(
         .split(inner);
 
     render_header(frame, pr, chunks[0]);
-    let diff_focus = state.ui.diff.focus;
+    let drilled = state.ui.commits.drilled.is_some();
+    let help_focus = if drilled {
+        state.ui.commits.diff.focus
+    } else {
+        state.ui.diff.focus
+    };
     let pr_data = state.cache.details.get(&pr.id);
     render_tabs_and_content(frame, pr, pr_data, &mut state.ui, tab, chunks[2]);
-    render_help(frame, tab, diff_focus, outer_chunks[1]);
+    render_help(frame, tab, drilled, help_focus, outer_chunks[1]);
 }
 
 pub(super) fn description_body(pr: &PullRequest) -> &str {
@@ -308,19 +313,45 @@ fn render_content(
     match tab {
         DetailTab::Description => description::render(frame, pr, ui, inset),
         DetailTab::Overview => overview::render(frame, pr, pr_data, ui, inset),
-        DetailTab::Diff => diff::render(frame, pr_data, &mut ui.diff, inset),
-        DetailTab::Commits => commits::render(frame, pr_data, inset),
+        DetailTab::Diff => {
+            let threads = activity_threads(pr_data);
+            diff::render(frame, pr_data.map(|d| &d.diff), threads, &mut ui.diff, inset);
+        }
+        DetailTab::Commits => {
+            if ui.commits.drilled.is_some() {
+                commits::render_commit_diff(frame, pr_data, &mut ui.commits, inset);
+            } else {
+                commits::render(frame, pr_data, &mut ui.commits, inset);
+            }
+        }
         DetailTab::Builds => checks::render(frame, pr_data, inset),
     }
 }
 
-fn render_help(frame: &mut Frame, tab: DetailTab, diff_focus: DiffFocus, area: Rect) {
-    let hint = match (tab, diff_focus) {
-        (DetailTab::Diff, DiffFocus::Tree) => {
+/// Inline review threads from the loaded activity bundle, or empty.
+fn activity_threads(pr_data: Option<&PrData>) -> &[ReviewThread] {
+    pr_data
+        .and_then(|d| match &d.activity {
+            LoadState::Loaded(b) => Some(b.threads.as_slice()),
+            _ => None,
+        })
+        .unwrap_or(&[])
+}
+
+fn render_help(frame: &mut Frame, tab: DetailTab, drilled: bool, focus: DiffFocus, area: Rect) {
+    let hint = match (tab, drilled, focus) {
+        (DetailTab::Diff, _, DiffFocus::Tree) => {
             "j/k: files  ^d/^u: page  enter: open  h/l: fold  esc: back"
         }
-        (DetailTab::Diff, DiffFocus::Pane) => {
-            "j/k: line  ^d/^u: page  h/esc: tree  q: quit"
+        (DetailTab::Diff, _, DiffFocus::Pane) => "j/k: line  ^d/^u: page  h/esc: tree  q: quit",
+        (DetailTab::Commits, true, DiffFocus::Tree) => {
+            "j/k: files  enter: open  [ ]: prev/next  esc: list"
+        }
+        (DetailTab::Commits, true, DiffFocus::Pane) => {
+            "j/k: line  [ ]: prev/next commit  h/esc: tree"
+        }
+        (DetailTab::Commits, false, _) => {
+            "j/k: commits  ^d/^u: page  enter: view diff  h/l: tab  esc: back"
         }
         _ => "1-5 / h/l: tab  j/k: scroll  ^d/^u: page  esc: back",
     };
@@ -337,23 +368,35 @@ pub(in crate::tui) fn key_to_action(state: &AppState, key: KeyEvent) -> Option<A
         Screen::Detail { tab, .. } => tab,
         _ => return None,
     };
-    let diff_focus = state.ui.diff.focus;
+    let drilled = state.ui.commits.drilled.is_some();
+    // Focus of whichever diff view is active: the Diff tab's, or — when a
+    // commit is drilled into from the Commits tab — that drill-in's.
+    let diff_focus = if drilled {
+        state.ui.commits.diff.focus
+    } else {
+        state.ui.diff.focus
+    };
 
     // Ctrl+D / Ctrl+U: half-page scroll in whichever view is scrollable right
-    // now (description, overview, or the focused diff pane).
+    // now (description, overview, commit list, or the focused diff pane).
     if key.modifiers.contains(KeyModifiers::CONTROL) {
         match key.code {
-            KeyCode::Char('d') => return half_page_scroll(state, tab, diff_focus, true),
-            KeyCode::Char('u') => return half_page_scroll(state, tab, diff_focus, false),
+            KeyCode::Char('d') => return half_page_scroll(state, tab, true),
+            KeyCode::Char('u') => return half_page_scroll(state, tab, false),
             _ => {}
         }
     }
 
-    // Esc steps back one level: from the diff pane to the tree, otherwise out
-    // of the detail view entirely.
+    // Esc steps back one level: diff pane → tree, commit drill-in → commit
+    // list, otherwise out of the detail view entirely.
     if key.code == KeyCode::Esc {
-        if tab == DetailTab::Diff && diff_focus == DiffFocus::Pane {
+        let in_diff_pane = diff_focus == DiffFocus::Pane
+            && (tab == DetailTab::Diff || (tab == DetailTab::Commits && drilled));
+        if in_diff_pane {
             return Some(Action::Diff(DiffAction::FocusTree));
+        }
+        if tab == DetailTab::Commits && drilled {
+            return Some(Action::Commits(CommitsAction::Back));
         }
         return Some(Action::Detail(DetailAction::Back));
     }
@@ -371,35 +414,31 @@ pub(in crate::tui) fn key_to_action(state: &AppState, key: KeyEvent) -> Option<A
     }
 
     match tab {
-        // Tree focus: navigate files, Enter jumps into the pane.
-        DetailTab::Diff if diff_focus == DiffFocus::Tree => match key.code {
-            KeyCode::Down | KeyCode::Char('j') => Some(Action::Diff(DiffAction::MoveCursor(1))),
-            KeyCode::Up | KeyCode::Char('k') => Some(Action::Diff(DiffAction::MoveCursor(-1))),
-            KeyCode::PageDown => Some(Action::Diff(DiffAction::MoveCursor(half_page(
-                state.ui.diff.tree_viewport,
-            )))),
-            KeyCode::PageUp => Some(Action::Diff(DiffAction::MoveCursor(-half_page(
-                state.ui.diff.tree_viewport,
-            )))),
-            KeyCode::Enter => Some(Action::Diff(DiffAction::EnterPane)),
-            KeyCode::Char(' ') => Some(Action::Diff(DiffAction::ToggleAtCursor)),
-            KeyCode::Left | KeyCode::Char('h') => Some(Action::Diff(DiffAction::CollapseAtCursor)),
-            KeyCode::Right | KeyCode::Char('l') => Some(Action::Diff(DiffAction::ExpandAtCursor)),
-            _ => None,
+        DetailTab::Diff => diff_nav_action(key.code, &state.ui.diff).map(Action::Diff),
+        // Drilled into a commit: same diff navigation as the Diff tab, plus
+        // `[`/`]` to step between commits.
+        DetailTab::Commits if drilled => match key.code {
+            KeyCode::Char('[') => Some(Action::Commits(CommitsAction::StepCommit(-1))),
+            KeyCode::Char(']') => Some(Action::Commits(CommitsAction::StepCommit(1))),
+            _ => diff_nav_action(key.code, &state.ui.commits.diff).map(Action::Diff),
         },
-        // Pane focus: scroll the diff; Enter/h/Left hand focus back to the tree.
-        DetailTab::Diff => match key.code {
-            KeyCode::Down | KeyCode::Char('j') => Some(Action::Diff(DiffAction::MovePaneCursor(1))),
-            KeyCode::Up | KeyCode::Char('k') => Some(Action::Diff(DiffAction::MovePaneCursor(-1))),
-            KeyCode::PageDown => Some(Action::Diff(DiffAction::MovePaneCursor(half_page(
-                state.ui.diff.pane_viewport,
-            )))),
-            KeyCode::PageUp => Some(Action::Diff(DiffAction::MovePaneCursor(-half_page(
-                state.ui.diff.pane_viewport,
-            )))),
-            KeyCode::Enter | KeyCode::Left | KeyCode::Char('h') => {
-                Some(Action::Diff(DiffAction::FocusTree))
+        // Commit list: navigate + Enter to drill into a commit's diff.
+        DetailTab::Commits => match key.code {
+            KeyCode::Down | KeyCode::Char('j') => {
+                Some(Action::Commits(CommitsAction::MoveSelection(1)))
             }
+            KeyCode::Up | KeyCode::Char('k') => {
+                Some(Action::Commits(CommitsAction::MoveSelection(-1)))
+            }
+            KeyCode::PageDown => Some(Action::Commits(CommitsAction::MoveSelection(half_page(
+                state.ui.commits.viewport,
+            )))),
+            KeyCode::PageUp => Some(Action::Commits(CommitsAction::MoveSelection(-half_page(
+                state.ui.commits.viewport,
+            )))),
+            KeyCode::Enter => Some(Action::Commits(CommitsAction::Open)),
+            KeyCode::Right | KeyCode::Char('l') => Some(Action::Detail(DetailAction::NextTab)),
+            KeyCode::Left | KeyCode::Char('h') => Some(Action::Detail(DetailAction::PrevTab)),
             _ => None,
         },
         DetailTab::Overview => match key.code {
@@ -440,14 +479,46 @@ pub(in crate::tui) fn key_to_action(state: &AppState, key: KeyEvent) -> Option<A
     }
 }
 
+/// The diff navigation action a key maps to, given the active diff view's
+/// focus. Shared by the Diff tab and the Commits drill-in.
+fn diff_nav_action(code: KeyCode, view: &DiffViewState) -> Option<DiffAction> {
+    match view.focus {
+        // Tree focus: navigate files, Enter jumps into the pane.
+        DiffFocus::Tree => match code {
+            KeyCode::Down | KeyCode::Char('j') => Some(DiffAction::MoveCursor(1)),
+            KeyCode::Up | KeyCode::Char('k') => Some(DiffAction::MoveCursor(-1)),
+            KeyCode::PageDown => Some(DiffAction::MoveCursor(half_page(view.tree_viewport))),
+            KeyCode::PageUp => Some(DiffAction::MoveCursor(-half_page(view.tree_viewport))),
+            KeyCode::Enter => Some(DiffAction::EnterPane),
+            KeyCode::Char(' ') => Some(DiffAction::ToggleAtCursor),
+            KeyCode::Left | KeyCode::Char('h') => Some(DiffAction::CollapseAtCursor),
+            KeyCode::Right | KeyCode::Char('l') => Some(DiffAction::ExpandAtCursor),
+            _ => None,
+        },
+        // Pane focus: scroll the diff; Enter/h/Left hand focus back to the tree.
+        DiffFocus::Pane => match code {
+            KeyCode::Down | KeyCode::Char('j') => Some(DiffAction::MovePaneCursor(1)),
+            KeyCode::Up | KeyCode::Char('k') => Some(DiffAction::MovePaneCursor(-1)),
+            KeyCode::PageDown => Some(DiffAction::MovePaneCursor(half_page(view.pane_viewport))),
+            KeyCode::PageUp => Some(DiffAction::MovePaneCursor(-half_page(view.pane_viewport))),
+            KeyCode::Enter | KeyCode::Left | KeyCode::Char('h') => Some(DiffAction::FocusTree),
+            _ => None,
+        },
+    }
+}
+
+/// Ctrl+D/U half-page action for a diff view, by current focus.
+fn diff_half_page(view: &DiffViewState, down: bool) -> DiffAction {
+    let step = |v| if down { half_page(v) } else { -half_page(v) };
+    match view.focus {
+        DiffFocus::Pane => DiffAction::MovePaneCursor(step(view.pane_viewport)),
+        DiffFocus::Tree => DiffAction::MoveCursor(step(view.tree_viewport)),
+    }
+}
+
 /// The scroll action Ctrl+D/U should fire, picked from whichever view is
-/// currently scrollable. `None` on non-scrolling contexts (e.g. the file tree).
-fn half_page_scroll(
-    state: &AppState,
-    tab: DetailTab,
-    diff_focus: DiffFocus,
-    down: bool,
-) -> Option<Action> {
+/// currently scrollable. `None` on non-scrolling contexts (e.g. Builds).
+fn half_page_scroll(state: &AppState, tab: DetailTab, down: bool) -> Option<Action> {
     let step = |viewport| {
         let h = half_page(viewport);
         if down { h } else { -h }
@@ -459,13 +530,13 @@ fn half_page_scroll(
         DetailTab::Overview => Some(Action::Detail(DetailAction::OverviewScroll(step(
             state.ui.overview_viewport,
         )))),
-        DetailTab::Diff if diff_focus == DiffFocus::Pane => {
-            Some(Action::Diff(DiffAction::MovePaneCursor(step(state.ui.diff.pane_viewport))))
+        DetailTab::Diff => Some(Action::Diff(diff_half_page(&state.ui.diff, down))),
+        DetailTab::Commits if state.ui.commits.drilled.is_some() => {
+            Some(Action::Diff(diff_half_page(&state.ui.commits.diff, down)))
         }
-        // Tree focus: jump the cursor by a half page.
-        DetailTab::Diff => Some(Action::Diff(DiffAction::MoveCursor(step(
-            state.ui.diff.tree_viewport,
+        DetailTab::Commits => Some(Action::Commits(CommitsAction::MoveSelection(step(
+            state.ui.commits.viewport,
         )))),
-        _ => None,
+        DetailTab::Builds => None,
     }
 }

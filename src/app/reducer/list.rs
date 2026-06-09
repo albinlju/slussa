@@ -2,7 +2,7 @@ use crate::{
     app::{
         App,
         action::ListAction,
-        state::{DiffViewState, Screen, StatusFilter},
+        state::{CommitsViewState, DiffViewState, Screen, StatusFilter},
     },
     tui::screens::pr_detail::DetailTab,
 };
@@ -37,6 +37,7 @@ impl App {
             tab: DetailTab::default(),
         };
         self.state.ui.diff = DiffViewState::default();
+        self.state.ui.commits = CommitsViewState::default();
         self.state.ui.description_scroll = 0;
         self.state.ui.overview_scroll = 0;
 

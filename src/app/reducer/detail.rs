@@ -28,20 +28,27 @@ impl App {
         if let Screen::Detail { tab, .. } = &mut self.state.screen {
             *tab = tab.next();
         }
-        self.state.ui.diff.focus = DiffFocus::Tree;
+        self.leave_tab();
     }
 
     fn prev_tab(&mut self) {
         if let Screen::Detail { tab, .. } = &mut self.state.screen {
             *tab = tab.prev();
         }
-        self.state.ui.diff.focus = DiffFocus::Tree;
+        self.leave_tab();
     }
 
     fn select_tab(&mut self, new_tab: DetailTab) {
         if let Screen::Detail { tab, .. } = &mut self.state.screen {
             *tab = new_tab;
         }
+        self.leave_tab();
+    }
+
+    /// Reset transient per-tab focus on any tab switch: hand diff focus back to
+    /// the tree, and drop the Commits drill-in so the tab reopens on its list.
+    fn leave_tab(&mut self) {
         self.state.ui.diff.focus = DiffFocus::Tree;
+        self.state.ui.commits.drilled = None;
     }
 }

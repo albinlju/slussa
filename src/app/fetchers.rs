@@ -61,6 +61,15 @@ impl App {
         );
     }
 
+    pub(super) fn spawn_load_commit_diff(&self, pr_id: u64, oid: String) {
+        let backend = self.backend.clone();
+        let oid_fetch = oid.clone();
+        self.spawn_fetch(
+            move || backend.fetch_commit_diff(&oid_fetch),
+            move |r| Action::Loaded(LoadedAction::CommitDiff(pr_id, oid, r)),
+        );
+    }
+
     pub(super) fn spawn_load_activity(&self, pr_id: u64) {
         let backend = self.backend.clone();
         self.spawn_fetch(
