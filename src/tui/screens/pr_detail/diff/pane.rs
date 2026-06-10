@@ -1,6 +1,5 @@
-//! Right side of the Diff tab — outer rounded box, the file-path/stats
-//! header band, and the diff body below (hunk headers, +/-/context rows,
-//! inline review-thread boxes anchored to specific lines).
+//! The Diff tab's diff pane: file-path/stats header band, then the diff body
+//! with inline review-thread boxes anchored to their lines.
 
 use std::collections::HashMap;
 
@@ -21,9 +20,8 @@ use crate::{
     tui::{screens::pr_detail::render_inline_thread, theme, widgets},
 };
 
-/// 2-col gutter on each side of the diff body — the content (prefix +
-/// text) sits inside this gutter, but the background tint extends all the
-/// way across the row to the box's borders.
+/// 2-col gutter on each side of the diff body; the row's background tint
+/// extends across it to the box borders.
 const DIFF_GUTTER: &str = "  ";
 const DIFF_GUTTER_COLS: u16 = 2;
 
@@ -63,12 +61,8 @@ pub(super) fn render(
         ])
         .split(pane_inner);
 
-    // Diff body fills the full `pane_inner` width so the row-background tint
-    // on +/- lines flows to the box's left/right borders. Each line's own
-    // padding handles the 2-col left/right gutter for the content itself.
     let body_area = pane_chunks[1];
-    // The cursor is only live when the pane has the keyboard; otherwise the
-    // tree owns navigation and we leave the body unmarked.
+    // The cursor is only live while the pane has the keyboard.
     let active = focused.then_some(pane_cursor);
     let (mut lines, meta) = file_to_lines(file, threads, body_area.width, active);
     let cursor = active.and_then(|i| meta.get(i));
@@ -85,8 +79,8 @@ pub(super) fn render(
         pane_chunks[0],
     );
 
-    // A diff-line cursor highlights its row; a thread cursor is already marked
-    // by its accent border, so we don't tint a row for it.
+    // A line cursor tints its row; a thread cursor is already marked by the
+    // box's accent border.
     if let Some(m) = cursor
         && matches!(m.kind, NavKind::Line { .. })
         && m.rendered_row < lines.len()
@@ -99,8 +93,7 @@ pub(super) fn render(
     let visible = body_area.height as usize;
     let max_scroll = total.saturating_sub(visible) as u16;
 
-    // Keep the cursor item in view (top and bottom for multi-row threads);
-    // otherwise honour the stored offset.
+    // Keep the whole cursor item in view; otherwise honour the stored offset.
     let mut scroll = (*pane_scroll).min(max_scroll) as usize;
     if let Some(m) = cursor {
         let top = m.rendered_row;
@@ -153,7 +146,6 @@ fn render_pane_header(
             Style::default().fg(theme.fg).add_modifier(Modifier::BOLD),
         ),
     ];
-    // Show where the cursor sits / where a comment would anchor.
     if let Some((line, removed, is_thread)) = cursor {
         let label = if is_thread {
             format!("  \u{f075} L{line}") //  comment on this line
@@ -173,8 +165,7 @@ fn render_pane_header(
     frame.render_widget(Paragraph::new(line), header_inner);
 }
 
-/// Truncate from the left if the path exceeds `max`, keeping the filename
-/// visible and prefixing "…" so the reader sees the end of the path.
+/// Truncate from the left (`…tail`) so the filename stays visible.
 fn truncate_path_left(path: &str, max: usize) -> String {
     let total = path.chars().count();
     if total <= max || max < 2 {
@@ -186,9 +177,6 @@ fn truncate_path_left(path: &str, max: usize) -> String {
     format!("…{tail}")
 }
 
-/// Build a single diff line with full-row background fill via the shared
-/// `widgets::diff_bg_row` helper. Context lines have no bg tint, only the
-/// gutter for alignment with `+`/`-` rows above and below.
 fn styled_diff_line(diff_line: &DiffLine, width: u16) -> Line<'static> {
     let theme = theme::current();
     let row_w = width as usize;
@@ -218,26 +206,21 @@ fn styled_diff_line(diff_line: &DiffLine, width: u16) -> Line<'static> {
     }
 }
 
-/// What a navigable cursor item is: a diff line, or an inline thread box.
-/// Both carry the anchor line so the header can label the cursor.
 enum NavKind {
     Line { line: usize, removed: bool },
     Thread { line: usize, removed: bool },
 }
 
-/// A cursor stop in the pane: a diff line or a thread box. Indexed in render
-/// order, matching `pane_cursor`. `row_span` covers a thread box's height so
-/// scrolling can keep the whole box in view; the kind tells the renderer
-/// whether to tint a row or rely on the box's accent border.
+/// A cursor stop in the pane (diff line or thread box), indexed in render
+/// order to match `pane_cursor`. `row_span` is the box height for threads so
+/// scrolling can keep the whole box in view.
 struct NavItem {
-    /// First rendered row of this item in the returned `Vec<Line>`.
     rendered_row: usize,
     row_span: usize,
     kind: NavKind,
 }
 
 impl NavItem {
-    /// Anchor line + whether it's an old-side (removed) line.
     fn line_removed(&self) -> (usize, bool) {
         match self.kind {
             NavKind::Line { line, removed } | NavKind::Thread { line, removed } => (line, removed),
@@ -254,10 +237,9 @@ fn file_to_lines(
     let theme = theme::current();
     let mut lines: Vec<Line> = Vec::new();
     let mut meta: Vec<NavItem> = Vec::new();
-    // File path lives in the pane header above us — don't repeat it here.
 
-    // Build two lookups: threads on added/context lines key off the new-file
-    // line number, threads on removed lines key off the old-file line number.
+    // Threads on added/context lines key off the new-file line number,
+    // threads on removed lines off the old-file number.
     let mut comments_at: HashMap<usize, Vec<&ReviewThread>> = HashMap::new();
     let mut comments_at_old: HashMap<usize, Vec<&ReviewThread>> = HashMap::new();
     for thread in threads.iter().filter(|t| t.path == file.path) {
@@ -270,10 +252,8 @@ fn file_to_lines(
 
     let now = Utc::now();
 
-    // Inline-thread box is rendered narrower than the diff row so the colored
-    // bg around it visibly flows past the box on both sides. Width subtracts
-    // 4 cols (2 each side); the box itself is then offset by 2 cols on its
-    // left when added to the lines.
+    // Thread boxes render narrower than the diff rows so the row bg visibly
+    // flows past the box on both sides.
     let thread_width = width.saturating_sub(2 * DIFF_GUTTER_COLS);
 
     for hunk in &file.hunks {
@@ -299,9 +279,6 @@ fn file_to_lines(
                 kind: NavKind::Line { line, removed },
             });
 
-            // Anchor threads to the line just rendered: removed lines match on
-            // the old-file line number, added/context on the new-file number.
-            // Each thread is its own cursor stop, right after the line.
             let threads_here = match diff_line {
                 DiffLine::Removed(_) => comments_at_old.get(&old_line_num),
                 _ => comments_at.get(&new_line_num),
@@ -339,10 +316,9 @@ fn file_to_lines(
     (lines, meta)
 }
 
-/// Re-tint a whole row with the cursor highlight, keeping each span's fg so the
-/// `+`/`-` colors still read through. Pads to `row_w` so the background fills
-/// the full row — context rows aren't padded otherwise and would only tint
-/// under their text.
+/// Re-tint a row with the cursor bg, keeping each span's fg. Pads to `row_w`
+/// since context rows aren't otherwise padded and would only tint under
+/// their text.
 fn highlight_row(line: Line<'static>, row_w: usize) -> Line<'static> {
     let bg = theme::current().highlight_bg;
     let visible: usize = line.spans.iter().map(|s| s.width()).sum();
@@ -358,10 +334,8 @@ fn highlight_row(line: Line<'static>, row_w: usize) -> Line<'static> {
     Line::from(spans)
 }
 
-/// Render one review thread into the diff body, each line prefixed by the
-/// left gutter so the box aligns with the +/- rows above it. Returns the
-/// number of rows pushed (the box's height) so the caller can record its
-/// `row_span`. `active` draws the box with an accent border.
+/// Render one review thread into the diff body, gutter-prefixed to align
+/// with the diff rows. Returns the box height for the caller's `row_span`.
 fn push_thread_lines(
     lines: &mut Vec<Line<'static>>,
     thread: &ReviewThread,

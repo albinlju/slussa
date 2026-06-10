@@ -1,7 +1,6 @@
-use chrono::{DateTime, TimeZone, Utc};
 use serde::Deserialize;
 
-use super::Config;
+use super::{Config, ms_to_utc};
 use crate::clients::bitbucket_dc::http::get_json;
 use crate::clients::error::FetchError;
 use crate::domain::commit::Commit;
@@ -39,25 +38,12 @@ pub fn fetch_commits(config: &Config, pr_id: u64) -> Result<Vec<Commit>, FetchEr
 }
 
 fn map_commit(c: BbCommit) -> Commit {
-    let (headline, body) = split_message(&c.message);
     Commit {
         oid: c.id,
-        headline,
-        body,
+        headline: c.message.lines().next().unwrap_or("").to_string(),
         author_name: c.author.display_name.unwrap_or(c.author.name),
         authored_at: ms_to_utc(c.author_timestamp),
         additions: 0,
         deletions: 0,
     }
-}
-
-fn split_message(msg: &str) -> (String, String) {
-    let mut lines = msg.lines();
-    let headline = lines.next().unwrap_or("").to_string();
-    let body = lines.collect::<Vec<_>>().join("\n").trim().to_string();
-    (headline, body)
-}
-
-fn ms_to_utc(ms: i64) -> DateTime<Utc> {
-    Utc.timestamp_millis_opt(ms).single().unwrap_or_default()
 }

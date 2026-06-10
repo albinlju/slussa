@@ -20,8 +20,8 @@ use ratatui::{
     widgets::{Block, BorderType, Borders, Clear, List, ListItem, ListState, Paragraph},
 };
 
-/// Fixed widths for every column except Title. Title flexes to absorb the
-/// remaining width so the header and rows fill the inner area edge-to-edge.
+/// Fixed widths for every column except Title, which flexes to absorb the
+/// remaining width.
 struct ColWidths {
     id: usize,
     status: usize,
@@ -69,9 +69,7 @@ enum PrListView<'a> {
 pub(in crate::tui) fn render(frame: &mut Frame, state: &mut AppState, area: ratatui::layout::Rect) {
     let theme = theme::current();
 
-    // List body height = area minus the status bar (1), block border (2) and
-    // column header (1). Stored for half-page selection jumps. Written before
-    // the immutable borrows below.
+    // area minus status bar (1), block border (2), column header (1).
     state.ui.list_viewport = area.height.saturating_sub(4);
 
     let chunks = Layout::default()
@@ -240,16 +238,14 @@ fn row_for_pr(pr: &PullRequest, widths: &ColWidths) -> ListItem<'static> {
     };
 
     // Nerd Font CI status glyphs (requires a Nerd Font in the terminal).
-    let (ci_sym, ci_color) = match pr.ci.state {
+    let (ci_sym, ci_color) = match pr.ci {
         CiState::Success => ("\u{f058}", theme.success), //  check-circle
         CiState::Failed => ("\u{f057}", theme.error),    //  times-circle
         CiState::Pending => ("\u{f017}", theme.warning), //  clock
         CiState::Unknown => ("\u{f042}", theme.muted),   //  adjust (half circle — neutral/not run)
     };
 
-    // Diff column renders `+N` and `-N` as separate colored spans, so we
-    // compute the visible width manually to know how much trailing padding
-    // to add.
+    // `+N`/`-N` are separate colored spans, so the padding is computed by hand.
     let plus = format!("+{}", pr.additions);
     let minus = format!("-{}", pr.deletions);
     let diff_visible = plus.chars().count() + 1 + minus.chars().count();
@@ -284,8 +280,6 @@ fn row_for_pr(pr: &PullRequest, widths: &ColWidths) -> ListItem<'static> {
         (format!("{approved}/{total}"), color)
     };
 
-    // Truncate title/author so they don't push later columns out of alignment
-    // when the data is wider than the column.
     let title_max = widths.title.saturating_sub(2);
     let author_max = widths.author.saturating_sub(2);
     let title: String = pr.title.chars().take(title_max).collect();

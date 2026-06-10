@@ -14,8 +14,7 @@ pub enum PreflightError {
     GhNotAuthenticated {
         host: String,
     },
-    /// Couldn't figure out whether `host` is a Bitbucket Data Center instance
-    /// — probe failed or returned an unexpected shape. Likely network or DNS.
+    /// The backend probe for `host` failed — likely network or DNS.
     UnknownHost {
         host: String,
         reason: String,
@@ -158,7 +157,7 @@ fn probe_bitbucket_dc(host: &str) -> Result<bool, String> {
         .unwrap_or(false))
 }
 
-fn read_origin_remote() -> Result<String, PreflightError> {
+pub(super) fn read_origin_remote() -> Result<String, PreflightError> {
     let output = Command::new("git")
         .args(["remote", "get-url", "origin"])
         .output()
@@ -169,7 +168,7 @@ fn read_origin_remote() -> Result<String, PreflightError> {
     Ok(String::from_utf8_lossy(&output.stdout).trim().to_string())
 }
 
-fn parse_remote_host(url: &str) -> Option<String> {
+pub(super) fn parse_remote_host(url: &str) -> Option<String> {
     if let Some(rest) = url.strip_prefix("ssh://") {
         let (authority, _) = rest.split_once('/')?;
         let host_port = authority.rsplit('@').next().unwrap_or(authority);

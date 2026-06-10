@@ -18,8 +18,6 @@ struct GhCommit {
     oid: String,
     #[serde(default)]
     message_headline: String,
-    #[serde(default)]
-    message_body: String,
     authored_date: DateTime<Utc>,
     #[serde(default)]
     authors: Vec<GhCommitAuthor>,
@@ -84,7 +82,6 @@ fn map_commit(gh: GhCommit) -> Commit {
     Commit {
         oid: gh.oid,
         headline: gh.message_headline,
-        body: gh.message_body,
         author_name,
         authored_at: gh.authored_date,
         additions: 0,

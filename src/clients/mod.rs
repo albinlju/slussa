@@ -14,10 +14,8 @@ use crate::domain::{
     pr::PullRequest,
 };
 
-/// A PR's activity feed, parsed once and split three ways: general discussion
-/// comments, lifecycle events, and inline review threads. Both backends produce
-/// it from a single fetch — Bitbucket from one `/activities` call, GitHub from
-/// one bundling call — mirroring how `structured` projects the diff payload.
+/// A PR's activity feed split three ways: general discussion comments,
+/// lifecycle events, and inline review threads.
 #[derive(Debug, Default, Clone)]
 pub struct ActivityBundle {
     pub comments: Vec<Comment>,
@@ -56,8 +54,6 @@ impl Backend {
     }
 
     /// The diff a single commit introduced (commit vs its first parent).
-    /// Used by the Commits tab's drill-in. The commit is identified globally
-    /// by `oid`, so no PR id is needed.
     pub fn fetch_commit_diff(&self, oid: &str) -> Result<Diff, FetchError> {
         match self {
             Self::GitHub => github::fetch_commit_diff(oid),
@@ -72,7 +68,6 @@ impl Backend {
         }
     }
 
-    /// Comments, events, and inline threads in one shot. See [`ActivityBundle`].
     pub fn fetch_activity(&self, pr_id: u64) -> Result<ActivityBundle, FetchError> {
         match self {
             Self::GitHub => github::fetch_activity(pr_id),

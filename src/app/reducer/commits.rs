@@ -10,8 +10,6 @@ impl App {
             CommitsAction::MoveSelection(delta) => self.commits_move_selection(delta),
             CommitsAction::Open => self.commits_open_selected(),
             CommitsAction::Back => self.state.ui.commits.drilled = None,
-            // Step = move the selection, then re-drill into the new commit so
-            // `[`/`]` page through commit diffs without returning to the list.
             CommitsAction::StepCommit(delta) => {
                 self.commits_move_selection(delta);
                 self.commits_open_selected();
@@ -19,7 +17,6 @@ impl App {
         }
     }
 
-    /// Commit oids in list order for the open PR, or empty if not loaded.
     fn commit_oids(&self) -> Vec<String> {
         let Screen::Detail { pr_id, .. } = self.state.screen else {
             return Vec::new();
@@ -54,13 +51,10 @@ impl App {
             return;
         };
         self.state.ui.commits.drilled = Some(oid.clone());
-        // Fresh tree/pane state for the commit we're entering.
         self.state.ui.commits.diff = DiffViewState::default();
         self.ensure_commit_diff(oid);
     }
 
-    /// Kick off the per-commit diff fetch the first time a commit is opened;
-    /// subsequent opens reuse the cached result.
     fn ensure_commit_diff(&mut self, oid: String) {
         let Screen::Detail { pr_id, .. } = self.state.screen else {
             return;

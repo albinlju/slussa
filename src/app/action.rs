@@ -16,8 +16,6 @@ pub enum Action {
 
 #[derive(Debug)]
 pub enum ListAction {
-    /// Move the selection by a signed row delta (negative = up). Serves j/k
-    /// (±1) and Ctrl+D/U / PageDown/Up (±half page).
     MoveSelection(i16),
     OpenPr(u64),
     OpenFilterPicker,
@@ -33,40 +31,29 @@ pub enum DetailAction {
     NextTab,
     PrevTab,
     SelectTab(DetailTab),
-    /// Scroll by a signed line delta (negative = up). Lets one variant serve
-    /// j/k (±1) and Ctrl+D/U (±half page).
     DescriptionScroll(i16),
     OverviewScroll(i16),
 }
 
 #[derive(Debug)]
 pub enum DiffAction {
-    /// Move the tree cursor by a signed row delta (negative = up). Serves j/k
-    /// (±1) and Ctrl+D/U / PageDown/Up (±half page).
     MoveCursor(i16),
     ToggleAtCursor,
     CollapseAtCursor,
     ExpandAtCursor,
-    /// Move the diff-pane line cursor by a signed delta (negative = up). The
-    /// view auto-scrolls to keep it visible.
     MovePaneCursor(i16),
-    /// Enter on a file row: focus that file and hand the keyboard to the pane.
-    /// On a directory row, falls back to toggling expansion.
+    /// Focus the file under the tree cursor in the pane; on a directory row,
+    /// toggles expansion instead.
     EnterPane,
-    /// Return focus from the pane back to the tree.
     FocusTree,
 }
 
 #[derive(Debug)]
 pub enum CommitsAction {
-    /// Move the list cursor by a signed row delta (negative = up). Serves j/k
-    /// (±1) and Ctrl+D/U / PageDown/Up (±half page).
     MoveSelection(i16),
-    /// Enter on the selected commit: drill into its diff.
     Open,
-    /// Esc: leave the drilled-in diff, back to the commit list.
     Back,
-    /// `[` / `]`: step to the previous/next commit while drilled in.
+    /// Step to the previous/next commit while drilled into a commit's diff.
     StepCommit(i16),
 }
 
@@ -77,6 +64,5 @@ pub enum LoadedAction {
     Diff(u64, Result<Diff, String>),
     Builds(u64, Result<Vec<Build>, String>),
     Activity(u64, Result<ActivityBundle, String>),
-    /// A single commit's diff, keyed by `(pr_id, oid)`.
     CommitDiff(u64, String, Result<Diff, String>),
 }

@@ -21,9 +21,8 @@ impl App {
         }
     }
 
-    /// The diff-pane state the keyboard currently drives: the Commits tab's
-    /// drill-in view when a commit is open, otherwise the Diff tab's own.
-    /// `DiffAction`s flow through here so one set of handlers serves both.
+    /// The diff view the keyboard drives: the Commits drill-in when a commit
+    /// is open, otherwise the Diff tab's own.
     fn diff_view(&self) -> &DiffViewState {
         if self.state.ui.commits.drilled.is_some() {
             &self.state.ui.commits.diff
@@ -40,8 +39,6 @@ impl App {
         }
     }
 
-    /// Files of the diff currently on screen — the drilled-in commit's diff
-    /// when set, otherwise the full PR diff.
     fn active_diff_files(&self) -> Option<&[FileDiff]> {
         let Screen::Detail { pr_id, .. } = self.state.screen else {
             return None;
@@ -57,8 +54,6 @@ impl App {
         }
     }
 
-    /// Switch which file the pane shows, resetting its scroll + line cursor.
-    /// No-op when already on that file.
     fn focus_file(&mut self, file_index: usize) {
         let view = self.diff_view_mut();
         if file_index != view.focused_file {
@@ -88,15 +83,11 @@ impl App {
         let last = (rows.len() - 1) as i64;
         let new_cursor = (self.diff_view().cursor as i64 + delta as i64).clamp(0, last) as usize;
         self.diff_view_mut().cursor = new_cursor;
-        // Landing on a file row focuses it in the pane.
         if let Some(TreeRow::File { file_index, .. }) = rows.get(new_cursor) {
             self.focus_file(*file_index);
         }
     }
 
-    /// Move the pane's cursor over its navigable items (diff lines + inline
-    /// thread boxes). The item count comes from the pane's last render, so the
-    /// cursor can land on comment threads as well as lines.
     fn diff_move_pane_cursor(&mut self, delta: i16) {
         let count = self.diff_view().pane_items;
         if count == 0 {

@@ -1,15 +1,12 @@
 use chrono::{DateTime, Utc};
-use serde::{Deserialize, Serialize};
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone)]
 pub struct Commit {
     pub oid: String,
+    /// First line of the commit message.
     pub headline: String,
-    pub body: String,
     pub author_name: String,
     pub authored_at: DateTime<Utc>,
-    #[serde(default)]
     pub additions: u32,
-    #[serde(default)]
     pub deletions: u32,
 }

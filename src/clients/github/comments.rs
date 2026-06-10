@@ -7,12 +7,9 @@ use crate::clients::error::FetchError;
 use crate::clients::github::cli::run_gh_json;
 
 #[derive(Debug, Deserialize)]
-#[serde(rename_all = "camelCase")]
 struct GhCommentAuthor {
     #[serde(default)]
     login: String,
-    #[serde(default)]
-    name: Option<String>,
 }
 
 #[derive(Debug, Deserialize)]
@@ -22,8 +19,6 @@ struct GhComment {
     body: String,
     author: GhCommentAuthor,
     created_at: DateTime<Utc>,
-    #[serde(default)]
-    updated_at: Option<DateTime<Utc>>,
 }
 
 #[derive(Debug, Deserialize)]
@@ -35,28 +30,15 @@ pub fn fetch_comments(pr_number: u64) -> Result<Vec<Comment>, FetchError> {
     let pr_arg = pr_number.to_string();
     let resp: GhCommentsResponse =
         run_gh_json(&["pr", "view", &pr_arg, "--json", "comments"])?;
-    Ok(resp
-        .comments
-        .into_iter()
-        .enumerate()
-        .map(|(idx, gh)| map_comment(idx as u64, gh))
-        .collect())
+    Ok(resp.comments.into_iter().map(map_comment).collect())
 }
 
-fn map_comment(idx: u64, gh: GhComment) -> Comment {
-    let updated = gh.updated_at.unwrap_or(gh.created_at);
+fn map_comment(gh: GhComment) -> Comment {
     Comment {
-        id: idx,
         author: User {
-            id: gh.author.login.clone(),
             username: gh.author.login,
-            display_name: gh.author.name,
-            avatar_url: None,
         },
         content: gh.body,
         created: gh.created_at,
-        updated,
-        replies: vec![],
-        resolved: false,
     }
 }

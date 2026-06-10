@@ -1,5 +1,4 @@
-//! Left side of the Diff tab — the file tree with a `N files +A -B`
-//! header band on top and the list of dirs/files below.
+//! The Diff tab's file tree, with a `N files +A -B` header band.
 
 use ratatui::{
     Frame,
@@ -95,7 +94,6 @@ pub(super) fn render(
                     let comments = comment_counts.get(*file_index).copied().unwrap_or(0);
                     let indent = "  ".repeat(*depth + 1);
 
-                    // Right group: comment badge (when any) + the +A -D stats.
                     let mut right: Vec<Span<'static>> = Vec::new();
                     if comments > 0 {
                         right.push(Span::styled(

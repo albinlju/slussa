@@ -1,11 +1,7 @@
-//! Bundles GitHub's three activity sources — discussion comments, lifecycle
-//! events, and inline review threads — into one [`ActivityBundle`], matching
-//! the single-fetch shape the rest of the app consumes. Each piece is a
-//! distinct `gh` call (no shared feed like Bitbucket's `/activities`).
-//!
-//! Comments are the primary content, so a failure there fails the whole load.
-//! Events and threads are supplementary: if their `gh` call errors we log it
-//! and fall back to empty rather than blanking the conversation.
+//! Bundles GitHub's three activity sources into one [`ActivityBundle`].
+//! Comments are the primary content, so their failure fails the load; events
+//! and threads degrade to empty with a warning rather than blanking the
+//! conversation.
 
 use super::{comments, events, review_threads};
 use crate::clients::ActivityBundle;

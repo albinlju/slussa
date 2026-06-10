@@ -22,8 +22,6 @@ struct GhPrComment {
     user: GhUser,
     created_at: DateTime<Utc>,
     #[serde(default)]
-    updated_at: Option<DateTime<Utc>>,
-    #[serde(default)]
     path: String,
     #[serde(default)]
     line: Option<usize>,
@@ -62,20 +60,12 @@ pub fn fetch_review_threads(pr_number: u64) -> Result<Vec<ReviewThread>, FetchEr
 
         let domain_comments: Vec<Comment> = group
             .into_iter()
-            .enumerate()
-            .map(|(i, gc)| Comment {
-                id: i as u64,
+            .map(|gc| Comment {
                 author: User {
-                    id: gc.user.login.clone(),
                     username: gc.user.login,
-                    display_name: None,
-                    avatar_url: None,
                 },
                 content: gc.body,
                 created: gc.created_at,
-                updated: gc.updated_at.unwrap_or(gc.created_at),
-                replies: vec![],
-                resolved: false,
             })
             .collect();
 

@@ -41,8 +41,6 @@ impl App {
         self.state.ui.description_scroll = 0;
         self.state.ui.overview_scroll = 0;
 
-        // Kick off each background fetch only on the first open — `start_loading`
-        // returns `true` exactly when the LoadState was `NotRequested`.
         let pr_data = self.state.cache.details.entry(pr_id).or_default();
         let load_commits = pr_data.commits.start_loading();
         let load_diff = pr_data.diff.start_loading();
@@ -63,8 +61,6 @@ impl App {
     }
 
     fn open_filter_picker(&mut self) {
-        // Start the picker cursor on the currently active filter so pressing
-        // Enter without moving keeps the same filter.
         self.state.ui.filter_picker_cursor = StatusFilter::CYCLE
             .iter()
             .position(|&f| f == self.state.ui.list_filter)

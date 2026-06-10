@@ -1,6 +1,4 @@
-//! Builds tab — the CI build statuses reported against the PR's source
-//! commit. A summary band (running/passed/failed + an `N/M passing` count and
-//! a per-build progress bar) sits above an aligned list of build rows.
+//! Builds tab — CI build statuses for the PR's source commit.
 
 use ratatui::{
     Frame,
@@ -44,9 +42,8 @@ fn render_builds(frame: &mut Frame, builds: &[Build], area: Rect) {
     lines.push(summary_line(builds));
     lines.push(Line::default());
 
-    // Align the state labels into a column: reserve room for the longest
-    // "<icon> <name>" prefix, capped so a single long name can't crowd out
-    // the rest of the row.
+    // Reserve room for the longest name, capped so one long name can't crowd
+    // out the rest of the row.
     let name_col = builds
         .iter()
         .map(|b| b.name.chars().count())
@@ -97,8 +94,7 @@ fn summary_line(builds: &[Build]) -> Line<'static> {
     Line::from(spans)
 }
 
-/// One filled block per build, colored by its state. Shared with the Overview
-/// sidebar's Builds section.
+/// One filled block per build, colored by its state.
 pub(super) fn progress_bar(builds: &[Build]) -> Vec<Span<'static>> {
     builds
         .iter()
@@ -138,7 +134,6 @@ fn state_color(state: BuildState) -> Color {
     }
 }
 
-/// (status glyph, human label) for a build state.
 fn state_glyph(state: BuildState) -> (&'static str, &'static str) {
     match state {
         BuildState::Successful => ("\u{f058}", "passing"), //  check-circle
