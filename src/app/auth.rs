@@ -1,6 +1,7 @@
 use std::io::Write;
-use std::process::Command;
 use std::time::Duration;
+
+use crate::app::preflight::{parse_remote_host, read_origin_remote};
 
 const SERVICE: &str = "tuipr";
 
@@ -22,10 +23,8 @@ fn save_pat(host: &str, pat: &str) -> Result<(), String> {
     entry.set_password(pat).map_err(|e| e.to_string())
 }
 
-/// Interactive flow: detect host, prompt for PAT, validate, store. Returns
-/// `Ok(())` on success, `Err` with a printable message otherwise.
 pub fn run_login() -> Result<(), String> {
-    let remote = read_origin_remote()?;
+    let remote = read_origin_remote().map_err(|e| e.to_string())?;
     let host = parse_remote_host(&remote)
         .ok_or_else(|| format!("couldn't parse host from remote `{remote}`"))?;
 
@@ -67,8 +66,7 @@ fn validate_pat(host: &str, pat: &str) -> Result<(), String> {
     if status.is_success() {
         return Ok(());
     }
-    // Surface the server's own message — Bitbucket usually explains *why*
-    // (expired, wrong scope, anonymous access disabled, …).
+    // Bitbucket's error body usually says why (expired, wrong scope, …).
     let body = response.text().unwrap_or_default();
     let detail = server_message(&body);
     if status == reqwest::StatusCode::UNAUTHORIZED || status == reqwest::StatusCode::FORBIDDEN {
@@ -84,8 +82,6 @@ fn validate_pat(host: &str, pat: &str) -> Result<(), String> {
     ))
 }
 
-/// Pull the first `errors[].message` out of a Bitbucket JSON error body, or
-/// fall back to a trimmed snippet of the raw response.
 fn server_message(body: &str) -> String {
     if let Ok(v) = serde_json::from_str::<serde_json::Value>(body)
         && let Some(msg) = v["errors"][0]["message"].as_str()
@@ -100,33 +96,3 @@ fn server_message(body: &str) -> String {
     }
 }
 
-fn read_origin_remote() -> Result<String, String> {
-    let output = Command::new("git")
-        .args(["remote", "get-url", "origin"])
-        .output()
-        .map_err(|_| "must be run in a git repo with an `origin` remote.".to_string())?;
-    if !output.status.success() {
-        return Err("must be run in a git repo with an `origin` remote.".into());
-    }
-    Ok(String::from_utf8_lossy(&output.stdout).trim().to_string())
-}
-
-/// Duplicated from `preflight` so the auth command works as a standalone
-/// entry point without depending on the preflight code path.
-fn parse_remote_host(url: &str) -> Option<String> {
-    if let Some(rest) = url.strip_prefix("ssh://") {
-        let (authority, _) = rest.split_once('/')?;
-        let host_port = authority.rsplit('@').next().unwrap_or(authority);
-        let host = host_port.split(':').next().unwrap_or(host_port);
-        return Some(host.to_string());
-    }
-    if let Some(rest) = url.strip_prefix("git@") {
-        let (host, _) = rest.split_once(':')?;
-        return Some(host.to_string());
-    }
-    let rest = url
-        .strip_prefix("https://")
-        .or_else(|| url.strip_prefix("http://"))?;
-    let (host, _) = rest.split_once('/')?;
-    Some(host.to_string())
-}

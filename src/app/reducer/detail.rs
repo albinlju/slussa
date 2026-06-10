@@ -45,8 +45,8 @@ impl App {
         self.leave_tab();
     }
 
-    /// Reset transient per-tab focus on any tab switch: hand diff focus back to
-    /// the tree, and drop the Commits drill-in so the tab reopens on its list.
+    /// Reset transient focus on tab switch so each tab reopens in its resting
+    /// state.
     fn leave_tab(&mut self) {
         self.state.ui.diff.focus = DiffFocus::Tree;
         self.state.ui.commits.drilled = None;

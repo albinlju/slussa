@@ -6,8 +6,8 @@ pub mod diff;
 pub mod list;
 pub mod loads;
 
-/// Apply a signed line delta to a scroll offset, clamping at the top. The
-/// bottom is clamped at render time against the actual content height.
+/// Clamps at the top; the bottom is clamped at render time against the
+/// actual content height.
 pub(super) fn scroll(offset: u16, delta: i16) -> u16 {
     if delta >= 0 {
         offset.saturating_add(delta as u16)

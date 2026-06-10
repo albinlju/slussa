@@ -7,6 +7,8 @@ mod prs;
 pub mod remote;
 mod structured;
 
+use chrono::{DateTime, TimeZone, Utc};
+
 pub use activities::fetch as fetch_activity;
 pub use builds::fetch_builds;
 pub use commits::fetch_commits;
@@ -25,10 +27,13 @@ pub struct RepoCoords {
     pub repo_slug: String,
 }
 
-/// Everything `BitbucketDc` fetchers need: where the repo lives + the PAT to
-/// authenticate against it.
 #[derive(Clone, Debug)]
 pub struct Config {
     pub repo: RepoCoords,
     pub pat: String,
+}
+
+/// Bitbucket DC timestamps are epoch milliseconds.
+fn ms_to_utc(ms: i64) -> DateTime<Utc> {
+    Utc.timestamp_millis_opt(ms).single().unwrap_or_default()
 }

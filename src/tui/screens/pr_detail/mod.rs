@@ -134,12 +134,11 @@ pub(super) fn description_body(pr: &PullRequest) -> &str {
         .as_deref()
         .map(str::trim)
         .filter(|s| !s.is_empty())
-        .unwrap_or("(ingen beskrivning)")
+        .unwrap_or("(no description)")
 }
 
-/// Render a review thread as a `┃`-bar-prefixed block. Shared between the
-/// inline diff view and the Overview tab so review comments look identical in
-/// both places.
+/// Shared between the inline diff view and the Overview tab so review
+/// threads look identical in both places.
 pub(super) fn render_inline_thread(
     thread: &ReviewThread,
     width: u16,
@@ -148,11 +147,8 @@ pub(super) fn render_inline_thread(
 ) -> Vec<Line<'static>> {
     let theme = theme::current();
     let text_w = widgets::box_text_width(width);
-    // An active (cursor-focused) thread gets an accent border so it reads as
-    // the selected "row"; otherwise the muted divider color.
     let border = if active { theme.accent } else { theme.divider };
 
-    // Box header: status icon + label on the left, comment count on the right.
     let (icon, label, accent) = if thread.resolved {
         ("\u{f058}", "Resolved conversation", theme.success) //  check-circle
     } else {
@@ -239,8 +235,6 @@ fn render_tabs_and_content(
         ])
         .split(area);
 
-    // Tabs sit sandwiched between two divider lines so the row reads as its
-    // own band, separated from both the header above and the content below.
     let tabs_block = Block::default()
         .borders(Borders::TOP | Borders::BOTTOM)
         .border_style(Style::default().fg(theme.divider));
@@ -302,9 +296,8 @@ fn render_content(
     tab: DetailTab,
     area: Rect,
 ) {
-    // Description renders through glamour, which adds its own ~2-col
-    // left/right margins. The other tabs render text directly, so we inset
-    // their area on both sides to match the visual indent.
+    // Description renders through glamour, which adds its own ~2-col margins;
+    // the other tabs are inset to match that indent.
     let inset = match tab {
         DetailTab::Description => area,
         _ => Rect {
@@ -333,7 +326,6 @@ fn render_content(
     }
 }
 
-/// Inline review threads from the loaded activity bundle, or empty.
 fn activity_threads(pr_data: Option<&PrData>) -> &[ReviewThread] {
     pr_data
         .and_then(|d| match &d.activity {
@@ -374,16 +366,12 @@ pub(in crate::tui) fn key_to_action(state: &AppState, key: KeyEvent) -> Option<A
         _ => return None,
     };
     let drilled = state.ui.commits.drilled.is_some();
-    // Focus of whichever diff view is active: the Diff tab's, or — when a
-    // commit is drilled into from the Commits tab — that drill-in's.
     let diff_focus = if drilled {
         state.ui.commits.diff.focus
     } else {
         state.ui.diff.focus
     };
 
-    // Ctrl+D / Ctrl+U: half-page scroll in whichever view is scrollable right
-    // now (description, overview, commit list, or the focused diff pane).
     if key.modifiers.contains(KeyModifiers::CONTROL) {
         match key.code {
             KeyCode::Char('d') => return half_page_scroll(state, tab, true),
@@ -420,14 +408,11 @@ pub(in crate::tui) fn key_to_action(state: &AppState, key: KeyEvent) -> Option<A
 
     match tab {
         DetailTab::Diff => diff_nav_action(key.code, &state.ui.diff).map(Action::Diff),
-        // Drilled into a commit: same diff navigation as the Diff tab, plus
-        // `[`/`]` to step between commits.
         DetailTab::Commits if drilled => match key.code {
             KeyCode::Char('[') => Some(Action::Commits(CommitsAction::StepCommit(-1))),
             KeyCode::Char(']') => Some(Action::Commits(CommitsAction::StepCommit(1))),
             _ => diff_nav_action(key.code, &state.ui.commits.diff).map(Action::Diff),
         },
-        // Commit list: navigate + Enter to drill into a commit's diff.
         DetailTab::Commits => match key.code {
             KeyCode::Down | KeyCode::Char('j') => {
                 Some(Action::Commits(CommitsAction::MoveSelection(1)))
@@ -484,11 +469,9 @@ pub(in crate::tui) fn key_to_action(state: &AppState, key: KeyEvent) -> Option<A
     }
 }
 
-/// The diff navigation action a key maps to, given the active diff view's
-/// focus. Shared by the Diff tab and the Commits drill-in.
+/// Diff navigation shared by the Diff tab and the Commits drill-in.
 fn diff_nav_action(code: KeyCode, view: &DiffViewState) -> Option<DiffAction> {
     match view.focus {
-        // Tree focus: navigate files, Enter jumps into the pane.
         DiffFocus::Tree => match code {
             KeyCode::Down | KeyCode::Char('j') => Some(DiffAction::MoveCursor(1)),
             KeyCode::Up | KeyCode::Char('k') => Some(DiffAction::MoveCursor(-1)),
@@ -500,7 +483,6 @@ fn diff_nav_action(code: KeyCode, view: &DiffViewState) -> Option<DiffAction> {
             KeyCode::Right | KeyCode::Char('l') => Some(DiffAction::ExpandAtCursor),
             _ => None,
         },
-        // Pane focus: scroll the diff; Enter/h/Left hand focus back to the tree.
         DiffFocus::Pane => match code {
             KeyCode::Down | KeyCode::Char('j') => Some(DiffAction::MovePaneCursor(1)),
             KeyCode::Up | KeyCode::Char('k') => Some(DiffAction::MovePaneCursor(-1)),
@@ -512,7 +494,6 @@ fn diff_nav_action(code: KeyCode, view: &DiffViewState) -> Option<DiffAction> {
     }
 }
 
-/// Ctrl+D/U half-page action for a diff view, by current focus.
 fn diff_half_page(view: &DiffViewState, down: bool) -> DiffAction {
     let step = |v| if down { half_page(v) } else { -half_page(v) };
     match view.focus {
@@ -521,8 +502,7 @@ fn diff_half_page(view: &DiffViewState, down: bool) -> DiffAction {
     }
 }
 
-/// The scroll action Ctrl+D/U should fire, picked from whichever view is
-/// currently scrollable. `None` on non-scrolling contexts (e.g. Builds).
+/// `None` on non-scrolling contexts (Builds).
 fn half_page_scroll(state: &AppState, tab: DetailTab, down: bool) -> Option<Action> {
     let step = |viewport| {
         let h = half_page(viewport);

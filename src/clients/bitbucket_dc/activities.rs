@@ -1,17 +1,12 @@
-//! Bitbucket DC exposes a PR's whole history through one `/activities` feed —
-//! comments, approvals, merges, the lot. We fetch it once and split it into the
-//! three views the UI wants: general comments, lifecycle events, and inline
-//! review threads. (This is the activity-side mirror of [`super::structured`],
-//! which does the same one-fetch-many-views trick for the diff.)
-//!
-//! Inline comments come straight from here rather than the structured diff,
-//! since the diff window can omit comments whose line falls outside it; the
-//! activities feed always lists every one.
+//! Bitbucket DC exposes a PR's whole history through one `/activities` feed;
+//! it gets fetched once and split into general comments, lifecycle events,
+//! and inline review threads. Inline comments come from here rather than the
+//! structured diff because the diff window can omit comments whose line falls
+//! outside it — the activities feed always lists every one.
 
-use chrono::{DateTime, TimeZone, Utc};
 use serde::Deserialize;
 
-use super::Config;
+use super::{Config, ms_to_utc};
 use crate::clients::ActivityBundle;
 use crate::clients::bitbucket_dc::http::get_json;
 use crate::clients::error::FetchError;
@@ -70,11 +65,9 @@ struct Anchor {
 #[derive(Debug, Deserialize)]
 #[serde(rename_all = "camelCase")]
 struct BbComment {
-    id: u64,
     author: BbUser,
     text: String,
     created_date: i64,
-    updated_date: i64,
     #[serde(default)]
     state: String,
     #[serde(default)]
@@ -82,11 +75,8 @@ struct BbComment {
 }
 
 #[derive(Debug, Deserialize)]
-#[serde(rename_all = "camelCase")]
 struct BbUser {
     name: String,
-    #[serde(default)]
-    display_name: Option<String>,
 }
 
 pub fn fetch(config: &Config, pr_id: u64) -> Result<ActivityBundle, FetchError> {
@@ -98,16 +88,13 @@ pub fn fetch(config: &Config, pr_id: u64) -> Result<ActivityBundle, FetchError> 
     Ok(project(page.values))
 }
 
-/// Split the raw activity feed into the three views. Pure, so it's unit-tested
-/// directly against sample payloads.
 fn project(activities: Vec<Activity>) -> ActivityBundle {
     let mut bundle = ActivityBundle::default();
     for activity in activities {
         if activity.action == "COMMENTED" {
             match (activity.comment_anchor, activity.comment) {
-                // Anchored to a diff line → inline review thread.
+                // An anchor means the comment sits on a diff line.
                 (Some(anchor), Some(root)) => bundle.threads.push(make_thread(anchor, &root)),
-                // No anchor → general discussion comment.
                 (None, Some(root)) => bundle.comments.push(map_comment(&root)),
                 _ => {}
             }
@@ -135,7 +122,7 @@ fn project(activities: Vec<Activity>) -> ActivityBundle {
         };
 
         bundle.events.push(TimelineEvent {
-            actor: activity.user.map(map_user),
+            actor: activity.user.as_ref().map(map_user),
             kind,
             created: ms_to_utc(activity.created_date),
         });
@@ -183,22 +170,15 @@ fn collect_replies(c: &BbComment, out: &mut Vec<Comment>) {
 
 fn map_comment(c: &BbComment) -> Comment {
     Comment {
-        id: c.id,
-        author: map_user_ref(&c.author),
+        author: map_user(&c.author),
         content: c.text.clone(),
         created: ms_to_utc(c.created_date),
-        updated: ms_to_utc(c.updated_date),
-        replies: Vec::new(),
-        resolved: c.state.eq_ignore_ascii_case("RESOLVED"),
     }
 }
 
-fn map_user(u: BbUser) -> User {
+fn map_user(u: &BbUser) -> User {
     User {
-        id: u.name.clone(),
-        username: u.name,
-        display_name: u.display_name,
-        avatar_url: None,
+        username: u.name.clone(),
     }
 }
 
@@ -207,19 +187,6 @@ fn map_pushed(c: RescopeCommit) -> PushedCommit {
         id: c.display_id,
         message: c.message.lines().next().unwrap_or_default().to_string(),
     }
-}
-
-fn map_user_ref(u: &BbUser) -> User {
-    User {
-        id: u.name.clone(),
-        username: u.name.clone(),
-        display_name: u.display_name.clone(),
-        avatar_url: None,
-    }
-}
-
-fn ms_to_utc(ms: i64) -> DateTime<Utc> {
-    Utc.timestamp_millis_opt(ms).single().unwrap_or_default()
 }
 
 #[cfg(test)]

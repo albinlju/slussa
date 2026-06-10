@@ -37,10 +37,8 @@ pub(super) fn footer(width: u16, hints: &str) -> Line<'static> {
     Line::from(justify_between(left, right, width as usize))
 }
 
-/// Build a `left ... pad ... right` span sequence that fills `width`. Widths
-/// are measured with `Span::width()` so Nerd Font glyphs land where they
-/// should. If left + right already exceed `width`, a single space keeps
-/// them visually separated.
+/// `left … pad … right` spans filling `width`, with at least one space
+/// between the groups.
 pub(super) fn justify_between(
     mut left: Vec<Span<'static>>,
     right: Vec<Span<'static>>,
@@ -54,15 +52,9 @@ pub(super) fn justify_between(
     left
 }
 
-/// Vertical thumb-style scrollbar with a fixed 3-row thumb that slides from
-/// the top to `height - 1` as `scroll` runs from `0` to `max_scroll`.
-///
-/// ratatui's built-in `Scrollbar` sizes its thumb proportionally to visible
-/// content, which for short scroll ranges means the thumb's *top* only
-/// inches down even at max scroll — it doesn't feel like "at the bottom".
-/// A fixed thumb fixes that; it compresses to 1-2 rows at the very end
-/// (lower rows fall outside the track), a small visual cost for clear
-/// "I'm at the bottom" feedback.
+/// Fixed 3-row thumb that slides the full track, instead of ratatui's
+/// proportional `Scrollbar` whose thumb barely moves on short scroll ranges.
+/// The thumb compresses against the bottom at the end of the track.
 pub(super) fn scrollbar(scroll: u16, max_scroll: u16, height: u16) -> Vec<Line<'static>> {
     if max_scroll == 0 || height == 0 {
         return Vec::new();
@@ -94,9 +86,9 @@ pub(super) fn scrollbar_area(area: Rect) -> Rect {
     }
 }
 
-/// Markdown body → ratatui lines via charmed-glamour, already wrapped to
-/// `width`. Wraps the call in `catch_unwind` so a glamour panic falls back
-/// to raw body lines instead of taking down the TUI.
+/// Markdown → ratatui lines via charmed-glamour, wrapped to `width`. A
+/// glamour panic or ANSI-bridge failure falls back to the raw body instead
+/// of taking down the TUI.
 pub(super) fn markdown(body: &str, width: u16) -> Vec<Line<'static>> {
     if width == 0 {
         return vec![Line::default()];
@@ -110,7 +102,6 @@ pub(super) fn markdown(body: &str, width: u16) -> Vec<Line<'static>> {
     });
     let lines = match rendered {
         Ok(Ok(lines)) => lines,
-        // ANSI bridge failed, or glamour panicked: fall back to the raw body.
         _ => body.lines().map(|l| Line::raw(l.to_string())).collect(),
     };
     if lines.is_empty() {
@@ -134,9 +125,8 @@ fn is_blank_line(line: &Line<'static>) -> bool {
     line.spans.is_empty() || line.spans.iter().all(|s| s.content.trim().is_empty())
 }
 
-/// Strip `n` leading chars from each line's first span — peels off
-/// glamour's fixed-width document margin so the rendered markdown sits
-/// flush against whatever frames it.
+/// Peel off glamour's fixed-width document margin (`n` leading chars per
+/// line) so the rendered markdown sits flush against whatever frames it.
 pub(super) fn strip_glamour_margin(lines: Vec<Line<'static>>, n: usize) -> Vec<Line<'static>> {
     lines
         .into_iter()
@@ -181,9 +171,8 @@ fn wrap_box_line(line: Line<'static>, text_w: usize, border: Style) -> Line<'sta
     let visible: usize = line.spans.iter().map(|s| s.width()).sum();
     let pad = text_w.saturating_sub(visible);
     let line_style = line.style;
-    // If the line's leading/trailing span carries a bg tint, extend it into
-    // the 1-col gap spaces so the fill reaches the inner borders. Otherwise
-    // the gap is plain.
+    // Extend an edge span's bg tint into the 1-col gap so the fill reaches
+    // the inner borders.
     let leading_bg = line.spans.first().and_then(|s| s.style.bg);
     let trailing_bg = line.spans.last().and_then(|s| s.style.bg);
     let pad_style = |bg: Option<ratatui::style::Color>| match bg {

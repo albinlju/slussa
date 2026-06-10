@@ -42,7 +42,6 @@ pub fn render(frame: &mut Frame, pr_data: Option<&PrData>, cv: &mut CommitsViewS
                 .map(|(i, c)| ListItem::new(build_commit_line(c, i == last_idx, now, width)))
                 .collect();
 
-            // ListState gives selection highlight + auto-scroll-to-selection.
             let list = List::new(items)
                 .highlight_style(Style::default().bg(theme.highlight_bg));
             let mut list_state = ListState::default();
@@ -52,8 +51,8 @@ pub fn render(frame: &mut Frame, pr_data: Option<&PrData>, cv: &mut CommitsViewS
     }
 }
 
-/// The drill-in: a one-line banner identifying the commit, then that commit's
-/// diff rendered with the shared Diff-tab widget.
+/// The drill-in: a banner identifying the commit, then its diff rendered with
+/// the shared Diff-tab widget.
 pub fn render_commit_diff(
     frame: &mut Frame,
     pr_data: Option<&PrData>,
@@ -72,8 +71,6 @@ pub fn render_commit_diff(
     render_commit_banner(frame, pr_data, &oid, chunks[0]);
 
     let diff_state = pr_data.and_then(|d| d.commit_diffs.get(&oid));
-    // Pass the PR's review threads through: the pane anchors each to its
-    // (path, line), so a comment shows on any line this commit's diff renders.
     super::diff::render(frame, diff_state, threads, &mut cv.diff, chunks[1]);
 }
 

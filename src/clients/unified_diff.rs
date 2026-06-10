@@ -37,9 +37,9 @@ pub fn parse(text: &str) -> Diff {
                 lines: Vec::new(),
             });
         } else if let Some(hunk) = current_hunk.as_mut() {
-            if line.starts_with("+++") || line.starts_with("---") {
-                continue;
-            }
+            // `---`/`+++` file headers only appear outside hunks, so a
+            // leading +/- here is always a real diff line (`+++i;` = added
+            // `++i;`).
             if let Some(rest) = line.strip_prefix('+') {
                 hunk.lines.push(DiffLine::Added(rest.to_string()));
             } else if let Some(rest) = line.strip_prefix('-') {
@@ -65,7 +65,12 @@ pub fn parse(text: &str) -> Diff {
 fn parse_hunk_header(line: &str) -> (usize, usize) {
     let mut old_start = 0;
     let mut new_start = 0;
-    for part in line.split_whitespace() {
+    // Stop at the closing `@@`: the section text after it can contain tokens
+    // starting with `-`/`+` (e.g. `@@ -1,2 +3,4 @@ fn f() -> u16 {`).
+    for part in line.split_whitespace().skip(1) {
+        if part == "@@" {
+            break;
+        }
         if let Some(rest) = part.strip_prefix('-') {
             old_start = rest
                 .split(',')
@@ -81,4 +86,56 @@ fn parse_hunk_header(line: &str) -> (usize, usize) {
         }
     }
     (old_start, new_start)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn hunk_header_ignores_section_text() {
+        // The `->` in the trailing function context must not reset old_start.
+        assert_eq!(
+            parse_hunk_header("@@ -10,7 +12,8 @@ fn half_page(viewport: u16) -> i16 {"),
+            (10, 12)
+        );
+        assert_eq!(parse_hunk_header("@@ -1 +1,2 @@"), (1, 1));
+    }
+
+    #[test]
+    fn keeps_diff_lines_starting_with_double_plus_or_minus() {
+        // Single literal: a `\`-continued string would strip the context
+        // line's leading space.
+        let text =
+            "diff --git a/x.c b/x.c\n--- a/x.c\n+++ b/x.c\n@@ -1,2 +1,2 @@\n int i = 0;\n---i;\n+++i;\n";
+        let diff = parse(text);
+        let lines = &diff.files[0].hunks[0].lines;
+        assert!(matches!(&lines[0], DiffLine::Context(s) if s == "int i = 0;"));
+        assert!(matches!(&lines[1], DiffLine::Removed(s) if s == "--i;"));
+        assert!(matches!(&lines[2], DiffLine::Added(s) if s == "++i;"));
+    }
+
+    #[test]
+    fn splits_files_and_skips_headers() {
+        let text = "diff --git a/a.rs b/a.rs\n\
+                    index 123..456 100644\n\
+                    --- a/a.rs\n\
+                    +++ b/a.rs\n\
+                    @@ -3,2 +3,2 @@\n\
+                    -old();\n\
+                    +new();\n\
+                    diff --git a/b.rs b/b.rs\n\
+                    --- a/b.rs\n\
+                    +++ b/b.rs\n\
+                    @@ -1,1 +1,1 @@\n\
+                    -x\n\
+                    +y\n";
+        let diff = parse(text);
+        assert_eq!(diff.files.len(), 2);
+        assert_eq!(diff.files[0].path, "a.rs");
+        assert_eq!(diff.files[0].hunks[0].old_start, 3);
+        assert_eq!(diff.files[1].path, "b.rs");
+        // The `--- a/...` / `+++ b/...` headers never leak in as diff lines.
+        assert_eq!(diff.files[1].hunks[0].lines.len(), 2);
+    }
 }

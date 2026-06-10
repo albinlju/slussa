@@ -1,21 +1,16 @@
 use std::fmt;
 
 #[derive(Debug)]
-#[allow(dead_code)]
 pub enum FetchError {
     /// `gh` binary couldn't be spawned at all.
     GhMissing,
-    /// `gh` ran but returned a non-zero exit code. Stderr is captured so we
-    /// can show the user what gh complained about.
+    /// `gh` ran but exited non-zero.
     GhFailed { code: Option<i32>, stderr: String },
-    /// HTTP request to a REST API (Bitbucket Data Center, Cloud) failed with
-    /// a non-2xx status. Body is included for diagnosis.
+    /// Non-2xx from a REST API; body kept for diagnosis.
     HttpFailed { status: u16, body: String },
-    /// Network-level error before we even got an HTTP response — DNS,
-    /// connect, TLS, etc.
+    /// Network-level error before any HTTP response — DNS, connect, TLS.
     Network(String),
-    /// Auth credentials are missing for the host — caller should send the
-    /// user through `tuipr auth login`.
+    /// No credentials for the host — the user needs `tuipr auth login`.
     NotAuthenticated { host: String },
     /// The response didn't match the schema we expected.
     ParseFailed(String),

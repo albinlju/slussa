@@ -90,9 +90,8 @@ fn print_help() {
 }
 
 
-/// Round-trips a throwaway entry through the OS keyring to confirm the
-/// platform backend is wired in. Useful for verifying the install before
-/// trusting it with a real PAT.
+/// Round-trips a throwaway entry through the OS keyring, for verifying the
+/// install before trusting it with a real PAT.
 fn run_keyring_test() -> ExitCode {
     use keyring::Entry;
 

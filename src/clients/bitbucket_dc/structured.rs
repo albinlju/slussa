@@ -1,7 +1,6 @@
 //! Bitbucket DC's `/diff` endpoint returns a *structured* JSON diff (not raw
-//! unified-diff text). We project it into our [`Diff`]. Inline comments come
-//! from the activities feed instead (see [`super::activities`]), so we don't
-//! ask for `withComments` here — the diff window can omit comments anyway.
+//! unified-diff text), projected here into [`Diff`]. Inline comments come
+//! from the activities feed instead (see [`super::activities`]).
 //!
 //! Shape (trimmed to what we read):
 //! ```json
@@ -76,8 +75,8 @@ pub(super) fn fetch(config: &Config, pr_id: u64) -> Result<Diff, FetchError> {
     fetch_path(config, &path)
 }
 
-/// The diff a single commit introduced, from the same structured-diff endpoint
-/// scoped to a commit (defaults to diffing against the first parent).
+/// Same structured-diff endpoint scoped to a commit (diffs against the first
+/// parent by default).
 pub(super) fn fetch_commit(config: &Config, oid: &str) -> Result<Diff, FetchError> {
     let path = format!(
         "/rest/api/1.0/projects/{}/repos/{}/commits/{oid}/diff",

@@ -25,7 +25,6 @@ struct PagedBuilds {
 }
 
 #[derive(Debug, Deserialize)]
-#[serde(rename_all = "camelCase")]
 struct BbBuild {
     #[serde(default)]
     key: String,
@@ -33,10 +32,6 @@ struct BbBuild {
     name: Option<String>,
     #[serde(default)]
     state: String,
-    #[serde(default)]
-    description: Option<String>,
-    #[serde(default)]
-    url: Option<String>,
     #[serde(default)]
     duration: Option<u64>,
 }
@@ -69,18 +64,11 @@ fn map_build(b: BbBuild) -> Build {
         "CANCELLED" => BuildState::Cancelled,
         _ => BuildState::Unknown,
     };
-    // Fall back to the key when no display name is set — the key is required,
-    // so the row is never blank.
-    let name = b
-        .name
-        .filter(|n| !n.is_empty())
-        .unwrap_or_else(|| b.key.clone());
+    // The key is required, so the row is never blank.
+    let name = b.name.filter(|n| !n.is_empty()).unwrap_or(b.key);
     Build {
-        key: b.key,
         name,
         state,
-        description: b.description,
-        url: b.url,
         duration_ms: b.duration,
     }
 }

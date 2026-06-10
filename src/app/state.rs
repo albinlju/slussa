@@ -14,10 +14,11 @@ pub struct AppState {
     pub screen: Screen,
 }
 
+/// The `*_viewport` fields are written by the renderer each frame (last-drawn
+/// content height) and read by the key handlers to size half-page jumps.
 #[derive(Debug, Default)]
 pub struct UiMemory {
     pub list_selected: usize,
-    /// Last-rendered PR-list height, for half-page selection jumps.
     pub list_viewport: u16,
     pub list_filter: StatusFilter,
     pub filter_picker_open: bool,
@@ -26,8 +27,6 @@ pub struct UiMemory {
     pub commits: CommitsViewState,
     pub description_scroll: u16,
     pub overview_scroll: u16,
-    /// Last-rendered content height of the description / overview views, so
-    /// Ctrl+D/U can scroll by a half page.
     pub description_viewport: u16,
     pub overview_viewport: u16,
 }
@@ -79,17 +78,13 @@ pub struct DiffViewState {
     pub focused_file: usize,
     pub collapsed: HashSet<String>,
     pub pane_scroll: u16,
-    /// Cursor within the focused file's diff, as a logical diff-line index
-    /// (added/removed/context, in file order). The line a comment would anchor
-    /// to; the pane highlights it and scrolls to keep it visible.
+    /// Cursor over the focused file's navigable items (diff lines + inline
+    /// thread boxes), in render order.
     pub pane_cursor: usize,
-    /// Last-rendered body heights of the diff pane / file tree, for half-page
-    /// scrolling and cursor jumps.
     pub pane_viewport: u16,
     pub tree_viewport: u16,
-    /// Number of navigable items (diff lines + inline thread boxes) in the
-    /// focused file, written by the pane each render. The reducer clamps
-    /// `pane_cursor` against it so the cursor can step onto comment threads.
+    /// Item count behind `pane_cursor`, written by the pane each render so
+    /// the reducer can clamp the cursor.
     pub pane_items: usize,
     pub focus: DiffFocus,
 }
@@ -101,20 +96,14 @@ pub enum DiffFocus {
     Pane,
 }
 
-/// State for the Commits tab. Its resting state is the commit list; pressing
-/// Enter on a commit "drills in" to that commit's diff, rendered with the same
-/// widget as the Diff tab via [`DiffViewState`]. The drill-in is transient —
-/// leaving the tab clears `drilled` back to the list (see the reducer).
 #[derive(Debug, Default)]
 pub struct CommitsViewState {
-    /// Cursor in the commit list.
     pub selected: usize,
-    /// Last-rendered list height, for half-page selection jumps.
     pub viewport: u16,
     /// `Some(oid)` while viewing a single commit's diff; `None` = list view.
     pub drilled: Option<String>,
-    /// Diff-pane state used while drilled in, kept separate from the Diff
-    /// tab's own `diff` so the two views don't clobber each other's scroll.
+    /// Pane state for the drill-in, separate from the Diff tab's so the two
+    /// views don't clobber each other's scroll.
     pub diff: DiffViewState,
 }
 
@@ -129,10 +118,8 @@ pub struct PrData {
     pub commits: LoadState<Vec<Commit>>,
     pub diff: LoadState<Diff>,
     pub builds: LoadState<Vec<Build>>,
-    /// Comments, lifecycle events, and inline review threads — one fetch.
     pub activity: LoadState<ActivityBundle>,
-    /// Per-commit diffs, fetched lazily when a commit is drilled into from the
-    /// Commits tab. Keyed by commit oid.
+    /// Per-commit diffs, fetched lazily on drill-in. Keyed by commit oid.
     pub commit_diffs: HashMap<String, LoadState<Diff>>,
 }
 
@@ -146,8 +133,10 @@ pub enum LoadState<T> {
 }
 
 impl<T> LoadState<T> {
+    /// Flip to `Loading` and return true when a fetch should start: not yet
+    /// requested, or failed (so reopening retries).
     pub fn start_loading(&mut self) -> bool {
-        if matches!(self, LoadState::NotRequested) {
+        if matches!(self, LoadState::NotRequested | LoadState::Failed(_)) {
             *self = LoadState::Loading;
             true
         } else {

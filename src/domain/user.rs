@@ -1,9 +1,5 @@
-use serde::{Deserialize, Serialize};
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone)]
 pub struct User {
-    pub id: String,
+    /// Login/handle — what `@-mentions` use.
     pub username: String,
-    pub display_name: Option<String>,
-    pub avatar_url: Option<String>,
 }

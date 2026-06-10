@@ -105,10 +105,5 @@ fn review_kind(state: &str) -> Option<EventKind> {
 }
 
 fn login_user(login: String) -> User {
-    User {
-        id: login.clone(),
-        username: login,
-        display_name: None,
-        avatar_url: None,
-    }
+    User { username: login }
 }

@@ -1,7 +1,5 @@
-//! Diff tab — left side is the file tree (`tree.rs`), right side is the
-//! diff pane (`pane.rs`). This module is the entry point: it picks apart
-//! the `LoadState`, computes per-file `+/-` stats once, and routes to the
-//! two panel renderers.
+//! Diff tab — file tree (`tree.rs`) on the left, diff pane (`pane.rs`) on
+//! the right.
 
 mod pane;
 mod tree;
@@ -22,10 +20,8 @@ use crate::{
     tui::{screens::pr_detail::file_tree::build_visible_rows, theme, widgets},
 };
 
-/// Renders a diff (file tree + pane) from whatever `LoadState` it's given —
-/// the full PR diff for the Diff tab, or a single commit's diff for the
-/// Commits drill-in. Threads are passed in explicitly (empty for the commit
-/// view, which has no inline comments yet).
+/// Renders the full PR diff (Diff tab) or a single commit's diff (Commits
+/// drill-in), depending on the `LoadState` passed in.
 pub fn render(
     frame: &mut Frame,
     diff_state: Option<&LoadState<Diff>>,
@@ -59,11 +55,9 @@ pub fn render(
                 ])
                 .split(area);
 
-            // FileDiff doesn't carry stats so we tally them once here and
-            // pass the slice down to both panel renderers.
             let file_stats: Vec<(u32, u32)> = diff.files.iter().map(count_file_stats).collect();
 
-            // Comment count per file (by file_index) for the tree's badge.
+            // Per-file comment counts for the tree's badge.
             let comment_counts: Vec<usize> = diff
                 .files
                 .iter()
@@ -76,9 +70,7 @@ pub fn render(
                 })
                 .collect();
 
-            // Body heights = each column minus its border (2) and header band
-            // (2); see `pane::render` / `tree::render`. Stored for half-page
-            // scrolling and cursor jumps.
+            // Column height minus border (2) and header band (2).
             ui_diff.pane_viewport = chunks[2].height.saturating_sub(4);
             ui_diff.tree_viewport = chunks[0].height.saturating_sub(4);
 
@@ -108,8 +100,6 @@ pub fn render(
     }
 }
 
-/// Walk a file's hunks and count `+` / `-` lines. Shared between the tree
-/// header (sums them) and the pane header (per-file).
 fn count_file_stats(file: &FileDiff) -> (u32, u32) {
     let mut adds = 0u32;
     let mut dels = 0u32;

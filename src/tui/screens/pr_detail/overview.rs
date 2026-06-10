@@ -36,8 +36,6 @@ pub fn render(
     ui: &mut UiMemory,
     area: Rect,
 ) {
-    // Wide enough → split off a right-hand metadata sidebar; otherwise the
-    // conversation timeline takes the full width.
     let (timeline_area, sidebar_area) = if area.width >= 64 {
         let chunks = Layout::default()
             .direction(Direction::Horizontal)
@@ -69,8 +67,6 @@ fn dim(text: &str) -> Line<'static> {
     ))
 }
 
-/// `3/5 passing` on the first line, the Builds tab's colored progress bar on
-/// the second. Spinner while loading, dash when there are none.
 fn builds_summary(pr_data: Option<&PrData>) -> Vec<Line<'static>> {
     let theme = theme::current();
     match pr_data.map(|d| &d.builds) {
@@ -127,12 +123,10 @@ fn render_sidebar(frame: &mut Frame, pr: &PullRequest, pr_data: Option<&PrData>,
         lines.push(dim("—"));
     } else {
         for r in &pr.reviewers {
-            // Status to the LEFT of the name: approved / denied / not responded.
             let (icon, color) = match r.state {
                 ReviewerState::Approved => ("\u{f058}", theme.success), //  check-circle
                 ReviewerState::ChangesRequested => ("\u{f057}", theme.error), //  times-circle
-                // No approve/reject decision yet.
-                ReviewerState::Commented => ("\u{f10c}", theme.muted), //  circle-o
+                ReviewerState::Commented => ("\u{f10c}", theme.muted),  //  circle-o
             };
             lines.push(Line::from(vec![
                 Span::styled(icon, Style::default().fg(color)),
@@ -150,8 +144,7 @@ fn render_sidebar(frame: &mut Frame, pr: &PullRequest, pr_data: Option<&PrData>,
     lines.extend(builds_summary(pr_data));
     lines.push(Line::default());
 
-    // Labels only render when the provider supplies them (GitHub); Bitbucket
-    // DC has none, so the section is hidden entirely.
+    // Bitbucket DC has no labels; the section is hidden when empty.
     if !pr.labels.is_empty() {
         section_heading(&mut lines, "Labels");
         for label in &pr.labels {
@@ -227,15 +220,12 @@ fn render_timeline(frame: &mut Frame, pr_data: Option<&PrData>, ui: &mut UiMemor
         return;
     }
 
-    // Inline review snippets are pulled from the loaded diff (same source +
-    // styling for every provider).
     let diff = pr_data.and_then(|d| match &d.diff {
         LoadState::Loaded(diff) => Some(diff),
         _ => None,
     });
 
-    // Reserve rightmost column for the scrollbar so wrapped markdown doesn't
-    // get clipped or overlap the thumb.
+    // Rightmost column is reserved for the scrollbar.
     let content_width = area.width.saturating_sub(1);
     let lines = build_overview_lines(
         &bundle.comments,
@@ -295,15 +285,13 @@ fn build_overview_lines(
     events.extend(comments.iter().map(Event::Issue));
     events.extend(threads.iter().map(Event::Review));
     events.extend(activity.iter().map(Event::Activity));
-    // Newest first — most recent activity sits at the top of the timeline.
+    // Newest first.
     events.sort_by_key(|e| std::cmp::Reverse(e.timestamp()));
 
     let now = Utc::now();
 
-    // Render each event's content lines first (no left column), then assemble
-    // with the timeline column prepended — circle on the first line of each
-    // event, vertical connector on all other lines and on the gap rows
-    // between events.
+    // Content lines first, then the timeline column gets prepended: ● on each
+    // event's first line, │ everywhere else.
     let blocks: Vec<(EventStyle, Vec<Line<'static>>)> = events
         .iter()
         .filter_map(|event| match event {
@@ -349,11 +337,9 @@ fn build_overview_lines(
 
 #[derive(Clone, Copy)]
 enum EventStyle {
-    /// Plain issue/discussion comment.
     Comment,
-    /// Inline review comment anchored to a diff line.
     Review,
-    /// Lifecycle event (approved, merged, …) — carries its own dot color.
+    /// Lifecycle event, carrying its own dot color.
     Activity(Color),
 }
 
@@ -367,14 +353,12 @@ impl EventStyle {
     }
 }
 
-/// Lifecycle rows for the timeline. Most events are one line
-/// (`@actor approved · 2d ago`); a push expands to a header plus one line per
-/// added commit. Returns the dot color so the timeline circle matches.
+/// One `@actor <verb> · age` line per lifecycle event (a push adds one line
+/// per commit). Returns the dot color so the timeline circle matches.
 fn activity_lines(event: &TimelineEvent, now: DateTime<Utc>) -> (Color, Vec<Line<'static>>) {
     let theme = theme::current();
     let age = widgets::relative_age(event.created, now);
 
-    // `@actor <verb> · age`, with the actor omitted when unattributed.
     let header = |verb: String, color: Color| -> Line<'static> {
         let mut spans: Vec<Span<'static>> = Vec::new();
         if let Some(actor) = &event.actor {
@@ -410,7 +394,6 @@ fn activity_lines(event: &TimelineEvent, now: DateTime<Utc>) -> (Color, Vec<Line
 
     let (verb, color) = match &event.kind {
         EventKind::Opened => ("opened this pull request", theme.info),
-        EventKind::ReadyForReview => ("marked this ready for review", theme.accent),
         EventKind::Approved => ("approved these changes", theme.success),
         EventKind::ChangesRequested => ("requested changes", theme.error),
         EventKind::ReviewRemoved => ("dismissed their review", theme.muted),
@@ -425,9 +408,6 @@ fn activity_lines(event: &TimelineEvent, now: DateTime<Utc>) -> (Color, Vec<Line
 fn build_issue_lines(c: &Comment, width: u16, now: DateTime<Utc>) -> Vec<Line<'static>> {
     let text_width = widgets::box_text_width(width);
     let header = issue_comment_header(&c.author.username, c.created, now);
-    // Glamour's Dark theme adds a 2-col document margin to every rendered
-    // line. Stripping it pulls the comment text flush against the box's
-    // inner padding instead of sitting another two cols in.
     let body = widgets::trim_blank_lines(widgets::strip_glamour_margin(
         widgets::markdown(&c.content, text_width + 2),
         2,
@@ -448,8 +428,7 @@ fn build_review_lines(
 
     let mut body: Vec<Line<'static>> = Vec::new();
 
-    // Nested box: path:line as header, diff snippet as body. Sits inside the
-    // outer comment box; comment text follows underneath.
+    // Nested box: path:line as header, diff snippet as body.
     let location = match thread.line.or(thread.old_line) {
         Some(l) => format!("{}:{}", thread.path, l),
         None => thread.path.clone(),
@@ -468,16 +447,13 @@ fn build_review_lines(
         .map(|d| diff_snippet(d, &thread.path, thread.line, thread.old_line, inner_text_width))
         .unwrap_or_default();
     if snippet.is_empty() {
-        // No diff context (diff not loaded, or an outdated comment) — show just
-        // the location.
         body.push(inner_header);
     } else {
         body.extend(widgets::boxed(inner_header, snippet, text_width, theme.divider));
     }
 
-    // First comment body + replies. The first author is already in the box
-    // header so we skip the per-comment header for them; replies still get
-    // a `↳ @user` line.
+    // The first author is already in the box header; replies get a `↳ @user`
+    // line.
     for (i, comment) in thread.comments.iter().enumerate() {
         if i > 0 {
             body.push(Line::raw(""));
@@ -518,16 +494,12 @@ fn issue_comment_header(
     ])
 }
 
-/// Diff hunk styled to match the Diff tab — full-row bg tint on added/removed
-/// lines, strong-color prefix for `+`/`-`, plain muted for context. Each row
-/// is prefixed with its new-side line number (blank for removed lines).
-/// Number of leading context lines to show above the anchored line.
+/// Leading context lines above the anchored line.
 const SNIPPET_CONTEXT: usize = 3;
 
-/// A diff snippet around the line a review thread is anchored to, pulled from
-/// the already-loaded diff. Same source + styling for every provider, so
-/// threads look identical regardless of backend. Empty when the file/line
-/// isn't in the diff (e.g. an outdated comment, or the diff isn't loaded yet).
+/// A diff snippet around the thread's anchor line, styled to match the Diff
+/// tab. Empty when the file/line isn't in the loaded diff (outdated comment,
+/// or not loaded yet).
 fn diff_snippet(
     diff: &Diff,
     path: &str,
@@ -540,7 +512,6 @@ fn diff_snippet(
         return Vec::new();
     };
 
-    // Flatten the file's diff lines, tracking both sides' line numbers.
     struct Row<'a> {
         dl: &'a DiffLine,
         new_no: usize,
@@ -563,8 +534,7 @@ fn diff_snippet(
         }
     }
 
-    // Locate the anchored line: by new-side number for added/context, by
-    // old-side number for removed.
+    // Added/context lines anchor by new-side number, removed by old-side.
     let anchor = rows.iter().position(|r| match (line, old_line) {
         (Some(l), _) => !matches!(r.dl, DiffLine::Removed(_)) && r.new_no == l,
         (None, Some(o)) => matches!(r.dl, DiffLine::Removed(_)) && r.old_no == o,
