@@ -291,6 +291,7 @@ pub(super) fn render_inline_thread(
             2,
         )));
         if let Some(line) = widgets::reactions_line(&comment.reactions) {
+            body.push(Line::raw(""));
             body.push(line);
         }
     }

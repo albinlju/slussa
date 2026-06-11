@@ -10,19 +10,30 @@ use crate::tui::theme;
 
 const SPINNER_FRAMES: &[&str] = &["⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏"];
 
-/// A one-line reaction summary (`👍 3   ❤ 1`), or `None` when there are no
-/// reactions. Shared by every comment-rendering view.
+/// One-line reaction pills under a comment, powerline-capped like the
+/// header's status badge. The user's own reactions sit on a dark accent
+/// tint with an accent count — a full accent fill would drown yellow emojis.
 pub(super) fn reactions_line(reactions: &[Reaction]) -> Option<Line<'static>> {
     if reactions.is_empty() {
         return None;
     }
-    let muted = Style::default().fg(theme::current().muted);
+    let theme = theme::current();
     let mut spans: Vec<Span<'static>> = Vec::new();
     for r in reactions {
         if !spans.is_empty() {
-            spans.push(Span::raw("   "));
+            spans.push(Span::raw(" "));
         }
-        spans.push(Span::styled(format!("{} {}", r.emoji, r.count), muted));
+        let (bg, fg) = if r.mine {
+            (theme.accent_bg, theme.accent)
+        } else {
+            (theme.highlight_bg, theme.fg)
+        };
+        spans.push(Span::styled("\u{e0b6}", Style::default().fg(bg)));
+        spans.push(Span::styled(
+            format!("{} {}", r.emoji, r.count),
+            Style::default().fg(fg).bg(bg),
+        ));
+        spans.push(Span::styled("\u{e0b4}", Style::default().fg(bg)));
     }
     Some(Line::from(spans))
 }
@@ -306,5 +317,38 @@ pub(super) fn relative_age(when: DateTime<Utc>, now: DateTime<Utc>) -> String {
         } else {
             "just now".to_string()
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn reaction(emoji: &str, count: u32, mine: bool) -> Reaction {
+        Reaction {
+            emoji: emoji.to_string(),
+            count,
+            mine,
+        }
+    }
+
+    fn text(line: &Line<'_>) -> String {
+        line.spans.iter().map(|s| s.content.as_ref()).collect()
+    }
+
+    #[test]
+    fn renders_one_capped_pill_per_reaction() {
+        let line = reactions_line(&[reaction("👍", 2, false), reaction("👀", 3, false)]).unwrap();
+        assert_eq!(text(&line), "\u{e0b6}👍 2\u{e0b4} \u{e0b6}👀 3\u{e0b4}");
+    }
+
+    #[test]
+    fn own_reaction_gets_the_accent_tint() {
+        let theme = theme::current();
+        let line = reactions_line(&[reaction("👍", 4, true), reaction("👀", 3, false)]).unwrap();
+        // Spans per pill: cap, label, cap (+ a gap span between pills).
+        assert_eq!(line.spans[1].style.bg, Some(theme.accent_bg));
+        assert_eq!(line.spans[1].style.fg, Some(theme.accent));
+        assert_eq!(line.spans[5].style.bg, Some(theme.highlight_bg));
     }
 }
