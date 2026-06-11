@@ -308,6 +308,9 @@ fn file_to_lines(
                 _ => comments_at.get(&new_line_num),
             };
             if let Some(threads_here) = threads_here {
+                let anchor_text = match diff_line {
+                    DiffLine::Added(t) | DiffLine::Removed(t) | DiffLine::Context(t) => t.as_str(),
+                };
                 for thread in threads_here {
                     let idx = meta.len();
                     let start = lines.len();
@@ -317,6 +320,7 @@ fn file_to_lines(
                         thread_width,
                         now,
                         active == Some(idx),
+                        anchor_text,
                     );
                     meta.push(NavItem {
                         rendered_row: start,
@@ -366,8 +370,9 @@ fn push_thread_lines(
     thread_width: u16,
     now: chrono::DateTime<Utc>,
     active: bool,
+    anchor_text: &str,
 ) -> usize {
-    let rendered = render_inline_thread(thread, thread_width, now, active);
+    let rendered = render_inline_thread(thread, thread_width, now, active, Some(anchor_text));
     let count = rendered.len();
     for tline in rendered {
         let line_style = tline.style;

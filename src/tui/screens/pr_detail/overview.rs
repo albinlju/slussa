@@ -11,7 +11,7 @@ use crate::{
     app::state::{LoadState, PrData, UiMemory},
     domain::{
         ci::BuildState,
-        comment::{Comment, ReviewThread},
+        comment::{Comment, ReviewThread, split_suggestions},
         diff::{Diff, DiffLine},
         event::{EventKind, TimelineEvent},
         pr::PullRequest,
@@ -447,18 +447,29 @@ fn build_review_lines(
     let inner_header = Line::from(anchor_spans);
 
     let inner_text_width = widgets::box_text_width(text_width);
-    let snippet = diff
+    let (snippet, anchor_text) = diff
         .map(|d| diff_snippet(d, &thread.path, thread.line, thread.old_line, inner_text_width))
         .unwrap_or_default();
-    if snippet.is_empty() {
+    let splits: Vec<(String, Vec<String>)> = thread
+        .comments
+        .iter()
+        .map(|c| split_suggestions(&c.content))
+        .collect();
+    // A suggestion box repeats the anchored line as its `-` side, so the
+    // snippet would show the same line twice — keep just the location header.
+    let has_suggestion = splits.iter().any(|(_, s)| !s.is_empty());
+    if snippet.is_empty() || has_suggestion {
         body.push(inner_header);
     } else {
         body.extend(widgets::boxed(inner_header, snippet, text_width, theme.divider));
     }
+    let anchor = thread.line.or(thread.old_line).zip(anchor_text.as_deref());
 
     // The first author is already in the box header; replies get a `↳ @user`
     // line.
-    for (i, comment) in thread.comments.iter().enumerate() {
+    for (i, (comment, (prose, suggestions))) in
+        thread.comments.iter().zip(splits.iter()).enumerate()
+    {
         if i > 0 {
             body.push(Line::raw(""));
             let age = widgets::relative_age(comment.created, now);
@@ -470,10 +481,16 @@ fn build_review_lines(
                 Span::styled(format!(" · {age}"), Style::default().fg(theme.muted)),
             ]));
         }
-        body.extend(widgets::trim_blank_lines(widgets::strip_glamour_margin(
-            widgets::markdown(&comment.content, text_width + 2),
-            2,
-        )));
+        if !prose.trim().is_empty() {
+            body.extend(widgets::trim_blank_lines(widgets::strip_glamour_margin(
+                widgets::markdown(prose, text_width + 2),
+                2,
+            )));
+        }
+        for suggestion in suggestions {
+            body.push(Line::default());
+            body.extend(super::suggestion_lines(anchor, suggestion, text_width));
+        }
         if let Some(line) = widgets::reactions_line(&comment.reactions) {
             body.push(Line::default());
             body.push(line);
@@ -506,18 +523,19 @@ fn issue_comment_header(
 const SNIPPET_CONTEXT: usize = 3;
 
 /// A diff snippet around the thread's anchor line, styled to match the Diff
-/// tab. Empty when the file/line isn't in the loaded diff (outdated comment,
-/// or not loaded yet).
+/// tab, plus the anchored line's text (the `-` side of a suggested change).
+/// Empty when the file/line isn't in the loaded diff (outdated comment, or
+/// not loaded yet).
 fn diff_snippet(
     diff: &Diff,
     path: &str,
     line: Option<usize>,
     old_line: Option<usize>,
     width: u16,
-) -> Vec<Line<'static>> {
+) -> (Vec<Line<'static>>, Option<String>) {
     let theme = theme::current();
     let Some(file) = diff.files.iter().find(|f| f.path == path) else {
-        return Vec::new();
+        return (Vec::new(), None);
     };
 
     struct Row<'a> {
@@ -549,7 +567,10 @@ fn diff_snippet(
         _ => false,
     });
     let Some(anchor) = anchor else {
-        return Vec::new();
+        return (Vec::new(), None);
+    };
+    let anchor_text = match rows[anchor].dl {
+        DiffLine::Added(c) | DiffLine::Removed(c) | DiffLine::Context(c) => c.clone(),
     };
 
     let window = &rows[anchor.saturating_sub(SNIPPET_CONTEXT)..=anchor];
@@ -565,7 +586,7 @@ fn diff_snippet(
     let lines: Vec<Line<'static>> = window
         .iter()
         .map(|r| match r.dl {
-            DiffLine::Added(c) => numbered_diff_row(
+            DiffLine::Added(c) => widgets::numbered_diff_row(
                 Some(r.new_no as u32),
                 num_width,
                 "+",
@@ -575,7 +596,7 @@ fn diff_snippet(
                 theme.fg,
                 row_w,
             ),
-            DiffLine::Removed(c) => numbered_diff_row(
+            DiffLine::Removed(c) => widgets::numbered_diff_row(
                 None,
                 num_width,
                 "-",
@@ -585,7 +606,7 @@ fn diff_snippet(
                 theme.muted,
                 row_w,
             ),
-            DiffLine::Context(c) => numbered_diff_row(
+            DiffLine::Context(c) => widgets::numbered_diff_row(
                 Some(r.new_no as u32),
                 num_width,
                 " ",
@@ -597,50 +618,6 @@ fn diff_snippet(
             ),
         })
         .collect();
-    lines
+    (lines, Some(anchor_text))
 }
 
-#[allow(clippy::too_many_arguments)]
-fn numbered_diff_row(
-    line_num: Option<u32>,
-    num_width: usize,
-    prefix: &'static str,
-    content: &str,
-    prefix_fg: Color,
-    bg: Option<Color>,
-    text_fg: Color,
-    row_w: usize,
-) -> Line<'static> {
-    let num_str = match line_num {
-        Some(n) => format!("{n:>num_width$}"),
-        None => " ".repeat(num_width),
-    };
-    // `{num} {prefix} {content}` — single space between each.
-    let gutter = format!(" {num_str} ");
-    let visible = gutter.chars().count() + prefix.chars().count() + 1 + content.chars().count();
-    let pad = row_w.saturating_sub(visible);
-
-    let gutter_style = match bg {
-        Some(bg) => Style::default().fg(theme::current().muted).bg(bg),
-        None => Style::default().fg(theme::current().muted),
-    };
-    let prefix_style = {
-        let s = Style::default()
-            .fg(prefix_fg)
-            .add_modifier(Modifier::BOLD);
-        match bg {
-            Some(bg) => s.bg(bg),
-            None => s,
-        }
-    };
-    let text_style = match bg {
-        Some(bg) => Style::default().fg(text_fg).bg(bg),
-        None => Style::default().fg(text_fg),
-    };
-
-    Line::from(vec![
-        Span::styled(gutter, gutter_style),
-        Span::styled(prefix, prefix_style),
-        Span::styled(format!(" {content}{}", " ".repeat(pad)), text_style),
-    ])
-}
