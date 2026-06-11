@@ -2,7 +2,7 @@ use crate::{
     app::{
         App,
         action::ListAction,
-        state::{CommitsViewState, DiffViewState, Screen, StatusFilter},
+        state::{CommitsViewState, DiffViewState, Screen, SearchState, StatusFilter},
     },
     tui::screens::pr_detail::DetailTab,
 };
@@ -36,6 +36,8 @@ impl App {
             pr_id,
             tab: DetailTab::default(),
         };
+        // Leave search behind so the list is clean when we return.
+        self.state.ui.list_search = SearchState::default();
         self.state.ui.diff = DiffViewState::default();
         self.state.ui.commits = CommitsViewState::default();
         self.state.ui.description_scroll = 0;

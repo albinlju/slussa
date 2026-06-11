@@ -16,11 +16,41 @@ pub struct AppState {
 
 /// The `*_viewport` fields are written by the renderer each frame (last-drawn
 /// content height) and read by the key handlers to size half-page jumps.
+/// Generic `/` incremental-search box, shared by every searchable view (PR
+/// list, commit list, file tree, …). `open` = typing mode; `query` also
+/// narrows/filters its view while non-empty. The reducer drives all of these
+/// through one `Action::Search`, so the editing logic lives in exactly one
+/// place; each view only supplies what to match against.
+#[derive(Debug, Default)]
+pub struct SearchState {
+    pub open: bool,
+    pub query: String,
+}
+
+impl SearchState {
+    /// Case-insensitive substring match; an empty query matches everything.
+    pub fn matches(&self, haystack: &str) -> bool {
+        self.query.is_empty() || haystack.to_lowercase().contains(&self.query.to_lowercase())
+    }
+
+    /// Per-view matchers — the one place each view's searchable fields live, so
+    /// the render filter and the reducer's clamping never drift apart.
+    pub fn matches_pr(&self, pr: &PullRequest) -> bool {
+        self.matches(&format!("#{} {} {}", pr.id, pr.title, pr.author.username))
+    }
+
+    pub fn matches_commit(&self, c: &Commit) -> bool {
+        self.matches(&format!("{} {}", c.oid, c.headline))
+    }
+}
+
 #[derive(Debug, Default)]
 pub struct UiMemory {
     pub list_selected: usize,
     pub list_viewport: u16,
     pub list_filter: StatusFilter,
+    /// `/` incremental search over the PR list (matches `#`, title, author).
+    pub list_search: SearchState,
     pub filter_picker_open: bool,
     pub filter_picker_cursor: usize,
     pub diff: DiffViewState,
@@ -86,6 +116,15 @@ pub struct DiffViewState {
     /// Item count behind `pane_cursor`, written by the pane each render so
     /// the reducer can clamp the cursor.
     pub pane_items: usize,
+    /// `/` search over the file tree — filters files by path.
+    pub tree_search: SearchState,
+    /// `/` search over the diff pane — *highlights* matches instead of
+    /// filtering. The highlight + matches apply on Enter (not while typing);
+    /// `n`/`N` step through them.
+    pub pane_search: SearchState,
+    /// Nav-item indices of the lines matching the applied pane query, written
+    /// by the pane each render. `n`/`N` step `pane_cursor` through these.
+    pub pane_matches: Vec<usize>,
     pub focus: DiffFocus,
 }
 
@@ -100,6 +139,8 @@ pub enum DiffFocus {
 pub struct CommitsViewState {
     pub selected: usize,
     pub viewport: u16,
+    /// `/` search over the commit list — filters by oid + headline.
+    pub search: SearchState,
     /// `Some(oid)` while viewing a single commit's diff; `None` = list view.
     pub drilled: Option<String>,
     /// Pane state for the drill-in, separate from the Diff tab's so the two
@@ -168,6 +209,7 @@ impl AppState {
             LoadState::Loaded(prs) => prs
                 .iter()
                 .filter(|pr| self.ui.list_filter.matches(&pr.status))
+                .filter(|pr| self.ui.list_search.matches_pr(pr))
                 .collect(),
             _ => Vec::new(),
         }

@@ -35,11 +35,12 @@ pub(super) fn render(
     file_stats: &[(u32, u32)],
     threads: &[ReviewThread],
     focused: bool,
+    search_query: &str,
     area: Rect,
-) -> usize {
+) -> (usize, Vec<usize>) {
     let bounded = focused_file.min(diff.files.len().saturating_sub(1));
     let Some(file) = diff.files.get(bounded) else {
-        return 0;
+        return (0, Vec::new());
     };
     let (adds, dels) = file_stats.get(bounded).copied().unwrap_or((0, 0));
 
@@ -64,8 +65,18 @@ pub(super) fn render(
     let body_area = pane_chunks[1];
     // The cursor is only live while the pane has the keyboard.
     let active = focused.then_some(pane_cursor);
-    let (mut lines, meta) = file_to_lines(file, threads, body_area.width, active);
+    let (mut lines, meta, matches) =
+        file_to_lines(file, threads, body_area.width, active, search_query);
     let cursor = active.and_then(|i| meta.get(i));
+
+    // Search highlight: tint every match across the diff body. Applied before
+    // the cursor tint so the cursor row still reads as the cursor.
+    if !search_query.is_empty() {
+        let match_style = Style::default().fg(theme.bg).bg(theme.warning);
+        for line in &mut lines {
+            *line = widgets::highlight_query(std::mem::take(line), search_query, match_style);
+        }
+    }
 
     render_pane_header(
         frame,
@@ -115,7 +126,7 @@ pub(super) fn render(
         frame.render_widget(Paragraph::new(bar), widgets::scrollbar_area(body_area));
     }
 
-    meta.len()
+    (meta.len(), matches)
 }
 
 fn render_pane_header(
@@ -233,10 +244,14 @@ fn file_to_lines(
     threads: &[ReviewThread],
     width: u16,
     active: Option<usize>,
-) -> (Vec<Line<'static>>, Vec<NavItem>) {
+    query: &str,
+) -> (Vec<Line<'static>>, Vec<NavItem>, Vec<usize>) {
     let theme = theme::current();
     let mut lines: Vec<Line> = Vec::new();
     let mut meta: Vec<NavItem> = Vec::new();
+    // Nav-item indices of diff lines containing the (applied) search query.
+    let mut matches: Vec<usize> = Vec::new();
+    let query_lower = query.to_lowercase();
 
     // Threads on added/context lines key off the new-file line number,
     // threads on removed lines off the old-file number.
@@ -273,11 +288,20 @@ fn file_to_lines(
                 DiffLine::Removed(_) => (old_line_num, true),
                 _ => (new_line_num, false),
             };
+            let item_idx = meta.len();
             meta.push(NavItem {
                 rendered_row,
                 row_span: 1,
                 kind: NavKind::Line { line, removed },
             });
+            if !query_lower.is_empty() {
+                let text = match diff_line {
+                    DiffLine::Added(t) | DiffLine::Removed(t) | DiffLine::Context(t) => t,
+                };
+                if text.to_lowercase().contains(&query_lower) {
+                    matches.push(item_idx);
+                }
+            }
 
             let threads_here = match diff_line {
                 DiffLine::Removed(_) => comments_at_old.get(&old_line_num),
@@ -313,7 +337,7 @@ fn file_to_lines(
         }
     }
 
-    (lines, meta)
+    (lines, meta, matches)
 }
 
 /// Re-tint a row with the cursor bg, keeping each span's fg. Pads to `row_w`

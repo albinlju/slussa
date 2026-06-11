@@ -37,6 +37,62 @@ pub(super) fn footer(width: u16, hints: &str) -> Line<'static> {
     Line::from(justify_between(left, right, width as usize))
 }
 
+/// A `/` search prompt line: `Search: query█            N match`. Shared by
+/// every searchable view's footer so they all look and read the same.
+pub(super) fn search_prompt(query: &str, count: usize, width: u16) -> Line<'static> {
+    let theme = theme::current();
+    let left = vec![
+        Span::styled(format!("  Search: {query}"), Style::default().fg(theme.fg)),
+        Span::styled("█", Style::default().fg(theme.accent)),
+    ];
+    let right = vec![Span::styled(
+        format!("{count} match  "),
+        Style::default().fg(theme.muted),
+    )];
+    Line::from(justify_between(left, right, width as usize))
+}
+
+/// Re-style every case-insensitive occurrence of `query` inside `line` with
+/// `match_style` (patched onto each span's own style, so diff tints read
+/// through). Spans that change byte length when lowercased (non-ASCII) are
+/// left untouched to keep slicing on char boundaries.
+pub(super) fn highlight_query(
+    line: Line<'static>,
+    query: &str,
+    match_style: Style,
+) -> Line<'static> {
+    if query.is_empty() {
+        return line;
+    }
+    let needle = query.to_lowercase();
+    let mut out: Vec<Span<'static>> = Vec::new();
+    for span in line.spans {
+        let content = span.content.into_owned();
+        let lower = content.to_lowercase();
+        if content.len() != lower.len() {
+            out.push(Span::styled(content, span.style));
+            continue;
+        }
+        let mut start = 0;
+        while let Some(rel) = lower[start..].find(&needle) {
+            let m = start + rel;
+            if m > start {
+                out.push(Span::styled(content[start..m].to_string(), span.style));
+            }
+            let end = m + needle.len();
+            out.push(Span::styled(
+                content[m..end].to_string(),
+                span.style.patch(match_style),
+            ));
+            start = end;
+        }
+        if start < content.len() {
+            out.push(Span::styled(content[start..].to_string(), span.style));
+        }
+    }
+    Line::from(out)
+}
+
 /// `left … pad … right` spans filling `width`, with at least one space
 /// between the groups.
 pub(super) fn justify_between(

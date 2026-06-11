@@ -33,10 +33,13 @@ pub fn render(frame: &mut Frame, pr_data: Option<&PrData>, cv: &mut CommitsViewS
         }
         Some(LoadState::Loaded(commits)) => {
             cv.viewport = area.height;
-            let last_idx = commits.len() - 1;
             let now = Utc::now();
             let width = area.width as usize;
-            let items: Vec<ListItem> = commits
+            // `/` search narrows the list; selection indexes the filtered view.
+            let filtered: Vec<&Commit> =
+                commits.iter().filter(|c| cv.search.matches_commit(c)).collect();
+            let last_idx = filtered.len().saturating_sub(1);
+            let items: Vec<ListItem> = filtered
                 .iter()
                 .enumerate()
                 .map(|(i, c)| ListItem::new(build_commit_line(c, i == last_idx, now, width)))
