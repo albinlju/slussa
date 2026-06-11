@@ -4,6 +4,8 @@
 mod pane;
 mod tree;
 
+use std::collections::HashSet;
+
 use ratatui::{
     Frame,
     layout::{Constraint, Direction, Layout, Rect},
@@ -57,17 +59,10 @@ pub fn render(
 
             let file_stats: Vec<(u32, u32)> = diff.files.iter().map(count_file_stats).collect();
 
-            // Per-file comment counts for the tree's badge.
             let comment_counts: Vec<usize> = diff
                 .files
                 .iter()
-                .map(|f| {
-                    review_threads
-                        .iter()
-                        .filter(|t| t.path == f.path)
-                        .map(|t| t.comments.len())
-                        .sum()
-                })
+                .map(|f| file_comment_count(f, review_threads))
                 .collect();
 
             // Column height minus border (2) and header band (2).
@@ -100,6 +95,47 @@ pub fn render(
     }
 }
 
+/// Comments whose anchored line is actually present in *this* file's diff —
+/// so the tree badge matches what the pane renders inline. Mirrors the pane's
+/// anchoring: new-side lines (added/context) match `thread.line`, old-side
+/// lines (removed) match `thread.old_line`.
+fn file_comment_count(file: &FileDiff, threads: &[ReviewThread]) -> usize {
+    let mut new_lines: HashSet<usize> = HashSet::new();
+    let mut old_lines: HashSet<usize> = HashSet::new();
+    for hunk in &file.hunks {
+        let mut new_no = hunk.new_start;
+        let mut old_no = hunk.old_start;
+        for line in &hunk.lines {
+            match line {
+                DiffLine::Added(_) => {
+                    new_lines.insert(new_no);
+                    new_no += 1;
+                }
+                DiffLine::Removed(_) => {
+                    old_lines.insert(old_no);
+                    old_no += 1;
+                }
+                DiffLine::Context(_) => {
+                    new_lines.insert(new_no);
+                    new_no += 1;
+                    old_no += 1;
+                }
+            }
+        }
+    }
+    threads
+        .iter()
+        .filter(|t| t.path == file.path)
+        .filter(|t| {
+            t.line.is_some_and(|l| new_lines.contains(&l))
+                || t.old_line.is_some_and(|o| old_lines.contains(&o))
+        })
+        .map(|t| t.comments.len())
+        .sum()
+}
+
+/// Walk a file's hunks and count `+` / `-` lines. Shared between the tree
+/// header (sums them) and the pane header (per-file).
 fn count_file_stats(file: &FileDiff) -> (u32, u32) {
     let mut adds = 0u32;
     let mut dels = 0u32;
