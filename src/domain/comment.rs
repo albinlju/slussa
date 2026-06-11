@@ -15,6 +15,9 @@ pub struct Comment {
 pub struct Reaction {
     pub emoji: String,
     pub count: u32,
+    /// Whether the logged-in user is among the reactors — their own
+    /// reactions render with a border.
+    pub mine: bool,
 }
 
 /// A review thread is a discussion anchored to a specific line in the diff.

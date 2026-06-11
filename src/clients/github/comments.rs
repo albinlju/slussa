@@ -1,75 +1,66 @@
-use chrono::{DateTime, Utc};
 use serde::Deserialize;
 
-use crate::domain::comment::{Comment, Reaction};
-use crate::domain::user::User;
 use crate::clients::error::FetchError;
 use crate::clients::github::cli::run_gh_json;
-use crate::clients::github::reaction_emoji;
+use crate::clients::github::{GqlComment, map_gql_comment};
+use crate::domain::comment::Comment;
+
+// GraphQL instead of `gh pr view --json comments`: only the GraphQL
+// reactionGroups carry `viewerHasReacted`, which marks the user's own
+// reactions in the UI.
+const QUERY: &str = "query($owner: String!, $name: String!, $pr: Int!) { \
+  repository(owner: $owner, name: $name) { pullRequest(number: $pr) { \
+    comments(first: 100) { nodes { \
+      body createdAt author { login } \
+      reactionGroups { content viewerHasReacted users { totalCount } } \
+    } } } } }";
 
 #[derive(Debug, Deserialize)]
-struct GhCommentAuthor {
-    #[serde(default)]
-    login: String,
+struct GqlResponse {
+    data: GqlData,
+}
+
+#[derive(Debug, Deserialize)]
+struct GqlData {
+    repository: GqlRepository,
 }
 
 #[derive(Debug, Deserialize)]
 #[serde(rename_all = "camelCase")]
-struct GhComment {
-    #[serde(default)]
-    body: String,
-    author: GhCommentAuthor,
-    created_at: DateTime<Utc>,
-    #[serde(default)]
-    reaction_groups: Vec<GhReactionGroup>,
+struct GqlRepository {
+    pull_request: GqlPullRequest,
 }
 
 #[derive(Debug, Deserialize)]
-#[serde(rename_all = "camelCase")]
-struct GhReactionGroup {
-    #[serde(default)]
-    content: String,
-    #[serde(default)]
-    users: GhReactionUsers,
-}
-
-#[derive(Debug, Default, Deserialize)]
-#[serde(rename_all = "camelCase")]
-struct GhReactionUsers {
-    #[serde(default)]
-    total_count: u32,
+struct GqlPullRequest {
+    comments: GqlComments,
 }
 
 #[derive(Debug, Deserialize)]
-struct GhCommentsResponse {
-    comments: Vec<GhComment>,
+struct GqlComments {
+    nodes: Vec<GqlComment>,
 }
 
 pub fn fetch_comments(pr_number: u64) -> Result<Vec<Comment>, FetchError> {
-    let pr_arg = pr_number.to_string();
-    let resp: GhCommentsResponse =
-        run_gh_json(&["pr", "view", &pr_arg, "--json", "comments"])?;
-    Ok(resp.comments.into_iter().map(map_comment).collect())
-}
-
-fn map_comment(gh: GhComment) -> Comment {
-    let reactions = gh
-        .reaction_groups
-        .iter()
-        .filter(|g| g.users.total_count > 0)
-        .filter_map(|g| {
-            reaction_emoji(&g.content).map(|emoji| Reaction {
-                emoji: emoji.to_string(),
-                count: g.users.total_count,
-            })
-        })
-        .collect();
-    Comment {
-        author: User {
-            username: gh.author.login,
-        },
-        content: gh.body,
-        created: gh.created_at,
-        reactions,
-    }
+    let resp: GqlResponse = run_gh_json(&[
+        "api",
+        "graphql",
+        "-F",
+        "owner={owner}",
+        "-F",
+        "name={repo}",
+        "-F",
+        &format!("pr={pr_number}"),
+        "-f",
+        &format!("query={QUERY}"),
+    ])?;
+    Ok(resp
+        .data
+        .repository
+        .pull_request
+        .comments
+        .nodes
+        .into_iter()
+        .map(map_gql_comment)
+        .collect())
 }

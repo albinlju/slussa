@@ -475,6 +475,7 @@ fn build_review_lines(
             2,
         )));
         if let Some(line) = widgets::reactions_line(&comment.reactions) {
+            body.push(Line::default());
             body.push(line);
         }
     }
