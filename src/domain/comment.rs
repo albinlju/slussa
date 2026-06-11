@@ -6,6 +6,15 @@ pub struct Comment {
     pub author: User,
     pub content: String,
     pub created: DateTime<Utc>,
+    /// Emoji reactions on the comment (read-only), already aggregated to a
+    /// count per emoji. Empty when none / the provider doesn't surface them.
+    pub reactions: Vec<Reaction>,
+}
+
+#[derive(Debug, Clone)]
+pub struct Reaction {
+    pub emoji: String,
+    pub count: u32,
 }
 
 /// A review thread is a discussion anchored to a specific line in the diff.

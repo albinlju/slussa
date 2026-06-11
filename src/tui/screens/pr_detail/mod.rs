@@ -290,6 +290,9 @@ pub(super) fn render_inline_thread(
             widgets::markdown(&comment.content, text_w + 2),
             2,
         )));
+        if let Some(line) = widgets::reactions_line(&comment.reactions) {
+            body.push(line);
+        }
     }
 
     widgets::boxed(header, body, width, border)

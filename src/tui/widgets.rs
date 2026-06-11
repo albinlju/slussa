@@ -5,9 +5,27 @@ use ratatui::{
     text::{Line, Span},
 };
 
+use crate::domain::comment::Reaction;
 use crate::tui::theme;
 
 const SPINNER_FRAMES: &[&str] = &["⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏"];
+
+/// A one-line reaction summary (`👍 3   ❤ 1`), or `None` when there are no
+/// reactions. Shared by every comment-rendering view.
+pub(super) fn reactions_line(reactions: &[Reaction]) -> Option<Line<'static>> {
+    if reactions.is_empty() {
+        return None;
+    }
+    let muted = Style::default().fg(theme::current().muted);
+    let mut spans: Vec<Span<'static>> = Vec::new();
+    for r in reactions {
+        if !spans.is_empty() {
+            spans.push(Span::raw("   "));
+        }
+        spans.push(Span::styled(format!("{} {}", r.emoji, r.count), muted));
+    }
+    Some(Line::from(spans))
+}
 
 pub(super) fn spinner_frame() -> &'static str {
     let now = std::time::SystemTime::now()

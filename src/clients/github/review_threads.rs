@@ -5,7 +5,8 @@ use serde::Deserialize;
 
 use crate::clients::error::FetchError;
 use crate::clients::github::cli::run_gh_json;
-use crate::domain::comment::{Comment, ReviewThread};
+use crate::clients::github::reaction_emoji;
+use crate::domain::comment::{Comment, Reaction, ReviewThread};
 use crate::domain::user::User;
 
 #[derive(Debug, Deserialize)]
@@ -30,6 +31,51 @@ struct GhPrComment {
     /// Set on replies. The id of the root comment in the same thread.
     #[serde(default)]
     in_reply_to_id: Option<u64>,
+    #[serde(default)]
+    reactions: GhReactions,
+}
+
+/// REST reaction summary (`{ "+1": n, "heart": n, … }`).
+#[derive(Debug, Default, Deserialize)]
+struct GhReactions {
+    #[serde(rename = "+1", default)]
+    plus_one: u32,
+    #[serde(rename = "-1", default)]
+    minus_one: u32,
+    #[serde(default)]
+    laugh: u32,
+    #[serde(default)]
+    hooray: u32,
+    #[serde(default)]
+    confused: u32,
+    #[serde(default)]
+    heart: u32,
+    #[serde(default)]
+    rocket: u32,
+    #[serde(default)]
+    eyes: u32,
+}
+
+fn reactions_of(r: &GhReactions) -> Vec<Reaction> {
+    [
+        ("+1", r.plus_one),
+        ("-1", r.minus_one),
+        ("laugh", r.laugh),
+        ("hooray", r.hooray),
+        ("confused", r.confused),
+        ("heart", r.heart),
+        ("rocket", r.rocket),
+        ("eyes", r.eyes),
+    ]
+    .into_iter()
+    .filter(|&(_, n)| n > 0)
+    .filter_map(|(key, n)| {
+        reaction_emoji(key).map(|emoji| Reaction {
+            emoji: emoji.to_string(),
+            count: n,
+        })
+    })
+    .collect()
 }
 
 pub fn fetch_review_threads(pr_number: u64) -> Result<Vec<ReviewThread>, FetchError> {
@@ -60,12 +106,16 @@ pub fn fetch_review_threads(pr_number: u64) -> Result<Vec<ReviewThread>, FetchEr
 
         let domain_comments: Vec<Comment> = group
             .into_iter()
-            .map(|gc| Comment {
-                author: User {
-                    username: gc.user.login,
-                },
-                content: gc.body,
-                created: gc.created_at,
+            .map(|gc| {
+                let reactions = reactions_of(&gc.reactions);
+                Comment {
+                    author: User {
+                        username: gc.user.login,
+                    },
+                    content: gc.body,
+                    created: gc.created_at,
+                    reactions,
+                }
             })
             .collect();
 
