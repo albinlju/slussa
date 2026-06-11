@@ -17,11 +17,12 @@ use ratatui::{
 
 use crate::{
     app::{
-        action::{Action, CommitsAction, DetailAction, DiffAction},
+        action::{Action, CommitsAction, DetailAction, DiffAction, SearchInput},
         state::{AppState, DiffFocus, DiffViewState, LoadState, PrData, Screen, UiMemory},
     },
     domain::{
         comment::ReviewThread,
+        diff::FileDiff,
         pr::{PrStatus, PullRequest},
     },
     tui::{screens::half_page, theme, widgets},
@@ -125,8 +126,105 @@ pub(in crate::tui) fn render(
         state.ui.diff.focus
     };
     let pr_data = state.cache.details.get(&pr.id);
+    let footer = detail_footer(
+        state,
+        pr_data,
+        tab,
+        drilled,
+        help_focus,
+        outer_chunks[1].width,
+    );
     render_tabs_and_content(frame, pr, pr_data, &mut state.ui, tab, chunks[2]);
-    render_help(frame, tab, drilled, help_focus, outer_chunks[1]);
+    render_help(frame, tab, drilled, help_focus, footer, outer_chunks[1]);
+}
+
+/// The footer line when a detail-view search is active: a `/` filter prompt
+/// (commit list / file tree) or the pane's highlight state (typing, or applied
+/// with a match count + n/N hint). `None` falls back to the key hints.
+fn detail_footer(
+    state: &AppState,
+    pr_data: Option<&PrData>,
+    tab: DetailTab,
+    drilled: bool,
+    focus: DiffFocus,
+    width: u16,
+) -> Option<Line<'static>> {
+    let theme = theme::current();
+
+    // Commit list — filter prompt.
+    if tab == DetailTab::Commits && !drilled {
+        let s = &state.ui.commits.search;
+        return s.open.then(|| {
+            let count = match pr_data.map(|d| &d.commits) {
+                Some(LoadState::Loaded(cs)) => cs.iter().filter(|c| s.matches_commit(c)).count(),
+                _ => 0,
+            };
+            widgets::search_prompt(&s.query, count, width)
+        });
+    }
+
+    if tab != DetailTab::Diff && !(tab == DetailTab::Commits && drilled) {
+        return None;
+    }
+    let view = if drilled { &state.ui.commits.diff } else { &state.ui.diff };
+
+    match focus {
+        DiffFocus::Tree => {
+            let s = &view.tree_search;
+            s.open.then(|| {
+                let files = active_files(state, pr_data, drilled);
+                let count = files.iter().filter(|f| s.matches(&f.path)).count();
+                widgets::search_prompt(&s.query, count, width)
+            })
+        }
+        DiffFocus::Pane => {
+            let s = &view.pane_search;
+            if s.open {
+                // Typing — show the query only; highlight + count wait for Enter.
+                Some(Line::from(vec![
+                    Span::styled(format!("  Search: {}", s.query), Style::default().fg(theme.fg)),
+                    Span::styled("█", Style::default().fg(theme.accent)),
+                ]))
+            } else if !s.query.is_empty() {
+                // Applied — match count + n/N navigation.
+                let n = view.pane_matches.len();
+                let label = if n == 1 {
+                    "1 match".to_string()
+                } else {
+                    format!("{n} matches")
+                };
+                let left = vec![Span::styled(
+                    format!("  /{}", s.query),
+                    Style::default().fg(theme.muted),
+                )];
+                let right = vec![Span::styled(
+                    format!("{label}   n/N: navigate   esc: clear  "),
+                    Style::default().fg(theme.muted),
+                )];
+                Some(Line::from(widgets::justify_between(left, right, width as usize)))
+            } else {
+                None
+            }
+        }
+    }
+}
+
+/// Files of the diff currently shown (the drilled commit's, else the PR's).
+fn active_files<'a>(state: &AppState, pr_data: Option<&'a PrData>, drilled: bool) -> &'a [FileDiff] {
+    let diff_state = if drilled {
+        state
+            .ui
+            .commits
+            .drilled
+            .as_deref()
+            .and_then(|oid| pr_data.and_then(|d| d.commit_diffs.get(oid)))
+    } else {
+        pr_data.map(|d| &d.diff)
+    };
+    match diff_state {
+        Some(LoadState::Loaded(diff)) => &diff.files,
+        _ => &[],
+    }
 }
 
 pub(super) fn description_body(pr: &PullRequest) -> &str {
@@ -335,7 +433,18 @@ fn activity_threads(pr_data: Option<&PrData>) -> &[ReviewThread] {
         .unwrap_or(&[])
 }
 
-fn render_help(frame: &mut Frame, tab: DetailTab, drilled: bool, focus: DiffFocus, area: Rect) {
+fn render_help(
+    frame: &mut Frame,
+    tab: DetailTab,
+    drilled: bool,
+    focus: DiffFocus,
+    footer: Option<Line<'static>>,
+    area: Rect,
+) {
+    if let Some(line) = footer {
+        frame.render_widget(Paragraph::new(line), area);
+        return;
+    }
     let hint = match (tab, drilled, focus) {
         (DetailTab::Diff, _, DiffFocus::Tree) => {
             "j/k: files  ^d/^u: page  enter: open  h/l: fold  esc: back"
@@ -386,6 +495,16 @@ pub(in crate::tui) fn key_to_action(state: &AppState, key: KeyEvent) -> Option<A
         let in_diff_pane = diff_focus == DiffFocus::Pane
             && (tab == DetailTab::Diff || (tab == DetailTab::Commits && drilled));
         if in_diff_pane {
+            // Esc clears a lingering search highlight first, then steps back to
+            // the tree.
+            let pane_search = if drilled {
+                &state.ui.commits.diff.pane_search
+            } else {
+                &state.ui.diff.pane_search
+            };
+            if !pane_search.query.is_empty() {
+                return Some(Action::Search(SearchInput::Cancel));
+            }
             return Some(Action::Diff(DiffAction::FocusTree));
         }
         if tab == DetailTab::Commits && drilled {
@@ -488,6 +607,13 @@ fn diff_nav_action(code: KeyCode, view: &DiffViewState) -> Option<DiffAction> {
             KeyCode::Up | KeyCode::Char('k') => Some(DiffAction::MovePaneCursor(-1)),
             KeyCode::PageDown => Some(DiffAction::MovePaneCursor(half_page(view.pane_viewport))),
             KeyCode::PageUp => Some(DiffAction::MovePaneCursor(-half_page(view.pane_viewport))),
+            // n/N step through search matches while a highlight is active.
+            KeyCode::Char('n') if !view.pane_search.query.is_empty() => {
+                Some(DiffAction::JumpMatch(1))
+            }
+            KeyCode::Char('N') if !view.pane_search.query.is_empty() => {
+                Some(DiffAction::JumpMatch(-1))
+            }
             KeyCode::Enter | KeyCode::Left | KeyCode::Char('h') => Some(DiffAction::FocusTree),
             _ => None,
         },

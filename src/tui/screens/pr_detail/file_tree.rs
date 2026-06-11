@@ -18,8 +18,15 @@ pub enum TreeRow {
     },
 }
 
-pub fn build_visible_rows(files: &[FileDiff], collapsed: &HashSet<String>) -> Vec<TreeRow> {
-    let root = build_tree(files);
+/// `query` filters files by path (case-insensitive substring); non-matching
+/// files are dropped but matching files keep their original index so the pane
+/// (which keys off `file_index`) stays in sync. Empty query = all files.
+pub fn build_visible_rows(
+    files: &[FileDiff],
+    collapsed: &HashSet<String>,
+    query: &str,
+) -> Vec<TreeRow> {
+    let root = build_tree(files, query);
     let mut rows = Vec::new();
     for child in &root.children {
         walk(child, 0, collapsed, &mut rows);
@@ -41,9 +48,15 @@ impl Node {
     }
 }
 
-fn build_tree(files: &[FileDiff]) -> Node {
+fn build_tree(files: &[FileDiff], query: &str) -> Node {
+    let query = query.to_lowercase();
     let mut root = Node::default();
     for (idx, file) in files.iter().enumerate() {
+        // `idx` stays the full-list index even when filtering, so `file_index`
+        // keeps pointing at the right file in the unfiltered diff.
+        if !query.is_empty() && !file.path.to_lowercase().contains(&query) {
+            continue;
+        }
         let segments: Vec<&str> = file.path.split('/').filter(|s| !s.is_empty()).collect();
         insert(&mut root, &segments, idx);
     }

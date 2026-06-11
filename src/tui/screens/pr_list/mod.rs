@@ -161,11 +161,19 @@ pub(in crate::tui) fn render(frame: &mut Frame, state: &mut AppState, area: rata
         }
     }
 
-    let footer = widgets::footer(
-        chunks[1].width,
-        "j/k: navigate  ^d/^u: page  enter: open PR  f: filter  q: quit",
-    );
-    frame.render_widget(Paragraph::new(footer), chunks[1]);
+    let footer_line = if state.ui.list_search.open {
+        widgets::search_prompt(
+            &state.ui.list_search.query,
+            state.filtered_prs().len(),
+            chunks[1].width,
+        )
+    } else {
+        widgets::footer(
+            chunks[1].width,
+            "j/k: navigate  /: search  ^d/^u: page  enter: open  f: filter  q: quit",
+        )
+    };
+    frame.render_widget(Paragraph::new(footer_line), chunks[1]);
 
     if state.ui.filter_picker_open {
         render_filter_picker(frame, state, area);
@@ -335,6 +343,9 @@ pub(in crate::tui) fn key_to_action(state: &AppState, key: KeyEvent) -> Option<A
         };
     }
 
+    // `/` search (open + typing) is handled generically in the dispatcher; here
+    // we only handle navigation/commands, which work the same whether or not a
+    // search filter is active.
     let half = half_page(state.ui.list_viewport);
     if key.modifiers.contains(KeyModifiers::CONTROL) {
         return match key.code {

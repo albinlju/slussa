@@ -70,7 +70,7 @@ pub fn render(
             ui_diff.tree_viewport = chunks[0].height.saturating_sub(4);
 
             let tree_focused = matches!(ui_diff.focus, DiffFocus::Tree);
-            let rows = build_visible_rows(&diff.files, &ui_diff.collapsed);
+            let rows = build_visible_rows(&diff.files, &ui_diff.collapsed, &ui_diff.tree_search.query);
             tree::render(
                 frame,
                 &rows,
@@ -80,7 +80,14 @@ pub fn render(
                 tree_focused,
                 chunks[0],
             );
-            ui_diff.pane_items = pane::render(
+            // The highlight + matches apply only once committed (Enter), so the
+            // query is withheld while the prompt is still open.
+            let pane_query = if ui_diff.pane_search.open {
+                String::new()
+            } else {
+                ui_diff.pane_search.query.clone()
+            };
+            let (pane_items, pane_matches) = pane::render(
                 frame,
                 diff,
                 ui_diff.focused_file,
@@ -89,8 +96,11 @@ pub fn render(
                 &file_stats,
                 review_threads,
                 !tree_focused,
+                &pane_query,
                 chunks[2],
             );
+            ui_diff.pane_items = pane_items;
+            ui_diff.pane_matches = pane_matches;
         }
     }
 }

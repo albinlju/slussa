@@ -5,6 +5,7 @@ pub mod detail;
 pub mod diff;
 pub mod list;
 pub mod loads;
+pub mod search;
 
 /// Clamps at the top; the bottom is clamped at render time against the
 /// actual content height.
@@ -24,6 +25,7 @@ impl App {
             Action::Detail(a) => self.apply_detail(a),
             Action::Diff(a) => self.apply_diff(a),
             Action::Commits(a) => self.apply_commits(a),
+            Action::Search(a) => self.apply_search(a),
             Action::Loaded(a) => self.apply_loaded(a),
         }
     }

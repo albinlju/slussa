@@ -21,14 +21,19 @@ impl App {
         let Screen::Detail { pr_id, .. } = self.state.screen else {
             return Vec::new();
         };
+        let search = &self.state.ui.commits.search;
         self.state
             .cache
             .details
             .get(&pr_id)
             .and_then(|d| match &d.commits {
-                LoadState::Loaded(commits) => {
-                    Some(commits.iter().map(|c| c.oid.clone()).collect())
-                }
+                LoadState::Loaded(commits) => Some(
+                    commits
+                        .iter()
+                        .filter(|c| search.matches_commit(c))
+                        .map(|c| c.oid.clone())
+                        .collect(),
+                ),
                 _ => None,
             })
             .unwrap_or_default()

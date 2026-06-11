@@ -16,6 +16,7 @@ impl App {
             DiffAction::CollapseAtCursor => self.diff_collapse_at_cursor(),
             DiffAction::ExpandAtCursor => self.diff_expand_at_cursor(),
             DiffAction::MovePaneCursor(delta) => self.diff_move_pane_cursor(delta),
+            DiffAction::JumpMatch(delta) => self.diff_jump_match(delta),
             DiffAction::EnterPane => self.diff_enter_pane(),
             DiffAction::FocusTree => self.diff_view_mut().focus = DiffFocus::Tree,
         }
@@ -23,7 +24,7 @@ impl App {
 
     /// The diff view the keyboard drives: the Commits drill-in when a commit
     /// is open, otherwise the Diff tab's own.
-    fn diff_view(&self) -> &DiffViewState {
+    pub(super) fn diff_view(&self) -> &DiffViewState {
         if self.state.ui.commits.drilled.is_some() {
             &self.state.ui.commits.diff
         } else {
@@ -31,7 +32,7 @@ impl App {
         }
     }
 
-    fn diff_view_mut(&mut self) -> &mut DiffViewState {
+    pub(super) fn diff_view_mut(&mut self) -> &mut DiffViewState {
         if self.state.ui.commits.drilled.is_some() {
             &mut self.state.ui.commits.diff
         } else {
@@ -54,7 +55,7 @@ impl App {
         }
     }
 
-    fn focus_file(&mut self, file_index: usize) {
+    pub(super) fn focus_file(&mut self, file_index: usize) {
         let view = self.diff_view_mut();
         if file_index != view.focused_file {
             view.focused_file = file_index;
@@ -86,6 +87,28 @@ impl App {
         if let Some(TreeRow::File { file_index, .. }) = rows.get(new_cursor) {
             self.focus_file(*file_index);
         }
+    }
+
+    /// Step the pane cursor to the next (+1) / previous (-1) search match,
+    /// wrapping around. No-op when there are no matches.
+    fn diff_jump_match(&mut self, delta: i16) {
+        let view = self.diff_view();
+        let matches = &view.pane_matches;
+        if matches.is_empty() {
+            return;
+        }
+        let cur = view.pane_cursor;
+        let next = if delta >= 0 {
+            matches.iter().copied().find(|&m| m > cur).unwrap_or(matches[0])
+        } else {
+            matches
+                .iter()
+                .copied()
+                .rev()
+                .find(|&m| m < cur)
+                .unwrap_or(matches[matches.len() - 1])
+        };
+        self.diff_view_mut().pane_cursor = next;
     }
 
     fn diff_move_pane_cursor(&mut self, delta: i16) {
@@ -135,9 +158,13 @@ impl App {
         }
     }
 
-    fn current_visible_rows(&self) -> Vec<TreeRow> {
+    pub(super) fn current_visible_rows(&self) -> Vec<TreeRow> {
         match self.active_diff_files() {
-            Some(files) => build_visible_rows(files, &self.diff_view().collapsed),
+            Some(files) => build_visible_rows(
+                files,
+                &self.diff_view().collapsed,
+                &self.diff_view().tree_search.query,
+            ),
             None => Vec::new(),
         }
     }
