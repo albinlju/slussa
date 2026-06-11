@@ -17,7 +17,8 @@
 - [x] **Builds / Checks tab** — CI build statuses for the source commit with a pass/total summary.
 - [x] **Bitbucket Data Center provider** — PRs, diff, commits, comments/events/threads, builds — alongside GitHub.
 - [x] **Markdown rendering** in descriptions and comments.
-
+- [x] **Fuzzy file finder / filter** in the diff tree (for big PRs).
+- [x] **PR list search** — free text on title / author.
 ---
 
 ## Backlog
@@ -26,10 +27,8 @@
 
 - [ ] **Suggestions** — render GitHub/GitLab "suggested change" blocks specially.
 - [ ] **Reactions** — show emoji reactions on comments (Bitbucket DC has a reactions API).
-- [ ] **Fuzzy file finder / filter** in the diff tree (for big PRs).
 - [ ] **Merge conflict / mergeability status** — can it merge? conflicts? N commits behind base? required checks gating.
 - [ ] **Assignees, milestones, projects** (reviewers + labels are already shown).
-- [ ] **PR list search** — free text on title / author.
 - [ ] **Branch ahead / behind base** info.
 - [ ] **Mergeability in the pr list** — conflict / behind-base indicators.
 - [ ] **Labels in the list** — colored and filterable (shown in Overview today).
