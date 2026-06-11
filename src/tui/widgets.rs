@@ -276,6 +276,52 @@ fn wrap_box_line(line: Line<'static>, text_w: usize, border: Style) -> Line<'sta
     Line::from(spans)
 }
 
+/// A line-numbered diff row: `{num} {prefix} {content}`, padded to `row_w`
+/// so an optional bg tint fills the whole row.
+#[allow(clippy::too_many_arguments)]
+pub(super) fn numbered_diff_row(
+    line_num: Option<u32>,
+    num_width: usize,
+    prefix: &'static str,
+    content: &str,
+    prefix_fg: Color,
+    bg: Option<Color>,
+    text_fg: Color,
+    row_w: usize,
+) -> Line<'static> {
+    let num_str = match line_num {
+        Some(n) => format!("{n:>num_width$}"),
+        None => " ".repeat(num_width),
+    };
+    let gutter = format!(" {num_str} ");
+    let visible = gutter.chars().count() + prefix.chars().count() + 1 + content.chars().count();
+    let pad = row_w.saturating_sub(visible);
+
+    let gutter_style = match bg {
+        Some(bg) => Style::default().fg(theme::current().muted).bg(bg),
+        None => Style::default().fg(theme::current().muted),
+    };
+    let prefix_style = {
+        let s = Style::default()
+            .fg(prefix_fg)
+            .add_modifier(Modifier::BOLD);
+        match bg {
+            Some(bg) => s.bg(bg),
+            None => s,
+        }
+    };
+    let text_style = match bg {
+        Some(bg) => Style::default().fg(text_fg).bg(bg),
+        None => Style::default().fg(text_fg),
+    };
+
+    Line::from(vec![
+        Span::styled(gutter, gutter_style),
+        Span::styled(prefix, prefix_style),
+        Span::styled(format!(" {content}{}", " ".repeat(pad)), text_style),
+    ])
+}
+
 pub(super) fn diff_bg_row(
     gutter: &'static str,
     prefix: &'static str,

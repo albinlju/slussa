@@ -21,7 +21,7 @@ use crate::{
         state::{AppState, DiffFocus, DiffViewState, LoadState, PrData, Screen, UiMemory},
     },
     domain::{
-        comment::ReviewThread,
+        comment::{ReviewThread, split_suggestions},
         diff::FileDiff,
         pr::{PrStatus, PullRequest},
     },
@@ -235,13 +235,15 @@ pub(super) fn description_body(pr: &PullRequest) -> &str {
         .unwrap_or("(no description)")
 }
 
-/// Shared between the inline diff view and the Overview tab so review
-/// threads look identical in both places.
+/// The diff pane's thread box (Diff tab and Commits drill-in). `anchor_text`
+/// is the diff line the thread sits on — the `-` side of any suggested
+/// change in the comments.
 pub(super) fn render_inline_thread(
     thread: &ReviewThread,
     width: u16,
     now: DateTime<Utc>,
     active: bool,
+    anchor_text: Option<&str>,
 ) -> Vec<Line<'static>> {
     let theme = theme::current();
     let text_w = widgets::box_text_width(width);
@@ -273,6 +275,7 @@ pub(super) fn render_inline_thread(
     let right = vec![Span::styled(count_label, Style::default().fg(theme.muted))];
     let header = Line::from(widgets::justify_between(left, right, text_w as usize));
 
+    let anchor = thread.line.or(thread.old_line).zip(anchor_text);
     let mut body: Vec<Line<'static>> = Vec::new();
     for (i, comment) in thread.comments.iter().enumerate() {
         if i > 0 {
@@ -286,10 +289,17 @@ pub(super) fn render_inline_thread(
             ),
             Span::styled(format!(" · {age}"), Style::default().fg(theme.muted)),
         ]));
-        body.extend(widgets::trim_blank_lines(widgets::strip_glamour_margin(
-            widgets::markdown(&comment.content, text_w + 2),
-            2,
-        )));
+        let (prose, suggestions) = split_suggestions(&comment.content);
+        if !prose.trim().is_empty() {
+            body.extend(widgets::trim_blank_lines(widgets::strip_glamour_margin(
+                widgets::markdown(&prose, text_w + 2),
+                2,
+            )));
+        }
+        for suggestion in &suggestions {
+            body.push(Line::raw(""));
+            body.extend(suggestion_lines(anchor, suggestion, text_w));
+        }
         if let Some(line) = widgets::reactions_line(&comment.reactions) {
             body.push(Line::raw(""));
             body.push(line);
@@ -297,6 +307,79 @@ pub(super) fn render_inline_thread(
     }
 
     widgets::boxed(header, body, width, border)
+}
+
+/// A `◆ Suggested change` box: the anchored line as `-`, the suggestion's
+/// lines as `+`, and a `-1 +N` stat in the header. Display only — applying
+/// suggestions is a future feature.
+fn suggestion_lines(
+    anchor: Option<(usize, &str)>,
+    suggestion: &str,
+    width: u16,
+) -> Vec<Line<'static>> {
+    let theme = theme::current();
+    let text_w = widgets::box_text_width(width) as usize;
+    let new_lines: Vec<&str> = suggestion.lines().collect();
+
+    let left = vec![
+        Span::styled(
+            "◆ ",
+            Style::default()
+                .fg(theme.suggestion)
+                .add_modifier(Modifier::BOLD),
+        ),
+        Span::styled(
+            "Suggested change",
+            Style::default().fg(theme.fg).add_modifier(Modifier::BOLD),
+        ),
+    ];
+    let mut right: Vec<Span<'static>> = Vec::new();
+    if anchor.is_some() {
+        right.push(Span::styled("-1", Style::default().fg(theme.diff_removed)));
+    }
+    if !new_lines.is_empty() {
+        if !right.is_empty() {
+            right.push(Span::raw(" "));
+        }
+        right.push(Span::styled(
+            format!("+{}", new_lines.len()),
+            Style::default().fg(theme.diff_added),
+        ));
+    }
+    let header = Line::from(widgets::justify_between(left, right, text_w));
+
+    // The suggestion replaces the anchored line, so both sides number from it.
+    let start = anchor.map(|(n, _)| n);
+    let num_width = start
+        .map(|n| (n + new_lines.len().saturating_sub(1)).to_string().len())
+        .unwrap_or(0);
+    let mut rows: Vec<Line<'static>> = Vec::new();
+    if let Some((n, old)) = anchor {
+        rows.push(widgets::numbered_diff_row(
+            Some(n as u32),
+            num_width,
+            "-",
+            old,
+            theme.diff_removed,
+            Some(theme.diff_removed_bg),
+            theme.muted,
+            text_w,
+        ));
+    }
+    for (i, new) in new_lines.iter().enumerate() {
+        rows.push(widgets::numbered_diff_row(
+            start.map(|n| (n + i) as u32),
+            num_width,
+            "+",
+            new,
+            theme.diff_added,
+            Some(theme.diff_added_bg),
+            theme.fg,
+            text_w,
+        ));
+    }
+
+    widgets::boxed(header, rows, width, theme.suggestion)
 }
 
 fn render_tabs_and_content(

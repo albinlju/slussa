@@ -21,6 +21,8 @@ pub struct Theme {
     /// Dark accent-tinted background — "yours" chips (own reactions), where
     /// a full accent fill would drown yellow emojis.
     pub accent_bg: Color,
+    /// Suggested-change blocks — header diamond and box border.
+    pub suggestion: Color,
     /// Positive / success state.
     pub success: Color,
     /// Warning / pending / spinner.
@@ -59,6 +61,7 @@ pub const GRUVBOX: Theme = Theme {
     highlight_bg: Color::Rgb(0x50, 0x49, 0x45),
     accent: Color::Rgb(0xfa, 0xbd, 0x2f),
     accent_bg: Color::Rgb(0x42, 0x39, 0x14),
+    suggestion: Color::Rgb(0xd3, 0x86, 0x9b),
     success: Color::Rgb(0xb8, 0xbb, 0x26),
     warning: Color::Rgb(0xfa, 0xbd, 0x2f),
     error: Color::Rgb(0xfb, 0x49, 0x34),
