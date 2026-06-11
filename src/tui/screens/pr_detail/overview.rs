@@ -408,10 +408,14 @@ fn activity_lines(event: &TimelineEvent, now: DateTime<Utc>) -> (Color, Vec<Line
 fn build_issue_lines(c: &Comment, width: u16, now: DateTime<Utc>) -> Vec<Line<'static>> {
     let text_width = widgets::box_text_width(width);
     let header = issue_comment_header(&c.author.username, c.created, now);
-    let body = widgets::trim_blank_lines(widgets::strip_glamour_margin(
+    let mut body = widgets::trim_blank_lines(widgets::strip_glamour_margin(
         widgets::markdown(&c.content, text_width + 2),
         2,
     ));
+    if let Some(line) = widgets::reactions_line(&c.reactions) {
+        body.push(Line::default());
+        body.push(line);
+    }
     widgets::boxed(header, body, width, theme::current().divider)
 }
 
@@ -470,6 +474,9 @@ fn build_review_lines(
             widgets::markdown(&comment.content, text_width + 2),
             2,
         )));
+        if let Some(line) = widgets::reactions_line(&comment.reactions) {
+            body.push(line);
+        }
     }
 
     Some(widgets::boxed(header, body, width, theme.divider))

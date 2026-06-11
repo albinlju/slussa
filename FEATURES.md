@@ -26,7 +26,9 @@
 ### Refined
 
 - [ ] **Suggestions** — render GitHub/GitLab "suggested change" blocks specially.
-- [ ] **Reactions** — show emoji reactions on comments (Bitbucket DC has a reactions API).
+- [x] **Reactions** — emoji reactions on comments (read-only). GitHub done (general
+  + inline comments); Bitbucket DC pending (reactions aren't in the activities feed —
+  needs a separate reactions endpoint).
 - [ ] **Merge conflict / mergeability status** — can it merge? conflicts? N commits behind base? required checks gating.
 - [ ] **Assignees, milestones, projects** (reviewers + labels are already shown).
 - [ ] **Branch ahead / behind base** info.

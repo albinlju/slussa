@@ -173,6 +173,9 @@ fn map_comment(c: &BbComment) -> Comment {
         author: map_user(&c.author),
         content: c.text.clone(),
         created: ms_to_utc(c.created_date),
+        // Bitbucket DC reactions aren't carried in the activities feed we read;
+        // they'd need a separate reactions endpoint. Left empty for now.
+        reactions: Vec::new(),
     }
 }
 
