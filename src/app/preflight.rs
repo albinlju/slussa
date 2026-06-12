@@ -5,7 +5,12 @@ use crate::clients::{Backend, bitbucket_dc, github};
 
 #[derive(Debug)]
 pub enum PreflightError {
+    GitMissing,
     NotAGitRepo,
+    /// The `origin` remote exists but no host could be parsed out of it.
+    UnparseableRemote {
+        remote: String,
+    },
     UnsupportedHost {
         host: String,
     },
@@ -33,9 +38,14 @@ pub enum PreflightError {
 impl fmt::Display for PreflightError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
+            Self::GitMissing => write!(f, "git is not installed (or not on PATH)."),
             Self::NotAGitRepo => write!(
                 f,
                 "must be run inside a git repository with an `origin` remote.",
+            ),
+            Self::UnparseableRemote { remote } => write!(
+                f,
+                "couldn't parse a host out of the `origin` remote `{remote}`.",
             ),
             Self::UnsupportedHost { host } => write!(
                 f,
@@ -76,11 +86,13 @@ impl fmt::Display for PreflightError {
 
 pub fn preflight() -> Result<Backend, PreflightError> {
     let remote = read_origin_remote()?;
-    let host = parse_remote_host(&remote).ok_or(PreflightError::NotAGitRepo)?;
+    let host = parse_remote_host(&remote).ok_or_else(|| PreflightError::UnparseableRemote {
+        remote: remote.clone(),
+    })?;
     tracing::info!("detected git remote host: {host}");
 
     match classify_host(&host)? {
-        Backend_::GitHub => {
+        HostKind::GitHub => {
             if !github::auth::is_installed() {
                 return Err(PreflightError::GhMissing);
             }
@@ -90,7 +102,7 @@ pub fn preflight() -> Result<Backend, PreflightError> {
             tracing::info!("gh auth ok for {host}");
             Ok(Backend::GitHub)
         }
-        Backend_::BitbucketDc => {
+        HostKind::BitbucketDc => {
             let coords = bitbucket_dc::remote::parse(&remote, &host).ok_or_else(|| {
                 PreflightError::DcUnparseableRemote {
                     host: host.clone(),
@@ -113,14 +125,14 @@ pub fn preflight() -> Result<Backend, PreflightError> {
     }
 }
 
-enum Backend_ {
+enum HostKind {
     GitHub,
     BitbucketDc,
 }
 
-fn classify_host(host: &str) -> Result<Backend_, PreflightError> {
+fn classify_host(host: &str) -> Result<HostKind, PreflightError> {
     if host == "github.com" {
-        return Ok(Backend_::GitHub);
+        return Ok(HostKind::GitHub);
     }
     if host == "bitbucket.org" {
         return Err(PreflightError::UnsupportedHost {
@@ -128,7 +140,7 @@ fn classify_host(host: &str) -> Result<Backend_, PreflightError> {
         });
     }
     match bitbucket_dc::probe(host) {
-        Ok(true) => Ok(Backend_::BitbucketDc),
+        Ok(true) => Ok(HostKind::BitbucketDc),
         Ok(false) => Err(PreflightError::UnsupportedHost {
             host: host.to_string(),
         }),
@@ -143,7 +155,7 @@ pub(super) fn read_origin_remote() -> Result<String, PreflightError> {
     let output = Command::new("git")
         .args(["remote", "get-url", "origin"])
         .output()
-        .map_err(|_| PreflightError::NotAGitRepo)?;
+        .map_err(|_| PreflightError::GitMissing)?;
     if !output.status.success() {
         return Err(PreflightError::NotAGitRepo);
     }

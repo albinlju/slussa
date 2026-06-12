@@ -1,5 +1,7 @@
 use ratatui::style::Color;
 
+use crate::domain::pr::PrStatus;
+
 #[derive(Debug, Clone, Copy)]
 pub struct Theme {
     /// Default foreground for body text.
@@ -78,6 +80,17 @@ pub const GRUVBOX: Theme = Theme {
     status_merged: Color::Rgb(0xd3, 0x86, 0x9b),
     status_declined: Color::Rgb(0xfb, 0x49, 0x34),
 };
+
+impl Theme {
+    pub fn status_color(&self, status: &PrStatus) -> Color {
+        match status {
+            PrStatus::Open => self.status_open,
+            PrStatus::Draft => self.status_draft,
+            PrStatus::Merged => self.status_merged,
+            PrStatus::Declined => self.status_declined,
+        }
+    }
+}
 
 pub fn current() -> &'static Theme {
     &GRUVBOX

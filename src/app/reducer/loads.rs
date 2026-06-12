@@ -1,4 +1,8 @@
-use crate::app::{App, action::LoadedAction, state::LoadState};
+use crate::app::{
+    App,
+    action::LoadedAction,
+    state::{LoadState, PrData},
+};
 
 impl App {
     pub(super) fn apply_loaded(&mut self, action: LoadedAction) {
@@ -9,32 +13,31 @@ impl App {
             }
             LoadedAction::Commits(pr_id, r) => {
                 log_outcome("commits", Some(pr_id), &r);
-                let pr_data = self.state.cache.details.entry(pr_id).or_default();
-                pr_data.commits = LoadState::from_result(r);
+                self.pr_data_mut(pr_id).commits = LoadState::from_result(r);
             }
             LoadedAction::Diff(pr_id, r) => {
                 log_outcome("diff", Some(pr_id), &r);
-                let pr_data = self.state.cache.details.entry(pr_id).or_default();
-                pr_data.diff = LoadState::from_result(r);
+                self.pr_data_mut(pr_id).diff = LoadState::from_result(r);
             }
             LoadedAction::Builds(pr_id, r) => {
                 log_outcome("builds", Some(pr_id), &r);
-                let pr_data = self.state.cache.details.entry(pr_id).or_default();
-                pr_data.builds = LoadState::from_result(r);
+                self.pr_data_mut(pr_id).builds = LoadState::from_result(r);
             }
             LoadedAction::Activity(pr_id, r) => {
                 log_outcome("activity", Some(pr_id), &r);
-                let pr_data = self.state.cache.details.entry(pr_id).or_default();
-                pr_data.activity = LoadState::from_result(r);
+                self.pr_data_mut(pr_id).activity = LoadState::from_result(r);
             }
             LoadedAction::CommitDiff(pr_id, oid, r) => {
                 log_outcome("commit-diff", Some(pr_id), &r);
-                let pr_data = self.state.cache.details.entry(pr_id).or_default();
-                pr_data
+                self.pr_data_mut(pr_id)
                     .commit_diffs
                     .insert(oid, LoadState::from_result(r));
             }
         }
+    }
+
+    fn pr_data_mut(&mut self, pr_id: u64) -> &mut PrData {
+        self.state.cache.details.entry(pr_id).or_default()
     }
 }
 

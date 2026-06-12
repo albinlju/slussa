@@ -108,7 +108,7 @@ pub fn fetch(config: &Config, pr_id: u64) -> Result<ActivityBundle, FetchError> 
         "/rest/api/1.0/projects/{}/repos/{}/pull-requests/{pr_id}/activities?limit=100",
         config.repo.project_key, config.repo.repo_slug
     );
-    let page: Page = get_json(&config.repo.host, &path, &config.pat)?;
+    let page: Page = get_json(&config.repo.base_url, &path, &config.pat)?;
     Ok(project(page.values))
 }
 

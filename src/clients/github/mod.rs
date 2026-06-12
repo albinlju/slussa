@@ -17,9 +17,53 @@ pub use prs::fetch_prs;
 
 use chrono::{DateTime, Utc};
 use serde::Deserialize;
+use serde::de::DeserializeOwned;
 
+use crate::clients::error::FetchError;
 use crate::domain::comment::{Comment, Reaction};
 use crate::domain::user::User;
+
+/// One `gh api graphql` call against the current repo's PR, returning the
+/// `pullRequest` payload. `P` mirrors the fields the query selects.
+pub(super) fn run_pr_graphql<P: DeserializeOwned>(
+    query: &str,
+    pr_number: u64,
+) -> Result<P, FetchError> {
+    let resp: GqlResponse<P> = cli::run_gh_json(&[
+        "api",
+        "graphql",
+        "-F",
+        "owner={owner}",
+        "-F",
+        "name={repo}",
+        "-F",
+        &format!("pr={pr_number}"),
+        "-f",
+        &format!("query={query}"),
+    ])?;
+    Ok(resp.data.repository.pull_request)
+}
+
+#[derive(Debug, Deserialize)]
+struct GqlResponse<P> {
+    data: GqlData<P>,
+}
+
+#[derive(Debug, Deserialize)]
+struct GqlData<P> {
+    repository: GqlRepository<P>,
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct GqlRepository<P> {
+    pull_request: P,
+}
+
+/// The comment-node field selection matching [`GqlComment`]. Interpolated
+/// into every query that selects comment nodes, so the two can't drift.
+pub(super) const COMMENT_FIELDS: &str = "body createdAt author { login } \
+    reactionGroups { content viewerHasReacted users { totalCount } }";
 
 /// GraphQL comment node, shared by the issue-comments and review-threads
 /// queries.

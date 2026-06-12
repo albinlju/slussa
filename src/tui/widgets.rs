@@ -1,11 +1,63 @@
 use ratatui::{
+    Frame,
     layout::Rect,
     style::{Color, Modifier, Style},
     text::{Line, Span},
+    widgets::Paragraph,
 };
 
+use crate::app::state::LoadState;
 use crate::domain::comment::Reaction;
 use crate::tui::theme;
+
+/// Render the shared loading/failed placeholders for a fetch slot, handing
+/// back the payload once loaded. The caller still owns its own empty-state.
+pub(super) fn loaded_or_placeholder<'a, T>(
+    frame: &mut Frame,
+    state: Option<&'a LoadState<T>>,
+    noun: &str,
+    area: Rect,
+) -> Option<&'a T> {
+    let theme = theme::current();
+    match state {
+        Some(LoadState::Loaded(value)) => return Some(value),
+        Some(LoadState::Failed(msg)) => {
+            let p = Paragraph::new(format!("Couldn't load {noun}: {msg}"))
+                .style(Style::default().fg(theme.error));
+            frame.render_widget(p, area);
+        }
+        None | Some(LoadState::NotRequested) | Some(LoadState::Loading) => {
+            frame.render_widget(Paragraph::new(loading(&format!("Loading {noun}..."))), area);
+        }
+    }
+    None
+}
+
+/// Clamp `scroll` against the content, store it and the viewport back for
+/// half-page keys, and render `lines` with the fixed-thumb scrollbar in the
+/// rightmost column.
+pub(super) fn scrolled_paragraph(
+    frame: &mut Frame,
+    lines: Vec<Line<'static>>,
+    scroll: &mut u16,
+    viewport: &mut u16,
+    area: Rect,
+) {
+    let max_scroll = lines.len().saturating_sub(area.height as usize) as u16;
+    *scroll = (*scroll).min(max_scroll);
+    *viewport = area.height;
+
+    let content_area = Rect {
+        width: area.width.saturating_sub(1),
+        ..area
+    };
+    frame.render_widget(Paragraph::new(lines).scroll((*scroll, 0)), content_area);
+
+    if max_scroll > 0 {
+        let bar = scrollbar(*scroll, max_scroll, area.height);
+        frame.render_widget(Paragraph::new(bar), scrollbar_area(area));
+    }
+}
 
 const SPINNER_FRAMES: &[&str] = &["⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏"];
 
@@ -73,19 +125,29 @@ pub(super) fn footer(width: u16, hints: &str) -> Line<'static> {
     Line::from(justify_between(left, right, width as usize))
 }
 
+/// The `Search: query█` input spans, shared by the prompt line and the diff
+/// pane's typing footer.
+pub(super) fn search_input_spans(query: &str) -> Vec<Span<'static>> {
+    let theme = theme::current();
+    vec![
+        Span::styled(format!("  Search: {query}"), Style::default().fg(theme.fg)),
+        Span::styled("█", Style::default().fg(theme.accent)),
+    ]
+}
+
 /// A `/` search prompt line: `Search: query█            N match`. Shared by
 /// every searchable view's footer so they all look and read the same.
 pub(super) fn search_prompt(query: &str, count: usize, width: u16) -> Line<'static> {
     let theme = theme::current();
-    let left = vec![
-        Span::styled(format!("  Search: {query}"), Style::default().fg(theme.fg)),
-        Span::styled("█", Style::default().fg(theme.accent)),
-    ];
     let right = vec![Span::styled(
         format!("{count} match  "),
         Style::default().fg(theme.muted),
     )];
-    Line::from(justify_between(left, right, width as usize))
+    Line::from(justify_between(
+        search_input_spans(query),
+        right,
+        width as usize,
+    ))
 }
 
 /// Re-style every case-insensitive occurrence of `query` inside `line` with
@@ -247,7 +309,7 @@ pub(super) fn numbered_diff_row(
         None => " ".repeat(num_width),
     };
     let gutter = format!(" {num_str} ");
-    let visible = gutter.chars().count() + prefix.chars().count() + 1 + content.chars().count();
+    let visible = gutter.len() + prefix.len() + 1 + Span::raw(content).width();
     let pad = row_w.saturating_sub(visible);
 
     let gutter_style = match bg {
@@ -284,7 +346,7 @@ pub(super) fn diff_bg_row(
     text_fg: Color,
     row_w: usize,
 ) -> Line<'static> {
-    let visible = gutter.chars().count() + prefix.chars().count() + content.chars().count();
+    let visible = gutter.len() + prefix.len() + Span::raw(content).width();
     let pad = row_w.saturating_sub(visible);
     let mut spans: Vec<Span<'static>> = Vec::with_capacity(3);
     if !gutter.is_empty() {

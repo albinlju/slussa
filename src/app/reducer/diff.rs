@@ -22,22 +22,12 @@ impl App {
         }
     }
 
-    /// The diff view the keyboard drives: the Commits drill-in when a commit
-    /// is open, otherwise the Diff tab's own.
     pub(super) fn diff_view(&self) -> &DiffViewState {
-        if self.state.ui.commits.drilled.is_some() {
-            &self.state.ui.commits.diff
-        } else {
-            &self.state.ui.diff
-        }
+        self.state.ui.active_diff_view()
     }
 
     pub(super) fn diff_view_mut(&mut self) -> &mut DiffViewState {
-        if self.state.ui.commits.drilled.is_some() {
-            &mut self.state.ui.commits.diff
-        } else {
-            &mut self.state.ui.diff
-        }
+        self.state.ui.active_diff_view_mut()
     }
 
     fn active_diff_files(&self) -> Option<&[FileDiff]> {
@@ -81,8 +71,7 @@ impl App {
         if rows.is_empty() {
             return;
         }
-        let last = (rows.len() - 1) as i64;
-        let new_cursor = (self.diff_view().cursor as i64 + delta as i64).clamp(0, last) as usize;
+        let new_cursor = super::step_index(self.diff_view().cursor, delta, rows.len());
         self.diff_view_mut().cursor = new_cursor;
         if let Some(TreeRow::File { file_index, .. }) = rows.get(new_cursor) {
             self.focus_file(*file_index);
@@ -112,49 +101,46 @@ impl App {
     }
 
     fn diff_move_pane_cursor(&mut self, delta: i16) {
-        let count = self.diff_view().pane_items;
-        if count == 0 {
-            self.diff_view_mut().pane_cursor = 0;
-            return;
-        }
-        let last = (count - 1) as i64;
-        let next = (self.diff_view().pane_cursor as i64 + delta as i64).clamp(0, last);
-        self.diff_view_mut().pane_cursor = next as usize;
+        self.diff_view_mut().pane_cursor = super::step_index(
+            self.diff_view().pane_cursor,
+            delta,
+            self.diff_view().pane_items,
+        );
     }
 
     fn diff_toggle_at_cursor(&mut self) {
         let rows = self.current_visible_rows();
-        let Some(row) = rows.get(self.diff_view().cursor) else {
-            return;
-        };
-        match row {
-            TreeRow::Dir { path, expanded, .. } => {
-                let path = path.clone();
-                let expanded = *expanded;
-                let collapsed = &mut self.diff_view_mut().collapsed;
-                if expanded {
-                    collapsed.insert(path);
-                } else {
-                    collapsed.remove(&path);
-                }
+        match rows.get(self.diff_view().cursor) {
+            Some(TreeRow::Dir { expanded, .. }) => {
+                let collapse = *expanded;
+                self.set_dir_collapsed_at_cursor(collapse);
             }
-            TreeRow::File { file_index, .. } => self.focus_file(*file_index),
+            Some(TreeRow::File { file_index, .. }) => {
+                let idx = *file_index;
+                self.focus_file(idx);
+            }
+            None => {}
         }
     }
 
     fn diff_collapse_at_cursor(&mut self) {
-        let rows = self.current_visible_rows();
-        if let Some(TreeRow::Dir { path, .. }) = rows.get(self.diff_view().cursor) {
-            let path = path.clone();
-            self.diff_view_mut().collapsed.insert(path);
-        }
+        self.set_dir_collapsed_at_cursor(true);
     }
 
     fn diff_expand_at_cursor(&mut self) {
+        self.set_dir_collapsed_at_cursor(false);
+    }
+
+    fn set_dir_collapsed_at_cursor(&mut self, collapsed: bool) {
         let rows = self.current_visible_rows();
         if let Some(TreeRow::Dir { path, .. }) = rows.get(self.diff_view().cursor) {
             let path = path.clone();
-            self.diff_view_mut().collapsed.remove(&path);
+            let set = &mut self.diff_view_mut().collapsed;
+            if collapsed {
+                set.insert(path);
+            } else {
+                set.remove(&path);
+            }
         }
     }
 

@@ -1,5 +1,6 @@
 //! Shared HTTP helpers for Bitbucket Data Center REST v1 calls.
 
+use std::sync::OnceLock;
 use std::time::Duration;
 
 use reqwest::blocking::Client;
@@ -16,17 +17,24 @@ pub(super) fn build_client(timeout: Duration) -> reqwest::Result<Client> {
         .build()
 }
 
-pub(super) fn client() -> Result<Client, FetchError> {
-    build_client(Duration::from_secs(20))
-        .map_err(|e| FetchError::Network(format!("http client build failed: {e}")))
+/// The shared fetch client, built once — reqwest clients carry a connection
+/// pool, so rebuilding per request would throw the pool away.
+fn client() -> Result<&'static Client, FetchError> {
+    static CLIENT: OnceLock<Client> = OnceLock::new();
+    if let Some(client) = CLIENT.get() {
+        return Ok(client);
+    }
+    let built = build_client(Duration::from_secs(20))
+        .map_err(|e| FetchError::Network(format!("http client build failed: {e}")))?;
+    Ok(CLIENT.get_or_init(|| built))
 }
 
 pub(super) fn get_json<T: DeserializeOwned>(
-    host: &str,
+    base_url: &str,
     path: &str,
     pat: &str,
 ) -> Result<T, FetchError> {
-    let url = format!("{host}{path}");
+    let url = format!("{base_url}{path}");
     tracing::debug!("GET {url}");
     let response = client()?
         .get(&url)
@@ -40,13 +48,13 @@ pub(super) fn get_json<T: DeserializeOwned>(
 
     let status = response.status();
     if status == reqwest::StatusCode::UNAUTHORIZED || status == reqwest::StatusCode::FORBIDDEN {
-        let host_str = host
+        let host = base_url
             .trim_start_matches("https://")
             .trim_start_matches("http://")
             .trim_end_matches('/')
             .to_string();
-        tracing::warn!("auth failed on {host_str} ({status})");
-        return Err(FetchError::NotAuthenticated { host: host_str });
+        tracing::warn!("auth failed on {host} ({status})");
+        return Err(FetchError::NotAuthenticated { host });
     }
     if !status.is_success() {
         let body = response.text().unwrap_or_default();

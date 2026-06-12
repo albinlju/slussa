@@ -33,7 +33,7 @@ pub fn fetch_commits(config: &Config, pr_id: u64) -> Result<Vec<Commit>, FetchEr
         "/rest/api/1.0/projects/{}/repos/{}/pull-requests/{pr_id}/commits?limit=100",
         config.repo.project_key, config.repo.repo_slug
     );
-    let page: PagedCommits = get_json(&config.repo.host, &path, &config.pat)?;
+    let page: PagedCommits = get_json(&config.repo.base_url, &path, &config.pat)?;
     Ok(page.values.into_iter().map(map_commit).collect())
 }
 

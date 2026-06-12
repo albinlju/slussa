@@ -29,6 +29,7 @@ pub fn dispatch(mut args: Vec<String>) -> Dispatch {
 
     match args.get(1).map(String::as_str) {
         Some("auth") => return Dispatch::Done(run_auth(&args[2..])),
+        // Deliberately absent from --help: a debug tool, not user surface.
         Some("keyring-test") => return Dispatch::Done(run_keyring_test()),
         Some("--help" | "-h") => {
             print_help();

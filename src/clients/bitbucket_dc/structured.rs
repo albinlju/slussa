@@ -86,7 +86,7 @@ pub(super) fn fetch_commit(config: &Config, oid: &str) -> Result<Diff, FetchErro
 }
 
 fn fetch_path(config: &Config, path: &str) -> Result<Diff, FetchError> {
-    let response: BbDiffResponse = get_json(&config.repo.host, path, &config.pat)?;
+    let response: BbDiffResponse = get_json(&config.repo.base_url, path, &config.pat)?;
     Ok(project(response))
 }
 

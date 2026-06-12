@@ -43,7 +43,7 @@ pub fn fetch_builds(config: &Config, pr_id: u64) -> Result<Vec<Build>, FetchErro
     }
 
     let path = format!("/rest/build-status/1.0/commits/{commit}?limit=100");
-    let page: PagedBuilds = get_json(&config.repo.host, &path, &config.pat)?;
+    let page: PagedBuilds = get_json(&config.repo.base_url, &path, &config.pat)?;
     Ok(page.values.into_iter().map(map_build).collect())
 }
 
@@ -52,7 +52,7 @@ fn latest_source_commit(config: &Config, pr_id: u64) -> Result<String, FetchErro
         "/rest/api/1.0/projects/{}/repos/{}/pull-requests/{pr_id}",
         config.repo.project_key, config.repo.repo_slug
     );
-    let pr: BbPrDetail = get_json(&config.repo.host, &path, &config.pat)?;
+    let pr: BbPrDetail = get_json(&config.repo.base_url, &path, &config.pat)?;
     Ok(pr.from_ref.latest_commit)
 }
 

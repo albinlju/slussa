@@ -17,14 +17,10 @@ impl App {
     {
         let tx = self.action_tx.clone();
         tokio::spawn(async move {
-            let result = task::spawn_blocking(fetch)
-                .await
-                .unwrap_or_else(|join_err| {
-                    Err(FetchError::ParseFailed(format!(
-                        "worker thread panicked: {join_err}"
-                    )))
-                })
-                .map_err(|e| e.to_string());
+            let result = match task::spawn_blocking(fetch).await {
+                Ok(r) => r.map_err(|e| e.to_string()),
+                Err(join_err) => Err(format!("worker thread panicked: {join_err}")),
+            };
             tx.send(make_action(result)).ok();
         });
     }
