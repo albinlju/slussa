@@ -1,37 +1,8 @@
 use serde::Deserialize;
 
 use crate::clients::error::FetchError;
-use crate::clients::github::cli::run_gh_json;
-use crate::clients::github::{GqlComment, map_gql_comment};
+use crate::clients::github::{COMMENT_FIELDS, GqlComment, map_gql_comment, run_pr_graphql};
 use crate::domain::comment::ReviewThread;
-
-// GraphQL instead of REST `/pulls/{n}/comments`: threads arrive pre-grouped
-// with `isResolved`, `diffSide` tells old-side anchors apart, and the
-// reactions carry `viewerHasReacted`.
-const QUERY: &str = "query($owner: String!, $name: String!, $pr: Int!) { \
-  repository(owner: $owner, name: $name) { pullRequest(number: $pr) { \
-    reviewThreads(first: 100) { nodes { \
-      isResolved path line originalLine diffSide \
-      comments(first: 100) { nodes { \
-        body createdAt author { login } \
-        reactionGroups { content viewerHasReacted users { totalCount } } \
-      } } } } } } }";
-
-#[derive(Debug, Deserialize)]
-struct GqlResponse {
-    data: GqlData,
-}
-
-#[derive(Debug, Deserialize)]
-struct GqlData {
-    repository: GqlRepository,
-}
-
-#[derive(Debug, Deserialize)]
-#[serde(rename_all = "camelCase")]
-struct GqlRepository {
-    pull_request: GqlPullRequest,
-}
 
 #[derive(Debug, Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -67,28 +38,20 @@ struct GqlComments {
     nodes: Vec<GqlComment>,
 }
 
+// GraphQL instead of REST `/pulls/{n}/comments`: threads arrive pre-grouped
+// with `isResolved`, `diffSide` tells old-side anchors apart, and the
+// reactions carry `viewerHasReacted`.
 pub fn fetch_review_threads(pr_number: u64) -> Result<Vec<ReviewThread>, FetchError> {
-    let resp: GqlResponse = run_gh_json(&[
-        "api",
-        "graphql",
-        "-F",
-        "owner={owner}",
-        "-F",
-        "name={repo}",
-        "-F",
-        &format!("pr={pr_number}"),
-        "-f",
-        &format!("query={QUERY}"),
-    ])?;
-    Ok(resp
-        .data
-        .repository
-        .pull_request
-        .review_threads
-        .nodes
-        .into_iter()
-        .map(map_thread)
-        .collect())
+    let query = format!(
+        "query($owner: String!, $name: String!, $pr: Int!) {{ \
+           repository(owner: $owner, name: $name) {{ pullRequest(number: $pr) {{ \
+             reviewThreads(first: 100) {{ nodes {{ \
+               isResolved path line originalLine diffSide \
+               comments(first: 100) {{ nodes {{ {COMMENT_FIELDS} }} }} \
+             }} }} }} }} }}"
+    );
+    let pr: GqlPullRequest = run_pr_graphql(&query, pr_number)?;
+    Ok(pr.review_threads.nodes.into_iter().map(map_thread).collect())
 }
 
 fn map_thread(t: GqlThread) -> ReviewThread {
@@ -111,7 +74,7 @@ fn map_thread(t: GqlThread) -> ReviewThread {
 mod tests {
     use super::*;
 
-    const SAMPLE: &str = r#"{ "data": { "repository": { "pullRequest": { "reviewThreads": {
+    const SAMPLE: &str = r#"{ "reviewThreads": {
         "nodes": [{
             "isResolved": true,
             "path": "src/x.rs",
@@ -129,15 +92,12 @@ mod tests {
                 ]
             }] }
         }]
-    } } } } }"#;
+    } }"#;
 
     #[test]
     fn maps_threads_with_reactions_and_old_side_anchor() {
-        let resp: GqlResponse = serde_json::from_str(SAMPLE).unwrap();
-        let threads: Vec<ReviewThread> = resp
-            .data
-            .repository
-            .pull_request
+        let pr: GqlPullRequest = serde_json::from_str(SAMPLE).unwrap();
+        let threads: Vec<ReviewThread> = pr
             .review_threads
             .nodes
             .into_iter()

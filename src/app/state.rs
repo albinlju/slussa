@@ -48,8 +48,6 @@ pub struct AppState {
     pub screen: Screen,
 }
 
-/// The `*_viewport` fields are written by the renderer each frame (last-drawn
-/// content height) and read by the key handlers to size half-page jumps.
 /// Generic `/` incremental-search box, shared by every searchable view (PR
 /// list, commit list, file tree, …). `open` = typing mode; `query` also
 /// narrows/filters its view while non-empty. The reducer drives all of these
@@ -70,14 +68,29 @@ impl SearchState {
     /// Per-view matchers — the one place each view's searchable fields live, so
     /// the render filter and the reducer's clamping never drift apart.
     pub fn matches_pr(&self, pr: &PullRequest) -> bool {
-        self.matches(&format!("#{} {} {}", pr.id, pr.title, pr.author.username))
+        self.matches(&pr.title)
+            || self.matches(&pr.author.username)
+            || self.matches(&format!("#{}", pr.id))
     }
 
     pub fn matches_commit(&self, c: &Commit) -> bool {
-        self.matches(&format!("{} {}", c.oid, c.headline))
+        self.matches(&c.oid) || self.matches(&c.headline)
     }
 }
 
+/// Which view's `/` search the keyboard drives right now. Computed by
+/// [`AppState::search_target`] — the single routing source for both the
+/// reducer's edits and the key handler's interception.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum SearchTarget {
+    List,
+    Commits,
+    DiffTree,
+    DiffPane,
+}
+
+/// The `*_viewport` fields are written by the renderer each frame (last-drawn
+/// content height) and read by the key handlers to size half-page jumps.
 #[derive(Debug, Default)]
 pub struct UiMemory {
     pub list_selected: usize,
@@ -93,6 +106,26 @@ pub struct UiMemory {
     pub overview_scroll: u16,
     pub description_viewport: u16,
     pub overview_viewport: u16,
+}
+
+impl UiMemory {
+    /// The diff view the keyboard drives: the Commits drill-in when a commit
+    /// is open, otherwise the Diff tab's own.
+    pub fn active_diff_view(&self) -> &DiffViewState {
+        if self.commits.drilled.is_some() {
+            &self.commits.diff
+        } else {
+            &self.diff
+        }
+    }
+
+    pub fn active_diff_view_mut(&mut self) -> &mut DiffViewState {
+        if self.commits.drilled.is_some() {
+            &mut self.commits.diff
+        } else {
+            &mut self.diff
+        }
+    }
 }
 
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
@@ -238,6 +271,26 @@ pub enum Screen {
 }
 
 impl AppState {
+    pub fn search_target(&self) -> Option<SearchTarget> {
+        match self.screen {
+            // The filter picker is a modal that owns the keyboard while open.
+            Screen::List => (!self.ui.filter_picker_open).then_some(SearchTarget::List),
+            Screen::Detail { tab, .. } => {
+                let drilled = self.ui.commits.drilled.is_some();
+                match tab {
+                    DetailTab::Commits if !drilled => Some(SearchTarget::Commits),
+                    DetailTab::Diff | DetailTab::Commits => {
+                        match self.ui.active_diff_view().focus {
+                            DiffFocus::Tree => Some(SearchTarget::DiffTree),
+                            DiffFocus::Pane => Some(SearchTarget::DiffPane),
+                        }
+                    }
+                    _ => None,
+                }
+            }
+        }
+    }
+
     pub fn filtered_prs(&self) -> Vec<&PullRequest> {
         match &self.cache.prs {
             LoadState::Loaded(prs) => prs

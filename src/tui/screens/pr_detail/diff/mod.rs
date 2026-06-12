@@ -30,76 +30,68 @@ pub fn render(
     area: Rect,
 ) {
     let theme = theme::current();
-    match diff_state {
-        None | Some(LoadState::NotRequested) | Some(LoadState::Loading) => {
-            frame.render_widget(Paragraph::new(widgets::loading("Loading diff...")), area);
-        }
-        Some(LoadState::Failed(msg)) => {
-            let paragraph = Paragraph::new(format!("Couldn't load diff: {msg}"))
-                .style(Style::default().fg(theme.error));
-            frame.render_widget(paragraph, area);
-        }
-        Some(LoadState::Loaded(diff)) if diff.files.is_empty() => {
-            let paragraph = Paragraph::new("(no diff)").style(Style::default().fg(theme.muted));
-            frame.render_widget(paragraph, area);
-        }
-        Some(LoadState::Loaded(diff)) => {
-            let chunks = Layout::default()
-                .direction(Direction::Horizontal)
-                .constraints([
-                    Constraint::Percentage(28),
-                    Constraint::Length(1),
-                    Constraint::Min(0),
-                ])
-                .split(area);
-
-            let file_stats: Vec<(u32, u32)> = diff.files.iter().map(count_file_stats).collect();
-
-            let comment_counts: Vec<usize> = diff
-                .files
-                .iter()
-                .map(|f| file_comment_count(f, review_threads))
-                .collect();
-
-            // Column height minus border (2) and header band (2).
-            ui_diff.pane_viewport = chunks[2].height.saturating_sub(4);
-            ui_diff.tree_viewport = chunks[0].height.saturating_sub(4);
-
-            let tree_focused = matches!(ui_diff.focus, DiffFocus::Tree);
-            let rows =
-                build_visible_rows(&diff.files, &ui_diff.collapsed, &ui_diff.tree_search.query);
-            tree::render(
-                frame,
-                &rows,
-                ui_diff.cursor,
-                &file_stats,
-                &comment_counts,
-                tree_focused,
-                chunks[0],
-            );
-            // The highlight + matches apply only once committed (Enter), so the
-            // query is withheld while the prompt is still open.
-            let pane_query = if ui_diff.pane_search.open {
-                String::new()
-            } else {
-                ui_diff.pane_search.query.clone()
-            };
-            let (pane_items, pane_matches) = pane::render(
-                frame,
-                diff,
-                ui_diff.focused_file,
-                &mut ui_diff.pane_scroll,
-                ui_diff.pane_cursor,
-                &file_stats,
-                review_threads,
-                !tree_focused,
-                &pane_query,
-                chunks[2],
-            );
-            ui_diff.pane_items = pane_items;
-            ui_diff.pane_matches = pane_matches;
-        }
+    let Some(diff) = widgets::loaded_or_placeholder(frame, diff_state, "diff", area) else {
+        return;
+    };
+    if diff.files.is_empty() {
+        let paragraph = Paragraph::new("(no diff)").style(Style::default().fg(theme.muted));
+        frame.render_widget(paragraph, area);
+        return;
     }
+
+    let chunks = Layout::default()
+        .direction(Direction::Horizontal)
+        .constraints([
+            Constraint::Percentage(28),
+            Constraint::Length(1),
+            Constraint::Min(0),
+        ])
+        .split(area);
+
+    let file_stats: Vec<(u32, u32)> = diff.files.iter().map(count_file_stats).collect();
+
+    let comment_counts: Vec<usize> = diff
+        .files
+        .iter()
+        .map(|f| file_comment_count(f, review_threads))
+        .collect();
+
+    // Column height minus border (2) and header band (2).
+    ui_diff.pane_viewport = chunks[2].height.saturating_sub(4);
+    ui_diff.tree_viewport = chunks[0].height.saturating_sub(4);
+
+    let tree_focused = matches!(ui_diff.focus, DiffFocus::Tree);
+    let rows = build_visible_rows(&diff.files, &ui_diff.collapsed, &ui_diff.tree_search.query);
+    tree::render(
+        frame,
+        &rows,
+        ui_diff.cursor,
+        &file_stats,
+        &comment_counts,
+        tree_focused,
+        chunks[0],
+    );
+    // The highlight + matches apply only once committed (Enter), so the
+    // query is withheld while the prompt is still open.
+    let pane_query = if ui_diff.pane_search.open {
+        ""
+    } else {
+        ui_diff.pane_search.query.as_str()
+    };
+    let (pane_items, pane_matches) = pane::render(
+        frame,
+        diff,
+        ui_diff.focused_file,
+        &mut ui_diff.pane_scroll,
+        ui_diff.pane_cursor,
+        &file_stats,
+        review_threads,
+        !tree_focused,
+        pane_query,
+        chunks[2],
+    );
+    ui_diff.pane_items = pane_items;
+    ui_diff.pane_matches = pane_matches;
 }
 
 /// Comments whose anchored line is actually present in *this* file's diff —
@@ -107,6 +99,10 @@ pub fn render(
 /// anchoring: new-side lines (added/context) match `thread.line`, old-side
 /// lines (removed) match `thread.old_line`.
 fn file_comment_count(file: &FileDiff, threads: &[ReviewThread]) -> usize {
+    // Most files have no threads — skip the line-set work for them.
+    if !threads.iter().any(|t| t.path == file.path) {
+        return 0;
+    }
     let mut new_lines: HashSet<usize> = HashSet::new();
     let mut old_lines: HashSet<usize> = HashSet::new();
     for hunk in &file.hunks {

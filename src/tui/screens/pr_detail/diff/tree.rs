@@ -113,7 +113,7 @@ pub(super) fn render(
                         Style::default().fg(theme.diff_removed),
                     ));
 
-                    let visible_left = indent.chars().count() + name.chars().count();
+                    let visible_left = indent.len() + Span::raw(name.as_str()).width();
                     let visible_right: usize = right.iter().map(|s| s.width()).sum();
                     let pad = row_width
                         .saturating_sub(visible_left + visible_right + 1)

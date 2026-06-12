@@ -71,7 +71,7 @@ pub fn fetch_prs(config: &Config) -> Result<Vec<PullRequest>, FetchError> {
         "/rest/api/1.0/projects/{}/repos/{}/pull-requests?state=ALL&limit=50",
         config.repo.project_key, config.repo.repo_slug
     );
-    let page: PagedPrs = get_json(&config.repo.host, &path, &config.pat)?;
+    let page: PagedPrs = get_json(&config.repo.base_url, &path, &config.pat)?;
     Ok(page.values.into_iter().map(map_pr).collect())
 }
 

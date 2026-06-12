@@ -22,7 +22,7 @@ use crate::{
     domain::{
         comment::{ReviewThread, split_suggestions},
         diff::FileDiff,
-        pr::{PrStatus, PullRequest},
+        pr::PullRequest,
     },
     tui::{format, markdown, screens::half_page, theme, widgets},
 };
@@ -90,11 +90,7 @@ pub(in crate::tui) fn render(
 
     render_header(frame, pr, chunks[0]);
     let drilled = state.ui.commits.drilled.is_some();
-    let help_focus = if drilled {
-        state.ui.commits.diff.focus
-    } else {
-        state.ui.diff.focus
-    };
+    let help_focus = state.ui.active_diff_view().focus;
     let pr_data = state.cache.details.get(&pr.id);
     let footer = detail_footer(
         state,
@@ -136,7 +132,7 @@ fn detail_footer(
     if tab != DetailTab::Diff && !(tab == DetailTab::Commits && drilled) {
         return None;
     }
-    let view = if drilled { &state.ui.commits.diff } else { &state.ui.diff };
+    let view = state.ui.active_diff_view();
 
     match focus {
         DiffFocus::Tree => {
@@ -151,10 +147,7 @@ fn detail_footer(
             let s = &view.pane_search;
             if s.open {
                 // Typing — show the query only; highlight + count wait for Enter.
-                Some(Line::from(vec![
-                    Span::styled(format!("  Search: {}", s.query), Style::default().fg(theme.fg)),
-                    Span::styled("█", Style::default().fg(theme.accent)),
-                ]))
+                Some(Line::from(widgets::search_input_spans(&s.query)))
             } else if !s.query.is_empty() {
                 // Applied — match count + n/N navigation.
                 let n = view.pane_matches.len();
@@ -195,14 +188,6 @@ fn active_files<'a>(state: &AppState, pr_data: Option<&'a PrData>, drilled: bool
         Some(LoadState::Loaded(diff)) => &diff.files,
         _ => &[],
     }
-}
-
-pub(super) fn description_body(pr: &PullRequest) -> &str {
-    pr.description
-        .as_deref()
-        .map(str::trim)
-        .filter(|s| !s.is_empty())
-        .unwrap_or("(no description)")
 }
 
 /// The diff pane's thread box (Diff tab and Commits drill-in). `anchor_text`
@@ -399,12 +384,7 @@ fn render_tabs_and_content(
 
 fn render_header(frame: &mut Frame, pr: &PullRequest, area: Rect) {
     let theme = theme::current();
-    let status_color = match pr.status {
-        PrStatus::Draft => theme.status_draft,
-        PrStatus::Open => theme.status_open,
-        PrStatus::Merged => theme.status_merged,
-        PrStatus::Declined => theme.status_declined,
-    };
+    let status_color = theme.status_color(&pr.status);
 
     let title_line = Line::from(vec![
         Span::styled(format!("#{} ", pr.id), Style::default().fg(theme.muted)),
@@ -529,11 +509,7 @@ pub(in crate::tui) fn key_to_action(state: &AppState, key: KeyEvent) -> Option<A
         _ => return None,
     };
     let drilled = state.ui.commits.drilled.is_some();
-    let diff_focus = if drilled {
-        state.ui.commits.diff.focus
-    } else {
-        state.ui.diff.focus
-    };
+    let diff_focus = state.ui.active_diff_view().focus;
 
     if key.modifiers.contains(KeyModifiers::CONTROL) {
         match key.code {
@@ -551,12 +527,7 @@ pub(in crate::tui) fn key_to_action(state: &AppState, key: KeyEvent) -> Option<A
         if in_diff_pane {
             // Esc clears a lingering search highlight first, then steps back to
             // the tree.
-            let pane_search = if drilled {
-                &state.ui.commits.diff.pane_search
-            } else {
-                &state.ui.diff.pane_search
-            };
-            if !pane_search.query.is_empty() {
+            if !state.ui.active_diff_view().pane_search.query.is_empty() {
                 return Some(Action::Search(SearchInput::Cancel));
             }
             return Some(Action::Diff(DiffAction::FocusTree));
@@ -580,65 +551,44 @@ pub(in crate::tui) fn key_to_action(state: &AppState, key: KeyEvent) -> Option<A
     }
 
     match tab {
-        DetailTab::Diff => diff_nav_action(key.code, &state.ui.diff).map(Action::Diff),
+        DetailTab::Diff => diff_nav_action(key.code, state.ui.active_diff_view()).map(Action::Diff),
         DetailTab::Commits if drilled => match key.code {
             KeyCode::Char('[') => Some(Action::Commits(CommitsAction::StepCommit(-1))),
             KeyCode::Char(']') => Some(Action::Commits(CommitsAction::StepCommit(1))),
-            _ => diff_nav_action(key.code, &state.ui.commits.diff).map(Action::Diff),
+            _ => diff_nav_action(key.code, state.ui.active_diff_view()).map(Action::Diff),
         },
-        DetailTab::Commits => match key.code {
-            KeyCode::Down | KeyCode::Char('j') => {
-                Some(Action::Commits(CommitsAction::MoveSelection(1)))
-            }
-            KeyCode::Up | KeyCode::Char('k') => {
-                Some(Action::Commits(CommitsAction::MoveSelection(-1)))
-            }
-            KeyCode::PageDown => Some(Action::Commits(CommitsAction::MoveSelection(half_page(
-                state.ui.commits.viewport,
-            )))),
-            KeyCode::PageUp => Some(Action::Commits(CommitsAction::MoveSelection(-half_page(
-                state.ui.commits.viewport,
-            )))),
-            KeyCode::Enter => Some(Action::Commits(CommitsAction::Open)),
-            KeyCode::Right | KeyCode::Char('l') => Some(Action::Detail(DetailAction::NextTab)),
-            KeyCode::Left | KeyCode::Char('h') => Some(Action::Detail(DetailAction::PrevTab)),
-            _ => None,
-        },
-        DetailTab::Overview => match key.code {
-            KeyCode::Down | KeyCode::Char('j') => Some(Action::Detail(DetailAction::OverviewScroll(1))),
-            KeyCode::Up | KeyCode::Char('k') => Some(Action::Detail(DetailAction::OverviewScroll(-1))),
-            KeyCode::PageDown => Some(Action::Detail(DetailAction::OverviewScroll(half_page(
-                state.ui.overview_viewport,
-            )))),
-            KeyCode::PageUp => Some(Action::Detail(DetailAction::OverviewScroll(-half_page(
-                state.ui.overview_viewport,
-            )))),
-            KeyCode::Right | KeyCode::Char('l') => Some(Action::Detail(DetailAction::NextTab)),
-            KeyCode::Left | KeyCode::Char('h') => Some(Action::Detail(DetailAction::PrevTab)),
-            _ => None,
-        },
-        DetailTab::Description => match key.code {
-            KeyCode::Down | KeyCode::Char('j') => {
-                Some(Action::Detail(DetailAction::DescriptionScroll(1)))
-            }
-            KeyCode::Up | KeyCode::Char('k') => {
-                Some(Action::Detail(DetailAction::DescriptionScroll(-1)))
-            }
-            KeyCode::PageDown => Some(Action::Detail(DetailAction::DescriptionScroll(half_page(
-                state.ui.description_viewport,
-            )))),
-            KeyCode::PageUp => Some(Action::Detail(DetailAction::DescriptionScroll(-half_page(
-                state.ui.description_viewport,
-            )))),
-            KeyCode::Right | KeyCode::Char('l') => Some(Action::Detail(DetailAction::NextTab)),
-            KeyCode::Left | KeyCode::Char('h') => Some(Action::Detail(DetailAction::PrevTab)),
-            _ => None,
-        },
-        _ => match key.code {
-            KeyCode::Right | KeyCode::Char('l') => Some(Action::Detail(DetailAction::NextTab)),
-            KeyCode::Left | KeyCode::Char('h') => Some(Action::Detail(DetailAction::PrevTab)),
-            _ => None,
-        },
+        DetailTab::Commits => scroll_delta(key.code, state.ui.commits.viewport)
+            .map(|d| Action::Commits(CommitsAction::MoveSelection(d)))
+            .or_else(|| match key.code {
+                KeyCode::Enter => Some(Action::Commits(CommitsAction::Open)),
+                _ => tab_nav(key.code),
+            }),
+        DetailTab::Overview => scroll_delta(key.code, state.ui.overview_viewport)
+            .map(|d| Action::Detail(DetailAction::OverviewScroll(d)))
+            .or_else(|| tab_nav(key.code)),
+        DetailTab::Description => scroll_delta(key.code, state.ui.description_viewport)
+            .map(|d| Action::Detail(DetailAction::DescriptionScroll(d)))
+            .or_else(|| tab_nav(key.code)),
+        DetailTab::Builds => tab_nav(key.code),
+    }
+}
+
+/// j/k and PageUp/PageDown as a signed step, page-sized by the viewport.
+fn scroll_delta(code: KeyCode, viewport: u16) -> Option<i16> {
+    match code {
+        KeyCode::Down | KeyCode::Char('j') => Some(1),
+        KeyCode::Up | KeyCode::Char('k') => Some(-1),
+        KeyCode::PageDown => Some(half_page(viewport)),
+        KeyCode::PageUp => Some(-half_page(viewport)),
+        _ => None,
+    }
+}
+
+fn tab_nav(code: KeyCode) -> Option<Action> {
+    match code {
+        KeyCode::Right | KeyCode::Char('l') => Some(Action::Detail(DetailAction::NextTab)),
+        KeyCode::Left | KeyCode::Char('h') => Some(Action::Detail(DetailAction::PrevTab)),
+        _ => None,
     }
 }
 

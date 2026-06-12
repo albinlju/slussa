@@ -11,7 +11,7 @@ use ratatui::{
 
 use crate::app::{
     action::{Action, SearchInput},
-    state::{AppState, DetailTab, DiffFocus, Screen, SearchState},
+    state::{AppState, Screen, SearchState, SearchTarget},
 };
 
 use screens::{pr_detail, pr_list};
@@ -54,29 +54,13 @@ pub fn key_to_action(state: &AppState, key: KeyEvent) -> Option<Action> {
 }
 
 /// The `SearchState` the active view drives, plus whether it's a *highlight*
-/// search (the diff pane) vs a filter search (everything else). Mirror of
-/// `App::active_search_mut` in the reducer.
+/// search (the diff pane) vs a filter search (everything else).
 fn active_search(state: &AppState) -> Option<(&SearchState, bool)> {
-    match state.screen {
-        // The filter picker is a modal that owns the keyboard while open.
-        Screen::List => (!state.ui.filter_picker_open).then_some((&state.ui.list_search, false)),
-        Screen::Detail { tab, .. } => {
-            let drilled = state.ui.commits.drilled.is_some();
-            match tab {
-                DetailTab::Commits if !drilled => Some((&state.ui.commits.search, false)),
-                DetailTab::Diff | DetailTab::Commits => {
-                    let view = if drilled {
-                        &state.ui.commits.diff
-                    } else {
-                        &state.ui.diff
-                    };
-                    match view.focus {
-                        DiffFocus::Tree => Some((&view.tree_search, false)),
-                        DiffFocus::Pane => Some((&view.pane_search, true)),
-                    }
-                }
-                _ => None,
-            }
-        }
-    }
+    let ui = &state.ui;
+    Some(match state.search_target()? {
+        SearchTarget::List => (&ui.list_search, false),
+        SearchTarget::Commits => (&ui.commits.search, false),
+        SearchTarget::DiffTree => (&ui.active_diff_view().tree_search, false),
+        SearchTarget::DiffPane => (&ui.active_diff_view().pane_search, true),
+    })
 }

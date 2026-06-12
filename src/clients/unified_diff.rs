@@ -15,10 +15,12 @@ pub fn parse(text: &str) -> Diff {
             if let Some(f) = current_file.take() {
                 files.push(f);
             }
+            // The *new* path (`b/...`) — review threads anchor against it, so
+            // renamed files must carry their post-rename name.
             let path = rest
                 .split_whitespace()
-                .next()
-                .map(|s| s.strip_prefix("a/").unwrap_or(s).to_string())
+                .next_back()
+                .map(|s| s.strip_prefix("b/").unwrap_or(s).to_string())
                 .unwrap_or_default();
             current_file = Some(FileDiff {
                 path,
@@ -113,6 +115,21 @@ mod tests {
         assert!(matches!(&lines[0], DiffLine::Context(s) if s == "int i = 0;"));
         assert!(matches!(&lines[1], DiffLine::Removed(s) if s == "--i;"));
         assert!(matches!(&lines[2], DiffLine::Added(s) if s == "++i;"));
+    }
+
+    #[test]
+    fn renamed_file_keeps_the_new_path() {
+        let text = "diff --git a/old_name.rs b/new_name.rs\n\
+                    similarity index 90%\n\
+                    rename from old_name.rs\n\
+                    rename to new_name.rs\n\
+                    --- a/old_name.rs\n\
+                    +++ b/new_name.rs\n\
+                    @@ -1,1 +1,1 @@\n\
+                    -x\n\
+                    +y\n";
+        let diff = parse(text);
+        assert_eq!(diff.files[0].path, "new_name.rs");
     }
 
     #[test]

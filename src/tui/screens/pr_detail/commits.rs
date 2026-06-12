@@ -15,40 +15,36 @@ use crate::{
 
 pub fn render(frame: &mut Frame, pr_data: Option<&PrData>, cv: &mut CommitsViewState, area: Rect) {
     let theme = theme::current();
-    match pr_data.map(|d| &d.commits) {
-        None | Some(LoadState::NotRequested) | Some(LoadState::Loading) => {
-            frame.render_widget(Paragraph::new(widgets::loading("Loading commits...")), area);
-        }
-        Some(LoadState::Failed(msg)) => {
-            let paragraph = Paragraph::new(format!("Couldn't load commits: {msg}"))
-                .style(Style::default().fg(theme.error));
-            frame.render_widget(paragraph, area);
-        }
-        Some(LoadState::Loaded(commits)) if commits.is_empty() => {
-            let paragraph = Paragraph::new("(no commits)").style(Style::default().fg(theme.muted));
-            frame.render_widget(paragraph, area);
-        }
-        Some(LoadState::Loaded(commits)) => {
-            cv.viewport = area.height;
-            let now = Utc::now();
-            let width = area.width as usize;
-            // `/` search narrows the list; selection indexes the filtered view.
-            let filtered: Vec<&Commit> =
-                commits.iter().filter(|c| cv.search.matches_commit(c)).collect();
-            let last_idx = filtered.len().saturating_sub(1);
-            let items: Vec<ListItem> = filtered
-                .iter()
-                .enumerate()
-                .map(|(i, c)| ListItem::new(build_commit_line(c, i == last_idx, now, width)))
-                .collect();
-
-            let list = List::new(items)
-                .highlight_style(Style::default().bg(theme.highlight_bg));
-            let mut list_state = ListState::default();
-            list_state.select(Some(cv.selected.min(last_idx)));
-            frame.render_stateful_widget(list, area, &mut list_state);
-        }
+    let Some(commits) =
+        widgets::loaded_or_placeholder(frame, pr_data.map(|d| &d.commits), "commits", area)
+    else {
+        return;
+    };
+    if commits.is_empty() {
+        let paragraph = Paragraph::new("(no commits)").style(Style::default().fg(theme.muted));
+        frame.render_widget(paragraph, area);
+        return;
     }
+
+    cv.viewport = area.height;
+    let now = Utc::now();
+    let width = area.width as usize;
+    // `/` search narrows the list; selection indexes the filtered view.
+    let filtered: Vec<&Commit> = commits
+        .iter()
+        .filter(|c| cv.search.matches_commit(c))
+        .collect();
+    let last_idx = filtered.len().saturating_sub(1);
+    let items: Vec<ListItem> = filtered
+        .iter()
+        .enumerate()
+        .map(|(i, c)| ListItem::new(build_commit_line(c, i == last_idx, now, width)))
+        .collect();
+
+    let list = List::new(items).highlight_style(Style::default().bg(theme.highlight_bg));
+    let mut list_state = ListState::default();
+    list_state.select(Some(cv.selected.min(last_idx)));
+    frame.render_stateful_widget(list, area, &mut list_state);
 }
 
 /// The drill-in: a banner identifying the commit, then its diff rendered with
@@ -137,22 +133,14 @@ fn build_commit_line(c: &Commit, is_last: bool, now: DateTime<Utc>, width: usize
     let right_visible: usize = right_spans.iter().map(|s| s.width()).sum();
 
     let left_fixed = graph.chars().count() + short_oid.chars().count() + 2; // 2 spaces after oid
-    let headline_max = width
-        .saturating_sub(left_fixed + right_visible + 2) // 2-col min gap before right block
-        .max(10);
-    let headline: String = if c.headline.chars().count() > headline_max {
-        let mut s: String = c
-            .headline
-            .chars()
-            .take(headline_max.saturating_sub(1))
-            .collect();
-        s.push('…');
-        s
-    } else {
-        c.headline.clone()
-    };
+    let headline = format::truncate_ellipsis(
+        &c.headline,
+        width
+            .saturating_sub(left_fixed + right_visible + 2) // 2-col min gap before right block
+            .max(10),
+    );
 
-    let used = left_fixed + headline.chars().count() + right_visible;
+    let used = left_fixed + Span::raw(headline.as_str()).width() + right_visible;
     let pad = width.saturating_sub(used).max(2);
 
     let mut spans: Vec<Span<'static>> = Vec::with_capacity(4 + right_spans.len());

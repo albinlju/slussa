@@ -11,8 +11,13 @@ impl App {
             CommitsAction::Open => self.commits_open_selected(),
             CommitsAction::Back => self.state.ui.commits.drilled = None,
             CommitsAction::StepCommit(delta) => {
+                let before = self.state.ui.commits.selected;
                 self.commits_move_selection(delta);
-                self.commits_open_selected();
+                // At the list boundary the selection doesn't move — re-opening
+                // would needlessly reset the current commit's scroll/cursor.
+                if self.state.ui.commits.selected != before {
+                    self.commits_open_selected();
+                }
             }
         }
     }
@@ -39,15 +44,19 @@ impl App {
             .unwrap_or_default()
     }
 
-    fn commits_move_selection(&mut self, delta: i16) {
-        let len = self.commit_oids().len();
-        if len == 0 {
-            self.state.ui.commits.selected = 0;
-            return;
+    fn commit_count(&self) -> usize {
+        let Screen::Detail { pr_id, .. } = self.state.screen else {
+            return 0;
+        };
+        match self.state.cache.details.get(&pr_id).map(|d| &d.commits) {
+            Some(LoadState::Loaded(commits)) => commits.len(),
+            _ => 0,
         }
-        let last = (len - 1) as i64;
-        let next = (self.state.ui.commits.selected as i64 + delta as i64).clamp(0, last);
-        self.state.ui.commits.selected = next as usize;
+    }
+
+    fn commits_move_selection(&mut self, delta: i16) {
+        self.state.ui.commits.selected =
+            super::step_index(self.state.ui.commits.selected, delta, self.commit_count());
     }
 
     fn commits_open_selected(&mut self) {

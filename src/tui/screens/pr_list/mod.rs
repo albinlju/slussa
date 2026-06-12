@@ -3,12 +3,8 @@ use crate::{
         action::{Action, ListAction},
         state::{AppState, LoadState, StatusFilter},
     },
-    domain::{
-        ci::CiState,
-        pr::{PrStatus, PullRequest},
-        review::ReviewerState,
-    },
-    tui::{screens::half_page, theme, widgets},
+    domain::{ci::CiState, pr::PullRequest, review::ReviewerState},
+    tui::{format, screens::half_page, theme, widgets},
 };
 use chrono::Utc;
 use ratatui::{
@@ -129,6 +125,10 @@ pub(in crate::tui) fn render(frame: &mut Frame, state: &mut AppState, area: rata
     ]));
     frame.render_widget(header, content_chunks[0]);
 
+    let match_count = match &load_view {
+        PrListView::Loaded(prs) => prs.len(),
+        _ => 0,
+    };
     match load_view {
         PrListView::Loaded(filtered) => {
             let items: Vec<ListItem> = filtered.iter().map(|pr| row_for_pr(pr, &widths)).collect();
@@ -160,11 +160,7 @@ pub(in crate::tui) fn render(frame: &mut Frame, state: &mut AppState, area: rata
     }
 
     let footer_line = if state.ui.list_search.open {
-        widgets::search_prompt(
-            &state.ui.list_search.query,
-            state.filtered_prs().len(),
-            chunks[1].width,
-        )
+        widgets::search_prompt(&state.ui.list_search.query, match_count, chunks[1].width)
     } else {
         widgets::footer(
             chunks[1].width,
@@ -227,12 +223,7 @@ fn render_filter_picker(frame: &mut Frame, state: &AppState, area: Rect) {
 
 fn row_for_pr(pr: &PullRequest, widths: &ColWidths) -> ListItem<'static> {
     let theme = theme::current();
-    let status_color = match pr.status {
-        PrStatus::Draft => theme.status_draft,
-        PrStatus::Open => theme.status_open,
-        PrStatus::Merged => theme.status_merged,
-        PrStatus::Declined => theme.status_declined,
-    };
+    let status_color = theme.status_color(&pr.status);
 
     let days_old = (Utc::now() - pr.created).num_days();
     let age = if days_old == 0 {
@@ -286,10 +277,8 @@ fn row_for_pr(pr: &PullRequest, widths: &ColWidths) -> ListItem<'static> {
         (format!("{approved}/{total}"), color)
     };
 
-    let title_max = widths.title.saturating_sub(2);
-    let author_max = widths.author.saturating_sub(2);
-    let title: String = pr.title.chars().take(title_max).collect();
-    let author: String = pr.author.username.chars().take(author_max).collect();
+    let title = format::truncate_ellipsis(&pr.title, widths.title.saturating_sub(2));
+    let author = format::truncate_ellipsis(&pr.author.username, widths.author.saturating_sub(2));
 
     let line = Line::from(vec![
         Span::styled(

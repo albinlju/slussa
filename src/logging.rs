@@ -4,7 +4,7 @@ use std::path::PathBuf;
 use tracing_subscriber::{EnvFilter, fmt};
 
 pub fn init() -> std::io::Result<()> {
-    let path = log_path()?;
+    let path = log_path();
     if let Some(parent) = path.parent() {
         create_dir_all(parent)?;
     }
@@ -22,9 +22,9 @@ pub fn init() -> std::io::Result<()> {
     Ok(())
 }
 
-pub fn log_path() -> std::io::Result<PathBuf> {
-    let dir = dirs::data_dir()
+pub fn log_path() -> PathBuf {
+    dirs::data_dir()
         .map(|d| d.join("tuipr"))
-        .unwrap_or_else(|| PathBuf::from("."));
-    Ok(dir.join("tuipr.log"))
+        .unwrap_or_else(|| PathBuf::from("."))
+        .join("tuipr.log")
 }

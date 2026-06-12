@@ -12,7 +12,7 @@ pub fn parse(remote: &str, host: &str) -> Option<RepoCoords> {
 
     let repo_slug = repo.strip_suffix(".git").unwrap_or(repo).to_string();
     Some(RepoCoords {
-        host: format!("https://{host}"),
+        base_url: format!("https://{host}"),
         project_key: project.to_string(),
         repo_slug,
     })
@@ -52,7 +52,7 @@ mod tests {
         .unwrap();
         assert_eq!(coords.project_key, "PLAT");
         assert_eq!(coords.repo_slug, "payments-api");
-        assert_eq!(coords.host, "https://bitbucket.kunden.se");
+        assert_eq!(coords.base_url, "https://bitbucket.kunden.se");
     }
 
     #[test]

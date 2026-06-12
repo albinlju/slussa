@@ -10,7 +10,6 @@ use ratatui::{
 use crate::{
     app::state::{LoadState, PrData, UiMemory},
     domain::{
-        ci::BuildState,
         comment::{Comment, ReviewThread, split_suggestions},
         diff::{Diff, DiffLine},
         event::{EventKind, TimelineEvent},
@@ -29,6 +28,9 @@ use crate::{
 const TIMELINE_COL: u16 = 2;
 
 const SIDEBAR_WIDTH: u16 = 30;
+/// Below this width the sidebar would squeeze the timeline into uselessness,
+/// so it's dropped entirely.
+const SIDEBAR_BREAKPOINT: u16 = 64;
 
 pub fn render(
     frame: &mut Frame,
@@ -37,7 +39,7 @@ pub fn render(
     ui: &mut UiMemory,
     area: Rect,
 ) {
-    let (timeline_area, sidebar_area) = if area.width >= 64 {
+    let (timeline_area, sidebar_area) = if area.width >= SIDEBAR_BREAKPOINT {
         let chunks = Layout::default()
             .direction(Direction::Horizontal)
             .constraints([Constraint::Min(0), Constraint::Length(SIDEBAR_WIDTH)])
@@ -69,31 +71,15 @@ fn dim(text: &str) -> Line<'static> {
 }
 
 fn builds_summary(pr_data: Option<&PrData>) -> Vec<Line<'static>> {
-    let theme = theme::current();
     match pr_data.map(|d| &d.builds) {
         Some(LoadState::Loaded(builds)) if !builds.is_empty() => {
-            let total = builds.len();
-            let passing = builds
-                .iter()
-                .filter(|b| b.state == BuildState::Successful)
-                .count();
-            let any_running = builds.iter().any(|b| b.state == BuildState::InProgress);
-            let any_failed = builds
-                .iter()
-                .any(|b| matches!(b.state, BuildState::Failed | BuildState::Cancelled));
-            let accent = if any_running {
-                theme.warning
-            } else if any_failed {
-                theme.error
-            } else if passing == total {
-                theme.success
-            } else {
-                theme.muted
-            };
+            let stats = super::checks::build_stats(builds);
             vec![
                 Line::from(Span::styled(
-                    format!("{passing}/{total} passing"),
-                    Style::default().fg(accent).add_modifier(Modifier::BOLD),
+                    format!("{}/{} passing", stats.passing, stats.total),
+                    Style::default()
+                        .fg(stats.accent())
+                        .add_modifier(Modifier::BOLD),
                 )),
                 Line::from(super::checks::progress_bar(builds)),
             ]
@@ -196,18 +182,10 @@ fn render_sidebar(frame: &mut Frame, pr: &PullRequest, pr_data: Option<&PrData>,
 
 fn render_timeline(frame: &mut Frame, pr_data: Option<&PrData>, ui: &mut UiMemory, area: Rect) {
     let theme = theme::current();
-    let bundle = match pr_data.map(|d| &d.activity) {
-        Some(LoadState::Loaded(b)) => b,
-        Some(LoadState::Failed(msg)) => {
-            let p = Paragraph::new(format!("Couldn't load activity: {msg}"))
-                .style(Style::default().fg(theme.error));
-            frame.render_widget(p, area);
-            return;
-        }
-        _ => {
-            frame.render_widget(Paragraph::new(widgets::loading("Loading...")), area);
-            return;
-        }
+    let Some(bundle) =
+        widgets::loaded_or_placeholder(frame, pr_data.map(|d| &d.activity), "activity", area)
+    else {
+        return;
     };
 
     if bundle.comments.is_empty() && bundle.threads.is_empty() && bundle.events.is_empty() {
@@ -221,31 +199,21 @@ fn render_timeline(frame: &mut Frame, pr_data: Option<&PrData>, ui: &mut UiMemor
         _ => None,
     });
 
-    // Rightmost column is reserved for the scrollbar.
-    let content_width = area.width.saturating_sub(1);
+    // The scrollbar owns the rightmost column.
     let lines = build_overview_lines(
         &bundle.comments,
         &bundle.threads,
         &bundle.events,
         diff,
-        content_width.saturating_sub(TIMELINE_COL),
+        area.width.saturating_sub(1 + TIMELINE_COL),
     );
-
-    let total = lines.len();
-    let visible = area.height as usize;
-    let max_scroll = total.saturating_sub(visible) as u16;
-    let scroll = ui.overview_scroll.min(max_scroll);
-    ui.overview_scroll = scroll;
-    ui.overview_viewport = area.height;
-
-    let content_area = Rect { width: content_width, ..area };
-    let p = Paragraph::new(lines).scroll((scroll, 0));
-    frame.render_widget(p, content_area);
-
-    if max_scroll > 0 {
-        let bar = widgets::scrollbar(scroll, max_scroll, area.height);
-        frame.render_widget(Paragraph::new(bar), widgets::scrollbar_area(area));
-    }
+    widgets::scrolled_paragraph(
+        frame,
+        lines,
+        &mut ui.overview_scroll,
+        &mut ui.overview_viewport,
+        area,
+    );
 }
 
 enum Event<'a> {

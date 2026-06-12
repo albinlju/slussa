@@ -16,7 +16,7 @@ pub struct Reaction {
     pub emoji: String,
     pub count: u32,
     /// Whether the logged-in user is among the reactors — their own
-    /// reactions render with a border.
+    /// reactions render with an accent-tinted background.
     pub mine: bool,
 }
 

@@ -19,13 +19,7 @@ impl App {
 
     fn move_selection(&mut self, delta: i16) {
         let len = self.state.filtered_prs().len();
-        if len == 0 {
-            self.state.ui.list_selected = 0;
-            return;
-        }
-        let last = (len - 1) as i64;
-        let next = (self.state.ui.list_selected as i64 + delta as i64).clamp(0, last);
-        self.state.ui.list_selected = next as usize;
+        self.state.ui.list_selected = super::step_index(self.state.ui.list_selected, delta, len);
     }
 
     fn open_pr(&mut self, pr_id: u64) {

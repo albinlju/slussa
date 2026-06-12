@@ -1,31 +1,26 @@
-use ratatui::{Frame, layout::Rect, widgets::Paragraph};
+use ratatui::{Frame, layout::Rect};
 
 use crate::{
     app::state::UiMemory,
     domain::pr::PullRequest,
-    tui::{markdown, screens::pr_detail::description_body, widgets},
+    tui::{markdown, widgets},
 };
 
 pub fn render(frame: &mut Frame, pr: &PullRequest, ui: &mut UiMemory, area: Rect) {
-    let content_width = area.width.saturating_sub(1);
-    let lines = markdown::render(description_body(pr), content_width);
+    let lines = markdown::render(description_body(pr), area.width.saturating_sub(1));
+    widgets::scrolled_paragraph(
+        frame,
+        lines,
+        &mut ui.description_scroll,
+        &mut ui.description_viewport,
+        area,
+    );
+}
 
-    let total = lines.len();
-    let visible = area.height as usize;
-    let max_scroll = total.saturating_sub(visible) as u16;
-    let scroll = ui.description_scroll.min(max_scroll);
-    ui.description_scroll = scroll;
-    ui.description_viewport = area.height;
-
-    let content_area = Rect {
-        width: content_width,
-        ..area
-    };
-    let paragraph = Paragraph::new(lines).scroll((scroll, 0));
-    frame.render_widget(paragraph, content_area);
-
-    if max_scroll > 0 {
-        let bar = widgets::scrollbar(scroll, max_scroll, area.height);
-        frame.render_widget(Paragraph::new(bar), widgets::scrollbar_area(area));
-    }
+fn description_body(pr: &PullRequest) -> &str {
+    pr.description
+        .as_deref()
+        .map(str::trim)
+        .filter(|s| !s.is_empty())
+        .unwrap_or("(no description)")
 }

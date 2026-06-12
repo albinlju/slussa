@@ -17,8 +17,11 @@
 - [x] **Builds / Checks tab** — CI build statuses for the source commit with a pass/total summary.
 - [x] **Bitbucket Data Center provider** — PRs, diff, commits, comments/events/threads, builds — alongside GitHub.
 - [x] **Markdown rendering** in descriptions and comments.
-- [x] **Fuzzy file finder / filter** in the diff tree (for big PRs).
+- [x] **File filter** (`/`) in the diff tree — case-insensitive substring match.
 - [x] **PR list search** — free text on title / author.
+- [x] **Reactions** — emoji reactions on comments (read-only), GitHub and
+  Bitbucket DC. GitHub via `reactionGroups`; Bitbucket DC reads `properties.reactions`
+  from the activities feed (emoji decoded from the twemoji URL codepoint).
 - [x] **Suggestions (display)** — `suggestion` blocks in review comments render as
   a "◆ Suggested change" box with the anchored line as `−`, the proposed lines as
   `+`, and a `−1 +N` stat. Applying/batching is a separate backlog item.
@@ -30,9 +33,6 @@
 
 - [ ] **Apply suggestions** — `a` to apply a suggested change, `b` to batch several
   into one commit (display already done).
-- [x] **Reactions** — emoji reactions on comments (read-only), GitHub and
-  Bitbucket DC. GitHub via `reactionGroups`; Bitbucket DC reads `properties.reactions`
-  from the activities feed (emoji decoded from the twemoji URL codepoint).
 - [ ] **Merge conflict / mergeability status** — can it merge? conflicts? N commits behind base? required checks gating.
 - [ ] **Assignees, milestones, projects** (reviewers + labels are already shown).
 - [ ] **Branch ahead / behind base** info.
