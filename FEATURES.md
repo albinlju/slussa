@@ -43,6 +43,8 @@
 - [ ] **Manual / auto refresh** (`r`) — re-fetch without restarting.
 - [ ] **Build jobs auto update status** — Builds should re-fetch status automatically while open tab
 - [ ] **Approve / Request changes / Comment** — needs a small text-input mode.
+- [ ] **Implement Bitbucket Cloud client** 
+- [ ] **Implement Gitlab client**
 
 ### Not refined
 
