@@ -10,17 +10,14 @@ use ratatui::{
 use crate::{
     app::state::{CommitsViewState, LoadState, PrData},
     domain::{comment::ReviewThread, commit::Commit},
-    tui::{theme, widgets},
+    tui::{format, theme, widgets},
 };
 
 pub fn render(frame: &mut Frame, pr_data: Option<&PrData>, cv: &mut CommitsViewState, area: Rect) {
     let theme = theme::current();
     match pr_data.map(|d| &d.commits) {
         None | Some(LoadState::NotRequested) | Some(LoadState::Loading) => {
-            let paragraph =
-                Paragraph::new(format!("{}  Loading commits...", widgets::spinner_frame()))
-                    .style(Style::default().fg(theme.warning));
-            frame.render_widget(paragraph, area);
+            frame.render_widget(Paragraph::new(widgets::loading("Loading commits...")), area);
         }
         Some(LoadState::Failed(msg)) => {
             let paragraph = Paragraph::new(format!("Couldn't load commits: {msg}"))
@@ -120,7 +117,7 @@ fn build_commit_line(c: &Commit, is_last: bool, now: DateTime<Utc>, width: usize
     let theme = theme::current();
     let graph = if is_last { "└─ " } else { "├─ " };
     let short_oid: String = c.oid.chars().take(7).collect();
-    let age = widgets::relative_age(c.authored_at, now);
+    let age = format::relative_age(c.authored_at, now);
 
     let right_spans: Vec<Span<'static>> = vec![
         Span::styled(c.author_name.clone(), Style::default().fg(theme.info)),

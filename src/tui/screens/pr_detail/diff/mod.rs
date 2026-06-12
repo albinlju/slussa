@@ -32,9 +32,7 @@ pub fn render(
     let theme = theme::current();
     match diff_state {
         None | Some(LoadState::NotRequested) | Some(LoadState::Loading) => {
-            let paragraph = Paragraph::new(format!("{} Loading diff...", widgets::spinner_frame()))
-                .style(Style::default().fg(theme.warning));
-            frame.render_widget(paragraph, area);
+            frame.render_widget(Paragraph::new(widgets::loading("Loading diff...")), area);
         }
         Some(LoadState::Failed(msg)) => {
             let paragraph = Paragraph::new(format!("Couldn't load diff: {msg}"))

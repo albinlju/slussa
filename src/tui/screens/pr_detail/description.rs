@@ -3,12 +3,12 @@ use ratatui::{Frame, layout::Rect, widgets::Paragraph};
 use crate::{
     app::state::UiMemory,
     domain::pr::PullRequest,
-    tui::{screens::pr_detail::description_body, widgets},
+    tui::{markdown, screens::pr_detail::description_body, widgets},
 };
 
 pub fn render(frame: &mut Frame, pr: &PullRequest, ui: &mut UiMemory, area: Rect) {
     let content_width = area.width.saturating_sub(1);
-    let lines = widgets::trim_blank_lines(widgets::markdown(description_body(pr), content_width));
+    let lines = markdown::render(description_body(pr), content_width);
 
     let total = lines.len();
     let visible = area.height as usize;
