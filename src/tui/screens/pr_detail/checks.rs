@@ -18,9 +18,7 @@ pub fn render(frame: &mut Frame, pr_data: Option<&PrData>, area: Rect) {
     let theme = theme::current();
     match pr_data.map(|d| &d.builds) {
         None | Some(LoadState::NotRequested) | Some(LoadState::Loading) => {
-            let p = Paragraph::new(format!("{}  Loading builds...", widgets::spinner_frame()))
-                .style(Style::default().fg(theme.warning));
-            frame.render_widget(p, area);
+            frame.render_widget(Paragraph::new(widgets::loading("Loading builds...")), area);
         }
         Some(LoadState::Failed(msg)) => {
             let p = Paragraph::new(format!("Couldn't load builds: {msg}"))

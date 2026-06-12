@@ -1,4 +1,3 @@
-use chrono::{DateTime, Utc};
 use ratatui::{
     layout::Rect,
     style::{Color, Modifier, Style},
@@ -9,6 +8,14 @@ use crate::domain::comment::Reaction;
 use crate::tui::theme;
 
 const SPINNER_FRAMES: &[&str] = &["⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏"];
+
+/// `⠋  text` in the warning color — the shared loading row.
+pub(super) fn loading(text: &str) -> Line<'static> {
+    Line::styled(
+        format!("{}  {text}", spinner_frame()),
+        Style::default().fg(theme::current().warning),
+    )
+}
 
 /// One-line reaction pills under a comment, powerline-capped like the
 /// header's status badge. The user's own reactions sit on a dark accent
@@ -171,60 +178,6 @@ pub(super) fn scrollbar_area(area: Rect) -> Rect {
     }
 }
 
-/// Markdown → ratatui lines via charmed-glamour, wrapped to `width`. A
-/// glamour panic or ANSI-bridge failure falls back to the raw body instead
-/// of taking down the TUI.
-pub(super) fn markdown(body: &str, width: u16) -> Vec<Line<'static>> {
-    if width == 0 {
-        return vec![Line::default()];
-    }
-    let rendered = std::panic::catch_unwind(|| {
-        let ansi = glamour::Renderer::new()
-            .with_style(glamour::Style::Dark)
-            .with_word_wrap(width as usize)
-            .render(body);
-        ansi_to_tui::IntoText::into_text(&ansi).map(|text| text.lines)
-    });
-    let lines = match rendered {
-        Ok(Ok(lines)) => lines,
-        _ => body.lines().map(|l| Line::raw(l.to_string())).collect(),
-    };
-    if lines.is_empty() {
-        vec![Line::default()]
-    } else {
-        lines
-    }
-}
-
-pub(super) fn trim_blank_lines(mut lines: Vec<Line<'static>>) -> Vec<Line<'static>> {
-    while lines.first().is_some_and(is_blank_line) {
-        lines.remove(0);
-    }
-    while lines.last().is_some_and(is_blank_line) {
-        lines.pop();
-    }
-    lines
-}
-
-fn is_blank_line(line: &Line<'static>) -> bool {
-    line.spans.is_empty() || line.spans.iter().all(|s| s.content.trim().is_empty())
-}
-
-/// Peel off glamour's fixed-width document margin (`n` leading chars per
-/// line) so the rendered markdown sits flush against whatever frames it.
-pub(super) fn strip_glamour_margin(lines: Vec<Line<'static>>, n: usize) -> Vec<Line<'static>> {
-    lines
-        .into_iter()
-        .map(|mut line| {
-            if let Some(first) = line.spans.first_mut() {
-                let trimmed: String = first.content.chars().skip(n).collect();
-                first.content = trimmed.into();
-            }
-            line
-        })
-        .collect()
-}
-
 pub(super) fn box_text_width(outer: u16) -> u16 {
     outer.saturating_sub(4)
 }
@@ -349,21 +302,6 @@ pub(super) fn diff_bg_row(
         Style::default().fg(text_fg).bg(bg),
     ));
     Line::from(spans)
-}
-
-pub(super) fn relative_age(when: DateTime<Utc>, now: DateTime<Utc>) -> String {
-    let delta = now - when;
-    let days = delta.num_days();
-    if days >= 1 {
-        format!("{days}d ago")
-    } else {
-        let hours = delta.num_hours();
-        if hours >= 1 {
-            format!("{hours}h ago")
-        } else {
-            "just now".to_string()
-        }
-    }
 }
 
 #[cfg(test)]

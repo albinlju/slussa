@@ -147,12 +147,10 @@ pub(in crate::tui) fn render(frame: &mut Frame, state: &mut AppState, area: rata
             frame.render_stateful_widget(list, content_chunks[1], &mut list_state);
         }
         PrListView::Loading => {
-            let spinner = Paragraph::new(format!(
-                "  {}  Loading pull requests…",
-                widgets::spinner_frame()
-            ))
-            .style(Style::default().fg(theme.warning));
-            frame.render_widget(spinner, content_chunks[1]);
+            // Indented to line up with the list rows' highlight-symbol column.
+            let mut line = widgets::loading("Loading pull requests…");
+            line.spans.insert(0, Span::raw("  "));
+            frame.render_widget(Paragraph::new(line), content_chunks[1]);
         }
         PrListView::Failed(msg) => {
             let err = Paragraph::new(format!("  Couldn't load pull requests: {msg}"))

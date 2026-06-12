@@ -188,10 +188,14 @@ generic `/`-search interception runs first (typing mode captures characters;
   (pane → tree → drill-in → list → PR list) and Ctrl+D/U routing.
 - **`widgets.rs`** — shared rendering primitives: `boxed` (rounded-border
   boxes built as `Line`s so they can nest inside scrolling paragraphs),
-  `markdown` (charmed-glamour behind `catch_unwind`, falling back to raw
-  text), `reactions_line` (powerline-capped pills; your own reactions get
-  the accent-tinted background), the fixed-thumb scrollbar, search
-  highlighting, diff row builders.
+  `loading` (the spinner row), `reactions_line` (powerline-capped pills;
+  your own reactions get the accent-tinted background), the fixed-thumb
+  scrollbar, search highlighting, diff row builders.
+- **`markdown.rs`** — the charmed-glamour pipeline behind `catch_unwind`
+  (falls back to raw text): `render` keeps glamour's document margins
+  (Description), `render_flush` strips them so text sits flush inside
+  comment boxes.
+- **`format.rs`** — pure text formatting (`relative_age`).
 - **`theme.rs`** — every color in one struct (`GRUVBOX` is the only theme so
   far). Semantic fields (`accent`, `suggestion`, `diff_added_bg`, …) rather
   than palette names, so views never hardcode a color.
@@ -199,7 +203,7 @@ generic `/`-search interception runs first (typing mode captures characters;
 Two rendering mechanics that aren't obvious from the outside:
 
 - Markdown comes back from glamour with a fixed 2-column document margin;
-  `strip_glamour_margin` peels it so comment text sits flush inside boxes.
+  `markdown::render_flush` peels it so comment text sits flush inside boxes.
   Tabs that don't render through glamour are inset to match its indent.
 - The diff pane returns its navigable-item count and search-match indices to
   `DiffViewState` *during render* — the reducer clamps and steps the cursor

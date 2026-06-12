@@ -18,6 +18,7 @@ use crate::{
         review::ReviewerState,
     },
     tui::{
+        format, markdown,
         theme::{self, Theme},
         widgets,
     },
@@ -99,10 +100,7 @@ fn builds_summary(pr_data: Option<&PrData>) -> Vec<Line<'static>> {
         }
         Some(LoadState::Loaded(_)) => vec![dim("no builds")],
         Some(LoadState::Failed(_)) => vec![dim("unavailable")],
-        _ => vec![Line::from(Span::styled(
-            format!("{} loading…", widgets::spinner_frame()),
-            Style::default().fg(theme.warning),
-        ))],
+        _ => vec![widgets::loading("loading…")],
     }
 }
 
@@ -168,11 +166,11 @@ fn render_sidebar(frame: &mut Frame, pr: &PullRequest, pr_data: Option<&PrData>,
     let fg = Style::default().fg(theme.fg);
     lines.push(detail(
         "opened",
-        vec![Span::styled(widgets::relative_age(pr.created, now), fg)],
+        vec![Span::styled(format::relative_age(pr.created, now), fg)],
     ));
     lines.push(detail(
         "updated",
-        vec![Span::styled(widgets::relative_age(pr.updated, now), fg)],
+        vec![Span::styled(format::relative_age(pr.updated, now), fg)],
     ));
     lines.push(detail(
         "diff",
@@ -207,9 +205,7 @@ fn render_timeline(frame: &mut Frame, pr_data: Option<&PrData>, ui: &mut UiMemor
             return;
         }
         _ => {
-            let p = Paragraph::new(format!("{}  Loading...", widgets::spinner_frame()))
-                .style(Style::default().fg(theme.warning));
-            frame.render_widget(p, area);
+            frame.render_widget(Paragraph::new(widgets::loading("Loading...")), area);
             return;
         }
     };
@@ -357,7 +353,7 @@ impl EventStyle {
 /// per commit). Returns the dot color so the timeline circle matches.
 fn activity_lines(event: &TimelineEvent, now: DateTime<Utc>) -> (Color, Vec<Line<'static>>) {
     let theme = theme::current();
-    let age = widgets::relative_age(event.created, now);
+    let age = format::relative_age(event.created, now);
 
     let header = |verb: String, color: Color| -> Line<'static> {
         let mut spans: Vec<Span<'static>> = Vec::new();
@@ -408,10 +404,7 @@ fn activity_lines(event: &TimelineEvent, now: DateTime<Utc>) -> (Color, Vec<Line
 fn build_issue_lines(c: &Comment, width: u16, now: DateTime<Utc>) -> Vec<Line<'static>> {
     let text_width = widgets::box_text_width(width);
     let header = issue_comment_header(&c.author.username, c.created, now);
-    let mut body = widgets::trim_blank_lines(widgets::strip_glamour_margin(
-        widgets::markdown(&c.content, text_width + 2),
-        2,
-    ));
+    let mut body = markdown::render_flush(&c.content, text_width);
     if let Some(line) = widgets::reactions_line(&c.reactions) {
         body.push(Line::default());
         body.push(line);
@@ -472,7 +465,7 @@ fn build_review_lines(
     {
         if i > 0 {
             body.push(Line::raw(""));
-            let age = widgets::relative_age(comment.created, now);
+            let age = format::relative_age(comment.created, now);
             body.push(Line::from(vec![
                 Span::styled(
                     format!("↳ @{}", comment.author.username),
@@ -482,10 +475,7 @@ fn build_review_lines(
             ]));
         }
         if !prose.trim().is_empty() {
-            body.extend(widgets::trim_blank_lines(widgets::strip_glamour_margin(
-                widgets::markdown(prose, text_width + 2),
-                2,
-            )));
+            body.extend(markdown::render_flush(prose, text_width));
         }
         for suggestion in suggestions {
             body.push(Line::default());
@@ -506,7 +496,7 @@ fn issue_comment_header(
     now: DateTime<Utc>,
 ) -> Line<'static> {
     let theme = theme::current();
-    let age = widgets::relative_age(created, now);
+    let age = format::relative_age(created, now);
     Line::from(vec![
         Span::styled(
             username.to_string(),

@@ -24,7 +24,7 @@ use crate::{
         diff::FileDiff,
         pr::{PrStatus, PullRequest},
     },
-    tui::{screens::half_page, theme, widgets},
+    tui::{format, markdown, screens::half_page, theme, widgets},
 };
 
 // `DetailTab` itself is application navigation state and lives in `app::state`;
@@ -251,7 +251,7 @@ pub(super) fn render_inline_thread(
         if i > 0 {
             body.push(Line::raw(""));
         }
-        let age = widgets::relative_age(comment.created, now);
+        let age = format::relative_age(comment.created, now);
         body.push(Line::from(vec![
             Span::styled(
                 comment.author.username.clone(),
@@ -261,10 +261,7 @@ pub(super) fn render_inline_thread(
         ]));
         let (prose, suggestions) = split_suggestions(&comment.content);
         if !prose.trim().is_empty() {
-            body.extend(widgets::trim_blank_lines(widgets::strip_glamour_margin(
-                widgets::markdown(&prose, text_w + 2),
-                2,
-            )));
+            body.extend(markdown::render_flush(&prose, text_w));
         }
         for suggestion in &suggestions {
             body.push(Line::raw(""));
