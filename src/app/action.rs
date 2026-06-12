@@ -17,7 +17,7 @@ pub enum Action {
     Loaded(LoadedAction),
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone, Copy)]
 pub enum SearchInput {
     /// `/` — enter typing mode for the active view's search.
     Open,
@@ -29,7 +29,7 @@ pub enum SearchInput {
     Cancel,
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone, Copy)]
 pub enum ListAction {
     MoveSelection(i16),
     OpenPr(u64),
@@ -40,7 +40,7 @@ pub enum ListAction {
     ApplyFilter,
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone, Copy)]
 pub enum DetailAction {
     Back,
     NextTab,
@@ -50,7 +50,7 @@ pub enum DetailAction {
     OverviewScroll(i16),
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone, Copy)]
 pub enum DiffAction {
     MoveCursor(i16),
     ToggleAtCursor,
@@ -65,7 +65,7 @@ pub enum DiffAction {
     FocusTree,
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone, Copy)]
 pub enum CommitsAction {
     MoveSelection(i16),
     Open,

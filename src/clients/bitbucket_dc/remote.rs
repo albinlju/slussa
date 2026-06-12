@@ -5,8 +5,7 @@ pub fn parse(remote: &str, host: &str) -> Option<RepoCoords> {
     let parts: Vec<&str> = path.split('/').filter(|p| !p.is_empty()).collect();
 
     let (project, repo) = match parts.as_slice() {
-        [proj, repo] => (*proj, *repo),
-        ["scm", proj, repo] => (*proj, *repo),
+        [proj, repo] | ["scm", proj, repo] => (*proj, *repo),
         _ => return None,
     };
 

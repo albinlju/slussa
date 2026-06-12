@@ -113,9 +113,9 @@ fn map_pr(gh: GhPr) -> PullRequest {
             PrStatus::Draft
         } else {
             match gh.state.as_str() {
-                "OPEN" => PrStatus::Open,
                 "MERGED" => PrStatus::Merged,
                 "CLOSED" => PrStatus::Declined,
+                // OPEN — and anything a newer API might add.
                 _ => PrStatus::Open,
             }
         },
@@ -152,7 +152,7 @@ fn summarize_checks(checks: &[GhCheck]) -> CiState {
 
         match outcome {
             "FAILURE" | "ERROR" | "TIMED_OUT" | "CANCELLED" | "ACTION_REQUIRED" => {
-                any_failure = true
+                any_failure = true;
             }
             "SUCCESS" => any_success = true,
             "PENDING" | "QUEUED" | "IN_PROGRESS" => any_pending = true,

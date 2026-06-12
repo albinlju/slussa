@@ -122,7 +122,7 @@ fn detail_footer(
         let s = &state.ui.commits.search;
         return s.open.then(|| {
             let count = match pr_data.map(|d| &d.commits) {
-                Some(LoadState::Loaded(cs)) => cs.iter().filter(|c| s.matches_commit(c)).count(),
+                Some(LoadState::Loaded(cs)) => s.filter_commits(cs).len(),
                 _ => 0,
             };
             widgets::search_prompt(&s.query, count, width)
@@ -303,8 +303,7 @@ fn suggestion_lines(
     // The suggestion replaces the anchored line, so both sides number from it.
     let start = anchor.map(|(n, _)| n);
     let num_width = start
-        .map(|n| (n + new_lines.len().saturating_sub(1)).to_string().len())
-        .unwrap_or(0);
+        .map_or(0, |n| (n + new_lines.len().saturating_sub(1)).to_string().len());
     let mut rows: Vec<Line<'static>> = Vec::new();
     if let Some((n, old)) = anchor {
         rows.push(widgets::numbered_diff_row(
@@ -504,9 +503,8 @@ pub(in crate::tui) fn key_to_action(state: &AppState, key: KeyEvent) -> Option<A
         return Some(Action::Quit);
     }
 
-    let tab = match state.screen {
-        Screen::Detail { tab, .. } => tab,
-        _ => return None,
+    let Screen::Detail { tab, .. } = state.screen else {
+        return None;
     };
     let drilled = state.ui.commits.drilled.is_some();
     let diff_focus = state.ui.active_diff_view().focus;

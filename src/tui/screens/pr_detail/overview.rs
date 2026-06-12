@@ -222,15 +222,13 @@ enum Event<'a> {
     Activity(&'a TimelineEvent),
 }
 
-impl<'a> Event<'a> {
+impl Event<'_> {
     fn timestamp(&self) -> DateTime<Utc> {
         match self {
             Event::Issue(c) => c.created,
             Event::Review(t) => t
                 .comments
-                .first()
-                .map(|c| c.created)
-                .unwrap_or_else(Utc::now),
+                .first().map_or_else(Utc::now, |c| c.created),
             Event::Activity(e) => e.created,
         }
     }
@@ -491,16 +489,17 @@ fn diff_snippet(
     old_line: Option<usize>,
     width: u16,
 ) -> (Vec<Line<'static>>, Option<String>) {
-    let theme = theme::current();
-    let Some(file) = diff.files.iter().find(|f| f.path == path) else {
-        return (Vec::new(), None);
-    };
-
     struct Row<'a> {
         dl: &'a DiffLine,
         new_no: usize,
         old_no: usize,
     }
+
+    let theme = theme::current();
+    let Some(file) = diff.files.iter().find(|f| f.path == path) else {
+        return (Vec::new(), None);
+    };
+
     let mut rows: Vec<Row> = Vec::new();
     for hunk in &file.hunks {
         let mut new_no = hunk.new_start;

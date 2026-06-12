@@ -1,7 +1,10 @@
-use crate::app::{
-    App,
-    action::CommitsAction,
-    state::{DiffViewState, LoadState, Screen},
+use crate::{
+    app::{
+        App,
+        action::CommitsAction,
+        state::{DiffViewState, LoadState, Screen},
+    },
+    domain::commit::Commit,
 };
 
 impl App {
@@ -22,46 +25,32 @@ impl App {
         }
     }
 
-    fn commit_oids(&self) -> Vec<String> {
+    /// The commit list as the screen shows it — `SearchState::filter_commits`
+    /// keeps this and the render in agreement.
+    fn filtered_commits(&self) -> Vec<&Commit> {
         let Screen::Detail { pr_id, .. } = self.state.screen else {
             return Vec::new();
         };
-        let search = &self.state.ui.commits.search;
-        self.state
-            .cache
-            .details
-            .get(&pr_id)
-            .and_then(|d| match &d.commits {
-                LoadState::Loaded(commits) => Some(
-                    commits
-                        .iter()
-                        .filter(|c| search.matches_commit(c))
-                        .map(|c| c.oid.clone())
-                        .collect(),
-                ),
-                _ => None,
-            })
-            .unwrap_or_default()
-    }
-
-    fn commit_count(&self) -> usize {
-        let Screen::Detail { pr_id, .. } = self.state.screen else {
-            return 0;
-        };
         match self.state.cache.details.get(&pr_id).map(|d| &d.commits) {
-            Some(LoadState::Loaded(commits)) => commits.len(),
-            _ => 0,
+            Some(LoadState::Loaded(commits)) => {
+                self.state.ui.commits.search.filter_commits(commits)
+            }
+            _ => Vec::new(),
         }
     }
 
     fn commits_move_selection(&mut self, delta: i16) {
+        let len = self.filtered_commits().len();
         self.state.ui.commits.selected =
-            super::step_index(self.state.ui.commits.selected, delta, self.commit_count());
+            super::step_index(self.state.ui.commits.selected, delta, len);
     }
 
     fn commits_open_selected(&mut self) {
-        let oids = self.commit_oids();
-        let Some(oid) = oids.get(self.state.ui.commits.selected).cloned() else {
+        let Some(oid) = self
+            .filtered_commits()
+            .get(self.state.ui.commits.selected)
+            .map(|c| c.oid.clone())
+        else {
             return;
         };
         self.state.ui.commits.drilled = Some(oid.clone());

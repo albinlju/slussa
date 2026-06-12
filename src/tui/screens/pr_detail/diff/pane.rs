@@ -349,7 +349,7 @@ fn file_to_lines(
 /// their text.
 fn highlight_row(line: Line<'static>, row_w: usize) -> Line<'static> {
     let bg = theme::current().highlight_bg;
-    let visible: usize = line.spans.iter().map(|s| s.width()).sum();
+    let visible: usize = line.spans.iter().map(Span::width).sum();
     let mut spans: Vec<Span<'static>> = line
         .spans
         .into_iter()
