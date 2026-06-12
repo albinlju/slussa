@@ -8,7 +8,8 @@ use ratatui::{
     widgets::{Block, BorderType, Borders, List, ListItem, ListState, Paragraph},
 };
 
-use crate::tui::{screens::pr_detail::file_tree::TreeRow, theme, widgets};
+use crate::app::file_tree::TreeRow;
+use crate::tui::{theme, widgets};
 
 #[allow(clippy::too_many_arguments)]
 pub(super) fn render(

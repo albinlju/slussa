@@ -1,7 +1,4 @@
-use crate::{
-    app::{App, action::DetailAction, state::{DiffFocus, Screen}},
-    tui::screens::pr_detail::DetailTab,
-};
+use crate::app::{App, action::DetailAction, state::{DetailTab, DiffFocus, Screen}};
 
 impl App {
     pub(super) fn apply_detail(&mut self, action: DetailAction) {

@@ -9,10 +9,10 @@ use ratatui::{
 
 use crate::app::{
     action::{Action, SearchInput},
-    state::{AppState, DiffFocus, Screen, SearchState},
+    state::{AppState, DetailTab, DiffFocus, Screen, SearchState},
 };
 
-use screens::{pr_detail, pr_detail::DetailTab, pr_list};
+use screens::{pr_detail, pr_list};
 
 pub fn render(frame: &mut Frame, state: &mut AppState) {
     match state.screen {

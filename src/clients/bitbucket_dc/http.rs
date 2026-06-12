@@ -7,11 +7,17 @@ use serde::de::DeserializeOwned;
 
 use crate::clients::error::FetchError;
 
-pub(super) fn client() -> Result<Client, FetchError> {
+/// Builds a blocking client with the shared user-agent. Timeout varies by
+/// caller — short for preflight probing, longer for real fetches.
+pub(super) fn build_client(timeout: Duration) -> reqwest::Result<Client> {
     Client::builder()
-        .timeout(Duration::from_secs(20))
+        .timeout(timeout)
         .user_agent(concat!("tuipr/", env!("CARGO_PKG_VERSION")))
         .build()
+}
+
+pub(super) fn client() -> Result<Client, FetchError> {
+    build_client(Duration::from_secs(20))
         .map_err(|e| FetchError::Network(format!("http client build failed: {e}")))
 }
 

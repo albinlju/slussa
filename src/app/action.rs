@@ -1,7 +1,7 @@
 use crate::{
+    app::state::DetailTab,
     clients::ActivityBundle,
     domain::{ci::Build, commit::Commit, diff::Diff, pr::PullRequest},
-    tui::screens::pr_detail::DetailTab,
 };
 
 #[derive(Debug)]

@@ -2,7 +2,6 @@ pub mod checks;
 pub mod commits;
 pub mod description;
 pub mod diff;
-pub mod file_tree;
 pub mod overview;
 
 use chrono::{DateTime, Utc};
@@ -18,7 +17,7 @@ use ratatui::{
 use crate::{
     app::{
         action::{Action, CommitsAction, DetailAction, DiffAction, SearchInput},
-        state::{AppState, DiffFocus, DiffViewState, LoadState, PrData, Screen, UiMemory},
+        state::{AppState, DetailTab, DiffFocus, DiffViewState, LoadState, PrData, Screen, UiMemory},
     },
     domain::{
         comment::{ReviewThread, split_suggestions},
@@ -28,25 +27,9 @@ use crate::{
     tui::{screens::half_page, theme, widgets},
 };
 
-#[derive(Debug, Default, Clone, Copy, PartialEq, Eq)]
-pub enum DetailTab {
-    #[default]
-    Description,
-    Overview,
-    Diff,
-    Commits,
-    Builds,
-}
-
+// `DetailTab` itself is application navigation state and lives in `app::state`;
+// here we add only its presentation (tab-bar glyphs and labels).
 impl DetailTab {
-    pub const ALL: [Self; 5] = [
-        Self::Description,
-        Self::Overview,
-        Self::Diff,
-        Self::Commits,
-        Self::Builds,
-    ];
-
     pub fn label(self) -> &'static str {
         match self {
             Self::Description => "Description",
@@ -66,19 +49,6 @@ impl DetailTab {
             Self::Commits => "\u{f417}",     //  git-commit
             Self::Builds => "\u{f085}",      //  cogs
         }
-    }
-
-    fn index(self) -> usize {
-        Self::ALL.iter().position(|&t| t == self).unwrap_or(0)
-    }
-
-    pub fn next(self) -> Self {
-        Self::ALL[(self.index() + 1) % Self::ALL.len()]
-    }
-
-    pub fn prev(self) -> Self {
-        let len = Self::ALL.len();
-        Self::ALL[(self.index() + len - 1) % len]
     }
 }
 

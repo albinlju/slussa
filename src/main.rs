@@ -4,7 +4,7 @@ mod domain;
 mod logging;
 mod tui;
 
-use std::process::{Command, ExitCode};
+use std::process::ExitCode;
 
 use crate::app::App;
 use crate::app::preflight::{self, PreflightError};
@@ -93,9 +93,9 @@ fn print_help() {
 /// Round-trips a throwaway entry through the OS keyring, for verifying the
 /// install before trusting it with a real PAT.
 fn run_keyring_test() -> ExitCode {
+    use crate::app::auth::SERVICE;
     use keyring::Entry;
 
-    const SERVICE: &str = "tuipr";
     const ACCOUNT: &str = "tuipr-keyring-test.localhost";
     const SECRET: &str = "test-token-12345";
 
@@ -173,15 +173,14 @@ fn ensure_ready() -> Result<Backend, PreflightError> {
                 "tuipr: not logged in to {host}. Launching `gh auth login` — \
                  follow the prompts and tuipr will continue afterwards.\n"
             );
-            let status = Command::new("gh")
-                .args(["auth", "login", "-h", &host])
-                .status()
-                .map_err(|_| PreflightError::GhMissing)?;
-            if !status.success() {
-                eprintln!("tuipr: `gh auth login` was cancelled or failed.\n");
-                return Err(PreflightError::GhNotAuthenticated { host });
+            match clients::github::auth::launch_login(&host) {
+                Ok(true) => preflight::preflight(),
+                Ok(false) => {
+                    eprintln!("tuipr: `gh auth login` was cancelled or failed.\n");
+                    Err(PreflightError::GhNotAuthenticated { host })
+                }
+                Err(_) => Err(PreflightError::GhMissing),
             }
-            preflight::preflight()
         }
         Err(other) => Err(other),
     }

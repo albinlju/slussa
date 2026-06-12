@@ -1,10 +1,7 @@
-use crate::{
-    app::{
-        App,
-        action::ListAction,
-        state::{CommitsViewState, DiffViewState, Screen, SearchState, StatusFilter},
-    },
-    tui::screens::pr_detail::DetailTab,
+use crate::app::{
+    App,
+    action::ListAction,
+    state::{CommitsViewState, DetailTab, DiffViewState, Screen, SearchState, StatusFilter},
 };
 
 impl App {
