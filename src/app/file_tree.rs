@@ -88,18 +88,15 @@ fn insert(node: &mut Node, segments: &[&str], file_index: usize) {
             .children
             .iter()
             .position(|c| c.name == head && c.is_dir());
-        match pos {
-            Some(idx) => insert(&mut node.children[idx], rest, file_index),
-            None => {
-                let mut new_child = Node {
-                    name: head.to_string(),
-                    full_path: new_path,
-                    children: Vec::new(),
-                    file_index: None,
-                };
-                insert(&mut new_child, rest, file_index);
-                node.children.push(new_child);
-            }
+        if let Some(idx) = pos { insert(&mut node.children[idx], rest, file_index) } else {
+            let mut new_child = Node {
+                name: head.to_string(),
+                full_path: new_path,
+                children: Vec::new(),
+                file_index: None,
+            };
+            insert(&mut new_child, rest, file_index);
+            node.children.push(new_child);
         }
     }
 }

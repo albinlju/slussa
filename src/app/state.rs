@@ -73,8 +73,18 @@ impl SearchState {
             || self.matches(&format!("#{}", pr.id))
     }
 
-    pub fn matches_commit(&self, c: &Commit) -> bool {
+    fn matches_commit(&self, c: &Commit) -> bool {
         self.matches(&c.oid) || self.matches(&c.headline)
+    }
+
+    /// The commit list as displayed. Render, the footer count, and the
+    /// reducer's clamp/Enter resolution all go through here, so they can't
+    /// disagree about which commits the selection indexes.
+    pub fn filter_commits<'a>(&self, commits: &'a [Commit]) -> Vec<&'a Commit> {
+        commits
+            .iter()
+            .filter(|c| self.matches_commit(c))
+            .collect()
     }
 }
 

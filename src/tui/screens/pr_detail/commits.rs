@@ -30,10 +30,7 @@ pub fn render(frame: &mut Frame, pr_data: Option<&PrData>, cv: &mut CommitsViewS
     let now = Utc::now();
     let width = area.width as usize;
     // `/` search narrows the list; selection indexes the filtered view.
-    let filtered: Vec<&Commit> = commits
-        .iter()
-        .filter(|c| cv.search.matches_commit(c))
-        .collect();
+    let filtered: Vec<&Commit> = cv.search.filter_commits(commits);
     let last_idx = filtered.len().saturating_sub(1);
     let items: Vec<ListItem> = filtered
         .iter()
@@ -130,7 +127,7 @@ fn build_commit_line(c: &Commit, is_last: bool, now: DateTime<Utc>, width: usize
         Span::styled("  · ", Style::default().fg(theme.muted)),
         Span::styled(age, Style::default().fg(theme.muted)),
     ];
-    let right_visible: usize = right_spans.iter().map(|s| s.width()).sum();
+    let right_visible: usize = right_spans.iter().map(Span::width).sum();
 
     let left_fixed = graph.chars().count() + short_oid.chars().count() + 2; // 2 spaces after oid
     let headline = format::truncate_ellipsis(

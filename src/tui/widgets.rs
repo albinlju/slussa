@@ -26,7 +26,7 @@ pub(super) fn loaded_or_placeholder<'a, T>(
                 .style(Style::default().fg(theme.error));
             frame.render_widget(p, area);
         }
-        None | Some(LoadState::NotRequested) | Some(LoadState::Loading) => {
+        None | Some(LoadState::NotRequested | LoadState::Loading) => {
             frame.render_widget(Paragraph::new(loading(&format!("Loading {noun}..."))), area);
         }
     }
@@ -198,8 +198,8 @@ pub(super) fn justify_between(
     right: Vec<Span<'static>>,
     width: usize,
 ) -> Vec<Span<'static>> {
-    let left_w: usize = left.iter().map(|s| s.width()).sum();
-    let right_w: usize = right.iter().map(|s| s.width()).sum();
+    let left_w: usize = left.iter().map(Span::width).sum();
+    let right_w: usize = right.iter().map(Span::width).sum();
     let pad = width.saturating_sub(left_w + right_w).max(1);
     left.push(Span::raw(" ".repeat(pad)));
     left.extend(right);
@@ -268,7 +268,7 @@ pub(super) fn boxed(
 }
 
 fn wrap_box_line(line: Line<'static>, text_w: usize, border: Style) -> Line<'static> {
-    let visible: usize = line.spans.iter().map(|s| s.width()).sum();
+    let visible: usize = line.spans.iter().map(Span::width).sum();
     let pad = text_w.saturating_sub(visible);
     let line_style = line.style;
     // Extend an edge span's bg tint into the 1-col gap so the fill reaches

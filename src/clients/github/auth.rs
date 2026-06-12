@@ -17,8 +17,7 @@ pub fn is_authenticated(host: &str) -> bool {
     Command::new("gh")
         .args(["auth", "status", "-h", host])
         .output()
-        .map(|out| out.status.success())
-        .unwrap_or(false)
+        .is_ok_and(|out| out.status.success())
 }
 
 /// Launch interactive `gh auth login` for `host`, inheriting the terminal so the

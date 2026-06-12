@@ -24,6 +24,5 @@ pub fn probe(host: &str) -> Result<bool, String> {
     Ok(body
         .get("displayName")
         .and_then(|v| v.as_str())
-        .map(|s| s.to_lowercase().contains("bitbucket"))
-        .unwrap_or(false))
+        .is_some_and(|s| s.to_lowercase().contains("bitbucket")))
 }

@@ -114,7 +114,7 @@ pub(super) fn render(
                     ));
 
                     let visible_left = indent.len() + Span::raw(name.as_str()).width();
-                    let visible_right: usize = right.iter().map(|s| s.width()).sum();
+                    let visible_right: usize = right.iter().map(Span::width).sum();
                     let pad = row_width
                         .saturating_sub(visible_left + visible_right + 1)
                         .max(1);

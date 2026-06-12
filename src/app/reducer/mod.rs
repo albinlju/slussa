@@ -12,7 +12,7 @@ pub(super) fn step_index(current: usize, delta: i16, len: usize) -> usize {
     if len == 0 {
         return 0;
     }
-    (current as i64 + delta as i64).clamp(0, (len - 1) as i64) as usize
+    (current as i64 + i64::from(delta)).clamp(0, (len - 1) as i64) as usize
 }
 
 /// Clamps at the top; the bottom is clamped at render time against the

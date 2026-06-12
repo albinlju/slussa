@@ -3,6 +3,20 @@ name = "tuipr"
 version = "0.1.0"
 edition = "2024"
 
+[lints.clippy]
+pedantic = { level = "warn", priority = -1 }
+# Terminal geometry casts between u16/i16/usize are everywhere and clamped at
+# the call sites; these three would drown the real findings.
+cast_possible_truncation = "allow"
+cast_sign_loss = "allow"
+cast_possible_wrap = "allow"
+# Render functions legitimately run long.
+too_many_lines = "allow"
+# Off the default ramps but worth having:
+redundant_clone = "warn"
+dbg_macro = "warn"
+todo = "warn"
+
 [dependencies]
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"

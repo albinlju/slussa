@@ -80,9 +80,9 @@ fn map_pr(bb: BbPr) -> PullRequest {
         PrStatus::Draft
     } else {
         match bb.state.as_str() {
-            "OPEN" => PrStatus::Open,
             "MERGED" => PrStatus::Merged,
             "DECLINED" => PrStatus::Declined,
+            // OPEN — and anything a newer server might add.
             _ => PrStatus::Open,
         }
     };
