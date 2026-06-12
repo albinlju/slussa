@@ -1,4 +1,5 @@
 mod activities;
+pub mod auth;
 mod builds;
 mod cli;
 mod comments;

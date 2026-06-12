@@ -1,8 +1,7 @@
 use std::fmt;
 use std::process::Command;
-use std::time::Duration;
 
-use crate::clients::{Backend, bitbucket_dc};
+use crate::clients::{Backend, bitbucket_dc, github};
 
 #[derive(Debug)]
 pub enum PreflightError {
@@ -82,8 +81,12 @@ pub fn preflight() -> Result<Backend, PreflightError> {
 
     match classify_host(&host)? {
         Backend_::GitHub => {
-            check_gh_installed()?;
-            check_gh_auth(&host)?;
+            if !github::auth::is_installed() {
+                return Err(PreflightError::GhMissing);
+            }
+            if !github::auth::is_authenticated(&host) {
+                return Err(PreflightError::GhNotAuthenticated { host });
+            }
             tracing::info!("gh auth ok for {host}");
             Ok(Backend::GitHub)
         }
@@ -124,7 +127,7 @@ fn classify_host(host: &str) -> Result<Backend_, PreflightError> {
             host: host.to_string(),
         });
     }
-    match probe_bitbucket_dc(host) {
+    match bitbucket_dc::probe(host) {
         Ok(true) => Ok(Backend_::BitbucketDc),
         Ok(false) => Err(PreflightError::UnsupportedHost {
             host: host.to_string(),
@@ -134,27 +137,6 @@ fn classify_host(host: &str) -> Result<Backend_, PreflightError> {
             reason,
         }),
     }
-}
-
-fn probe_bitbucket_dc(host: &str) -> Result<bool, String> {
-    let url = format!("https://{host}/rest/api/1.0/application-properties");
-    tracing::debug!("probing {url} for bitbucket dc");
-    let client = reqwest::blocking::Client::builder()
-        .timeout(Duration::from_secs(5))
-        .user_agent(concat!("tuipr/", env!("CARGO_PKG_VERSION")))
-        .build()
-        .map_err(|e| e.to_string())?;
-    let response = client.get(&url).send().map_err(|e| e.to_string())?;
-    if !response.status().is_success() {
-        return Ok(false);
-    }
-    let body: serde_json::Value = response.json().map_err(|e| e.to_string())?;
-    // DC's application-properties endpoint includes `displayName: "Bitbucket"`.
-    Ok(body
-        .get("displayName")
-        .and_then(|v| v.as_str())
-        .map(|s| s.to_lowercase().contains("bitbucket"))
-        .unwrap_or(false))
 }
 
 pub(super) fn read_origin_remote() -> Result<String, PreflightError> {
@@ -184,28 +166,6 @@ pub(super) fn parse_remote_host(url: &str) -> Option<String> {
         .or_else(|| url.strip_prefix("http://"))?;
     let (host, _) = rest.split_once('/')?;
     Some(host.to_string())
-}
-
-fn check_gh_installed() -> Result<(), PreflightError> {
-    Command::new("gh")
-        .arg("--version")
-        .output()
-        .map(|_| ())
-        .map_err(|_| PreflightError::GhMissing)
-}
-
-fn check_gh_auth(host: &str) -> Result<(), PreflightError> {
-    let output = Command::new("gh")
-        .args(["auth", "status", "-h", host])
-        .output()
-        .map_err(|_| PreflightError::GhMissing)?;
-    if output.status.success() {
-        Ok(())
-    } else {
-        Err(PreflightError::GhNotAuthenticated {
-            host: host.to_string(),
-        })
-    }
 }
 
 #[cfg(test)]

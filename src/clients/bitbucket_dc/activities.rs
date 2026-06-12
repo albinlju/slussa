@@ -10,7 +10,7 @@ use super::{Config, ms_to_utc};
 use crate::clients::ActivityBundle;
 use crate::clients::bitbucket_dc::http::get_json;
 use crate::clients::error::FetchError;
-use crate::domain::comment::{Comment, ReviewThread};
+use crate::domain::comment::{Comment, Reaction, ReviewThread};
 use crate::domain::event::{EventKind, PushedCommit, TimelineEvent};
 use crate::domain::user::User;
 
@@ -72,6 +72,30 @@ struct BbComment {
     state: String,
     #[serde(default)]
     comments: Vec<BbComment>,
+    #[serde(default)]
+    properties: BbProperties,
+}
+
+/// Emoji reactions ride along in the comment's `properties` (the comment-likes
+/// plugin). Each reaction has a twemoji `emoticon` and the list of reactors.
+#[derive(Debug, Default, Deserialize)]
+struct BbProperties {
+    #[serde(default)]
+    reactions: Vec<BbReaction>,
+}
+
+#[derive(Debug, Deserialize)]
+struct BbReaction {
+    emoticon: BbEmoticon,
+    /// Only the count is used; the reactors aren't matched against "me".
+    #[serde(default)]
+    users: Vec<serde::de::IgnoredAny>,
+}
+
+#[derive(Debug, Deserialize)]
+struct BbEmoticon {
+    #[serde(default)]
+    url: String,
 }
 
 #[derive(Debug, Deserialize)]
@@ -173,10 +197,35 @@ fn map_comment(c: &BbComment) -> Comment {
         author: map_user(&c.author),
         content: c.text.clone(),
         created: ms_to_utc(c.created_date),
-        // Bitbucket DC reactions aren't carried in the activities feed we read;
-        // they'd need a separate reactions endpoint. Left empty for now.
-        reactions: Vec::new(),
+        reactions: map_reactions(&c.properties),
     }
+}
+
+fn map_reactions(props: &BbProperties) -> Vec<Reaction> {
+    props
+        .reactions
+        .iter()
+        .filter_map(|r| {
+            Some(Reaction {
+                emoji: emoji_from_url(&r.emoticon.url)?,
+                count: r.users.len() as u32,
+                // Bitbucket gives the reactor list but no "viewer" flag, and we
+                // don't track the current user — so own-reaction highlight off.
+                mine: false,
+            })
+        })
+        .collect()
+}
+
+/// Bitbucket reactions are twemoji SVGs whose filename is the emoji's
+/// hyphen-separated hex codepoints (`…/1f44d.svg` → 👍). Decode it to the emoji.
+fn emoji_from_url(url: &str) -> Option<String> {
+    let stem = url.rsplit('/').next()?.strip_suffix(".svg")?;
+    let mut emoji = String::new();
+    for part in stem.split('-') {
+        emoji.push(char::from_u32(u32::from_str_radix(part, 16).ok()?)?);
+    }
+    (!emoji.is_empty()).then_some(emoji)
 }
 
 fn map_user(u: &BbUser) -> User {
@@ -243,5 +292,45 @@ mod tests {
                 message: "Merge 'develop' into feat".to_string(),
             }])
         );
+    }
+
+    // Shape taken verbatim from a real `/activities` response: reactions live in
+    // the comment's `properties`, with the emoji encoded in the twemoji URL.
+    const WITH_REACTIONS: &str = r#"{ "values": [
+        { "action": "COMMENTED", "createdDate": 5000,
+          "comment": { "id": 9, "text": "hi", "createdDate": 5000, "updatedDate": 5000,
+                       "author": { "name": "bo" },
+                       "properties": { "repositoryId": 1, "reactions": [
+                         { "emoticon": { "shortcut": "+1",
+                             "url": "https://x/twemoji/12.1.2/1f44d.svg" },
+                           "users": [ { "name": "bo" }, { "name": "cy" } ] },
+                         { "emoticon": { "shortcut": "tada",
+                             "url": "https://x/twemoji/12.1.2/1f389.svg" },
+                           "users": [ { "name": "ana" } ] }
+                       ] } } }
+    ]}"#;
+
+    #[test]
+    fn reads_reactions_from_comment_properties() {
+        let page: Page = serde_json::from_str(WITH_REACTIONS).unwrap();
+        let bundle = project(page.values);
+        let reactions = &bundle.comments[0].reactions;
+        assert_eq!(reactions.len(), 2);
+        assert_eq!(reactions[0].emoji, "👍");
+        assert_eq!(reactions[0].count, 2);
+        assert_eq!(reactions[1].emoji, "🎉");
+        assert_eq!(reactions[1].count, 1);
+        assert!(reactions.iter().all(|r| !r.mine));
+    }
+
+    #[test]
+    fn decodes_multi_codepoint_and_rejects_junk() {
+        // Country-flag style multi-codepoint filename decodes to both scalars.
+        assert_eq!(
+            emoji_from_url("https://x/1f1f8-1f1ea.svg").as_deref(),
+            Some("🇸🇪")
+        );
+        assert_eq!(emoji_from_url("https://x/not-an-emoji.png"), None);
+        assert_eq!(emoji_from_url(""), None);
     }
 }

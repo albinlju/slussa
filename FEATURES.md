@@ -30,9 +30,9 @@
 
 - [ ] **Apply suggestions** — `a` to apply a suggested change, `b` to batch several
   into one commit (display already done).
-- [x] **Reactions** — emoji reactions on comments (read-only). GitHub done (general
-  + inline comments); Bitbucket DC pending (reactions aren't in the activities feed —
-  needs a separate reactions endpoint).
+- [x] **Reactions** — emoji reactions on comments (read-only), GitHub and
+  Bitbucket DC. GitHub via `reactionGroups`; Bitbucket DC reads `properties.reactions`
+  from the activities feed (emoji decoded from the twemoji URL codepoint).
 - [ ] **Merge conflict / mergeability status** — can it merge? conflicts? N commits behind base? required checks gating.
 - [ ] **Assignees, milestones, projects** (reviewers + labels are already shown).
 - [ ] **Branch ahead / behind base** info.

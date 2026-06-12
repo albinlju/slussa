@@ -5,7 +5,41 @@ use crate::domain::ci::Build;
 use crate::domain::commit::Commit;
 use crate::domain::diff::Diff;
 use crate::domain::pr::{PrStatus, PullRequest};
-use crate::tui::screens::pr_detail::DetailTab;
+
+/// Which tab of the PR detail screen is active. Navigation state — the reducer
+/// cycles it; the tab-bar glyphs/labels are a presentation concern in `tui`.
+#[derive(Debug, Default, Clone, Copy, PartialEq, Eq)]
+pub enum DetailTab {
+    #[default]
+    Description,
+    Overview,
+    Diff,
+    Commits,
+    Builds,
+}
+
+impl DetailTab {
+    pub const ALL: [Self; 5] = [
+        Self::Description,
+        Self::Overview,
+        Self::Diff,
+        Self::Commits,
+        Self::Builds,
+    ];
+
+    pub fn index(self) -> usize {
+        Self::ALL.iter().position(|&t| t == self).unwrap_or(0)
+    }
+
+    pub fn next(self) -> Self {
+        Self::ALL[(self.index() + 1) % Self::ALL.len()]
+    }
+
+    pub fn prev(self) -> Self {
+        let len = Self::ALL.len();
+        Self::ALL[(self.index() + len - 1) % len]
+    }
+}
 
 #[derive(Debug, Default)]
 pub struct AppState {

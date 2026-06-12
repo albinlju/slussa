@@ -2,10 +2,10 @@ use crate::{
     app::{
         App,
         action::DiffAction,
+        file_tree::{TreeRow, build_visible_rows},
         state::{DiffFocus, DiffViewState, LoadState, Screen},
     },
     domain::diff::FileDiff,
-    tui::screens::pr_detail::file_tree::{TreeRow, build_visible_rows},
 };
 
 impl App {

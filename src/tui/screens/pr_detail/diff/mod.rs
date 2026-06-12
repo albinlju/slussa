@@ -14,12 +14,15 @@ use ratatui::{
 };
 
 use crate::{
-    app::state::{DiffFocus, DiffViewState, LoadState},
+    app::{
+        file_tree::build_visible_rows,
+        state::{DiffFocus, DiffViewState, LoadState},
+    },
     domain::{
         comment::ReviewThread,
         diff::{Diff, DiffLine, FileDiff},
     },
-    tui::{screens::pr_detail::file_tree::build_visible_rows, theme, widgets},
+    tui::{theme, widgets},
 };
 
 /// Renders the full PR diff (Diff tab) or a single commit's diff (Commits

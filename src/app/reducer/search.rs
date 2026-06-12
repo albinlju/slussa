@@ -4,13 +4,11 @@
 //! Each view only supplies *what* it matches against; the typing/clearing logic
 //! lives here and nowhere else.
 
-use crate::{
-    app::{
-        App,
-        action::SearchInput,
-        state::{DiffFocus, Screen, SearchState},
-    },
-    tui::screens::pr_detail::{DetailTab, file_tree::TreeRow},
+use crate::app::{
+    App,
+    action::SearchInput,
+    file_tree::TreeRow,
+    state::{DetailTab, DiffFocus, Screen, SearchState},
 };
 
 impl App {

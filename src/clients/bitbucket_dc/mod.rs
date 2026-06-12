@@ -3,9 +3,11 @@ mod builds;
 mod commits;
 mod diff;
 mod http;
+mod probe;
 mod prs;
 pub mod remote;
 mod structured;
+mod token;
 
 use chrono::{DateTime, TimeZone, Utc};
 
@@ -13,6 +15,12 @@ pub use activities::fetch as fetch_activity;
 pub use builds::fetch_builds;
 pub use commits::fetch_commits;
 pub use diff::{fetch_commit_diff, fetch_diff};
+pub use probe::probe;
+pub use token::{token_setup_hint, validate_pat};
+
+/// Unauthenticated-readable endpoint used both to detect a DC instance (probe)
+/// and to validate a PAT against it (token). One source for the path.
+pub(super) const APP_PROPERTIES_PATH: &str = "/rest/api/1.0/application-properties";
 pub use prs::fetch_prs;
 
 /// Identifies a single repo on a Data Center instance — derived from `git
