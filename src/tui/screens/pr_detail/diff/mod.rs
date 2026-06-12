@@ -1,6 +1,3 @@
-//! Diff tab — file tree (`tree.rs`) on the left, diff pane (`pane.rs`) on
-//! the right.
-
 mod pane;
 mod tree;
 
@@ -25,8 +22,6 @@ use crate::{
     tui::{theme, widgets},
 };
 
-/// Renders the full PR diff (Diff tab) or a single commit's diff (Commits
-/// drill-in), depending on the `LoadState` passed in.
 pub fn render(
     frame: &mut Frame,
     diff_state: Option<&LoadState<Diff>>,
@@ -73,7 +68,8 @@ pub fn render(
             ui_diff.tree_viewport = chunks[0].height.saturating_sub(4);
 
             let tree_focused = matches!(ui_diff.focus, DiffFocus::Tree);
-            let rows = build_visible_rows(&diff.files, &ui_diff.collapsed, &ui_diff.tree_search.query);
+            let rows =
+                build_visible_rows(&diff.files, &ui_diff.collapsed, &ui_diff.tree_search.query);
             tree::render(
                 frame,
                 &rows,
