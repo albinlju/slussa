@@ -19,7 +19,7 @@ pub fn render(frame: &mut Frame, pr_data: Option<&PrData>, area: Rect) {
         return;
     };
     if builds.is_empty() {
-        frame.render_widget(widgets::empty("(no builds reported for this commit)"), area);
+        frame.render_widget(widgets::empty_state("(no builds reported for this commit)"), area);
         return;
     }
     render_builds(frame, builds, area);

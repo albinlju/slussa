@@ -1,4 +1,4 @@
-use super::{ci::CiState, review::Reviewer, user::User};
+use super::{ci::CiSummary, review::Reviewer, user::User};
 use chrono::{DateTime, Utc};
 
 #[derive(Debug, Clone, PartialEq)]
@@ -26,7 +26,7 @@ pub struct PullRequest {
     pub title: String,
     pub description: Option<String>,
     pub author: User,
-    pub ci: CiState,
+    pub ci: CiSummary,
     pub status: PrStatus,
     pub reviewers: Vec<Reviewer>,
     pub labels: Vec<String>,

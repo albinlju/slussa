@@ -36,7 +36,7 @@ pub fn dispatch(mut args: Vec<String>) -> Dispatch {
         None => {}
     }
 
-    match ensure_ready() {
+    match resolve_provider() {
         Ok(provider) => {
             tracing::info!("preflight passed, starting tui");
             Dispatch::RunTui(provider)
@@ -81,7 +81,7 @@ fn run_auth(args: &[String]) -> ExitCode {
     }
 }
 
-fn ensure_ready() -> Result<Provider, PreflightError> {
+fn resolve_provider() -> Result<Provider, PreflightError> {
     match preflight::run() {
         Ok(provider) => Ok(provider),
         Err(PreflightError::GhNotAuthenticated { host }) => {

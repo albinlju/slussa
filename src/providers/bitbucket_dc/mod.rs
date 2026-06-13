@@ -7,7 +7,7 @@ mod http;
 mod probe;
 mod prs;
 pub mod remote;
-mod structured;
+mod json_diff;
 
 use chrono::{DateTime, TimeZone, Utc};
 
@@ -15,7 +15,7 @@ pub use activities::fetch as fetch_activity;
 pub use builds::fetch_builds;
 pub use commits::fetch_commits;
 pub use diff::{fetch_commit_diff, fetch_diff};
-pub use probe::probe;
+pub use probe::is_instance;
 pub use prs::fetch_prs;
 
 pub(super) const APP_PROPERTIES_PATH: &str = "/rest/api/1.0/application-properties";

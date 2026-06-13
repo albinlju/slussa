@@ -3,7 +3,7 @@ use crate::{
         action::{Action, ListAction},
         state::{AppState, LoadState, StatusFilter},
     },
-    domain::{ci::CiState, pr::PullRequest, review::ReviewerState},
+    domain::{ci::CiSummary, pr::PullRequest, review::ReviewerState},
     tui::{
         screens::half_page,
         table::{self, Cell, Column, Width},
@@ -183,8 +183,6 @@ fn render_filter_picker(frame: &mut Frame, state: &AppState, area: Rect) {
     frame.render_widget(help, inner_chunks[1]);
 }
 
-/// One PR's cells, in `COLS` order. Padding/truncation/alignment is the
-/// table engine's job — this only produces the styled content per column.
 fn row_cells(pr: &PullRequest) -> Vec<Cell> {
     let theme = theme::current();
     let muted = Style::default().fg(theme.muted);
@@ -199,10 +197,10 @@ fn row_cells(pr: &PullRequest) -> Vec<Cell> {
     };
 
     let (ci_sym, ci_color) = match pr.ci {
-        CiState::Success => ("\u{f058}", theme.success), //  check-circle
-        CiState::Failed => ("\u{f057}", theme.error),    //  times-circle
-        CiState::Pending => ("\u{f017}", theme.warning), //  clock
-        CiState::Unknown => ("\u{f042}", theme.muted),   //  adjust (half circle — neutral/not run)
+        CiSummary::Success => ("\u{f058}", theme.success), //  check-circle
+        CiSummary::Failed => ("\u{f057}", theme.error),    //  times-circle
+        CiSummary::Pending => ("\u{f017}", theme.warning), //  clock
+        CiSummary::Unknown => ("\u{f042}", theme.muted),   //  adjust (half circle — neutral/not run)
     };
 
     let comm_text = if pr.comment_count == 0 {

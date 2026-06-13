@@ -167,7 +167,7 @@ pub struct DiffViewState {
     pub pane_cursor: usize,
     pub pane_viewport: u16,
     pub tree_viewport: u16,
-    pub pane_items: usize,
+    pub pane_item_count: usize,
     pub tree_search: SearchState,
     pub pane_search: SearchState,
     pub pane_matches: Vec<usize>,

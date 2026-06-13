@@ -25,24 +25,24 @@ impl App {
         if let Screen::Detail { tab, .. } = &mut self.state.screen {
             *tab = tab.next();
         }
-        self.leave_tab();
+        self.reset_tab_state();
     }
 
     fn prev_tab(&mut self) {
         if let Screen::Detail { tab, .. } = &mut self.state.screen {
             *tab = tab.prev();
         }
-        self.leave_tab();
+        self.reset_tab_state();
     }
 
     fn select_tab(&mut self, new_tab: DetailTab) {
         if let Screen::Detail { tab, .. } = &mut self.state.screen {
             *tab = new_tab;
         }
-        self.leave_tab();
+        self.reset_tab_state();
     }
 
-    fn leave_tab(&mut self) {
+    fn reset_tab_state(&mut self) {
         self.state.ui.diff.focus = DiffFocus::Tree;
         self.state.ui.commits.drilled = None;
     }

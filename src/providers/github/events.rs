@@ -26,7 +26,7 @@ struct GhReview {
 
 #[derive(Debug, Deserialize)]
 #[serde(rename_all = "camelCase")]
-struct GhPrEvents {
+struct GhPrTimeline {
     author: GhReviewAuthor,
     created_at: DateTime<Utc>,
     #[serde(default)]
@@ -41,7 +41,7 @@ struct GhPrEvents {
 
 pub fn fetch_events(pr_number: u64) -> Result<Vec<TimelineEvent>, FetchError> {
     let pr_arg = pr_number.to_string();
-    let pr: GhPrEvents = run_gh_json(&[
+    let pr: GhPrTimeline = run_gh_json(&[
         "pr",
         "view",
         &pr_arg,

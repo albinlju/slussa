@@ -24,8 +24,8 @@ pub(crate) struct Table<'a> {
 }
 
 impl<'a> Table<'a> {
-    pub fn new(cols: &'a [Column], total: u16) -> Self {
-        let total = total as usize;
+    pub fn new(cols: &'a [Column], total_width: u16) -> Self {
+        let total = total_width as usize;
         let fixed: usize = cols
             .iter()
             .filter_map(|c| match c.width {
@@ -74,52 +74,12 @@ impl<'a> Table<'a> {
     }
 }
 
-/// Truncate (tail `…`) and left-pad a cell's spans to exactly `width`.
 fn fit_cell(cell: &[Span<'static>], width: usize) -> Vec<Span<'static>> {
-    let total: usize = cell.iter().map(Span::width).sum();
-    let mut out: Vec<Span<'static>> = Vec::new();
-    let mut used = 0;
-
-    if total <= width {
-        out.extend(cell.iter().cloned());
-        used = total;
-    } else {
-        let budget = width.saturating_sub(1);
-        for span in cell {
-            let w = span.width();
-            if used + w <= budget {
-                out.push(span.clone());
-                used += w;
-            } else {
-                let kept = take_to_width(&span.content, budget - used);
-                used += Span::raw(kept.as_str()).width();
-                if !kept.is_empty() {
-                    out.push(Span::styled(kept, span.style));
-                }
-                break;
-            }
-        }
-        out.push(Span::raw("…"));
-        used += 1;
-    }
-
+    let mut out = super::widgets::truncate_to_width(cell.to_vec(), width);
+    let used: usize = out.iter().map(Span::width).sum();
     let pad = width.saturating_sub(used);
     if pad > 0 {
         out.push(Span::raw(" ".repeat(pad)));
-    }
-    out
-}
-
-fn take_to_width(s: &str, max: usize) -> String {
-    let mut out = String::new();
-    let mut used = 0;
-    for c in s.chars() {
-        let w = Span::raw(c.to_string()).width();
-        if used + w > max {
-            break;
-        }
-        used += w;
-        out.push(c);
     }
     out
 }

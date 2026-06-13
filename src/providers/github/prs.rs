@@ -3,7 +3,7 @@ use serde::Deserialize;
 
 use crate::providers::error::FetchError;
 use crate::providers::github::cli::run_gh_json;
-use crate::domain::ci::CiState;
+use crate::domain::ci::CiSummary;
 use crate::domain::pr::{PrStatus, PullRequest};
 use crate::domain::review::{Reviewer, ReviewerState};
 use crate::domain::user::User;
@@ -125,9 +125,9 @@ fn map_pr(gh: GhPr) -> PullRequest {
     }
 }
 
-fn summarize_checks(checks: &[GhCheck]) -> CiState {
+fn summarize_checks(checks: &[GhCheck]) -> CiSummary {
     if checks.is_empty() {
-        return CiState::Unknown;
+        return CiSummary::Unknown;
     }
 
     let mut any_failure = false;
@@ -158,13 +158,13 @@ fn summarize_checks(checks: &[GhCheck]) -> CiState {
     }
 
     if any_failure {
-        CiState::Failed
+        CiSummary::Failed
     } else if any_pending {
-        CiState::Pending
+        CiSummary::Pending
     } else if any_success {
-        CiState::Success
+        CiSummary::Success
     } else {
-        CiState::Unknown
+        CiSummary::Unknown
     }
 }
 

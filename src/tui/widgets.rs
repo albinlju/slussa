@@ -10,10 +10,6 @@ use crate::app::state::LoadState;
 use crate::domain::comment::Reaction;
 use crate::tui::theme;
 
-/// A rounded panel (accent border when focused, else divider) with a header
-/// band on top. Draws the outer frame + the header's bottom divider and
-/// returns `(header_inner, body)` for the caller to fill. Shared by the diff
-/// tree and pane.
 pub(super) fn framed_panel(frame: &mut Frame, area: Rect, focused: bool) -> (Rect, Rect) {
     let theme = theme::current();
     let border = if focused { theme.accent } else { theme.divider };
@@ -38,8 +34,7 @@ pub(super) fn framed_panel(frame: &mut Frame, area: Rect, focused: bool) -> (Rec
     (header_inner, chunks[1])
 }
 
-/// A muted one-line empty-state, e.g. `(no commits)`.
-pub(super) fn empty(text: &str) -> Paragraph<'static> {
+pub(super) fn empty_state(text: &str) -> Paragraph<'static> {
     Paragraph::new(text.to_string()).style(Style::default().fg(theme::current().muted))
 }
 
@@ -278,19 +273,20 @@ pub(super) fn boxed(
 }
 
 fn wrap_box_line(line: Line<'static>, text_w: usize, border: Style) -> Line<'static> {
-    let visible: usize = line.spans.iter().map(Span::width).sum();
-    let pad = text_w.saturating_sub(visible);
     let line_style = line.style;
-    let leading_bg = line.spans.first().and_then(|s| s.style.bg);
-    let trailing_bg = line.spans.last().and_then(|s| s.style.bg);
+    let content = truncate_to_width(line.spans, text_w);
+    let visible: usize = content.iter().map(Span::width).sum();
+    let pad = text_w.saturating_sub(visible);
+    let leading_bg = content.first().and_then(|s| s.style.bg);
+    let trailing_bg = content.last().and_then(|s| s.style.bg);
     let pad_style = |bg: Option<ratatui::style::Color>| match bg {
         Some(c) => Style::default().bg(c),
         None => Style::default(),
     };
-    let mut spans: Vec<Span<'static>> = Vec::with_capacity(line.spans.len() + 4);
+    let mut spans: Vec<Span<'static>> = Vec::with_capacity(content.len() + 4);
     spans.push(Span::styled("│", border));
     spans.push(Span::styled(" ", pad_style(leading_bg)));
-    for s in line.spans {
+    for s in content {
         let merged = line_style.patch(s.style);
         spans.push(Span::styled(s.content, merged));
     }
@@ -299,7 +295,46 @@ fn wrap_box_line(line: Line<'static>, text_w: usize, border: Style) -> Line<'sta
     Line::from(spans)
 }
 
-#[allow(clippy::too_many_arguments)]
+pub(super) fn truncate_to_width(spans: Vec<Span<'static>>, max: usize) -> Vec<Span<'static>> {
+    let total: usize = spans.iter().map(Span::width).sum();
+    if total <= max {
+        return spans;
+    }
+    let budget = max.saturating_sub(1);
+    let mut out: Vec<Span<'static>> = Vec::new();
+    let mut used = 0;
+    for span in spans {
+        let w = span.width();
+        if used + w <= budget {
+            used += w;
+            out.push(span);
+        } else {
+            let kept = take_to_width(&span.content, budget - used);
+            if !kept.is_empty() {
+                out.push(Span::styled(kept, span.style));
+            }
+            break;
+        }
+    }
+    out.push(Span::raw("…"));
+    out
+}
+
+fn take_to_width(s: &str, max: usize) -> String {
+    let mut out = String::new();
+    let mut used = 0;
+    for c in s.chars() {
+        let w = Span::raw(c.to_string()).width();
+        if used + w > max {
+            break;
+        }
+        used += w;
+        out.push(c);
+    }
+    out
+}
+
+#[expect(clippy::too_many_arguments, reason = "one styled diff row — splitting the args adds no clarity")]
 pub(super) fn numbered_diff_row(
     line_num: Option<u32>,
     num_width: usize,
