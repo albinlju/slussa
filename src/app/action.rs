@@ -1,7 +1,6 @@
 use crate::{
     app::state::DetailTab,
-    clients::ActivityBundle,
-    domain::{ci::Build, commit::Commit, diff::Diff, pr::PullRequest},
+    domain::{activity::Activity, ci::Build, commit::Commit, diff::Diff, pr::PullRequest},
 };
 
 #[derive(Debug)]
@@ -71,6 +70,6 @@ pub enum LoadedAction {
     Commits(u64, Result<Vec<Commit>, String>),
     Diff(u64, Result<Diff, String>),
     Builds(u64, Result<Vec<Build>, String>),
-    Activity(u64, Result<ActivityBundle, String>),
+    Activity(u64, Result<Activity, String>),
     CommitDiff(u64, String, Result<Diff, String>),
 }

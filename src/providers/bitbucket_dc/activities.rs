@@ -1,21 +1,21 @@
 use serde::Deserialize;
 
 use super::{Config, ms_to_utc};
-use crate::clients::ActivityBundle;
-use crate::clients::bitbucket_dc::http::get_json;
-use crate::clients::error::FetchError;
+use crate::providers::bitbucket_dc::http::get_json;
+use crate::providers::error::FetchError;
+use crate::domain::activity::Activity;
 use crate::domain::comment::{Comment, Reaction, ReviewThread};
 use crate::domain::event::{EventKind, PushedCommit, TimelineEvent};
 use crate::domain::user::User;
 
 #[derive(Debug, Deserialize)]
 struct Page {
-    values: Vec<Activity>,
+    values: Vec<BbActivity>,
 }
 
 #[derive(Debug, Deserialize)]
 #[serde(rename_all = "camelCase")]
-struct Activity {
+struct BbActivity {
     action: String,
     #[serde(default)]
     created_date: i64,
@@ -93,7 +93,7 @@ struct BbUser {
     name: String,
 }
 
-pub fn fetch(config: &Config, pr_id: u64) -> Result<ActivityBundle, FetchError> {
+pub fn fetch(config: &Config, pr_id: u64) -> Result<Activity, FetchError> {
     let path = format!(
         "/rest/api/1.0/projects/{}/repos/{}/pull-requests/{pr_id}/activities?limit=100",
         config.repo.project_key, config.repo.repo_slug
@@ -102,8 +102,8 @@ pub fn fetch(config: &Config, pr_id: u64) -> Result<ActivityBundle, FetchError> 
     Ok(project(page.values))
 }
 
-fn project(activities: Vec<Activity>) -> ActivityBundle {
-    let mut bundle = ActivityBundle::default();
+fn project(activities: Vec<BbActivity>) -> Activity {
+    let mut bundle = Activity::default();
     for activity in activities {
         if activity.action == "COMMENTED" {
             match (activity.comment_anchor, activity.comment) {

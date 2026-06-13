@@ -1,4 +1,4 @@
-use crate::clients::error::FetchError;
+use crate::providers::error::FetchError;
 
 pub(super) fn run_gh(args: &[&str]) -> Result<Vec<u8>, FetchError> {
     tracing::debug!("gh {}", args.join(" "));

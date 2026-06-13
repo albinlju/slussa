@@ -5,29 +5,15 @@ mod unified_diff;
 
 pub use error::FetchError;
 
-use crate::domain::{
-    ci::Build,
-    comment::{Comment, ReviewThread},
-    commit::Commit,
-    diff::Diff,
-    event::TimelineEvent,
-    pr::PullRequest,
-};
-
-#[derive(Debug, Default, Clone)]
-pub struct ActivityBundle {
-    pub comments: Vec<Comment>,
-    pub events: Vec<TimelineEvent>,
-    pub threads: Vec<ReviewThread>,
-}
+use crate::domain::{activity::Activity, ci::Build, commit::Commit, diff::Diff, pr::PullRequest};
 
 #[derive(Clone, Debug)]
-pub enum Backend {
+pub enum Provider {
     GitHub,
     BitbucketDc(bitbucket_dc::Config),
 }
 
-impl Backend {
+impl Provider {
     pub fn fetch_prs(&self) -> Result<Vec<PullRequest>, FetchError> {
         match self {
             Self::GitHub => github::fetch_prs(),
@@ -63,7 +49,7 @@ impl Backend {
         }
     }
 
-    pub fn fetch_activity(&self, pr_id: u64) -> Result<ActivityBundle, FetchError> {
+    pub fn fetch_activity(&self, pr_id: u64) -> Result<Activity, FetchError> {
         match self {
             Self::GitHub => github::fetch_activity(pr_id),
             Self::BitbucketDc(c) => bitbucket_dc::fetch_activity(c, pr_id),

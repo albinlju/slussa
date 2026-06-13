@@ -1,6 +1,6 @@
 use std::time::Duration;
 
-use crate::clients::bitbucket_dc::{APP_PROPERTIES_PATH, http};
+use crate::providers::bitbucket_dc::{APP_PROPERTIES_PATH, http};
 
 pub fn probe(host: &str) -> Result<bool, String> {
     let url = format!("https://{host}{APP_PROPERTIES_PATH}");

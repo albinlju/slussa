@@ -1,8 +1,8 @@
 use chrono::{DateTime, Utc};
 use serde::Deserialize;
 
-use crate::clients::error::FetchError;
-use crate::clients::github::run_pr_graphql;
+use crate::providers::error::FetchError;
+use crate::providers::github::run_pr_graphql;
 use crate::domain::commit::Commit;
 
 const QUERY: &str = "query($owner: String!, $name: String!, $pr: Int!) { \

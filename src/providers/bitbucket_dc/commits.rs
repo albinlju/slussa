@@ -1,8 +1,8 @@
 use serde::Deserialize;
 
 use super::{Config, ms_to_utc};
-use crate::clients::bitbucket_dc::http::get_json;
-use crate::clients::error::FetchError;
+use crate::providers::bitbucket_dc::http::get_json;
+use crate::providers::error::FetchError;
 use crate::domain::commit::Commit;
 
 #[derive(Debug, Deserialize)]

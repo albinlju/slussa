@@ -14,7 +14,7 @@ main.rs ── cli.rs ── app/preflight.rs        (startup: args, host detect
                     ▲                                      │
                     │                          spawns app/fetchers.rs
       spinner tick ─┤                                      │
-       (while load) │                              clients/* (gh / REST)
+       (while load) │                              providers/* (gh / REST)
        tui::render ◄┴── AppState ◄── LoadedAction ◄────────┘
 ```
 
@@ -37,7 +37,7 @@ split safe.
 `keyring-test` subcommands, `--help`, and unknown-command errors. Its
 contract with `main` is the `Dispatch` enum — either a subcommand ran to
 completion (`Done(ExitCode)`) or the TUI should start against a detected
-backend (`RunTui(Backend)`). Parsing is deliberately by hand; two
+provider (`RunTui(Provider)`). Parsing is deliberately by hand; two
 subcommands don't justify a CLI framework, and the boundary makes swapping
 one in later a one-file change.
 
@@ -46,20 +46,20 @@ logged in?". It reads `git remote get-url origin`, extracts the host, and
 classifies it:
 
 - `github.com` → check `gh` is installed and authenticated
-  (`clients/github/auth.rs`). If not logged in, `cli::ensure_ready` launches
+  (`providers/github/auth.rs`). If not logged in, `cli::ensure_ready` launches
   the interactive `gh auth login` and retries preflight once.
 - any other host → probe `/rest/api/1.0/application-properties`
-  (`clients/bitbucket_dc/probe.rs`) to detect a Data Center instance, then
+  (`providers/bitbucket_dc/probe.rs`) to detect a Data Center instance, then
   load its PAT from the OS keyring (`app/auth.rs`). No PAT → the error tells
   the user to run `tuipr auth login`, which prompts for a token, validates it
   against the same endpoint (`bitbucket_dc/token.rs`), and stores it.
 
-The result is a `clients::Backend` — the only value carried from startup
+The result is a `providers::Provider` — the only value carried from startup
 into the TUI.
 
 ## The event loop
 
-**`app/mod.rs`** holds `App { state, backend, action_tx, action_rx }` and the
+**`app/mod.rs`** holds `App { state, provider, action_tx, action_rx }` and the
 loop, a `tokio::select!` over three sources. Rendering is event-driven: a
 frame is drawn once at startup, then only after something that can change the
 view —
@@ -130,15 +130,15 @@ store `LoadState::from_result` in the cache.
 ## Fetching (`app/fetchers.rs`)
 
 One generic `spawn_fetch` wraps every call: `tokio::spawn` →
-`task::spawn_blocking` (the clients are blocking) → map the result into a
+`task::spawn_blocking` (the providers are blocking) → map the result into a
 `LoadedAction` and send it. Errors cross the boundary as `String`s — the UI
 only ever displays them. Opening a PR kicks off four parallel fetches
 (commits, diff, builds, activity); drilling into a commit lazily fetches
 that commit's diff, keyed by oid.
 
-## Clients (`clients/`)
+## Providers (`providers/`)
 
-`Backend` is an enum, not a trait — with two variants and unconditional
+`Provider` is an enum, not a trait — with two variants and unconditional
 dispatch, `match` is simpler and keeps the fetch signatures honest. Each
 provider module mirrors the same surface: `fetch_prs`, `fetch_commits`,
 `fetch_diff`, `fetch_commit_diff`, `fetch_builds`, `fetch_activity`.
@@ -146,22 +146,22 @@ provider module mirrors the same surface: `fetch_prs`, `fetch_commits`,
 **Conventions shared by both providers:**
 
 - Each fetch module owns its private serde DTOs and a `map_*` function into
-  `domain` types. Wire shapes never leak past `clients/`.
-- `fetch_activity` returns an `ActivityBundle` — comments, lifecycle events,
+  `domain` types. Wire shapes never leak past `providers/`.
+- `fetch_activity` returns an `Activity` — comments, lifecycle events,
   and inline review threads from one conceptual fetch, because that's how
   the Overview consumes them.
 - Pure projection functions (payload → domain) carry inline `#[cfg(test)]`
   tests against sample payloads.
 
-**GitHub (`clients/github/`)** shells out to `gh` (`cli.rs` is the
+**GitHub (`providers/github/`)** shells out to `gh` (`cli.rs` is the
 spawn/parse wrapper), inheriting its auth and host handling. Listing and
 events use `gh pr list`/`gh pr view`; comments and review threads use
 GraphQL via `gh api graphql`, because only GraphQL exposes
 `viewerHasReacted` (own-reaction highlighting), `isResolved`, and `diffSide`
 (old-side thread anchors). The PR diff arrives as unified-diff text, parsed
-by `clients/unified_diff.rs` — the only place raw diff text is interpreted.
+by `providers/unified_diff.rs` — the only place raw diff text is interpreted.
 
-**Bitbucket DC (`clients/bitbucket_dc/`)** talks REST v1 with a bearer PAT
+**Bitbucket DC (`providers/bitbucket_dc/`)** talks REST v1 with a bearer PAT
 (`http.rs` is the shared GET-JSON helper; 401/403 map to a
 `NotAuthenticated` error that points the user back to `tuipr auth login`).
 Its `/diff` endpoint returns structured JSON rather than diff text —
@@ -223,7 +223,7 @@ Two rendering mechanics that aren't obvious from the outside:
 ## Adding a feature — the usual recipe
 
 1. **New data?** Add the field to `domain` only if a view will render it.
-   Extend the provider DTO + `map_*` in each `clients/` backend (empty/`None`
+   Extend the provider DTO + `map_*` in each `providers/` module (empty/`None`
    is fine where a provider can't supply it), and thread it through the
    relevant fetcher.
 2. **New interaction?** Add an `Action` variant, map a key to it in the

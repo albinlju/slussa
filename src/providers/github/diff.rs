@@ -1,6 +1,6 @@
-use crate::clients::error::FetchError;
-use crate::clients::github::cli::run_gh;
-use crate::clients::unified_diff;
+use crate::providers::error::FetchError;
+use crate::providers::github::cli::run_gh;
+use crate::providers::unified_diff;
 use crate::domain::diff::Diff;
 
 pub fn fetch_diff(pr_number: u64) -> Result<Diff, FetchError> {

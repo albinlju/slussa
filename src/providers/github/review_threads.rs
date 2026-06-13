@@ -1,7 +1,7 @@
 use serde::Deserialize;
 
-use crate::clients::error::FetchError;
-use crate::clients::github::{COMMENT_FIELDS, GqlComment, map_gql_comment, run_pr_graphql};
+use crate::providers::error::FetchError;
+use crate::providers::github::{COMMENT_FIELDS, GqlComment, map_gql_comment, run_pr_graphql};
 use crate::domain::comment::ReviewThread;
 
 #[derive(Debug, Deserialize)]
