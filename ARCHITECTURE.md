@@ -45,7 +45,10 @@ one in later a one-file change.
 logged in?". The git-remote plumbing — `git remote get-url origin` and the
 URL→host parsing — lives in `app/remote.rs`; preflight `classify_host`s the
 host into a `HostKind` (recognition), and `run` decides what to do with each
-(policy):
+(policy). The scheme-stripping that splits a remote URL into `(authority,
+path)` is the one piece both layers need — `app/remote.rs` keeps the authority
+(→ host), `providers/bitbucket_dc/remote.rs` keeps the path (→ project/repo) —
+so it lives in the low-level `git_url` module both depend on downward:
 
 - `github.com` → check `gh` is installed and authenticated
   (`providers/github/auth.rs`). If not logged in, `cli::resolve_provider` launches

@@ -1,7 +1,7 @@
 use super::RepoCoords;
 
 pub fn parse(remote: &str, host: &str) -> Option<RepoCoords> {
-    let path = extract_path(remote)?;
+    let (_authority, path) = crate::git_url::split(remote)?;
     let parts: Vec<&str> = path.split('/').filter(|p| !p.is_empty()).collect();
 
     let (project, repo) = match parts.as_slice() {
@@ -15,25 +15,6 @@ pub fn parse(remote: &str, host: &str) -> Option<RepoCoords> {
         project_key: project.to_string(),
         repo_slug,
     })
-}
-
-fn extract_path(remote: &str) -> Option<&str> {
-    if let Some(rest) = remote.strip_prefix("ssh://") {
-        let (_authority, path) = rest.split_once('/')?;
-        return Some(path);
-    }
-    if let Some(rest) = remote.strip_prefix("git@") {
-        let (_authority, path) = rest.split_once(':')?;
-        return Some(path);
-    }
-    if let Some(rest) = remote
-        .strip_prefix("https://")
-        .or_else(|| remote.strip_prefix("http://"))
-    {
-        let (_authority, path) = rest.split_once('/')?;
-        return Some(path);
-    }
-    None
 }
 
 #[cfg(test)]
