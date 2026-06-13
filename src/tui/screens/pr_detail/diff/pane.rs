@@ -3,10 +3,10 @@ use std::collections::HashMap;
 use chrono::Utc;
 use ratatui::{
     Frame,
-    layout::{Constraint, Direction, Layout, Rect},
+    layout::Rect,
     style::{Modifier, Style},
     text::{Line, Span},
-    widgets::{Block, BorderType, Borders, Paragraph},
+    widgets::Paragraph,
 };
 
 use crate::{
@@ -45,20 +45,7 @@ impl PaneView<'_> {
 
         let theme = theme::current();
 
-        let border_color = if self.focused { theme.accent } else { theme.divider };
-        let pane_block = Block::default()
-            .borders(Borders::ALL)
-            .border_type(BorderType::Rounded)
-            .border_style(Style::default().fg(border_color));
-        let pane_inner = pane_block.inner(area);
-        frame.render_widget(pane_block, area);
-
-        let pane_chunks = Layout::default()
-            .direction(Direction::Vertical)
-            .constraints([Constraint::Length(2), Constraint::Min(0)])
-            .split(pane_inner);
-
-        let body_area = pane_chunks[1];
+        let (header_inner, body_area) = widgets::framed_panel(frame, area, self.focused);
         let active = self.focused.then_some(self.pane_cursor);
         let (mut lines, meta, matches) =
             file_to_lines(file, self.threads, body_area.width, active, self.query);
@@ -80,7 +67,7 @@ impl PaneView<'_> {
                 let (line, removed) = m.line_removed();
                 (line, removed, matches!(m.kind, NavKind::Thread { .. }))
             }),
-            pane_chunks[0],
+            header_inner,
         );
 
         if let Some(m) = cursor
@@ -129,14 +116,7 @@ fn render_pane_header(
     area: Rect,
 ) {
     let theme = theme::current();
-
-    let header_block = Block::default()
-        .borders(Borders::BOTTOM)
-        .border_style(Style::default().fg(theme.divider));
-    let header_inner = header_block.inner(area);
-    frame.render_widget(header_block, area);
-
-    let inner_w = (header_inner.width as usize).saturating_sub(4);
+    let inner_w = (area.width as usize).saturating_sub(4);
     let stats_w = "+".len() + adds.to_string().len() + 1 + "-".len() + dels.to_string().len();
     let displayed_path = truncate_path_left(path, inner_w.saturating_sub(stats_w + 2));
 
@@ -163,7 +143,7 @@ fn render_pane_header(
         Span::styled(format!("-{dels}"), Style::default().fg(theme.diff_removed)),
     ];
     let line = Line::from(widgets::justify_between(left, right, inner_w + 2));
-    frame.render_widget(Paragraph::new(line), header_inner);
+    frame.render_widget(Paragraph::new(line), area);
 }
 
 fn truncate_path_left(path: &str, max: usize) -> String {

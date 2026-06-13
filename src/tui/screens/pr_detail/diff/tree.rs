@@ -1,9 +1,9 @@
 use ratatui::{
     Frame,
-    layout::{Constraint, Direction, Layout, Rect},
+    layout::Rect,
     style::{Modifier, Style},
     text::{Line, Span},
-    widgets::{Block, BorderType, Borders, List, ListItem, ListState, Paragraph},
+    widgets::{List, ListItem, ListState, Paragraph},
 };
 
 use crate::app::file_tree::TreeRow;
@@ -26,24 +26,7 @@ impl TreeView<'_> {
             .iter()
             .fold((0u32, 0u32), |(a, d), (na, nd)| (a + na, d + nd));
 
-        let border_color = if self.focused { theme.accent } else { theme.divider };
-        let tree_block = Block::default()
-            .borders(Borders::ALL)
-            .border_type(BorderType::Rounded)
-            .border_style(Style::default().fg(border_color));
-        let tree_inner = tree_block.inner(area);
-        frame.render_widget(tree_block, area);
-
-        let tree_chunks = Layout::default()
-            .direction(Direction::Vertical)
-            .constraints([Constraint::Length(2), Constraint::Min(0)])
-            .split(tree_inner);
-
-        let header_block = Block::default()
-            .borders(Borders::BOTTOM)
-            .border_style(Style::default().fg(theme.divider));
-        let header_inner = header_block.inner(tree_chunks[0]);
-        frame.render_widget(header_block, tree_chunks[0]);
+        let (header_inner, body) = widgets::framed_panel(frame, area, self.focused);
         let row_width = (header_inner.width as usize).saturating_sub(1);
         let left = vec![Span::styled(
             format!("{file_count} files"),
@@ -57,7 +40,7 @@ impl TreeView<'_> {
         let header_line = Line::from(widgets::justify_between(left, right, row_width));
         frame.render_widget(Paragraph::new(header_line), header_inner);
 
-        let row_width = tree_chunks[1].width as usize;
+        let row_width = body.width as usize;
 
         let items: Vec<ListItem> = self
             .rows
@@ -137,6 +120,6 @@ impl TreeView<'_> {
                 .add_modifier(Modifier::BOLD),
         );
 
-        frame.render_stateful_widget(list, tree_chunks[1], &mut list_state);
+        frame.render_stateful_widget(list, body, &mut list_state);
     }
 }

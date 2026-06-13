@@ -202,11 +202,15 @@ generic `/`-search interception runs first (typing mode captures characters;
   (pane → tree → drill-in → list → PR list) and Ctrl+D/U routing.
 - **`widgets.rs`** — shared rendering primitives: `boxed` (rounded-border
   boxes built as `Line`s so they can nest inside scrolling paragraphs),
-  `loaded_or_placeholder` (the loading/failed rows every fetch-backed tab
-  shares), `scrolled_paragraph` (clamp-scroll + scrollbar + viewport
-  write-back), `loading` (the spinner row), `reactions_line`
+  `framed_panel` (the rounded panel + header band shared by the diff tree
+  and pane), `loaded_or_placeholder` (the loading/failed rows every
+  fetch-backed tab shares), `scrolled_paragraph` (clamp-scroll + scrollbar +
+  viewport write-back), `loading` (the spinner row), `reactions_line`
   (powerline-capped pills; your own reactions get the accent-tinted
   background), search highlighting, diff row builders.
+- **`table.rs`** — the declarative table engine for the PR-list grid:
+  `Column { title, width: Fixed|Flex }` + `Table::{header, row}` measure,
+  truncate, and pad cells so the screen only supplies content per column.
 - **`markdown.rs`** — the charmed-glamour pipeline behind `catch_unwind`
   (falls back to raw text): `render` keeps glamour's document margins
   (Description), `render_flush` strips them so text sits flush inside
