@@ -10,8 +10,8 @@ use ratatui::{
 use crate::{
     app::state::{LoadState, PrData, UiMemory},
     domain::{
-        comment::{Comment, ReviewThread, split_suggestions},
-        diff::{Diff, DiffLine},
+        comment::{Comment, ReviewThread},
+        diff::Diff,
         event::{EventKind, TimelineEvent},
         pr::PullRequest,
         review::ReviewerState,
@@ -209,7 +209,7 @@ fn render_timeline(frame: &mut Frame, pr_data: Option<&PrData>, ui: &mut UiMemor
 }
 
 enum TimelineItem<'a> {
-    Issue(&'a Comment),
+    Comment(&'a Comment),
     Review(&'a ReviewThread),
     Activity(&'a TimelineEvent),
 }
@@ -217,7 +217,7 @@ enum TimelineItem<'a> {
 impl TimelineItem<'_> {
     fn timestamp(&self) -> DateTime<Utc> {
         match self {
-            TimelineItem::Issue(c) => c.created,
+            TimelineItem::Comment(c) => c.created,
             TimelineItem::Review(t) => t
                 .comments
                 .first().map_or_else(Utc::now, |c| c.created),
@@ -236,7 +236,7 @@ fn build_overview_lines(
     let theme = theme::current();
     let mut events: Vec<TimelineItem<'_>> =
         Vec::with_capacity(comments.len() + threads.len() + activity.len());
-    events.extend(comments.iter().map(TimelineItem::Issue));
+    events.extend(comments.iter().map(TimelineItem::Comment));
     events.extend(threads.iter().map(TimelineItem::Review));
     events.extend(activity.iter().map(TimelineItem::Activity));
     events.sort_by_key(|e| std::cmp::Reverse(e.timestamp()));
@@ -246,10 +246,11 @@ fn build_overview_lines(
     let blocks: Vec<(EventStyle, Vec<Line<'static>>)> = events
         .iter()
         .filter_map(|event| match event {
-            TimelineItem::Issue(c) => Some((EventStyle::Comment, build_issue_lines(c, width, now))),
-            TimelineItem::Review(t) => {
-                build_review_lines(t, diff, width, now).map(|l| (EventStyle::Review, l))
+            TimelineItem::Comment(c) => {
+                Some((EventStyle::Comment, super::comment::comment_box(c, width, now)))
             }
+            TimelineItem::Review(t) => super::comment::review_thread_box(t, diff, width, now)
+                .map(|l| (EventStyle::Review, l)),
             TimelineItem::Activity(e) => {
                 let (color, lines) = activity_lines(e, now);
                 Some((EventStyle::Activity(color), lines))
@@ -305,23 +306,18 @@ impl EventStyle {
 
 fn activity_lines(event: &TimelineEvent, now: DateTime<Utc>) -> (Color, Vec<Line<'static>>) {
     let theme = theme::current();
-    let age = format::relative_age(event.created, now);
 
     let header = |verb: String, color: Color| -> Line<'static> {
-        let mut spans: Vec<Span<'static>> = Vec::new();
+        let mut lead: Vec<Span<'static>> = Vec::new();
         if let Some(actor) = &event.actor {
-            spans.push(Span::styled(
+            lead.push(Span::styled(
                 format!("@{}", actor.username),
                 Style::default().fg(theme.info).add_modifier(Modifier::BOLD),
             ));
-            spans.push(Span::raw(" "));
+            lead.push(Span::raw(" "));
         }
-        spans.push(Span::styled(verb, Style::default().fg(color)));
-        spans.push(Span::styled(
-            format!(" · {age}"),
-            Style::default().fg(theme.muted),
-        ));
-        Line::from(spans)
+        lead.push(Span::styled(verb, Style::default().fg(color)));
+        widgets::author_line(lead, event.created, now)
     };
 
     if let EventKind::Pushed(commits) = &event.kind {
@@ -352,194 +348,3 @@ fn activity_lines(event: &TimelineEvent, now: DateTime<Utc>) -> (Color, Vec<Line
     };
     (color, vec![header(verb.to_string(), color)])
 }
-
-fn build_issue_lines(c: &Comment, width: u16, now: DateTime<Utc>) -> Vec<Line<'static>> {
-    let header = issue_comment_header(&c.author.username, c.created, now);
-    let body = super::comment_body(c, None, width);
-    widgets::boxed(header, body, width, theme::current().divider)
-}
-
-fn build_review_lines(
-    thread: &ReviewThread,
-    diff: Option<&Diff>,
-    width: u16,
-    now: DateTime<Utc>,
-) -> Option<Vec<Line<'static>>> {
-    let theme = theme::current();
-    let first = thread.comments.first()?;
-    let text_width = widgets::box_text_width(width);
-    let header = issue_comment_header(&first.author.username, first.created, now);
-
-    let mut body: Vec<Line<'static>> = Vec::new();
-
-    let location = match thread.line.or(thread.old_line) {
-        Some(l) => format!("{}:{}", thread.path, l),
-        None => thread.path.clone(),
-    };
-    let mut anchor_spans = vec![Span::styled(location, Style::default().fg(theme.accent))];
-    if thread.resolved {
-        anchor_spans.push(Span::styled(
-            " · resolved",
-            Style::default().fg(theme.success),
-        ));
-    }
-    let inner_header = Line::from(anchor_spans);
-
-    let inner_text_width = widgets::box_text_width(text_width);
-    let (snippet, anchor_text) = diff
-        .map(|d| diff_snippet(d, &thread.path, thread.line, thread.old_line, inner_text_width))
-        .unwrap_or_default();
-    // A suggestion repeats the anchored line, so the snippet box is dropped
-    // when any comment carries one (to avoid showing the line twice).
-    let has_suggestion = thread
-        .comments
-        .iter()
-        .any(|c| !split_suggestions(&c.content).1.is_empty());
-    if snippet.is_empty() || has_suggestion {
-        body.push(inner_header);
-    } else {
-        body.extend(widgets::boxed(inner_header, snippet, text_width, theme.divider));
-    }
-    let anchor = thread.line.or(thread.old_line).zip(anchor_text.as_deref());
-
-    for (i, comment) in thread.comments.iter().enumerate() {
-        if i > 0 {
-            body.push(Line::raw(""));
-            let age = format::relative_age(comment.created, now);
-            body.push(Line::from(vec![
-                Span::styled(
-                    format!("↳ @{}", comment.author.username),
-                    Style::default().fg(theme.info).add_modifier(Modifier::BOLD),
-                ),
-                Span::styled(format!(" · {age}"), Style::default().fg(theme.muted)),
-            ]));
-        }
-        body.extend(super::comment_body(comment, anchor, width));
-    }
-
-    Some(widgets::boxed(header, body, width, theme.divider))
-}
-
-fn issue_comment_header(
-    username: &str,
-    created: DateTime<Utc>,
-    now: DateTime<Utc>,
-) -> Line<'static> {
-    let theme = theme::current();
-    let age = format::relative_age(created, now);
-    Line::from(vec![
-        Span::styled(
-            username.to_string(),
-            Style::default()
-                .fg(theme.info)
-                .add_modifier(Modifier::BOLD),
-        ),
-        Span::styled(" commented", Style::default().fg(theme.muted)),
-        Span::styled(format!(" · {age}"), Style::default().fg(theme.muted)),
-    ])
-}
-
-const SNIPPET_CONTEXT: usize = 3;
-
-fn diff_snippet(
-    diff: &Diff,
-    path: &str,
-    line: Option<usize>,
-    old_line: Option<usize>,
-    width: u16,
-) -> (Vec<Line<'static>>, Option<String>) {
-    struct Row<'a> {
-        dl: &'a DiffLine,
-        new_no: usize,
-        old_no: usize,
-        hunk: usize,
-    }
-
-    let theme = theme::current();
-    let Some(file) = diff.files.iter().find(|f| f.path == path) else {
-        return (Vec::new(), None);
-    };
-
-    let mut rows: Vec<Row> = Vec::new();
-    for (hunk_idx, hunk) in file.hunks.iter().enumerate() {
-        let mut new_no = hunk.new_start;
-        let mut old_no = hunk.old_start;
-        for dl in &hunk.lines {
-            rows.push(Row { dl, new_no, old_no, hunk: hunk_idx });
-            match dl {
-                DiffLine::Added(_) => new_no += 1,
-                DiffLine::Removed(_) => old_no += 1,
-                DiffLine::Context(_) => {
-                    new_no += 1;
-                    old_no += 1;
-                }
-            }
-        }
-    }
-
-    let anchor = rows.iter().position(|r| match (line, old_line) {
-        (Some(l), _) => !matches!(r.dl, DiffLine::Removed(_)) && r.new_no == l,
-        (None, Some(o)) => matches!(r.dl, DiffLine::Removed(_)) && r.old_no == o,
-        _ => false,
-    });
-    let Some(anchor) = anchor else {
-        return (Vec::new(), None);
-    };
-    let anchor_text = match rows[anchor].dl {
-        DiffLine::Added(c) | DiffLine::Removed(c) | DiffLine::Context(c) => c.clone(),
-    };
-
-    // Context must not bleed in from the previous hunk (non-adjacent lines).
-    let hunk_start = rows[..anchor]
-        .iter()
-        .rposition(|r| r.hunk != rows[anchor].hunk)
-        .map_or(0, |i| i + 1);
-    let start = anchor.saturating_sub(SNIPPET_CONTEXT).max(hunk_start);
-    let window = &rows[start..=anchor];
-    let num_width = window
-        .iter()
-        .map(|r| r.new_no)
-        .max()
-        .unwrap_or(1)
-        .to_string()
-        .len();
-    let row_w = width as usize;
-
-    let lines: Vec<Line<'static>> = window
-        .iter()
-        .map(|r| match r.dl {
-            DiffLine::Added(c) => widgets::numbered_diff_row(
-                Some(r.new_no as u32),
-                num_width,
-                "+",
-                c,
-                theme.diff_added,
-                Some(theme.diff_added_bg),
-                theme.fg,
-                row_w,
-            ),
-            DiffLine::Removed(c) => widgets::numbered_diff_row(
-                None,
-                num_width,
-                "-",
-                c,
-                theme.diff_removed,
-                Some(theme.diff_removed_bg),
-                theme.muted,
-                row_w,
-            ),
-            DiffLine::Context(c) => widgets::numbered_diff_row(
-                Some(r.new_no as u32),
-                num_width,
-                " ",
-                c,
-                theme.muted,
-                None,
-                theme.diff_context,
-                row_w,
-            ),
-        })
-        .collect();
-    (lines, Some(anchor_text))
-}
-

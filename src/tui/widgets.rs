@@ -1,3 +1,4 @@
+use chrono::{DateTime, Utc};
 use ratatui::{
     Frame,
     layout::{Constraint, Direction, Layout, Rect},
@@ -8,7 +9,19 @@ use ratatui::{
 
 use crate::app::state::LoadState;
 use crate::domain::comment::Reaction;
-use crate::tui::theme;
+use crate::tui::{format, theme};
+
+pub(super) fn author_line(
+    mut lead: Vec<Span<'static>>,
+    created: DateTime<Utc>,
+    now: DateTime<Utc>,
+) -> Line<'static> {
+    lead.push(Span::styled(
+        format!(" · {}", format::relative_age(created, now)),
+        Style::default().fg(theme::current().muted),
+    ));
+    Line::from(lead)
+}
 
 pub(super) fn framed_panel(frame: &mut Frame, area: Rect, focused: bool) -> (Rect, Rect) {
     let theme = theme::current();
