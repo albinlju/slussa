@@ -6,8 +6,6 @@ use std::collections::HashSet;
 use ratatui::{
     Frame,
     layout::{Constraint, Direction, Layout, Rect},
-    style::Style,
-    widgets::Paragraph,
 };
 
 use crate::{
@@ -21,7 +19,7 @@ use crate::{
     },
     tui::{
         screens::pr_detail::diff::{pane::PaneView, tree::TreeView},
-        theme, widgets,
+        widgets,
     },
 };
 
@@ -32,13 +30,11 @@ pub fn render(
     ui_diff: &mut DiffViewState,
     area: Rect,
 ) {
-    let theme = theme::current();
     let Some(diff) = widgets::loaded_or_placeholder(frame, diff_state, "diff", area) else {
         return;
     };
     if diff.files.is_empty() {
-        let paragraph = Paragraph::new("(no diff)").style(Style::default().fg(theme.muted));
-        frame.render_widget(paragraph, area);
+        frame.render_widget(widgets::empty("(no diff)"), area);
         return;
     }
 

@@ -204,7 +204,8 @@ generic `/`-search interception runs first (typing mode captures characters;
   boxes built as `Line`s so they can nest inside scrolling paragraphs),
   `framed_panel` (the rounded panel + header band shared by the diff tree
   and pane), `loaded_or_placeholder` (the loading/failed rows every
-  fetch-backed tab shares), `scrolled_paragraph` (clamp-scroll + scrollbar +
+  fetch-backed tab shares), `empty` (the muted `(no …)` one-liner),
+  `scrolled_paragraph` (clamp-scroll + scrollbar +
   viewport write-back), `loading` (the spinner row), `reactions_line`
   (powerline-capped pills; your own reactions get the accent-tinted
   background), search highlighting, diff row builders.

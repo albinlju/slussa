@@ -20,7 +20,7 @@ use crate::{
         state::{AppState, DetailTab, DiffFocus, DiffViewState, LoadState, PrData, Screen, UiMemory},
     },
     domain::{
-        comment::{ReviewThread, split_suggestions},
+        comment::{Comment, ReviewThread, split_suggestions},
         diff::FileDiff,
         pr::PullRequest,
     },
@@ -231,21 +231,36 @@ pub(super) fn render_inline_thread(
             ),
             Span::styled(format!(" · {age}"), Style::default().fg(theme.muted)),
         ]));
-        let (prose, suggestions) = split_suggestions(&comment.content);
-        if !prose.trim().is_empty() {
-            body.extend(markdown::render_flush(&prose, text_w));
-        }
-        for suggestion in &suggestions {
-            body.push(Line::raw(""));
-            body.extend(suggestion_lines(anchor, suggestion, text_w));
-        }
-        if let Some(line) = widgets::reactions_line(&comment.reactions) {
-            body.push(Line::raw(""));
-            body.push(line);
-        }
+        body.extend(comment_body(comment, anchor, width));
     }
 
     widgets::boxed(header, body, width, border)
+}
+
+/// One comment's body inside a thread box: prose, any `suggestion` blocks,
+/// and the reaction strip. The author/age header is the caller's — it differs
+/// between the diff thread, the Overview timeline, and replies. Shared so
+/// those three can't drift in how a comment's content renders.
+pub(super) fn comment_body(
+    comment: &Comment,
+    anchor: Option<(usize, &str)>,
+    width: u16,
+) -> Vec<Line<'static>> {
+    let text_w = widgets::box_text_width(width);
+    let (prose, suggestions) = split_suggestions(&comment.content);
+    let mut lines: Vec<Line<'static>> = Vec::new();
+    if !prose.trim().is_empty() {
+        lines.extend(markdown::render_flush(&prose, text_w));
+    }
+    for suggestion in &suggestions {
+        lines.push(Line::raw(""));
+        lines.extend(suggestion_lines(anchor, suggestion, text_w));
+    }
+    if let Some(line) = widgets::reactions_line(&comment.reactions) {
+        lines.push(Line::raw(""));
+        lines.push(line);
+    }
+    lines
 }
 
 fn suggestion_lines(

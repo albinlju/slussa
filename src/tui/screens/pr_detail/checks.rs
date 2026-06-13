@@ -13,16 +13,13 @@ use crate::{
 };
 
 pub fn render(frame: &mut Frame, pr_data: Option<&PrData>, area: Rect) {
-    let theme = theme::current();
     let Some(builds) =
         widgets::loaded_or_placeholder(frame, pr_data.map(|d| &d.builds), "builds", area)
     else {
         return;
     };
     if builds.is_empty() {
-        let p = Paragraph::new("(no builds reported for this commit)")
-            .style(Style::default().fg(theme.muted));
-        frame.render_widget(p, area);
+        frame.render_widget(widgets::empty("(no builds reported for this commit)"), area);
         return;
     }
     render_builds(frame, builds, area);

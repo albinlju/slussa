@@ -17,7 +17,7 @@ use crate::{
         review::ReviewerState,
     },
     tui::{
-        format, markdown,
+        format,
         theme::{self, Theme},
         widgets,
     },
@@ -176,7 +176,6 @@ fn render_sidebar(frame: &mut Frame, pr: &PullRequest, pr_data: Option<&PrData>,
 }
 
 fn render_timeline(frame: &mut Frame, pr_data: Option<&PrData>, ui: &mut UiMemory, area: Rect) {
-    let theme = theme::current();
     let Some(bundle) =
         widgets::loaded_or_placeholder(frame, pr_data.map(|d| &d.activity), "activity", area)
     else {
@@ -184,8 +183,7 @@ fn render_timeline(frame: &mut Frame, pr_data: Option<&PrData>, ui: &mut UiMemor
     };
 
     if bundle.comments.is_empty() && bundle.threads.is_empty() && bundle.events.is_empty() {
-        let p = Paragraph::new("(no activity)").style(Style::default().fg(theme.muted));
-        frame.render_widget(p, area);
+        frame.render_widget(widgets::empty("(no activity)"), area);
         return;
     }
 
@@ -356,13 +354,8 @@ fn activity_lines(event: &TimelineEvent, now: DateTime<Utc>) -> (Color, Vec<Line
 }
 
 fn build_issue_lines(c: &Comment, width: u16, now: DateTime<Utc>) -> Vec<Line<'static>> {
-    let text_width = widgets::box_text_width(width);
     let header = issue_comment_header(&c.author.username, c.created, now);
-    let mut body = markdown::render_flush(&c.content, text_width);
-    if let Some(line) = widgets::reactions_line(&c.reactions) {
-        body.push(Line::default());
-        body.push(line);
-    }
+    let body = super::comment_body(c, None, width);
     widgets::boxed(header, body, width, theme::current().divider)
 }
 
@@ -396,12 +389,12 @@ fn build_review_lines(
     let (snippet, anchor_text) = diff
         .map(|d| diff_snippet(d, &thread.path, thread.line, thread.old_line, inner_text_width))
         .unwrap_or_default();
-    let splits: Vec<(String, Vec<String>)> = thread
+    // A suggestion repeats the anchored line, so the snippet box is dropped
+    // when any comment carries one (to avoid showing the line twice).
+    let has_suggestion = thread
         .comments
         .iter()
-        .map(|c| split_suggestions(&c.content))
-        .collect();
-    let has_suggestion = splits.iter().any(|(_, s)| !s.is_empty());
+        .any(|c| !split_suggestions(&c.content).1.is_empty());
     if snippet.is_empty() || has_suggestion {
         body.push(inner_header);
     } else {
@@ -409,9 +402,7 @@ fn build_review_lines(
     }
     let anchor = thread.line.or(thread.old_line).zip(anchor_text.as_deref());
 
-    for (i, (comment, (prose, suggestions))) in
-        thread.comments.iter().zip(splits.iter()).enumerate()
-    {
+    for (i, comment) in thread.comments.iter().enumerate() {
         if i > 0 {
             body.push(Line::raw(""));
             let age = format::relative_age(comment.created, now);
@@ -423,17 +414,7 @@ fn build_review_lines(
                 Span::styled(format!(" · {age}"), Style::default().fg(theme.muted)),
             ]));
         }
-        if !prose.trim().is_empty() {
-            body.extend(markdown::render_flush(prose, text_width));
-        }
-        for suggestion in suggestions {
-            body.push(Line::default());
-            body.extend(super::suggestion_lines(anchor, suggestion, text_width));
-        }
-        if let Some(line) = widgets::reactions_line(&comment.reactions) {
-            body.push(Line::default());
-            body.push(line);
-        }
+        body.extend(super::comment_body(comment, anchor, width));
     }
 
     Some(widgets::boxed(header, body, width, theme.divider))
