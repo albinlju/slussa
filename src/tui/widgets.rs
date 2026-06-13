@@ -38,6 +38,11 @@ pub(super) fn framed_panel(frame: &mut Frame, area: Rect, focused: bool) -> (Rec
     (header_inner, chunks[1])
 }
 
+/// A muted one-line empty-state, e.g. `(no commits)`.
+pub(super) fn empty(text: &str) -> Paragraph<'static> {
+    Paragraph::new(text.to_string()).style(Style::default().fg(theme::current().muted))
+}
+
 pub(super) fn loaded_or_placeholder<'a, T>(
     frame: &mut Frame,
     state: Option<&'a LoadState<T>>,
