@@ -1,14 +1,42 @@
 use ratatui::{
     Frame,
-    layout::Rect,
+    layout::{Constraint, Direction, Layout, Rect},
     style::{Color, Modifier, Style},
     text::{Line, Span},
-    widgets::Paragraph,
+    widgets::{Block, BorderType, Borders, Paragraph},
 };
 
 use crate::app::state::LoadState;
 use crate::domain::comment::Reaction;
 use crate::tui::theme;
+
+/// A rounded panel (accent border when focused, else divider) with a header
+/// band on top. Draws the outer frame + the header's bottom divider and
+/// returns `(header_inner, body)` for the caller to fill. Shared by the diff
+/// tree and pane.
+pub(super) fn framed_panel(frame: &mut Frame, area: Rect, focused: bool) -> (Rect, Rect) {
+    let theme = theme::current();
+    let border = if focused { theme.accent } else { theme.divider };
+    let block = Block::default()
+        .borders(Borders::ALL)
+        .border_type(BorderType::Rounded)
+        .border_style(Style::default().fg(border));
+    let inner = block.inner(area);
+    frame.render_widget(block, area);
+
+    let chunks = Layout::default()
+        .direction(Direction::Vertical)
+        .constraints([Constraint::Length(2), Constraint::Min(0)])
+        .split(inner);
+
+    let header_band = Block::default()
+        .borders(Borders::BOTTOM)
+        .border_style(Style::default().fg(theme.divider));
+    let header_inner = header_band.inner(chunks[0]);
+    frame.render_widget(header_band, chunks[0]);
+
+    (header_inner, chunks[1])
+}
 
 pub(super) fn loaded_or_placeholder<'a, T>(
     frame: &mut Frame,
