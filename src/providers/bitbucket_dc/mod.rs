@@ -21,7 +21,7 @@ pub use prs::fetch_prs;
 pub(super) const APP_PROPERTIES_PATH: &str = "/rest/api/1.0/application-properties";
 
 #[derive(Clone, Debug)]
-pub struct RepoCoords {
+pub struct RepoLocation {
     pub base_url: String,
     pub project_key: String,
     pub repo_slug: String,
@@ -29,7 +29,7 @@ pub struct RepoCoords {
 
 #[derive(Clone, Debug)]
 pub struct Config {
-    pub repo: RepoCoords,
+    pub repo: RepoLocation,
     pub pat: String,
 }
 
