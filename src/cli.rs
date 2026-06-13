@@ -78,7 +78,7 @@ fn run_auth(args: &[String]) -> ExitCode {
 }
 
 fn ensure_ready() -> Result<Backend, PreflightError> {
-    match preflight::preflight() {
+    match preflight::run() {
         Ok(backend) => Ok(backend),
         Err(PreflightError::GhNotAuthenticated { host }) => {
             eprintln!(
@@ -86,7 +86,7 @@ fn ensure_ready() -> Result<Backend, PreflightError> {
                  follow the prompts and tuipr will continue afterwards.\n"
             );
             match github::auth::launch_login(&host) {
-                Ok(true) => preflight::preflight(),
+                Ok(true) => preflight::run(),
                 Ok(false) => {
                     eprintln!("tuipr: `gh auth login` was cancelled or failed.\n");
                     Err(PreflightError::GhNotAuthenticated { host })

@@ -79,7 +79,7 @@ impl fmt::Display for PreflightError {
     }
 }
 
-pub fn preflight() -> Result<Backend, PreflightError> {
+pub fn run() -> Result<Backend, PreflightError> {
     let remote = read_origin_remote()?;
     let host = parse_remote_host(&remote).ok_or_else(|| PreflightError::UnparseableRemote {
         remote: remote.clone(),
