@@ -42,12 +42,16 @@ subcommands don't justify a CLI framework, and the boundary makes swapping
 one in later a one-file change.
 
 **`app/preflight.rs`** answers "which provider is this repo on, and are we
-logged in?". It reads `git remote get-url origin`, extracts the host, and
-classifies it:
+logged in?". The git-remote plumbing — `git remote get-url origin` and the
+URL→host parsing — lives in `app/remote.rs`; preflight `classify_host`s the
+host into a `HostKind` (recognition), and `run` decides what to do with each
+(policy):
 
 - `github.com` → check `gh` is installed and authenticated
   (`providers/github/auth.rs`). If not logged in, `cli::resolve_provider` launches
   the interactive `gh auth login` and retries preflight once.
+- `bitbucket.org` → `HostKind::BitbucketCloud`, which `run` rejects as
+  unsupported (on the roadmap).
 - any other host → `bitbucket_dc::is_instance` probes
   `/rest/api/1.0/application-properties`
   (`providers/bitbucket_dc/probe.rs`) to detect a Data Center instance, then

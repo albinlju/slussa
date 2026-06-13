@@ -24,6 +24,7 @@ pub mod fetchers;
 pub mod file_tree;
 pub mod preflight;
 pub mod reducer;
+pub mod remote;
 pub mod state;
 
 const SPINNER_INTERVAL: Duration = Duration::from_millis(100);
