@@ -34,7 +34,7 @@ pub fn render(
         return;
     };
     if diff.files.is_empty() {
-        frame.render_widget(widgets::empty("(no diff)"), area);
+        frame.render_widget(widgets::empty_state("(no diff)"), area);
         return;
     }
 
@@ -74,7 +74,7 @@ pub fn render(
     } else {
         ui_diff.pane_search.query.as_str()
     };
-    let (pane_items, pane_matches) = PaneView {
+    let (pane_item_count, pane_matches) = PaneView {
         diff,
         focused_file: ui_diff.focused_file,
         pane_cursor: ui_diff.pane_cursor,
@@ -84,7 +84,7 @@ pub fn render(
         query: pane_query,
     }
     .render(frame, &mut ui_diff.pane_scroll, chunks[2]);
-    ui_diff.pane_items = pane_items;
+    ui_diff.pane_item_count = pane_item_count;
     ui_diff.pane_matches = pane_matches;
 }
 
@@ -118,9 +118,12 @@ fn file_comment_count(file: &FileDiff, threads: &[ReviewThread]) -> usize {
     threads
         .iter()
         .filter(|t| t.path == file.path)
-        .filter(|t| {
-            t.line.is_some_and(|l| new_lines.contains(&l))
-                || t.old_line.is_some_and(|o| old_lines.contains(&o))
+        // Bucket each thread to one side exactly as the pane does (new-side
+        // `line` wins; otherwise old-side `old_line`) so the badge count can't
+        // diverge from the threads actually rendered.
+        .filter(|t| match t.line {
+            Some(l) => new_lines.contains(&l),
+            None => t.old_line.is_some_and(|o| old_lines.contains(&o)),
         })
         .map(|t| t.comments.len())
         .sum()

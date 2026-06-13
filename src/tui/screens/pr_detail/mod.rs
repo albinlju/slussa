@@ -237,10 +237,6 @@ pub(super) fn render_inline_thread(
     widgets::boxed(header, body, width, border)
 }
 
-/// One comment's body inside a thread box: prose, any `suggestion` blocks,
-/// and the reaction strip. The author/age header is the caller's — it differs
-/// between the diff thread, the Overview timeline, and replies. Shared so
-/// those three can't drift in how a comment's content renders.
 pub(super) fn comment_body(
     comment: &Comment,
     anchor: Option<(usize, &str)>,
@@ -250,7 +246,7 @@ pub(super) fn comment_body(
     let (prose, suggestions) = split_suggestions(&comment.content);
     let mut lines: Vec<Line<'static>> = Vec::new();
     if !prose.trim().is_empty() {
-        lines.extend(markdown::render_flush(&prose, text_w));
+        lines.extend(markdown::render_no_margin(&prose, text_w));
     }
     for suggestion in &suggestions {
         lines.push(Line::raw(""));

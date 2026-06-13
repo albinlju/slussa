@@ -1,5 +1,5 @@
 #[derive(Debug, Clone, Copy, PartialEq)]
-pub enum CiState {
+pub enum CiSummary {
     Pending,
     Success,
     Failed,

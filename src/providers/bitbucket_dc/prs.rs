@@ -4,7 +4,7 @@ use super::{Config, ms_to_utc};
 use crate::providers::bitbucket_dc::http::get_json;
 use crate::providers::error::FetchError;
 use crate::domain::{
-    ci::CiState,
+    ci::CiSummary,
     pr::{PrStatus, PullRequest},
     review::{Reviewer, ReviewerState},
     user::User,
@@ -90,7 +90,7 @@ fn map_pr(bb: BbPr) -> PullRequest {
         title: bb.title,
         description: bb.description,
         author: map_user(bb.author.user),
-        ci: CiState::Unknown,
+        ci: CiSummary::Unknown,
         status,
         reviewers: bb.reviewers.into_iter().map(map_reviewer).collect(),
         labels: Vec::new(),

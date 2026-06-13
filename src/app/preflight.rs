@@ -7,27 +7,13 @@ use crate::providers::{Provider, bitbucket_dc, github};
 pub enum PreflightError {
     GitMissing,
     NotAGitRepo,
-    UnparseableRemote {
-        remote: String,
-    },
-    UnsupportedHost {
-        host: String,
-    },
+    UnparseableRemote { remote: String },
+    UnsupportedHost { host: String },
     GhMissing,
-    GhNotAuthenticated {
-        host: String,
-    },
-    UnknownHost {
-        host: String,
-        reason: String,
-    },
-    DcNotAuthenticated {
-        host: String,
-    },
-    DcUnparseableRemote {
-        host: String,
-        remote: String,
-    },
+    GhNotAuthenticated { host: String },
+    UnknownHost { host: String, reason: String },
+    DcNotAuthenticated { host: String },
+    DcUnparseableRemote { host: String, remote: String },
 }
 
 impl fmt::Display for PreflightError {
@@ -97,6 +83,7 @@ pub fn run() -> Result<Provider, PreflightError> {
             tracing::info!("gh auth ok for {host}");
             Ok(Provider::GitHub)
         }
+        HostKind::BitbucketCloud => Err(PreflightError::UnsupportedHost { host }),
         HostKind::BitbucketDc => {
             let coords = bitbucket_dc::remote::parse(&remote, &host).ok_or_else(|| {
                 PreflightError::DcUnparseableRemote {
@@ -122,6 +109,7 @@ pub fn run() -> Result<Provider, PreflightError> {
 
 enum HostKind {
     GitHub,
+    BitbucketCloud,
     BitbucketDc,
 }
 
@@ -129,12 +117,14 @@ fn classify_host(host: &str) -> Result<HostKind, PreflightError> {
     if host == "github.com" {
         return Ok(HostKind::GitHub);
     }
+    classify_bitbucket(host)
+}
+
+fn classify_bitbucket(host: &str) -> Result<HostKind, PreflightError> {
     if host == "bitbucket.org" {
-        return Err(PreflightError::UnsupportedHost {
-            host: host.to_string(),
-        });
+        return Ok(HostKind::BitbucketCloud);
     }
-    match bitbucket_dc::probe(host) {
+    match bitbucket_dc::is_instance(host) {
         Ok(true) => Ok(HostKind::BitbucketDc),
         Ok(false) => Err(PreflightError::UnsupportedHost {
             host: host.to_string(),

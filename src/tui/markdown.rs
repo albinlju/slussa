@@ -6,8 +6,8 @@ pub(super) fn render(body: &str, width: u16) -> Vec<Line<'static>> {
     trim_blank_lines(glamour_lines(body, width))
 }
 
-pub(super) fn render_flush(body: &str, width: u16) -> Vec<Line<'static>> {
-    let lines = glamour_lines(body, width + GLAMOUR_MARGIN as u16);
+pub(super) fn render_no_margin(body: &str, width: u16) -> Vec<Line<'static>> {
+    let lines = glamour_lines(body, width.saturating_add(GLAMOUR_MARGIN as u16));
     trim_blank_lines(strip_margin(lines, GLAMOUR_MARGIN))
 }
 

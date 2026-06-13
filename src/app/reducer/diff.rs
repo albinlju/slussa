@@ -102,7 +102,7 @@ impl App {
         self.diff_view_mut().pane_cursor = super::step_index(
             self.diff_view().pane_cursor,
             delta,
-            self.diff_view().pane_items,
+            self.diff_view().pane_item_count,
         );
     }
 

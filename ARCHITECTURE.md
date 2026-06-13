@@ -46,9 +46,10 @@ logged in?". It reads `git remote get-url origin`, extracts the host, and
 classifies it:
 
 - `github.com` → check `gh` is installed and authenticated
-  (`providers/github/auth.rs`). If not logged in, `cli::ensure_ready` launches
+  (`providers/github/auth.rs`). If not logged in, `cli::resolve_provider` launches
   the interactive `gh auth login` and retries preflight once.
-- any other host → probe `/rest/api/1.0/application-properties`
+- any other host → `bitbucket_dc::is_instance` probes
+  `/rest/api/1.0/application-properties`
   (`providers/bitbucket_dc/probe.rs`) to detect a Data Center instance, then
   load its PAT from the OS keyring (`providers/bitbucket_dc/auth.rs`). No PAT →
   the error tells the user to run `tuipr auth login`, which prompts for a
@@ -103,7 +104,7 @@ the result and the loop redraws. The UI thread never blocks on the network.
   no refresh yet (it's in FEATURES.md).
 - **`ui`** — cursor positions, scroll offsets, collapsed tree dirs, search
   boxes. Two patterns worth knowing:
-  - *Viewport feedback*: the `*_viewport` and `pane_items`/`pane_matches`
+  - *Viewport feedback*: the `*_viewport` and `pane_item_count`/`pane_matches`
     fields are written by the renderer each frame and read by key handlers
     and the reducer (half-page jump sizes, cursor clamping). The renderer is
     the only thing that knows how tall a view actually was.
@@ -173,7 +174,7 @@ by `providers/unified_diff.rs` — the only place raw diff text is interpreted.
 (`http.rs` is the shared GET-JSON helper; 401/403 map to a
 `NotAuthenticated` error that points the user back to `tuipr auth login`).
 Its `/diff` endpoint returns structured JSON rather than diff text —
-`structured.rs` projects it into the same `domain::Diff`. The whole activity
+`json_diff.rs` projects it into the same `domain::Diff`. The whole activity
 feed comes from one `/activities` call, split three ways in `activities.rs`.
 
 ## Domain (`domain/`)
@@ -214,7 +215,7 @@ generic `/`-search interception runs first (typing mode captures characters;
   truncate, and pad cells so the screen only supplies content per column.
 - **`markdown.rs`** — the charmed-glamour pipeline behind `catch_unwind`
   (falls back to raw text): `render` keeps glamour's document margins
-  (Description), `render_flush` strips them so text sits flush inside
+  (Description), `render_no_margin` strips them so text sits flush inside
   comment boxes.
 - **`format.rs`** — pure text formatting (`relative_age`,
   `truncate_ellipsis`).
@@ -225,7 +226,7 @@ generic `/`-search interception runs first (typing mode captures characters;
 Two rendering mechanics that aren't obvious from the outside:
 
 - Markdown comes back from glamour with a fixed 2-column document margin;
-  `markdown::render_flush` peels it so comment text sits flush inside boxes.
+  `markdown::render_no_margin` peels it so comment text sits flush inside boxes.
   Tabs that don't render through glamour are inset to match its indent.
 - The diff pane returns its navigable-item count and search-match indices to
   `DiffViewState` *during render* — the reducer clamps and steps the cursor

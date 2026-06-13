@@ -21,7 +21,7 @@ pub fn render(frame: &mut Frame, pr_data: Option<&PrData>, cv: &mut CommitsViewS
         return;
     };
     if commits.is_empty() {
-        frame.render_widget(widgets::empty("(no commits)"), area);
+        frame.render_widget(widgets::empty_state("(no commits)"), area);
         return;
     }
 

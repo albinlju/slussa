@@ -47,9 +47,9 @@ impl PaneView<'_> {
 
         let (header_inner, body_area) = widgets::framed_panel(frame, area, self.focused);
         let active = self.focused.then_some(self.pane_cursor);
-        let (mut lines, meta, matches) =
-            file_to_lines(file, self.threads, body_area.width, active, self.query);
-        let cursor = active.and_then(|i| meta.get(i));
+        let (mut lines, nav_items, matches) =
+            build_diff_body(file, self.threads, body_area.width, active, self.query);
+        let cursor = active.and_then(|i| nav_items.get(i));
 
         if !self.query.is_empty() {
             let match_style = Style::default().fg(theme.bg).bg(theme.warning);
@@ -103,7 +103,7 @@ impl PaneView<'_> {
             frame.render_widget(Paragraph::new(bar), widgets::scrollbar_area(body_area));
         }
 
-        (meta.len(), matches)
+        (nav_items.len(), matches)
     }
 }
 
@@ -205,7 +205,7 @@ impl NavItem {
     }
 }
 
-fn file_to_lines(
+fn build_diff_body(
     file: &FileDiff,
     threads: &[ReviewThread],
     width: u16,
@@ -214,7 +214,7 @@ fn file_to_lines(
 ) -> (Vec<Line<'static>>, Vec<NavItem>, Vec<usize>) {
     let theme = theme::current();
     let mut lines: Vec<Line> = Vec::new();
-    let mut meta: Vec<NavItem> = Vec::new();
+    let mut nav_items: Vec<NavItem> = Vec::new();
     let mut matches: Vec<usize> = Vec::new();
     let query_lower = query.to_lowercase();
 
@@ -249,8 +249,8 @@ fn file_to_lines(
                 DiffLine::Removed(_) => (old_line_num, true),
                 _ => (new_line_num, false),
             };
-            let item_idx = meta.len();
-            meta.push(NavItem {
+            let item_idx = nav_items.len();
+            nav_items.push(NavItem {
                 rendered_row,
                 row_span: 1,
                 kind: NavKind::Line { line, removed },
@@ -273,7 +273,7 @@ fn file_to_lines(
                     DiffLine::Added(t) | DiffLine::Removed(t) | DiffLine::Context(t) => t.as_str(),
                 };
                 for thread in threads_here {
-                    let idx = meta.len();
+                    let idx = nav_items.len();
                     let start = lines.len();
                     let span = push_thread_lines(
                         &mut lines,
@@ -283,7 +283,7 @@ fn file_to_lines(
                         active == Some(idx),
                         anchor_text,
                     );
-                    meta.push(NavItem {
+                    nav_items.push(NavItem {
                         rendered_row: start,
                         row_span: span,
                         kind: NavKind::Thread { line, removed },
@@ -302,7 +302,7 @@ fn file_to_lines(
         }
     }
 
-    (lines, meta, matches)
+    (lines, nav_items, matches)
 }
 
 fn highlight_row(line: Line<'static>, row_w: usize) -> Line<'static> {

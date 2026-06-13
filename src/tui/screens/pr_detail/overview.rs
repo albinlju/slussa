@@ -59,7 +59,7 @@ fn section_heading(lines: &mut Vec<Line<'static>>, title: &str) {
     )));
 }
 
-fn dim(text: &str) -> Line<'static> {
+fn muted_line(text: &str) -> Line<'static> {
     Line::from(Span::styled(
         text.to_string(),
         Style::default().fg(theme::current().muted),
@@ -80,8 +80,8 @@ fn builds_summary(pr_data: Option<&PrData>) -> Vec<Line<'static>> {
                 Line::from(super::checks::progress_bar(builds)),
             ]
         }
-        Some(LoadState::Loaded(_)) => vec![dim("no builds")],
-        Some(LoadState::Failed(_)) => vec![dim("unavailable")],
+        Some(LoadState::Loaded(_)) => vec![muted_line("no builds")],
+        Some(LoadState::Failed(_)) => vec![muted_line("unavailable")],
         _ => vec![widgets::loading("loading…")],
     }
 }
@@ -100,7 +100,7 @@ fn render_sidebar(frame: &mut Frame, pr: &PullRequest, pr_data: Option<&PrData>,
 
     section_heading(&mut lines, "Reviewers");
     if pr.reviewers.is_empty() {
-        lines.push(dim("—"));
+        lines.push(muted_line("—"));
     } else {
         for r in &pr.reviewers {
             let (icon, color) = match r.state {
@@ -183,7 +183,7 @@ fn render_timeline(frame: &mut Frame, pr_data: Option<&PrData>, ui: &mut UiMemor
     };
 
     if bundle.comments.is_empty() && bundle.threads.is_empty() && bundle.events.is_empty() {
-        frame.render_widget(widgets::empty("(no activity)"), area);
+        frame.render_widget(widgets::empty_state("(no activity)"), area);
         return;
     }
 
@@ -208,20 +208,20 @@ fn render_timeline(frame: &mut Frame, pr_data: Option<&PrData>, ui: &mut UiMemor
     );
 }
 
-enum Event<'a> {
+enum TimelineItem<'a> {
     Issue(&'a Comment),
     Review(&'a ReviewThread),
     Activity(&'a TimelineEvent),
 }
 
-impl Event<'_> {
+impl TimelineItem<'_> {
     fn timestamp(&self) -> DateTime<Utc> {
         match self {
-            Event::Issue(c) => c.created,
-            Event::Review(t) => t
+            TimelineItem::Issue(c) => c.created,
+            TimelineItem::Review(t) => t
                 .comments
                 .first().map_or_else(Utc::now, |c| c.created),
-            Event::Activity(e) => e.created,
+            TimelineItem::Activity(e) => e.created,
         }
     }
 }
@@ -234,11 +234,11 @@ fn build_overview_lines(
     width: u16,
 ) -> Vec<Line<'static>> {
     let theme = theme::current();
-    let mut events: Vec<Event<'_>> =
+    let mut events: Vec<TimelineItem<'_>> =
         Vec::with_capacity(comments.len() + threads.len() + activity.len());
-    events.extend(comments.iter().map(Event::Issue));
-    events.extend(threads.iter().map(Event::Review));
-    events.extend(activity.iter().map(Event::Activity));
+    events.extend(comments.iter().map(TimelineItem::Issue));
+    events.extend(threads.iter().map(TimelineItem::Review));
+    events.extend(activity.iter().map(TimelineItem::Activity));
     events.sort_by_key(|e| std::cmp::Reverse(e.timestamp()));
 
     let now = Utc::now();
@@ -246,11 +246,11 @@ fn build_overview_lines(
     let blocks: Vec<(EventStyle, Vec<Line<'static>>)> = events
         .iter()
         .filter_map(|event| match event {
-            Event::Issue(c) => Some((EventStyle::Comment, build_issue_lines(c, width, now))),
-            Event::Review(t) => {
+            TimelineItem::Issue(c) => Some((EventStyle::Comment, build_issue_lines(c, width, now))),
+            TimelineItem::Review(t) => {
                 build_review_lines(t, diff, width, now).map(|l| (EventStyle::Review, l))
             }
-            Event::Activity(e) => {
+            TimelineItem::Activity(e) => {
                 let (color, lines) = activity_lines(e, now);
                 Some((EventStyle::Activity(color), lines))
             }
@@ -452,6 +452,7 @@ fn diff_snippet(
         dl: &'a DiffLine,
         new_no: usize,
         old_no: usize,
+        hunk: usize,
     }
 
     let theme = theme::current();
@@ -460,11 +461,11 @@ fn diff_snippet(
     };
 
     let mut rows: Vec<Row> = Vec::new();
-    for hunk in &file.hunks {
+    for (hunk_idx, hunk) in file.hunks.iter().enumerate() {
         let mut new_no = hunk.new_start;
         let mut old_no = hunk.old_start;
         for dl in &hunk.lines {
-            rows.push(Row { dl, new_no, old_no });
+            rows.push(Row { dl, new_no, old_no, hunk: hunk_idx });
             match dl {
                 DiffLine::Added(_) => new_no += 1,
                 DiffLine::Removed(_) => old_no += 1,
@@ -488,7 +489,13 @@ fn diff_snippet(
         DiffLine::Added(c) | DiffLine::Removed(c) | DiffLine::Context(c) => c.clone(),
     };
 
-    let window = &rows[anchor.saturating_sub(SNIPPET_CONTEXT)..=anchor];
+    // Context must not bleed in from the previous hunk (non-adjacent lines).
+    let hunk_start = rows[..anchor]
+        .iter()
+        .rposition(|r| r.hunk != rows[anchor].hunk)
+        .map_or(0, |i| i + 1);
+    let start = anchor.saturating_sub(SNIPPET_CONTEXT).max(hunk_start);
+    let window = &rows[start..=anchor];
     let num_width = window
         .iter()
         .map(|r| r.new_no)
