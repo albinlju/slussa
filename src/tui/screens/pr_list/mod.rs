@@ -4,7 +4,11 @@ use crate::{
         state::{AppState, LoadState, StatusFilter},
     },
     domain::{ci::CiState, pr::PullRequest, review::ReviewerState},
-    tui::{format, screens::half_page, theme, widgets},
+    tui::{
+        screens::half_page,
+        table::{self, Cell, Column, Width},
+        theme, widgets,
+    },
 };
 use chrono::Utc;
 use ratatui::{
@@ -16,43 +20,20 @@ use ratatui::{
     widgets::{Block, BorderType, Borders, Clear, List, ListItem, ListState, Paragraph},
 };
 
-struct ColWidths {
-    id: usize,
-    status: usize,
-    author: usize,
-    title: usize,
-    ci: usize,
-    diff: usize,
-    comments: usize,
-    reviews: usize,
-    age: usize,
-}
+// The 2-col gutter reserved for the list's highlight symbol (`▶ `).
+const GUTTER: u16 = 2;
 
-impl ColWidths {
-    fn for_inner(inner_width: u16) -> Self {
-        let id = 7;
-        let status = 10;
-        let author = 18;
-        let ci = 4;
-        let diff = 12;
-        let comments = 10;
-        let reviews = 9;
-        let age = 8;
-        let fixed = 2 + id + status + author + ci + diff + comments + reviews + age;
-        let title = (inner_width as usize).saturating_sub(fixed).max(20);
-        Self {
-            id,
-            status,
-            author,
-            title,
-            ci,
-            diff,
-            comments,
-            reviews,
-            age,
-        }
-    }
-}
+const COLS: &[Column] = &[
+    Column { title: "#", width: Width::Fixed(7) },
+    Column { title: "Status", width: Width::Fixed(10) },
+    Column { title: "Author", width: Width::Fixed(18) },
+    Column { title: "Title", width: Width::Flex(1) },
+    Column { title: "CI", width: Width::Fixed(4) },
+    Column { title: "Diff", width: Width::Fixed(12) },
+    Column { title: "Comments", width: Width::Fixed(10) },
+    Column { title: "Reviews", width: Width::Fixed(9) },
+    Column { title: "Age", width: Width::Fixed(8) },
+];
 
 enum PrListView<'a> {
     Loaded(Vec<&'a PullRequest>),
@@ -99,28 +80,11 @@ pub(in crate::tui) fn render(frame: &mut Frame, state: &mut AppState, area: rata
         .constraints([Constraint::Length(1), Constraint::Min(0)])
         .split(inner);
 
-    let widths = ColWidths::for_inner(inner.width);
-    let header_style = Style::default().fg(theme.fg).add_modifier(Modifier::BOLD);
+    let table = table::Table::new(COLS, inner.width.saturating_sub(GUTTER));
 
-    let header = Paragraph::new(Line::from(vec![
-        Span::raw("  "),
-        Span::styled(format!("{:<w$}", "#", w = widths.id), header_style),
-        Span::styled(format!("{:<w$}", "Status", w = widths.status), header_style),
-        Span::styled(format!("{:<w$}", "Author", w = widths.author), header_style),
-        Span::styled(format!("{:<w$}", "Title", w = widths.title), header_style),
-        Span::styled(format!("{:<w$}", "CI", w = widths.ci), header_style),
-        Span::styled(format!("{:<w$}", "Diff", w = widths.diff), header_style),
-        Span::styled(
-            format!("{:<w$}", "Comments", w = widths.comments),
-            header_style,
-        ),
-        Span::styled(
-            format!("{:<w$}", "Reviews", w = widths.reviews),
-            header_style,
-        ),
-        Span::styled(format!("{:<w$}", "Age", w = widths.age), header_style),
-    ]));
-    frame.render_widget(header, content_chunks[0]);
+    let mut header = table.header();
+    header.spans.insert(0, Span::raw(" ".repeat(GUTTER as usize)));
+    frame.render_widget(Paragraph::new(header), content_chunks[0]);
 
     let match_count = match &load_view {
         PrListView::Loaded(prs) => prs.len(),
@@ -128,7 +92,10 @@ pub(in crate::tui) fn render(frame: &mut Frame, state: &mut AppState, area: rata
     };
     match load_view {
         PrListView::Loaded(filtered) => {
-            let items: Vec<ListItem> = filtered.iter().map(|pr| row_for_pr(pr, &widths)).collect();
+            let items: Vec<ListItem> = filtered
+                .iter()
+                .map(|pr| ListItem::new(table.row(&row_cells(pr))))
+                .collect();
 
             let mut list_state = ListState::default();
             list_state.select(Some(state.ui.list_selected));
@@ -216,9 +183,11 @@ fn render_filter_picker(frame: &mut Frame, state: &AppState, area: Rect) {
     frame.render_widget(help, inner_chunks[1]);
 }
 
-fn row_for_pr(pr: &PullRequest, widths: &ColWidths) -> ListItem<'static> {
+/// One PR's cells, in `COLS` order. Padding/truncation/alignment is the
+/// table engine's job — this only produces the styled content per column.
+fn row_cells(pr: &PullRequest) -> Vec<Cell> {
     let theme = theme::current();
-    let status_color = theme.status_color(&pr.status);
+    let muted = Style::default().fg(theme.muted);
 
     let days_old = (Utc::now() - pr.created).num_days();
     let age = if days_old == 0 {
@@ -235,11 +204,6 @@ fn row_for_pr(pr: &PullRequest, widths: &ColWidths) -> ListItem<'static> {
         CiState::Pending => ("\u{f017}", theme.warning), //  clock
         CiState::Unknown => ("\u{f042}", theme.muted),   //  adjust (half circle — neutral/not run)
     };
-
-    let plus = format!("+{}", pr.additions);
-    let minus = format!("-{}", pr.deletions);
-    let diff_visible = plus.chars().count() + 1 + minus.chars().count();
-    let diff_pad = widths.diff.saturating_sub(diff_visible);
 
     let comm_text = if pr.comment_count == 0 {
         "—".to_string()
@@ -270,45 +234,21 @@ fn row_for_pr(pr: &PullRequest, widths: &ColWidths) -> ListItem<'static> {
         (format!("{approved}/{total}"), color)
     };
 
-    let title = format::truncate_ellipsis(&pr.title, widths.title.saturating_sub(2));
-    let author = format::truncate_ellipsis(&pr.author.username, widths.author.saturating_sub(2));
-
-    let line = Line::from(vec![
-        Span::styled(
-            format!("#{:<w$}", pr.id, w = widths.id - 1),
-            Style::default().fg(theme.muted),
-        ),
-        Span::styled(
-            format!("{:<w$}", pr.status.label(), w = widths.status),
-            Style::default().fg(status_color),
-        ),
-        Span::styled(
-            format!("{:<w$}", author, w = widths.author),
-            Style::default().fg(theme.info),
-        ),
-        Span::raw(format!("{:<w$}", title, w = widths.title)),
-        Span::styled(
-            format!("{:<w$}", ci_sym, w = widths.ci),
-            Style::default().fg(ci_color),
-        ),
-        Span::styled(plus, Style::default().fg(theme.diff_added)),
-        Span::raw(" "),
-        Span::styled(minus, Style::default().fg(theme.diff_removed)),
-        Span::raw(" ".repeat(diff_pad)),
-        Span::styled(
-            format!("{:<w$}", comm_text, w = widths.comments),
-            Style::default().fg(theme.muted),
-        ),
-        Span::styled(
-            format!("{:<w$}", rev_text, w = widths.reviews),
-            Style::default().fg(rev_color),
-        ),
-        Span::styled(
-            format!("{:<w$}", age, w = widths.age),
-            Style::default().fg(theme.muted),
-        ),
-    ]);
-    ListItem::new(line)
+    vec![
+        vec![Span::styled(format!("#{}", pr.id), muted)],
+        vec![Span::styled(pr.status.label().to_string(), Style::default().fg(theme.status_color(&pr.status)))],
+        vec![Span::styled(pr.author.username.clone(), Style::default().fg(theme.info))],
+        vec![Span::raw(pr.title.clone())],
+        vec![Span::styled(ci_sym, Style::default().fg(ci_color))],
+        vec![
+            Span::styled(format!("+{}", pr.additions), Style::default().fg(theme.diff_added)),
+            Span::raw(" "),
+            Span::styled(format!("-{}", pr.deletions), Style::default().fg(theme.diff_removed)),
+        ],
+        vec![Span::styled(comm_text, muted)],
+        vec![Span::styled(rev_text, Style::default().fg(rev_color))],
+        vec![Span::styled(age, muted)],
+    ]
 }
 
 pub(in crate::tui) fn key_to_action(state: &AppState, key: KeyEvent) -> Option<Action> {

@@ -19,7 +19,10 @@ use crate::{
         comment::ReviewThread,
         diff::{Diff, DiffLine, FileDiff},
     },
-    tui::{theme, widgets},
+    tui::{
+        screens::pr_detail::diff::{pane::PaneView, tree::TreeView},
+        theme, widgets,
+    },
 };
 
 pub fn render(
@@ -61,32 +64,30 @@ pub fn render(
 
     let tree_focused = matches!(ui_diff.focus, DiffFocus::Tree);
     let rows = build_visible_rows(&diff.files, &ui_diff.collapsed, &ui_diff.tree_search.query);
-    tree::render(
-        frame,
-        &rows,
-        ui_diff.cursor,
-        &file_stats,
-        &comment_counts,
-        tree_focused,
-        chunks[0],
-    );
+    TreeView {
+        rows: &rows,
+        cursor: ui_diff.cursor,
+        file_stats: &file_stats,
+        comment_counts: &comment_counts,
+        focused: tree_focused,
+    }
+    .render(frame, chunks[0]);
+
     let pane_query = if ui_diff.pane_search.open {
         ""
     } else {
         ui_diff.pane_search.query.as_str()
     };
-    let (pane_items, pane_matches) = pane::render(
-        frame,
+    let (pane_items, pane_matches) = PaneView {
         diff,
-        ui_diff.focused_file,
-        &mut ui_diff.pane_scroll,
-        ui_diff.pane_cursor,
-        &file_stats,
-        review_threads,
-        !tree_focused,
-        pane_query,
-        chunks[2],
-    );
+        focused_file: ui_diff.focused_file,
+        pane_cursor: ui_diff.pane_cursor,
+        file_stats: &file_stats,
+        threads: review_threads,
+        focused: !tree_focused,
+        query: pane_query,
+    }
+    .render(frame, &mut ui_diff.pane_scroll, chunks[2]);
     ui_diff.pane_items = pane_items;
     ui_diff.pane_matches = pane_matches;
 }
