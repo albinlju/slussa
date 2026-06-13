@@ -20,7 +20,6 @@ use crate::{
 };
 
 pub mod action;
-pub mod auth;
 pub mod fetchers;
 pub mod file_tree;
 pub mod preflight;

@@ -1,3 +1,4 @@
+pub mod auth;
 mod activities;
 mod builds;
 mod commits;
@@ -7,7 +8,6 @@ mod probe;
 mod prs;
 pub mod remote;
 mod structured;
-mod token;
 
 use chrono::{DateTime, TimeZone, Utc};
 
@@ -17,7 +17,6 @@ pub use commits::fetch_commits;
 pub use diff::{fetch_commit_diff, fetch_diff};
 pub use probe::probe;
 pub use prs::fetch_prs;
-pub use token::{token_setup_hint, validate_pat};
 
 pub(super) const APP_PROPERTIES_PATH: &str = "/rest/api/1.0/application-properties";
 
