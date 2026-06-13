@@ -20,102 +20,104 @@ use crate::{
 const DIFF_GUTTER: &str = "  ";
 const DIFF_GUTTER_COLS: u16 = 2;
 
-#[allow(clippy::too_many_arguments)]
-pub(super) fn render(
-    frame: &mut Frame,
-    diff: &Diff,
-    focused_file: usize,
-    pane_scroll: &mut u16,
-    pane_cursor: usize,
-    file_stats: &[(u32, u32)],
-    threads: &[ReviewThread],
-    focused: bool,
-    search_query: &str,
-    area: Rect,
-) -> (usize, Vec<usize>) {
-    let bounded = focused_file.min(diff.files.len().saturating_sub(1));
-    let Some(file) = diff.files.get(bounded) else {
-        return (0, Vec::new());
-    };
-    let (adds, dels) = file_stats.get(bounded).copied().unwrap_or((0, 0));
+pub(super) struct PaneView<'a> {
+    pub diff: &'a Diff,
+    pub focused_file: usize,
+    pub pane_cursor: usize,
+    pub file_stats: &'a [(u32, u32)],
+    pub threads: &'a [ReviewThread],
+    pub focused: bool,
+    pub query: &'a str,
+}
 
-    let theme = theme::current();
+impl PaneView<'_> {
+    pub(super) fn render(
+        &self,
+        frame: &mut Frame,
+        pane_scroll: &mut u16,
+        area: Rect,
+    ) -> (usize, Vec<usize>) {
+        let bounded = self.focused_file.min(self.diff.files.len().saturating_sub(1));
+        let Some(file) = self.diff.files.get(bounded) else {
+            return (0, Vec::new());
+        };
+        let (adds, dels) = self.file_stats.get(bounded).copied().unwrap_or((0, 0));
 
-    let border_color = if focused { theme.accent } else { theme.divider };
-    let pane_block = Block::default()
-        .borders(Borders::ALL)
-        .border_type(BorderType::Rounded)
-        .border_style(Style::default().fg(border_color));
-    let pane_inner = pane_block.inner(area);
-    frame.render_widget(pane_block, area);
+        let theme = theme::current();
 
-    let pane_chunks = Layout::default()
-        .direction(Direction::Vertical)
-        .constraints([
-            Constraint::Length(2),
-            Constraint::Min(0),
-        ])
-        .split(pane_inner);
+        let border_color = if self.focused { theme.accent } else { theme.divider };
+        let pane_block = Block::default()
+            .borders(Borders::ALL)
+            .border_type(BorderType::Rounded)
+            .border_style(Style::default().fg(border_color));
+        let pane_inner = pane_block.inner(area);
+        frame.render_widget(pane_block, area);
 
-    let body_area = pane_chunks[1];
-    let active = focused.then_some(pane_cursor);
-    let (mut lines, meta, matches) =
-        file_to_lines(file, threads, body_area.width, active, search_query);
-    let cursor = active.and_then(|i| meta.get(i));
+        let pane_chunks = Layout::default()
+            .direction(Direction::Vertical)
+            .constraints([Constraint::Length(2), Constraint::Min(0)])
+            .split(pane_inner);
 
-    if !search_query.is_empty() {
-        let match_style = Style::default().fg(theme.bg).bg(theme.warning);
-        for line in &mut lines {
-            *line = widgets::highlight_query(std::mem::take(line), search_query, match_style);
+        let body_area = pane_chunks[1];
+        let active = self.focused.then_some(self.pane_cursor);
+        let (mut lines, meta, matches) =
+            file_to_lines(file, self.threads, body_area.width, active, self.query);
+        let cursor = active.and_then(|i| meta.get(i));
+
+        if !self.query.is_empty() {
+            let match_style = Style::default().fg(theme.bg).bg(theme.warning);
+            for line in &mut lines {
+                *line = widgets::highlight_query(std::mem::take(line), self.query, match_style);
+            }
         }
-    }
 
-    render_pane_header(
-        frame,
-        &file.path,
-        adds,
-        dels,
-        cursor.map(|m| {
-            let (line, removed) = m.line_removed();
-            (line, removed, matches!(m.kind, NavKind::Thread { .. }))
-        }),
-        pane_chunks[0],
-    );
+        render_pane_header(
+            frame,
+            &file.path,
+            adds,
+            dels,
+            cursor.map(|m| {
+                let (line, removed) = m.line_removed();
+                (line, removed, matches!(m.kind, NavKind::Thread { .. }))
+            }),
+            pane_chunks[0],
+        );
 
-    if let Some(m) = cursor
-        && matches!(m.kind, NavKind::Line { .. })
-        && m.rendered_row < lines.len()
-    {
-        let row = m.rendered_row;
-        lines[row] = highlight_row(std::mem::take(&mut lines[row]), body_area.width as usize);
-    }
-
-    let total = lines.len();
-    let visible = body_area.height as usize;
-    let max_scroll = total.saturating_sub(visible) as u16;
-
-    let mut scroll = (*pane_scroll).min(max_scroll) as usize;
-    if let Some(m) = cursor {
-        let top = m.rendered_row;
-        let bottom = m.rendered_row + m.row_span.saturating_sub(1);
-        if top < scroll {
-            scroll = top;
-        } else if visible > 0 && bottom >= scroll + visible {
-            scroll = bottom + 1 - visible;
+        if let Some(m) = cursor
+            && matches!(m.kind, NavKind::Line { .. })
+            && m.rendered_row < lines.len()
+        {
+            let row = m.rendered_row;
+            lines[row] = highlight_row(std::mem::take(&mut lines[row]), body_area.width as usize);
         }
+
+        let total = lines.len();
+        let visible = body_area.height as usize;
+        let max_scroll = total.saturating_sub(visible) as u16;
+
+        let mut scroll = (*pane_scroll).min(max_scroll) as usize;
+        if let Some(m) = cursor {
+            let top = m.rendered_row;
+            let bottom = m.rendered_row + m.row_span.saturating_sub(1);
+            if top < scroll {
+                scroll = top;
+            } else if visible > 0 && bottom >= scroll + visible {
+                scroll = bottom + 1 - visible;
+            }
+        }
+        let scroll = (scroll as u16).min(max_scroll);
+        *pane_scroll = scroll;
+
+        let paragraph = Paragraph::new(lines).scroll((scroll, 0));
+        frame.render_widget(paragraph, body_area);
+
+        if max_scroll > 0 {
+            let bar = widgets::scrollbar(scroll, max_scroll, body_area.height);
+            frame.render_widget(Paragraph::new(bar), widgets::scrollbar_area(body_area));
+        }
+
+        (meta.len(), matches)
     }
-    let scroll = (scroll as u16).min(max_scroll);
-    *pane_scroll = scroll;
-
-    let paragraph = Paragraph::new(lines).scroll((scroll, 0));
-    frame.render_widget(paragraph, body_area);
-
-    if max_scroll > 0 {
-        let bar = widgets::scrollbar(scroll, max_scroll, body_area.height);
-        frame.render_widget(Paragraph::new(bar), widgets::scrollbar_area(body_area));
-    }
-
-    (meta.len(), matches)
 }
 
 fn render_pane_header(
