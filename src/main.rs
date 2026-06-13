@@ -1,8 +1,9 @@
 mod app;
 mod cli;
-mod providers;
 mod domain;
+mod git_url;
 mod logging;
+mod providers;
 mod tui;
 
 use std::process::ExitCode;
