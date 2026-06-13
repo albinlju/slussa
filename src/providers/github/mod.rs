@@ -19,7 +19,7 @@ use chrono::{DateTime, Utc};
 use serde::Deserialize;
 use serde::de::DeserializeOwned;
 
-use crate::clients::error::FetchError;
+use crate::providers::error::FetchError;
 use crate::domain::comment::{Comment, Reaction};
 use crate::domain::user::User;
 

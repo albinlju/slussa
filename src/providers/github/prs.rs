@@ -1,8 +1,8 @@
 use chrono::{DateTime, Utc};
 use serde::Deserialize;
 
-use crate::clients::error::FetchError;
-use crate::clients::github::cli::run_gh_json;
+use crate::providers::error::FetchError;
+use crate::providers::github::cli::run_gh_json;
 use crate::domain::ci::CiState;
 use crate::domain::pr::{PrStatus, PullRequest};
 use crate::domain::review::{Reviewer, ReviewerState};

@@ -15,7 +15,7 @@ use crate::{
         action::Action,
         state::{AppState, LoadState},
     },
-    clients::Backend,
+    providers::Provider,
     tui::{key_to_action, render},
 };
 
@@ -31,17 +31,17 @@ const SPINNER_INTERVAL: Duration = Duration::from_millis(100);
 
 pub struct App {
     pub state: AppState,
-    pub(crate) backend: Backend,
+    pub(crate) provider: Provider,
     action_tx: UnboundedSender<Action>,
     action_rx: UnboundedReceiver<Action>,
 }
 
 impl App {
-    pub fn new(backend: Backend) -> Self {
+    pub fn new(provider: Provider) -> Self {
         let (action_tx, action_rx) = mpsc::unbounded_channel();
         Self {
             state: AppState::default(),
-            backend,
+            provider,
             action_tx,
             action_rx,
         }

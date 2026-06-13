@@ -1,7 +1,7 @@
 use std::fmt;
 use std::time::Duration;
 
-use crate::clients::bitbucket_dc::{APP_PROPERTIES_PATH, http};
+use crate::providers::bitbucket_dc::{APP_PROPERTIES_PATH, http};
 
 #[derive(Debug)]
 pub enum PatError {

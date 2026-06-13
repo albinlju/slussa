@@ -4,7 +4,7 @@ use std::time::Duration;
 use reqwest::blocking::Client;
 use serde::de::DeserializeOwned;
 
-use crate::clients::error::FetchError;
+use crate::providers::error::FetchError;
 
 pub(super) fn build_client(timeout: Duration) -> reqwest::Result<Client> {
     Client::builder()

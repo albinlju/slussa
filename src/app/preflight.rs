@@ -1,7 +1,7 @@
 use std::fmt;
 use std::process::Command;
 
-use crate::clients::{Backend, bitbucket_dc, github};
+use crate::providers::{Provider, bitbucket_dc, github};
 
 #[derive(Debug)]
 pub enum PreflightError {
@@ -60,7 +60,7 @@ impl fmt::Display for PreflightError {
             ),
             Self::UnknownHost { host, reason } => write!(
                 f,
-                "couldn't reach `{host}` to detect the backend: {reason}.\n\
+                "couldn't reach `{host}` to detect the provider: {reason}.\n\
                  Check the host is reachable and re-run tuipr.",
             ),
             Self::DcNotAuthenticated { host } => write!(
@@ -79,7 +79,7 @@ impl fmt::Display for PreflightError {
     }
 }
 
-pub fn run() -> Result<Backend, PreflightError> {
+pub fn run() -> Result<Provider, PreflightError> {
     let remote = read_origin_remote()?;
     let host = parse_remote_host(&remote).ok_or_else(|| PreflightError::UnparseableRemote {
         remote: remote.clone(),
@@ -95,7 +95,7 @@ pub fn run() -> Result<Backend, PreflightError> {
                 return Err(PreflightError::GhNotAuthenticated { host });
             }
             tracing::info!("gh auth ok for {host}");
-            Ok(Backend::GitHub)
+            Ok(Provider::GitHub)
         }
         HostKind::BitbucketDc => {
             let coords = bitbucket_dc::remote::parse(&remote, &host).ok_or_else(|| {
@@ -112,7 +112,7 @@ pub fn run() -> Result<Backend, PreflightError> {
                 coords.project_key,
                 coords.repo_slug
             );
-            Ok(Backend::BitbucketDc(bitbucket_dc::Config {
+            Ok(Provider::BitbucketDc(bitbucket_dc::Config {
                 repo: coords,
                 pat,
             }))

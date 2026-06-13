@@ -1,6 +1,6 @@
 mod app;
 mod cli;
-mod clients;
+mod providers;
 mod domain;
 mod logging;
 mod tui;
@@ -8,7 +8,7 @@ mod tui;
 use std::process::ExitCode;
 
 use crate::app::App;
-use crate::clients::Backend;
+use crate::providers::Provider;
 
 fn main() -> ExitCode {
     if let Err(err) = logging::init() {
@@ -17,11 +17,11 @@ fn main() -> ExitCode {
 
     match cli::dispatch(std::env::args().collect()) {
         cli::Dispatch::Done(code) => code,
-        cli::Dispatch::RunTui(backend) => run_tui(backend),
+        cli::Dispatch::RunTui(provider) => run_tui(provider),
     }
 }
 
-fn run_tui(backend: Backend) -> ExitCode {
+fn run_tui(provider: Provider) -> ExitCode {
     let rt = match tokio::runtime::Builder::new_multi_thread()
         .enable_all()
         .build()
@@ -34,7 +34,7 @@ fn run_tui(backend: Backend) -> ExitCode {
     };
 
     rt.block_on(async move {
-        let app = App::new(backend);
+        let app = App::new(provider);
         let mut terminal = ratatui::init();
         let result = app.run(&mut terminal).await;
         ratatui::restore();

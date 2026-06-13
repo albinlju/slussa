@@ -1,6 +1,6 @@
 use std::collections::{HashMap, HashSet};
 
-use crate::clients::ActivityBundle;
+use crate::domain::activity::Activity;
 use crate::domain::ci::Build;
 use crate::domain::commit::Commit;
 use crate::domain::diff::Diff;
@@ -201,7 +201,7 @@ pub struct PrData {
     pub commits: LoadState<Vec<Commit>>,
     pub diff: LoadState<Diff>,
     pub builds: LoadState<Vec<Build>>,
-    pub activity: LoadState<ActivityBundle>,
+    pub activity: LoadState<Activity>,
     pub commit_diffs: HashMap<String, LoadState<Diff>>,
 }
 

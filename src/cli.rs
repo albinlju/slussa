@@ -2,11 +2,11 @@ use std::process::ExitCode;
 
 use crate::app;
 use crate::app::preflight::{self, PreflightError};
-use crate::clients::{Backend, github};
+use crate::providers::{Provider, github};
 
 pub enum Dispatch {
     Done(ExitCode),
-    RunTui(Backend),
+    RunTui(Provider),
 }
 
 pub fn dispatch(mut args: Vec<String>) -> Dispatch {
@@ -38,9 +38,9 @@ pub fn dispatch(mut args: Vec<String>) -> Dispatch {
     }
 
     match ensure_ready() {
-        Ok(backend) => {
+        Ok(provider) => {
             tracing::info!("preflight passed, starting tui");
-            Dispatch::RunTui(backend)
+            Dispatch::RunTui(provider)
         }
         Err(err) => {
             tracing::error!("preflight failed: {err}");
@@ -77,9 +77,9 @@ fn run_auth(args: &[String]) -> ExitCode {
     }
 }
 
-fn ensure_ready() -> Result<Backend, PreflightError> {
+fn ensure_ready() -> Result<Provider, PreflightError> {
     match preflight::run() {
-        Ok(backend) => Ok(backend),
+        Ok(provider) => Ok(provider),
         Err(PreflightError::GhNotAuthenticated { host }) => {
             eprintln!(
                 "tuipr: not logged in to {host}. Launching `gh auth login` — \

@@ -1,7 +1,7 @@
 use std::io::Write;
 
 use crate::app::preflight::{parse_remote_host, read_origin_remote};
-use crate::clients::bitbucket_dc;
+use crate::providers::bitbucket_dc;
 
 pub(crate) const SERVICE: &str = "tuipr";
 
