@@ -1,8 +1,3 @@
-//! Bundles GitHub's three activity sources into one [`ActivityBundle`].
-//! Comments are the primary content, so their failure fails the load; events
-//! and threads degrade to empty with a warning rather than blanking the
-//! conversation.
-
 use super::{comments, events, review_threads};
 use crate::clients::ActivityBundle;
 use crate::clients::error::FetchError;

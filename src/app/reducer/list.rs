@@ -27,7 +27,6 @@ impl App {
             pr_id,
             tab: DetailTab::default(),
         };
-        // Leave search behind so the list is clean when we return.
         self.state.ui.list_search = SearchState::default();
         self.state.ui.diff = DiffViewState::default();
         self.state.ui.commits = CommitsViewState::default();

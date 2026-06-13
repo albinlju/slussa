@@ -1,22 +1,11 @@
-//! Markdown → ratatui lines via charmed-glamour. A glamour panic or
-//! ANSI-bridge failure falls back to the raw body instead of taking down
-//! the TUI.
-
 use ratatui::text::Line;
 
-/// Glamour's Dark theme adds a fixed document margin this wide to every
-/// rendered line.
 const GLAMOUR_MARGIN: usize = 2;
 
-/// Rendered markdown wrapped to `width`, glamour's own margins kept — used
-/// where the margin doubles as the view's indent (the Description tab).
 pub(super) fn render(body: &str, width: u16) -> Vec<Line<'static>> {
     trim_blank_lines(glamour_lines(body, width))
 }
 
-/// Rendered markdown with glamour's left margin stripped, so the text sits
-/// flush against whatever frames it (comment boxes). Text still wraps to
-/// `width`.
 pub(super) fn render_flush(body: &str, width: u16) -> Vec<Line<'static>> {
     let lines = glamour_lines(body, width + GLAMOUR_MARGIN as u16);
     trim_blank_lines(strip_margin(lines, GLAMOUR_MARGIN))
@@ -44,7 +33,6 @@ fn glamour_lines(body: &str, width: u16) -> Vec<Line<'static>> {
     }
 }
 
-/// Strip `n` leading chars from each line's first span.
 fn strip_margin(lines: Vec<Line<'static>>, n: usize) -> Vec<Line<'static>> {
     lines
         .into_iter()

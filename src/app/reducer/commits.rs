@@ -16,8 +16,6 @@ impl App {
             CommitsAction::StepCommit(delta) => {
                 let before = self.state.ui.commits.selected;
                 self.commits_move_selection(delta);
-                // At the list boundary the selection doesn't move — re-opening
-                // would needlessly reset the current commit's scroll/cursor.
                 if self.state.ui.commits.selected != before {
                     self.commits_open_selected();
                 }
@@ -25,8 +23,6 @@ impl App {
         }
     }
 
-    /// The commit list as the screen shows it — `SearchState::filter_commits`
-    /// keeps this and the render in agreement.
     fn filtered_commits(&self) -> Vec<&Commit> {
         let Screen::Detail { pr_id, .. } = self.state.screen else {
             return Vec::new();

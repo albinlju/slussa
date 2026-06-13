@@ -2,17 +2,11 @@ use std::fmt;
 
 #[derive(Debug)]
 pub enum FetchError {
-    /// `gh` binary couldn't be spawned at all.
     GhMissing,
-    /// `gh` ran but exited non-zero.
     GhFailed { code: Option<i32>, stderr: String },
-    /// Non-2xx from a REST API; body kept for diagnosis.
     HttpFailed { status: u16, body: String },
-    /// Network-level error before any HTTP response — DNS, connect, TLS.
     Network(String),
-    /// No credentials for the host — the user needs `tuipr auth login`.
     NotAuthenticated { host: String },
-    /// The response didn't match the schema we expected.
     ParseFailed(String),
 }
 

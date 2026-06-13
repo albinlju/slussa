@@ -1,18 +1,3 @@
-//! Bitbucket DC's `/diff` endpoint returns a *structured* JSON diff (not raw
-//! unified-diff text), projected here into [`Diff`]. Inline comments come
-//! from the activities feed instead (see [`super::activities`]).
-//!
-//! Shape (trimmed to what we read):
-//! ```json
-//! { "diffs": [ {
-//!     "source":      { "toString": "old/path" },   // null for added files
-//!     "destination": { "toString": "new/path" },   // null for deleted files
-//!     "hunks": [ {
-//!       "sourceLine": 10, "destinationLine": 10,
-//!       "segments": [ { "type": "CONTEXT"|"ADDED"|"REMOVED",
-//!         "lines": [ { "line": "text" } ] } ] } ] } ] }
-//! ```
-
 use serde::Deserialize;
 
 use super::Config;
@@ -75,8 +60,6 @@ pub(super) fn fetch(config: &Config, pr_id: u64) -> Result<Diff, FetchError> {
     fetch_path(config, &path)
 }
 
-/// Same structured-diff endpoint scoped to a commit (diffs against the first
-/// parent by default).
 pub(super) fn fetch_commit(config: &Config, oid: &str) -> Result<Diff, FetchError> {
     let path = format!(
         "/rest/api/1.0/projects/{}/repos/{}/commits/{oid}/diff",
@@ -94,7 +77,6 @@ fn project(response: BbDiffResponse) -> Diff {
     let mut files: Vec<FileDiff> = Vec::new();
 
     for file in response.diffs {
-        // Prefer the destination path; fall back to source for deleted files.
         let path = file
             .destination
             .as_ref()

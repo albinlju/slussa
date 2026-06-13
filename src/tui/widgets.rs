@@ -10,8 +10,6 @@ use crate::app::state::LoadState;
 use crate::domain::comment::Reaction;
 use crate::tui::theme;
 
-/// Render the shared loading/failed placeholders for a fetch slot, handing
-/// back the payload once loaded. The caller still owns its own empty-state.
 pub(super) fn loaded_or_placeholder<'a, T>(
     frame: &mut Frame,
     state: Option<&'a LoadState<T>>,
@@ -33,9 +31,6 @@ pub(super) fn loaded_or_placeholder<'a, T>(
     None
 }
 
-/// Clamp `scroll` against the content, store it and the viewport back for
-/// half-page keys, and render `lines` with the fixed-thumb scrollbar in the
-/// rightmost column.
 pub(super) fn scrolled_paragraph(
     frame: &mut Frame,
     lines: Vec<Line<'static>>,
@@ -61,7 +56,6 @@ pub(super) fn scrolled_paragraph(
 
 const SPINNER_FRAMES: &[&str] = &["⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏"];
 
-/// `⠋  text` in the warning color — the shared loading row.
 pub(super) fn loading(text: &str) -> Line<'static> {
     Line::styled(
         format!("{}  {text}", spinner_frame()),
@@ -69,9 +63,6 @@ pub(super) fn loading(text: &str) -> Line<'static> {
     )
 }
 
-/// One-line reaction pills under a comment, powerline-capped like the
-/// header's status badge. The user's own reactions sit on a dark accent
-/// tint with an accent count — a full accent fill would drown yellow emojis.
 pub(super) fn reactions_line(reactions: &[Reaction]) -> Option<Line<'static>> {
     if reactions.is_empty() {
         return None;
@@ -125,8 +116,6 @@ pub(super) fn footer(width: u16, hints: &str) -> Line<'static> {
     Line::from(justify_between(left, right, width as usize))
 }
 
-/// The `Search: query█` input spans, shared by the prompt line and the diff
-/// pane's typing footer.
 pub(super) fn search_input_spans(query: &str) -> Vec<Span<'static>> {
     let theme = theme::current();
     vec![
@@ -135,8 +124,6 @@ pub(super) fn search_input_spans(query: &str) -> Vec<Span<'static>> {
     ]
 }
 
-/// A `/` search prompt line: `Search: query█            N match`. Shared by
-/// every searchable view's footer so they all look and read the same.
 pub(super) fn search_prompt(query: &str, count: usize, width: u16) -> Line<'static> {
     let theme = theme::current();
     let right = vec![Span::styled(
@@ -150,10 +137,6 @@ pub(super) fn search_prompt(query: &str, count: usize, width: u16) -> Line<'stat
     ))
 }
 
-/// Re-style every case-insensitive occurrence of `query` inside `line` with
-/// `match_style` (patched onto each span's own style, so diff tints read
-/// through). Spans that change byte length when lowercased (non-ASCII) are
-/// left untouched to keep slicing on char boundaries.
 pub(super) fn highlight_query(
     line: Line<'static>,
     query: &str,
@@ -191,8 +174,6 @@ pub(super) fn highlight_query(
     Line::from(out)
 }
 
-/// `left … pad … right` spans filling `width`, with at least one space
-/// between the groups.
 pub(super) fn justify_between(
     mut left: Vec<Span<'static>>,
     right: Vec<Span<'static>>,
@@ -206,9 +187,6 @@ pub(super) fn justify_between(
     left
 }
 
-/// Fixed 3-row thumb that slides the full track, instead of ratatui's
-/// proportional `Scrollbar` whose thumb barely moves on short scroll ranges.
-/// The thumb compresses against the bottom at the end of the track.
 pub(super) fn scrollbar(scroll: u16, max_scroll: u16, height: u16) -> Vec<Line<'static>> {
     if max_scroll == 0 || height == 0 {
         return Vec::new();
@@ -230,7 +208,6 @@ pub(super) fn scrollbar(scroll: u16, max_scroll: u16, height: u16) -> Vec<Line<'
         .collect()
 }
 
-/// Rightmost-column slice of `area` — where the vertical scrollbar lives.
 pub(super) fn scrollbar_area(area: Rect) -> Rect {
     Rect {
         x: area.x + area.width.saturating_sub(1),
@@ -271,8 +248,6 @@ fn wrap_box_line(line: Line<'static>, text_w: usize, border: Style) -> Line<'sta
     let visible: usize = line.spans.iter().map(Span::width).sum();
     let pad = text_w.saturating_sub(visible);
     let line_style = line.style;
-    // Extend an edge span's bg tint into the 1-col gap so the fill reaches
-    // the inner borders.
     let leading_bg = line.spans.first().and_then(|s| s.style.bg);
     let trailing_bg = line.spans.last().and_then(|s| s.style.bg);
     let pad_style = |bg: Option<ratatui::style::Color>| match bg {
@@ -291,8 +266,6 @@ fn wrap_box_line(line: Line<'static>, text_w: usize, border: Style) -> Line<'sta
     Line::from(spans)
 }
 
-/// A line-numbered diff row: `{num} {prefix} {content}`, padded to `row_w`
-/// so an optional bg tint fills the whole row.
 #[allow(clippy::too_many_arguments)]
 pub(super) fn numbered_diff_row(
     line_num: Option<u32>,
@@ -392,7 +365,6 @@ mod tests {
     fn own_reaction_gets_the_accent_tint() {
         let theme = theme::current();
         let line = reactions_line(&[reaction("👍", 4, true), reaction("👀", 3, false)]).unwrap();
-        // Spans per pill: cap, label, cap (+ a gap span between pills).
         assert_eq!(line.spans[1].style.bg, Some(theme.accent_bg));
         assert_eq!(line.spans[1].style.fg, Some(theme.accent));
         assert_eq!(line.spans[5].style.bg, Some(theme.highlight_bg));

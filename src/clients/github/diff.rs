@@ -10,7 +10,6 @@ pub fn fetch_diff(pr_number: u64) -> Result<Diff, FetchError> {
     Ok(unified_diff::parse(&text))
 }
 
-/// `gh` expands `{owner}`/`{repo}` from the current repo context.
 pub fn fetch_commit_diff(oid: &str) -> Result<Diff, FetchError> {
     let endpoint = format!("repos/{{owner}}/{{repo}}/commits/{oid}");
     let stdout = run_gh(&[

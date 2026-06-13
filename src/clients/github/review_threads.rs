@@ -22,8 +22,6 @@ struct GqlThread {
     is_resolved: bool,
     #[serde(default)]
     path: String,
-    /// Anchor line on the side given by `diff_side`; `null` for outdated
-    /// threads, where `original_line` still holds the anchor.
     #[serde(default)]
     line: Option<usize>,
     #[serde(default)]
@@ -38,9 +36,6 @@ struct GqlComments {
     nodes: Vec<GqlComment>,
 }
 
-// GraphQL instead of REST `/pulls/{n}/comments`: threads arrive pre-grouped
-// with `isResolved`, `diffSide` tells old-side anchors apart, and the
-// reactions carry `viewerHasReacted`.
 pub fn fetch_review_threads(pr_number: u64) -> Result<Vec<ReviewThread>, FetchError> {
     let query = format!(
         "query($owner: String!, $name: String!, $pr: Int!) {{ \
@@ -106,11 +101,9 @@ mod tests {
 
         let t = &threads[0];
         assert!(t.resolved);
-        // LEFT side + null line → anchored to the old file via originalLine.
         assert_eq!((t.line, t.old_line), (None, Some(7)));
 
         let reactions = &t.comments[0].reactions;
-        // The zero-count HEART group is dropped.
         assert_eq!(reactions.len(), 2);
         assert_eq!(
             (reactions[0].emoji.as_str(), reactions[0].count, reactions[0].mine),

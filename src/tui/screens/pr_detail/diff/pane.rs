@@ -1,6 +1,3 @@
-//! The Diff tab's diff pane: file-path/stats header band, then the diff body
-//! with inline review-thread boxes anchored to their lines.
-
 use std::collections::HashMap;
 
 use chrono::Utc;
@@ -20,8 +17,6 @@ use crate::{
     tui::{screens::pr_detail::render_inline_thread, theme, widgets},
 };
 
-/// 2-col gutter on each side of the diff body; the row's background tint
-/// extends across it to the box borders.
 const DIFF_GUTTER: &str = "  ";
 const DIFF_GUTTER_COLS: u16 = 2;
 
@@ -57,20 +52,17 @@ pub(super) fn render(
     let pane_chunks = Layout::default()
         .direction(Direction::Vertical)
         .constraints([
-            Constraint::Length(2), // header row + bottom divider
-            Constraint::Min(0),    // diff body
+            Constraint::Length(2),
+            Constraint::Min(0),
         ])
         .split(pane_inner);
 
     let body_area = pane_chunks[1];
-    // The cursor is only live while the pane has the keyboard.
     let active = focused.then_some(pane_cursor);
     let (mut lines, meta, matches) =
         file_to_lines(file, threads, body_area.width, active, search_query);
     let cursor = active.and_then(|i| meta.get(i));
 
-    // Search highlight: tint every match across the diff body. Applied before
-    // the cursor tint so the cursor row still reads as the cursor.
     if !search_query.is_empty() {
         let match_style = Style::default().fg(theme.bg).bg(theme.warning);
         for line in &mut lines {
@@ -90,8 +82,6 @@ pub(super) fn render(
         pane_chunks[0],
     );
 
-    // A line cursor tints its row; a thread cursor is already marked by the
-    // box's accent border.
     if let Some(m) = cursor
         && matches!(m.kind, NavKind::Line { .. })
         && m.rendered_row < lines.len()
@@ -104,7 +94,6 @@ pub(super) fn render(
     let visible = body_area.height as usize;
     let max_scroll = total.saturating_sub(visible) as u16;
 
-    // Keep the whole cursor item in view; otherwise honour the stored offset.
     let mut scroll = (*pane_scroll).min(max_scroll) as usize;
     if let Some(m) = cursor {
         let top = m.rendered_row;
@@ -145,7 +134,6 @@ fn render_pane_header(
     let header_inner = header_block.inner(area);
     frame.render_widget(header_block, area);
 
-    // 2-col padding on each side inside the header band.
     let inner_w = (header_inner.width as usize).saturating_sub(4);
     let stats_w = "+".len() + adds.to_string().len() + 1 + "-".len() + dels.to_string().len();
     let displayed_path = truncate_path_left(path, inner_w.saturating_sub(stats_w + 2));
@@ -176,7 +164,6 @@ fn render_pane_header(
     frame.render_widget(Paragraph::new(line), header_inner);
 }
 
-/// Truncate from the left (`…tail`) so the filename stays visible.
 fn truncate_path_left(path: &str, max: usize) -> String {
     let total = path.chars().count();
     if total <= max || max < 2 {
@@ -222,9 +209,6 @@ enum NavKind {
     Thread { line: usize, removed: bool },
 }
 
-/// A cursor stop in the pane (diff line or thread box), indexed in render
-/// order to match `pane_cursor`. `row_span` is the box height for threads so
-/// scrolling can keep the whole box in view.
 struct NavItem {
     rendered_row: usize,
     row_span: usize,
@@ -249,12 +233,9 @@ fn file_to_lines(
     let theme = theme::current();
     let mut lines: Vec<Line> = Vec::new();
     let mut meta: Vec<NavItem> = Vec::new();
-    // Nav-item indices of diff lines containing the (applied) search query.
     let mut matches: Vec<usize> = Vec::new();
     let query_lower = query.to_lowercase();
 
-    // Threads on added/context lines key off the new-file line number,
-    // threads on removed lines off the old-file number.
     let mut comments_at: HashMap<usize, Vec<&ReviewThread>> = HashMap::new();
     let mut comments_at_old: HashMap<usize, Vec<&ReviewThread>> = HashMap::new();
     for thread in threads.iter().filter(|t| t.path == file.path) {
@@ -267,8 +248,6 @@ fn file_to_lines(
 
     let now = Utc::now();
 
-    // Thread boxes render narrower than the diff rows so the row bg visibly
-    // flows past the box on both sides.
     let thread_width = width.saturating_sub(2 * DIFF_GUTTER_COLS);
 
     for hunk in &file.hunks {
@@ -344,9 +323,6 @@ fn file_to_lines(
     (lines, meta, matches)
 }
 
-/// Re-tint a row with the cursor bg, keeping each span's fg. Pads to `row_w`
-/// since context rows aren't otherwise padded and would only tint under
-/// their text.
 fn highlight_row(line: Line<'static>, row_w: usize) -> Line<'static> {
     let bg = theme::current().highlight_bg;
     let visible: usize = line.spans.iter().map(Span::width).sum();
@@ -362,8 +338,6 @@ fn highlight_row(line: Line<'static>, row_w: usize) -> Line<'static> {
     Line::from(spans)
 }
 
-/// Render one review thread into the diff body, gutter-prefixed to align
-/// with the diff rows. Returns the box height for the caller's `row_span`.
 fn push_thread_lines(
     lines: &mut Vec<Line<'static>>,
     thread: &ReviewThread,

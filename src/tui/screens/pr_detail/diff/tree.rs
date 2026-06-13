@@ -1,5 +1,3 @@
-//! The Diff tab's file tree, with a `N files +A -B` header band.
-
 use ratatui::{
     Frame,
     layout::{Constraint, Direction, Layout, Rect},
@@ -38,8 +36,8 @@ pub(super) fn render(
     let tree_chunks = Layout::default()
         .direction(Direction::Vertical)
         .constraints([
-            Constraint::Length(2), // header row + bottom divider
-            Constraint::Min(0),    // file list
+            Constraint::Length(2),
+            Constraint::Min(0),
         ])
         .split(tree_inner);
 
@@ -48,8 +46,6 @@ pub(super) fn render(
         .border_style(Style::default().fg(theme.divider));
     let header_inner = header_block.inner(tree_chunks[0]);
     frame.render_widget(header_block, tree_chunks[0]);
-    // The `- 1` keeps a trailing 1-col gap before the right edge so the
-    // +A -D blocks vertically align with the file rows below.
     let row_width = (header_inner.width as usize).saturating_sub(1);
     let left = vec![Span::styled(
         format!("{file_count} files"),

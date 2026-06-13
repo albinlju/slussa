@@ -7,7 +7,6 @@ pub mod list;
 pub mod loads;
 pub mod search;
 
-/// Move an index by a signed delta, clamped to the collection; 0 when empty.
 pub(super) fn step_index(current: usize, delta: i16, len: usize) -> usize {
     if len == 0 {
         return 0;
@@ -15,8 +14,6 @@ pub(super) fn step_index(current: usize, delta: i16, len: usize) -> usize {
     (current as i64 + i64::from(delta)).clamp(0, (len - 1) as i64) as usize
 }
 
-/// Clamps at the top; the bottom is clamped at render time against the
-/// actual content height.
 pub(super) fn scroll(offset: u16, delta: i16) -> u16 {
     if delta >= 0 {
         offset.saturating_add(delta as u16)

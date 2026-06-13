@@ -5,8 +5,6 @@ use crate::clients::error::FetchError;
 use crate::clients::github::run_pr_graphql;
 use crate::domain::commit::Commit;
 
-// GraphQL gets the +/- stats together with the metadata — the REST commits
-// endpoint would need a follow-up call per commit.
 const QUERY: &str = "query($owner: String!, $name: String!, $pr: Int!) { \
   repository(owner: $owner, name: $name) { pullRequest(number: $pr) { \
     commits(first: 100) { nodes { commit { \

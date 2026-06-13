@@ -23,8 +23,6 @@ use crate::clients::error::FetchError;
 use crate::domain::comment::{Comment, Reaction};
 use crate::domain::user::User;
 
-/// One `gh api graphql` call against the current repo's PR, returning the
-/// `pullRequest` payload. `P` mirrors the fields the query selects.
 pub(super) fn run_pr_graphql<P: DeserializeOwned>(
     query: &str,
     pr_number: u64,
@@ -60,20 +58,15 @@ struct GqlRepository<P> {
     pull_request: P,
 }
 
-/// The comment-node field selection matching [`GqlComment`]. Interpolated
-/// into every query that selects comment nodes, so the two can't drift.
 pub(super) const COMMENT_FIELDS: &str = "body createdAt author { login } \
     reactionGroups { content viewerHasReacted users { totalCount } }";
 
-/// GraphQL comment node, shared by the issue-comments and review-threads
-/// queries.
 #[derive(Debug, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub(super) struct GqlComment {
     #[serde(default)]
     body: String,
     created_at: DateTime<Utc>,
-    /// `null` for deleted accounts.
     author: Option<GqlAuthor>,
     #[serde(default)]
     reaction_groups: Vec<GqlReactionGroup>,
@@ -126,7 +119,6 @@ pub(super) fn map_gql_comment(c: GqlComment) -> Comment {
     }
 }
 
-/// GraphQL `reactionGroups` content → emoji. `None` for unknown values.
 fn reaction_emoji(name: &str) -> Option<&'static str> {
     Some(match name {
         "THUMBS_UP" => "👍",

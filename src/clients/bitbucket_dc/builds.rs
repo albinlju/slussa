@@ -64,7 +64,6 @@ fn map_build(b: BbBuild) -> Build {
         "CANCELLED" => BuildState::Cancelled,
         _ => BuildState::Unknown,
     };
-    // The key is required, so the row is never blank.
     let name = b.name.filter(|n| !n.is_empty()).unwrap_or(b.key);
     Build {
         name,
@@ -90,13 +89,10 @@ mod tests {
 
         assert_eq!(builds[0].state, BuildState::Successful);
         assert_eq!(builds[0].duration_ms, Some(72000));
-        // Missing name falls back to the (required) key.
         assert_eq!(builds[1].name, "deploy");
         assert_eq!(builds[1].state, BuildState::InProgress);
-        // Empty name also falls back; state match is case-insensitive.
         assert_eq!(builds[2].name, "lint");
         assert_eq!(builds[2].state, BuildState::Failed);
-        // Unrecognised states degrade to Unknown rather than erroring.
         assert_eq!(builds[3].state, BuildState::Unknown);
     }
 }
