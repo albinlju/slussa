@@ -230,6 +230,20 @@ impl<T> LoadState<T> {
             Err(e) => LoadState::Failed(e),
         }
     }
+
+    pub fn is_loading(&self) -> bool {
+        matches!(self, LoadState::Loading)
+    }
+}
+
+impl PrData {
+    fn any_loading(&self) -> bool {
+        self.commits.is_loading()
+            || self.diff.is_loading()
+            || self.builds.is_loading()
+            || self.activity.is_loading()
+            || self.commit_diffs.values().any(LoadState::is_loading)
+    }
 }
 
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
@@ -271,5 +285,9 @@ impl AppState {
                 .collect(),
             _ => Vec::new(),
         }
+    }
+
+    pub fn is_loading(&self) -> bool {
+        self.cache.prs.is_loading() || self.cache.details.values().any(PrData::any_loading)
     }
 }

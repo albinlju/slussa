@@ -13,8 +13,8 @@ main.rs ── cli.rs ── app/preflight.rs        (startup: args, host detect
        key event ─► tui::key_to_action ─► Action ─► app/reducer/* ─► AppState
                     ▲                                      │
                     │                          spawns app/fetchers.rs
-       60 fps tick ─┤                                      │
-                    │                              clients/* (gh / REST)
+      spinner tick ─┤                                      │
+       (while load) │                              clients/* (gh / REST)
        tui::render ◄┴── AppState ◄── LoadedAction ◄────────┘
 ```
 
@@ -60,19 +60,25 @@ into the TUI.
 ## The event loop
 
 **`app/mod.rs`** holds `App { state, backend, action_tx, action_rx }` and the
-loop, a `tokio::select!` over three sources:
+loop, a `tokio::select!` over three sources. Rendering is event-driven: a
+frame is drawn once at startup, then only after something that can change the
+view —
 
-- a 16 ms interval → redraw (`tui::render`). Rendering every tick keeps
-  spinners animated and makes redraw logic trivial — state changes never
-  need to request a repaint.
+- the unbounded action channel → `Action`s, applied by the reducer, then a
+  redraw. `Action::Quit` exits the loop; everything else mutates state. This
+  is the path both key presses and fetch results funnel through, so it's the
+  single redraw trigger for state changes.
 - crossterm's `EventStream` → key presses, translated by
-  `tui::key_to_action(&state, key)` into an `Action` (or ignored).
-- the unbounded action channel → `Action`s, applied by the reducer.
-  `Action::Quit` exits the loop; everything else mutates state.
+  `tui::key_to_action(&state, key)` into an `Action` (sent to the channel, no
+  direct redraw); resize events redraw directly.
+- a `SPINNER_INTERVAL` (100 ms) sleep, **guarded by `state.is_loading()`** so
+  it's only armed while a fetch is in flight — it advances the loading
+  spinner. When nothing is loading the branch is disabled and the loop blocks
+  purely on events, so an idle tuipr wakes the CPU zero times per second.
 
 Fetchers hold a clone of `action_tx`, which is how background work re-enters
-the loop: a fetch completes, sends `Action::Loaded(...)`, and the reducer
-stores the result. The UI thread never blocks on the network.
+the loop: a fetch completes, sends `Action::Loaded(...)`, the reducer stores
+the result and the loop redraws. The UI thread never blocks on the network.
 
 ## State (`app/state.rs`)
 
