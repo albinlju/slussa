@@ -1,5 +1,3 @@
-//! Argument handling and the subcommands that run outside the TUI.
-
 use std::process::ExitCode;
 
 use crate::app;
@@ -7,9 +5,7 @@ use crate::app::preflight::{self, PreflightError};
 use crate::clients::{Backend, github};
 
 pub enum Dispatch {
-    /// A subcommand ran (or argument handling failed); exit with this code.
     Done(ExitCode),
-    /// No subcommand — start the TUI against this backend.
     RunTui(Backend),
 }
 
@@ -29,7 +25,6 @@ pub fn dispatch(mut args: Vec<String>) -> Dispatch {
 
     match args.get(1).map(String::as_str) {
         Some("auth") => return Dispatch::Done(run_auth(&args[2..])),
-        // Deliberately absent from --help: a debug tool, not user surface.
         Some("keyring-test") => return Dispatch::Done(run_keyring_test()),
         Some("--help" | "-h") => {
             print_help();
@@ -103,8 +98,6 @@ fn ensure_ready() -> Result<Backend, PreflightError> {
     }
 }
 
-/// Round-trips a throwaway entry through the OS keyring, for verifying the
-/// install before trusting it with a real PAT.
 fn run_keyring_test() -> ExitCode {
     use crate::app::auth::SERVICE;
     use keyring::Entry;

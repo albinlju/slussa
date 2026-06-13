@@ -16,8 +16,6 @@ use ratatui::{
     widgets::{Block, BorderType, Borders, Clear, List, ListItem, ListState, Paragraph},
 };
 
-/// Fixed widths for every column except Title, which flexes to absorb the
-/// remaining width.
 struct ColWidths {
     id: usize,
     status: usize,
@@ -65,7 +63,6 @@ enum PrListView<'a> {
 pub(in crate::tui) fn render(frame: &mut Frame, state: &mut AppState, area: ratatui::layout::Rect) {
     let theme = theme::current();
 
-    // area minus status bar (1), block border (2), column header (1).
     state.ui.list_viewport = area.height.saturating_sub(4);
 
     let chunks = Layout::default()
@@ -147,7 +144,6 @@ pub(in crate::tui) fn render(frame: &mut Frame, state: &mut AppState, area: rata
             frame.render_stateful_widget(list, content_chunks[1], &mut list_state);
         }
         PrListView::Loading => {
-            // Indented to line up with the list rows' highlight-symbol column.
             let mut line = widgets::loading("Loading pull requests…");
             line.spans.insert(0, Span::raw("  "));
             frame.render_widget(Paragraph::new(line), content_chunks[1]);
@@ -177,7 +173,6 @@ pub(in crate::tui) fn render(frame: &mut Frame, state: &mut AppState, area: rata
 fn render_filter_picker(frame: &mut Frame, state: &AppState, area: Rect) {
     let theme = theme::current();
     let popup_width = 40u16.min(area.width);
-    // 5 filters + 2 border rows + 1 help row = 8
     let popup_height = 8u16.min(area.height);
     let popup_area = Rect {
         x: area.x + area.width.saturating_sub(popup_width) / 2,
@@ -234,7 +229,6 @@ fn row_for_pr(pr: &PullRequest, widths: &ColWidths) -> ListItem<'static> {
         format!("{days_old}d")
     };
 
-    // Nerd Font CI status glyphs (requires a Nerd Font in the terminal).
     let (ci_sym, ci_color) = match pr.ci {
         CiState::Success => ("\u{f058}", theme.success), //  check-circle
         CiState::Failed => ("\u{f057}", theme.error),    //  times-circle
@@ -242,7 +236,6 @@ fn row_for_pr(pr: &PullRequest, widths: &ColWidths) -> ListItem<'static> {
         CiState::Unknown => ("\u{f042}", theme.muted),   //  adjust (half circle — neutral/not run)
     };
 
-    // `+N`/`-N` are separate colored spans, so the padding is computed by hand.
     let plus = format!("+{}", pr.additions);
     let minus = format!("-{}", pr.deletions);
     let diff_visible = plus.chars().count() + 1 + minus.chars().count();
@@ -330,9 +323,6 @@ pub(in crate::tui) fn key_to_action(state: &AppState, key: KeyEvent) -> Option<A
         };
     }
 
-    // `/` search (open + typing) is handled generically in the dispatcher; here
-    // we only handle navigation/commands, which work the same whether or not a
-    // search filter is active.
     let half = half_page(state.ui.list_viewport);
     if key.modifiers.contains(KeyModifiers::CONTROL) {
         return match key.code {

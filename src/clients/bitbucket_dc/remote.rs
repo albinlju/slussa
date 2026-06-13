@@ -19,12 +19,10 @@ pub fn parse(remote: &str, host: &str) -> Option<RepoCoords> {
 
 fn extract_path(remote: &str) -> Option<&str> {
     if let Some(rest) = remote.strip_prefix("ssh://") {
-        // ssh://user@host[:port]/path
         let (_authority, path) = rest.split_once('/')?;
         return Some(path);
     }
     if let Some(rest) = remote.strip_prefix("git@") {
-        // user@host:path
         let (_authority, path) = rest.split_once(':')?;
         return Some(path);
     }

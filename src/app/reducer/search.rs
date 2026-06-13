@@ -1,8 +1,3 @@
-//! The one place `/` search is edited. `Action::Search` carries no target —
-//! `AppState::search_target` routes it to whichever view's `SearchState` is
-//! active. Each view only supplies *what* it matches against; the
-//! typing/clearing logic lives here and nowhere else.
-
 use crate::app::{
     App,
     action::SearchInput,
@@ -17,13 +12,12 @@ impl App {
         };
         let search = self.search_mut(target);
         match input {
-            // Open/Confirm don't change the result set, so no selection reset.
             SearchInput::Open => {
                 search.open = true;
                 return;
             }
             SearchInput::Confirm => {
-                search.open = false; // keep the query (e.g. the pane's highlight)
+                search.open = false;
                 return;
             }
             SearchInput::Type(c) => search.query.push(c),
@@ -35,14 +29,11 @@ impl App {
                 search.query.clear();
             }
         }
-        // The query changed → jump the filter view's selection to the top
-        // match. (The pane highlights rather than filters; nothing to reset.)
         match target {
             SearchTarget::List => self.state.ui.list_selected = 0,
             SearchTarget::Commits => self.state.ui.commits.selected = 0,
             SearchTarget::DiffTree => {
                 self.state.ui.active_diff_view_mut().cursor = 0;
-                // Keep the pane on the first matching file.
                 if let Some(TreeRow::File { file_index, .. }) =
                     self.current_visible_rows().first()
                 {

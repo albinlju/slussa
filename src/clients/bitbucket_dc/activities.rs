@@ -1,9 +1,3 @@
-//! Bitbucket DC exposes a PR's whole history through one `/activities` feed;
-//! it gets fetched once and split into general comments, lifecycle events,
-//! and inline review threads. Inline comments come from here rather than the
-//! structured diff because the diff window can omit comments whose line falls
-//! outside it — the activities feed always lists every one.
-
 use serde::Deserialize;
 
 use super::{Config, ms_to_utc};
@@ -31,7 +25,6 @@ struct Activity {
     comment_anchor: Option<Anchor>,
     #[serde(default)]
     comment: Option<BbComment>,
-    /// Commits added by a RESCOPED (push) activity.
     #[serde(default)]
     added: Option<Rescope>,
 }
@@ -76,8 +69,6 @@ struct BbComment {
     properties: BbProperties,
 }
 
-/// Emoji reactions ride along in the comment's `properties` (the comment-likes
-/// plugin). Each reaction has a twemoji `emoticon` and the list of reactors.
 #[derive(Debug, Default, Deserialize)]
 struct BbProperties {
     #[serde(default)]
@@ -87,7 +78,6 @@ struct BbProperties {
 #[derive(Debug, Deserialize)]
 struct BbReaction {
     emoticon: BbEmoticon,
-    /// Only the count is used; the reactors aren't matched against "me".
     #[serde(default)]
     users: Vec<serde::de::IgnoredAny>,
 }
@@ -117,7 +107,6 @@ fn project(activities: Vec<Activity>) -> ActivityBundle {
     for activity in activities {
         if activity.action == "COMMENTED" {
             match (activity.comment_anchor, activity.comment) {
-                // An anchor means the comment sits on a diff line.
                 (Some(anchor), Some(root)) => bundle.threads.push(make_thread(anchor, &root)),
                 (None, Some(root)) => bundle.comments.push(map_comment(&root)),
                 _ => {}
@@ -125,7 +114,6 @@ fn project(activities: Vec<Activity>) -> ActivityBundle {
             continue;
         }
 
-        // A push shows up as RESCOPED carrying the added commits.
         let kind = if activity.action == "RESCOPED" {
             let commits: Vec<PushedCommit> = activity
                 .added
@@ -134,7 +122,6 @@ fn project(activities: Vec<Activity>) -> ActivityBundle {
                 .into_iter()
                 .map(map_pushed)
                 .collect();
-            // Skip force-pushes / re-targets that didn't add commits.
             if commits.is_empty() {
                 continue;
             }
@@ -168,7 +155,6 @@ fn event_kind(action: &str) -> Option<EventKind> {
 }
 
 fn make_thread(anchor: Anchor, root: &BbComment) -> ReviewThread {
-    // Removed lines anchor to the old-file line; added/context to the new.
     let (line, old_line) = if anchor.line_type.eq_ignore_ascii_case("REMOVED") {
         (None, Some(anchor.line))
     } else {
@@ -209,16 +195,12 @@ fn map_reactions(props: &BbProperties) -> Vec<Reaction> {
             Some(Reaction {
                 emoji: emoji_from_url(&r.emoticon.url)?,
                 count: r.users.len() as u32,
-                // Bitbucket gives the reactor list but no "viewer" flag, and we
-                // don't track the current user — so own-reaction highlight off.
                 mine: false,
             })
         })
         .collect()
 }
 
-/// Bitbucket reactions are twemoji SVGs whose filename is the emoji's
-/// hyphen-separated hex codepoints (`…/1f44d.svg` → 👍). Decode it to the emoji.
 fn emoji_from_url(url: &str) -> Option<String> {
     let stem = url.rsplit('/').next()?.strip_suffix(".svg")?;
     let mut emoji = String::new();
@@ -270,17 +252,14 @@ mod tests {
         let page: Page = serde_json::from_str(SAMPLE).unwrap();
         let bundle = project(page.values);
 
-        // One general comment, one inline thread (with a reply).
         assert_eq!(bundle.comments.len(), 1);
         assert_eq!(bundle.comments[0].content, "general");
 
         assert_eq!(bundle.threads.len(), 1);
         assert_eq!(bundle.threads[0].path, "src/x.rs");
         assert_eq!(bundle.threads[0].line, Some(42));
-        assert_eq!(bundle.threads[0].comments.len(), 2); // root + reply
+        assert_eq!(bundle.threads[0].comments.len(), 2);
 
-        // OPENED + MERGED + the RESCOPED that added a commit. The second
-        // RESCOPED added nothing, so it's dropped.
         assert_eq!(bundle.events.len(), 3);
         assert_eq!(bundle.events[0].kind, EventKind::Opened);
         assert_eq!(bundle.events[1].kind, EventKind::Merged);
@@ -288,14 +267,11 @@ mod tests {
             bundle.events[2].kind,
             EventKind::Pushed(vec![PushedCommit {
                 id: "ab0d1e2".to_string(),
-                // Only the first message line is kept.
                 message: "Merge 'develop' into feat".to_string(),
             }])
         );
     }
 
-    // Shape taken verbatim from a real `/activities` response: reactions live in
-    // the comment's `properties`, with the emoji encoded in the twemoji URL.
     const WITH_REACTIONS: &str = r#"{ "values": [
         { "action": "COMMENTED", "createdDate": 5000,
           "comment": { "id": 9, "text": "hi", "createdDate": 5000, "updatedDate": 5000,
@@ -325,7 +301,6 @@ mod tests {
 
     #[test]
     fn decodes_multi_codepoint_and_rejects_junk() {
-        // Country-flag style multi-codepoint filename decodes to both scalars.
         assert_eq!(
             emoji_from_url("https://x/1f1f8-1f1ea.svg").as_deref(),
             Some("🇸🇪")

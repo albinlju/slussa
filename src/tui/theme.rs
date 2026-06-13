@@ -4,50 +4,26 @@ use crate::domain::pr::PrStatus;
 
 #[derive(Debug, Clone, Copy)]
 pub struct Theme {
-    /// Default foreground for body text.
     pub fg: Color,
-    /// Default background — also used as dark text on saturated accent
-    /// backgrounds (status badges) where light fg would have poor contrast.
     pub bg: Color,
-    /// Dimmed text — timestamps, separators, hints.
     pub muted: Color,
-    /// Borders, structural chrome.
     pub border: Color,
-    /// Dimmer divider line — separators inside a bordered frame so the inner
-    /// rule reads as secondary chrome compared to the outer border.
     pub divider: Color,
-    /// Background for highlighted/selected rows.
     pub highlight_bg: Color,
-    /// Primary accent — active tab, scroll thumb, "more" indicators.
     pub accent: Color,
-    /// Dark accent-tinted background — "yours" chips (own reactions), where
-    /// a full accent fill would drown yellow emojis.
     pub accent_bg: Color,
-    /// Suggested-change blocks — header diamond and box border.
     pub suggestion: Color,
-    /// Positive / success state.
     pub success: Color,
-    /// Warning / pending / spinner.
     pub warning: Color,
-    /// Error / failed state.
     pub error: Color,
-    /// Informational — author handles, hunk headers, inline-comment bar.
     pub info: Color,
-    /// Links, branches, dir names in tree.
     pub link: Color,
-    /// Gruvbox bright orange — block titles / labels in borders.
     pub orange: Color,
-    /// Diff added line color — strong green used for the "+" marker.
     pub diff_added: Color,
-    /// Diff removed line color — strong red used for the "-" marker.
     pub diff_removed: Color,
-    /// Diff context fallback (when not specifically Added/Removed).
     pub diff_context: Color,
-    /// Subtle background fill for added lines.
     pub diff_added_bg: Color,
-    /// Subtle background fill for removed lines.
     pub diff_removed_bg: Color,
-    /// PR status colors.
     pub status_open: Color,
     pub status_draft: Color,
     pub status_merged: Color,

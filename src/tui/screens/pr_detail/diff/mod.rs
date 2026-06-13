@@ -56,7 +56,6 @@ pub fn render(
         .map(|f| file_comment_count(f, review_threads))
         .collect();
 
-    // Column height minus border (2) and header band (2).
     ui_diff.pane_viewport = chunks[2].height.saturating_sub(4);
     ui_diff.tree_viewport = chunks[0].height.saturating_sub(4);
 
@@ -71,8 +70,6 @@ pub fn render(
         tree_focused,
         chunks[0],
     );
-    // The highlight + matches apply only once committed (Enter), so the
-    // query is withheld while the prompt is still open.
     let pane_query = if ui_diff.pane_search.open {
         ""
     } else {
@@ -94,12 +91,7 @@ pub fn render(
     ui_diff.pane_matches = pane_matches;
 }
 
-/// Comments whose anchored line is actually present in *this* file's diff —
-/// so the tree badge matches what the pane renders inline. Mirrors the pane's
-/// anchoring: new-side lines (added/context) match `thread.line`, old-side
-/// lines (removed) match `thread.old_line`.
 fn file_comment_count(file: &FileDiff, threads: &[ReviewThread]) -> usize {
-    // Most files have no threads — skip the line-set work for them.
     if !threads.iter().any(|t| t.path == file.path) {
         return 0;
     }
@@ -137,8 +129,6 @@ fn file_comment_count(file: &FileDiff, threads: &[ReviewThread]) -> usize {
         .sum()
 }
 
-/// Walk a file's hunks and count `+` / `-` lines. Shared between the tree
-/// header (sums them) and the pane header (per-file).
 fn count_file_stats(file: &FileDiff) -> (u32, u32) {
     let mut adds = 0u32;
     let mut dels = 0u32;

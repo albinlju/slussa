@@ -24,9 +24,6 @@ pub fn render(frame: &mut Frame, state: &mut AppState) {
 }
 
 pub fn key_to_action(state: &AppState, key: KeyEvent) -> Option<Action> {
-    // Generic `/` search, shared by every searchable view: `/` opens it, then
-    // letters are query text while Esc/Backspace edit it. Navigation (arrows,
-    // Enter, paging) falls through to the screen handler unchanged.
     if let Some((search, highlight)) = active_search(state) {
         if search.open {
             if !key.modifiers.contains(KeyModifiers::CONTROL) {
@@ -34,8 +31,6 @@ pub fn key_to_action(state: &AppState, key: KeyEvent) -> Option<Action> {
                     KeyCode::Char(c) => return Some(Action::Search(SearchInput::Type(c))),
                     KeyCode::Backspace => return Some(Action::Search(SearchInput::Backspace)),
                     KeyCode::Esc => return Some(Action::Search(SearchInput::Cancel)),
-                    // The pane keeps its highlight on Enter; filter views let
-                    // Enter fall through to select/open the highlighted row.
                     KeyCode::Enter if highlight => {
                         return Some(Action::Search(SearchInput::Confirm));
                     }
@@ -53,8 +48,6 @@ pub fn key_to_action(state: &AppState, key: KeyEvent) -> Option<Action> {
     }
 }
 
-/// The `SearchState` the active view drives, plus whether it's a *highlight*
-/// search (the diff pane) vs a filter search (everything else).
 fn active_search(state: &AppState) -> Option<(&SearchState, bool)> {
     let ui = &state.ui;
     Some(match state.search_target()? {

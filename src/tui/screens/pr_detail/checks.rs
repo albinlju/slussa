@@ -1,5 +1,3 @@
-//! Builds tab — CI build statuses for the PR's source commit.
-
 use ratatui::{
     Frame,
     layout::Rect,
@@ -36,8 +34,6 @@ fn render_builds(frame: &mut Frame, builds: &[Build], area: Rect) {
     lines.push(summary_line(builds));
     lines.push(Line::default());
 
-    // Reserve room for the longest name, capped so one long name can't crowd
-    // out the rest of the row.
     let name_col = builds
         .iter()
         .map(|b| Span::raw(b.name.as_str()).width())
@@ -52,8 +48,6 @@ fn render_builds(frame: &mut Frame, builds: &[Build], area: Rect) {
     frame.render_widget(Paragraph::new(lines), area);
 }
 
-/// Rollup over a PR's builds, shared with the Overview sidebar's Builds
-/// section.
 pub(super) struct BuildStats {
     pub passing: usize,
     pub total: usize,
@@ -90,7 +84,6 @@ pub(super) fn build_stats(builds: &[Build]) -> BuildStats {
     }
 }
 
-/// `◐ Checks running   3/5 passing   ▰▰▰▰▱`
 fn summary_line(builds: &[Build]) -> Line<'static> {
     let theme = theme::current();
     let stats = build_stats(builds);
@@ -119,7 +112,6 @@ fn summary_line(builds: &[Build]) -> Line<'static> {
     Line::from(spans)
 }
 
-/// One filled block per build, colored by its state.
 pub(super) fn progress_bar(builds: &[Build]) -> Vec<Span<'static>> {
     builds
         .iter()

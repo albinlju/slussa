@@ -15,8 +15,6 @@ pub fn parse(text: &str) -> Diff {
             if let Some(f) = current_file.take() {
                 files.push(f);
             }
-            // The *new* path (`b/...`) — review threads anchor against it, so
-            // renamed files must carry their post-rename name.
             let path = rest
                 .split_whitespace()
                 .next_back()
@@ -39,9 +37,6 @@ pub fn parse(text: &str) -> Diff {
                 lines: Vec::new(),
             });
         } else if let Some(hunk) = current_hunk.as_mut() {
-            // `---`/`+++` file headers only appear outside hunks, so a
-            // leading +/- here is always a real diff line (`+++i;` = added
-            // `++i;`).
             if let Some(rest) = line.strip_prefix('+') {
                 hunk.lines.push(DiffLine::Added(rest.to_string()));
             } else if let Some(rest) = line.strip_prefix('-') {
@@ -67,8 +62,6 @@ pub fn parse(text: &str) -> Diff {
 fn parse_hunk_header(line: &str) -> (usize, usize) {
     let mut old_start = 0;
     let mut new_start = 0;
-    // Stop at the closing `@@`: the section text after it can contain tokens
-    // starting with `-`/`+` (e.g. `@@ -1,2 +3,4 @@ fn f() -> u16 {`).
     for part in line.split_whitespace().skip(1) {
         if part == "@@" {
             break;
@@ -96,7 +89,6 @@ mod tests {
 
     #[test]
     fn hunk_header_ignores_section_text() {
-        // The `->` in the trailing function context must not reset old_start.
         assert_eq!(
             parse_hunk_header("@@ -10,7 +12,8 @@ fn half_page(viewport: u16) -> i16 {"),
             (10, 12)
@@ -106,8 +98,6 @@ mod tests {
 
     #[test]
     fn keeps_diff_lines_starting_with_double_plus_or_minus() {
-        // Single literal: a `\`-continued string would strip the context
-        // line's leading space.
         let text =
             "diff --git a/x.c b/x.c\n--- a/x.c\n+++ b/x.c\n@@ -1,2 +1,2 @@\n int i = 0;\n---i;\n+++i;\n";
         let diff = parse(text);
@@ -152,7 +142,6 @@ mod tests {
         assert_eq!(diff.files[0].path, "a.rs");
         assert_eq!(diff.files[0].hunks[0].old_start, 3);
         assert_eq!(diff.files[1].path, "b.rs");
-        // The `--- a/...` / `+++ b/...` headers never leak in as diff lines.
         assert_eq!(diff.files[1].hunks[0].lines.len(), 2);
     }
 }

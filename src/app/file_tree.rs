@@ -18,9 +18,6 @@ pub enum TreeRow {
     },
 }
 
-/// `query` filters files by path (case-insensitive substring); non-matching
-/// files are dropped but matching files keep their original index so the pane
-/// (which keys off `file_index`) stays in sync. Empty query = all files.
 pub fn build_visible_rows(
     files: &[FileDiff],
     collapsed: &HashSet<String>,
@@ -52,8 +49,6 @@ fn build_tree(files: &[FileDiff], query: &str) -> Node {
     let query = query.to_lowercase();
     let mut root = Node::default();
     for (idx, file) in files.iter().enumerate() {
-        // `idx` stays the full-list index even when filtering, so `file_index`
-        // keeps pointing at the right file in the unfiltered diff.
         if !query.is_empty() && !file.path.to_lowercase().contains(&query) {
             continue;
         }
@@ -102,7 +97,6 @@ fn insert(node: &mut Node, segments: &[&str], file_index: usize) {
 }
 
 fn sort_node(node: &mut Node) {
-    // Directories before files; within the same kind, sort alphabetically.
     node.children
         .sort_by(|a, b| match (a.is_dir(), b.is_dir()) {
             (true, false) => Ordering::Less,

@@ -71,8 +71,6 @@ pub fn fetch_events(pr_number: u64) -> Result<Vec<TimelineEvent>, FetchError> {
         });
     }
 
-    // Merge/close are mutually exclusive terminal states. gh doesn't attribute
-    // an actor to either, so they go through unattributed.
     if pr.state == "MERGED"
         && let Some(created) = pr.merged_at
     {
@@ -99,7 +97,6 @@ fn review_kind(state: &str) -> Option<EventKind> {
         "APPROVED" => Some(EventKind::Approved),
         "CHANGES_REQUESTED" => Some(EventKind::ChangesRequested),
         "DISMISSED" => Some(EventKind::ReviewRemoved),
-        // A "COMMENTED" review is just a comment — already shown via comments.
         _ => None,
     }
 }

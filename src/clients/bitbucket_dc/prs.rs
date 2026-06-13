@@ -55,7 +55,6 @@ struct BbAuthor {
 
 #[derive(Debug, Deserialize)]
 struct BbUser {
-    /// Username — what `@-mentions` use.
     name: String,
 }
 
@@ -82,7 +81,6 @@ fn map_pr(bb: BbPr) -> PullRequest {
         match bb.state.as_str() {
             "MERGED" => PrStatus::Merged,
             "DECLINED" => PrStatus::Declined,
-            // OPEN — and anything a newer server might add.
             _ => PrStatus::Open,
         }
     };
@@ -92,12 +90,9 @@ fn map_pr(bb: BbPr) -> PullRequest {
         title: bb.title,
         description: bb.description,
         author: map_user(bb.author.user),
-        // Bitbucket DC doesn't surface CI on the PR list endpoint — needs a
-        // separate /builds call. Left Unknown for now.
         ci: CiState::Unknown,
         status,
         reviewers: bb.reviewers.into_iter().map(map_reviewer).collect(),
-        // Bitbucket DC has no first-class label concept on PRs.
         labels: Vec::new(),
         comment_count: bb.properties.comment_count,
         source_branch: bb.from_ref.display_id,

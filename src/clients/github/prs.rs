@@ -14,7 +14,6 @@ struct GhAuthor {
     login: String,
 }
 
-/// Deliberately empty — only the array length is used.
 #[derive(Debug, Deserialize)]
 struct GhCommentSummary {}
 
@@ -36,13 +35,10 @@ struct GhReviewSummary {
 #[derive(Debug, Deserialize)]
 #[serde(rename_all = "camelCase")]
 struct GhCheck {
-    /// Set for GitHub Actions check runs.
     #[serde(default)]
     conclusion: String,
-    /// Set for GitHub Actions check runs.
     #[serde(default)]
     status: String,
-    /// Set for external status checks.
     #[serde(default)]
     state: String,
 }
@@ -79,8 +75,6 @@ struct GhPr {
 }
 
 pub fn fetch_prs() -> Result<Vec<PullRequest>, FetchError> {
-    // `gh pr list` defaults to open PRs and 30 results; match the Bitbucket
-    // backend (all states, 50).
     let gh_prs: Vec<GhPr> = run_gh_json(&[
         "pr",
         "list",
@@ -115,7 +109,6 @@ fn map_pr(gh: GhPr) -> PullRequest {
             match gh.state.as_str() {
                 "MERGED" => PrStatus::Merged,
                 "CLOSED" => PrStatus::Declined,
-                // OPEN — and anything a newer API might add.
                 _ => PrStatus::Open,
             }
         },

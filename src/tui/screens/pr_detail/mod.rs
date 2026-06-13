@@ -27,8 +27,6 @@ use crate::{
     tui::{format, markdown, screens::half_page, theme, widgets},
 };
 
-// `DetailTab` itself is application navigation state and lives in `app::state`;
-// here we add only its presentation (tab-bar glyphs and labels).
 impl DetailTab {
     pub fn label(self) -> &'static str {
         match self {
@@ -40,7 +38,6 @@ impl DetailTab {
         }
     }
 
-    /// Nerd Font glyphs (requires a Nerd Font in the terminal).
     pub fn icon(self) -> &'static str {
         match self {
             Self::Description => "\u{f15c}", //  file-text
@@ -82,9 +79,9 @@ pub(in crate::tui) fn render(
     let chunks = Layout::default()
         .direction(Direction::Vertical)
         .constraints([
-            Constraint::Length(3), // title + blank + branch meta
-            Constraint::Length(1), // spacer between header and tabs
-            Constraint::Min(0),    // tabs + divider + content
+            Constraint::Length(3),
+            Constraint::Length(1),
+            Constraint::Min(0),
         ])
         .split(inner);
 
@@ -104,9 +101,6 @@ pub(in crate::tui) fn render(
     render_help(frame, tab, drilled, help_focus, footer, outer_chunks[1]);
 }
 
-/// The footer line when a detail-view search is active: a `/` filter prompt
-/// (commit list / file tree) or the pane's highlight state (typing, or applied
-/// with a match count + n/N hint). `None` falls back to the key hints.
 fn detail_footer(
     state: &AppState,
     pr_data: Option<&PrData>,
@@ -117,7 +111,6 @@ fn detail_footer(
 ) -> Option<Line<'static>> {
     let theme = theme::current();
 
-    // Commit list — filter prompt.
     if tab == DetailTab::Commits && !drilled {
         let s = &state.ui.commits.search;
         return s.open.then(|| {
@@ -146,10 +139,8 @@ fn detail_footer(
         DiffFocus::Pane => {
             let s = &view.pane_search;
             if s.open {
-                // Typing — show the query only; highlight + count wait for Enter.
                 Some(Line::from(widgets::search_input_spans(&s.query)))
             } else if !s.query.is_empty() {
-                // Applied — match count + n/N navigation.
                 let n = view.pane_matches.len();
                 let label = if n == 1 {
                     "1 match".to_string()
@@ -172,7 +163,6 @@ fn detail_footer(
     }
 }
 
-/// Files of the diff currently shown (the drilled commit's, else the PR's).
 fn active_files<'a>(state: &AppState, pr_data: Option<&'a PrData>, drilled: bool) -> &'a [FileDiff] {
     let diff_state = if drilled {
         state
@@ -190,9 +180,6 @@ fn active_files<'a>(state: &AppState, pr_data: Option<&'a PrData>, drilled: bool
     }
 }
 
-/// The diff pane's thread box (Diff tab and Commits drill-in). `anchor_text`
-/// is the diff line the thread sits on — the `-` side of any suggested
-/// change in the comments.
 pub(super) fn render_inline_thread(
     thread: &ReviewThread,
     width: u16,
@@ -261,9 +248,6 @@ pub(super) fn render_inline_thread(
     widgets::boxed(header, body, width, border)
 }
 
-/// A `◆ Suggested change` box: the anchored line as `-`, the suggestion's
-/// lines as `+`, and a `-1 +N` stat in the header. Display only — applying
-/// suggestions is a future feature.
 fn suggestion_lines(
     anchor: Option<(usize, &str)>,
     suggestion: &str,
@@ -300,7 +284,6 @@ fn suggestion_lines(
     }
     let header = Line::from(widgets::justify_between(left, right, text_w));
 
-    // The suggestion replaces the anchored line, so both sides number from it.
     let start = anchor.map(|(n, _)| n);
     let num_width = start
         .map_or(0, |n| (n + new_lines.len().saturating_sub(1)).to_string().len());
@@ -366,8 +349,8 @@ fn render_tabs_and_content(
     let chunks = Layout::default()
         .direction(Direction::Vertical)
         .constraints([
-            Constraint::Length(3), // top divider + tabs row + bottom divider
-            Constraint::Min(0),    // content (outer frame handles the border)
+            Constraint::Length(3),
+            Constraint::Min(0),
         ])
         .split(area);
 
@@ -427,8 +410,6 @@ fn render_content(
     tab: DetailTab,
     area: Rect,
 ) {
-    // Description renders through glamour, which adds its own ~2-col margins;
-    // the other tabs are inset to match that indent.
     let inset = match tab {
         DetailTab::Description => area,
         _ => Rect {
@@ -517,14 +498,10 @@ pub(in crate::tui) fn key_to_action(state: &AppState, key: KeyEvent) -> Option<A
         }
     }
 
-    // Esc steps back one level: diff pane → tree, commit drill-in → commit
-    // list, otherwise out of the detail view entirely.
     if key.code == KeyCode::Esc {
         let in_diff_pane = diff_focus == DiffFocus::Pane
             && (tab == DetailTab::Diff || (tab == DetailTab::Commits && drilled));
         if in_diff_pane {
-            // Esc clears a lingering search highlight first, then steps back to
-            // the tree.
             if !state.ui.active_diff_view().pane_search.query.is_empty() {
                 return Some(Action::Search(SearchInput::Cancel));
             }
@@ -571,7 +548,6 @@ pub(in crate::tui) fn key_to_action(state: &AppState, key: KeyEvent) -> Option<A
     }
 }
 
-/// j/k and PageUp/PageDown as a signed step, page-sized by the viewport.
 fn scroll_delta(code: KeyCode, viewport: u16) -> Option<i16> {
     match code {
         KeyCode::Down | KeyCode::Char('j') => Some(1),
@@ -590,7 +566,6 @@ fn tab_nav(code: KeyCode) -> Option<Action> {
     }
 }
 
-/// Diff navigation shared by the Diff tab and the Commits drill-in.
 fn diff_nav_action(code: KeyCode, view: &DiffViewState) -> Option<DiffAction> {
     match view.focus {
         DiffFocus::Tree => match code {
@@ -609,7 +584,6 @@ fn diff_nav_action(code: KeyCode, view: &DiffViewState) -> Option<DiffAction> {
             KeyCode::Up | KeyCode::Char('k') => Some(DiffAction::MovePaneCursor(-1)),
             KeyCode::PageDown => Some(DiffAction::MovePaneCursor(half_page(view.pane_viewport))),
             KeyCode::PageUp => Some(DiffAction::MovePaneCursor(-half_page(view.pane_viewport))),
-            // n/N step through search matches while a highlight is active.
             KeyCode::Char('n') if !view.pane_search.query.is_empty() => {
                 Some(DiffAction::JumpMatch(1))
             }
@@ -630,7 +604,6 @@ fn diff_half_page(view: &DiffViewState, down: bool) -> DiffAction {
     }
 }
 
-/// `None` on non-scrolling contexts (Builds).
 fn half_page_scroll(state: &AppState, tab: DetailTab, down: bool) -> Option<Action> {
     let step = |viewport| {
         let h = half_page(viewport);

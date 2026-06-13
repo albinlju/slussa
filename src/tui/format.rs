@@ -1,7 +1,6 @@
 use chrono::{DateTime, Utc};
 use ratatui::text::Span;
 
-/// Truncate to `max` display columns, ending with `…` when cut.
 pub(super) fn truncate_ellipsis(s: &str, max: usize) -> String {
     if Span::raw(s).width() <= max {
         return s.to_string();

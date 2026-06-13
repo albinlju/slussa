@@ -78,8 +78,6 @@ impl App {
         }
     }
 
-    /// Step the pane cursor to the next (+1) / previous (-1) search match,
-    /// wrapping around. No-op when there are no matches.
     fn diff_jump_match(&mut self, delta: i16) {
         let view = self.diff_view();
         let matches = &view.pane_matches;

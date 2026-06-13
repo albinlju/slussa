@@ -3,10 +3,8 @@ use std::io::Write;
 use crate::app::preflight::{parse_remote_host, read_origin_remote};
 use crate::clients::bitbucket_dc;
 
-/// Keyring service name under which every host's PAT is stored.
 pub(crate) const SERVICE: &str = "tuipr";
 
-/// Look up a stored PAT for `host`. `None` means "not authenticated yet".
 pub fn load_pat(host: &str) -> Option<String> {
     let entry = keyring::Entry::new(SERVICE, host).ok()?;
     match entry.get_password() {

@@ -7,7 +7,6 @@ use crate::clients::{Backend, bitbucket_dc, github};
 pub enum PreflightError {
     GitMissing,
     NotAGitRepo,
-    /// The `origin` remote exists but no host could be parsed out of it.
     UnparseableRemote {
         remote: String,
     },
@@ -18,17 +17,13 @@ pub enum PreflightError {
     GhNotAuthenticated {
         host: String,
     },
-    /// The backend probe for `host` failed — likely network or DNS.
     UnknownHost {
         host: String,
         reason: String,
     },
-    /// `host` is a Bitbucket Data Center but no PAT exists in the keyring yet.
     DcNotAuthenticated {
         host: String,
     },
-    /// Git remote URL has Bitbucket-shaped host but doesn't parse to a
-    /// project + repo we can talk to.
     DcUnparseableRemote {
         host: String,
         remote: String,

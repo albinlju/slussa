@@ -14,9 +14,6 @@ struct GqlComments {
     nodes: Vec<GqlComment>,
 }
 
-// GraphQL instead of `gh pr view --json comments`: only the GraphQL
-// reactionGroups carry `viewerHasReacted`, which marks the user's own
-// reactions in the UI.
 pub fn fetch_comments(pr_number: u64) -> Result<Vec<Comment>, FetchError> {
     let query = format!(
         "query($owner: String!, $name: String!, $pr: Int!) {{ \

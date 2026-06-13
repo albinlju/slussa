@@ -14,8 +14,6 @@ use crate::domain::{
     pr::PullRequest,
 };
 
-/// A PR's activity feed split three ways: general discussion comments,
-/// lifecycle events, and inline review threads.
 #[derive(Debug, Default, Clone)]
 pub struct ActivityBundle {
     pub comments: Vec<Comment>,
@@ -25,9 +23,7 @@ pub struct ActivityBundle {
 
 #[derive(Clone, Debug)]
 pub enum Backend {
-    /// GitHub via the `gh` CLI. No client state — gh handles auth/session.
     GitHub,
-    /// Bitbucket Data Center via REST v1 with a PAT.
     BitbucketDc(bitbucket_dc::Config),
 }
 
@@ -53,7 +49,6 @@ impl Backend {
         }
     }
 
-    /// The diff a single commit introduced (commit vs its first parent).
     pub fn fetch_commit_diff(&self, oid: &str) -> Result<Diff, FetchError> {
         match self {
             Self::GitHub => github::fetch_commit_diff(oid),

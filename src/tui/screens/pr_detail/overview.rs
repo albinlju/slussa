@@ -23,13 +23,9 @@ use crate::{
     },
 };
 
-/// Width of the left timeline column (`● ` or `│ ` — glyph + a trailing
-/// space before content).
 const TIMELINE_COL: u16 = 2;
 
 const SIDEBAR_WIDTH: u16 = 30;
-/// Below this width the sidebar would squeeze the timeline into uselessness,
-/// so it's dropped entirely.
 const SIDEBAR_BREAKPOINT: u16 = 64;
 
 pub fn render(
@@ -128,7 +124,6 @@ fn render_sidebar(frame: &mut Frame, pr: &PullRequest, pr_data: Option<&PrData>,
     lines.extend(builds_summary(pr_data));
     lines.push(Line::default());
 
-    // Bitbucket DC has no labels; the section is hidden when empty.
     if !pr.labels.is_empty() {
         section_heading(&mut lines, "Labels");
         for label in &pr.labels {
@@ -199,7 +194,6 @@ fn render_timeline(frame: &mut Frame, pr_data: Option<&PrData>, ui: &mut UiMemor
         _ => None,
     });
 
-    // The scrollbar owns the rightmost column.
     let lines = build_overview_lines(
         &bundle.comments,
         &bundle.threads,
@@ -247,13 +241,10 @@ fn build_overview_lines(
     events.extend(comments.iter().map(Event::Issue));
     events.extend(threads.iter().map(Event::Review));
     events.extend(activity.iter().map(Event::Activity));
-    // Newest first.
     events.sort_by_key(|e| std::cmp::Reverse(e.timestamp()));
 
     let now = Utc::now();
 
-    // Content lines first, then the timeline column gets prepended: ● on each
-    // event's first line, │ everywhere else.
     let blocks: Vec<(EventStyle, Vec<Line<'static>>)> = events
         .iter()
         .filter_map(|event| match event {
@@ -301,7 +292,6 @@ fn build_overview_lines(
 enum EventStyle {
     Comment,
     Review,
-    /// Lifecycle event, carrying its own dot color.
     Activity(Color),
 }
 
@@ -315,8 +305,6 @@ impl EventStyle {
     }
 }
 
-/// One `@actor <verb> · age` line per lifecycle event (a push adds one line
-/// per commit). Returns the dot color so the timeline circle matches.
 fn activity_lines(event: &TimelineEvent, now: DateTime<Utc>) -> (Color, Vec<Line<'static>>) {
     let theme = theme::current();
     let age = format::relative_age(event.created, now);
@@ -391,7 +379,6 @@ fn build_review_lines(
 
     let mut body: Vec<Line<'static>> = Vec::new();
 
-    // Nested box: path:line as header, diff snippet as body.
     let location = match thread.line.or(thread.old_line) {
         Some(l) => format!("{}:{}", thread.path, l),
         None => thread.path.clone(),
@@ -414,8 +401,6 @@ fn build_review_lines(
         .iter()
         .map(|c| split_suggestions(&c.content))
         .collect();
-    // A suggestion box repeats the anchored line as its `-` side, so the
-    // snippet would show the same line twice — keep just the location header.
     let has_suggestion = splits.iter().any(|(_, s)| !s.is_empty());
     if snippet.is_empty() || has_suggestion {
         body.push(inner_header);
@@ -424,8 +409,6 @@ fn build_review_lines(
     }
     let anchor = thread.line.or(thread.old_line).zip(anchor_text.as_deref());
 
-    // The first author is already in the box header; replies get a `↳ @user`
-    // line.
     for (i, (comment, (prose, suggestions))) in
         thread.comments.iter().zip(splits.iter()).enumerate()
     {
@@ -475,13 +458,8 @@ fn issue_comment_header(
     ])
 }
 
-/// Leading context lines above the anchored line.
 const SNIPPET_CONTEXT: usize = 3;
 
-/// A diff snippet around the thread's anchor line, styled to match the Diff
-/// tab, plus the anchored line's text (the `-` side of a suggested change).
-/// Empty when the file/line isn't in the loaded diff (outdated comment, or
-/// not loaded yet).
 fn diff_snippet(
     diff: &Diff,
     path: &str,
@@ -517,7 +495,6 @@ fn diff_snippet(
         }
     }
 
-    // Added/context lines anchor by new-side number, removed by old-side.
     let anchor = rows.iter().position(|r| match (line, old_line) {
         (Some(l), _) => !matches!(r.dl, DiffLine::Removed(_)) && r.new_no == l,
         (None, Some(o)) => matches!(r.dl, DiffLine::Removed(_)) && r.old_no == o,

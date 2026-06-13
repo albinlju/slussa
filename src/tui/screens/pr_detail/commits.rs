@@ -29,7 +29,6 @@ pub fn render(frame: &mut Frame, pr_data: Option<&PrData>, cv: &mut CommitsViewS
     cv.viewport = area.height;
     let now = Utc::now();
     let width = area.width as usize;
-    // `/` search narrows the list; selection indexes the filtered view.
     let filtered: Vec<&Commit> = cv.search.filter_commits(commits);
     let last_idx = filtered.len().saturating_sub(1);
     let items: Vec<ListItem> = filtered
@@ -44,8 +43,6 @@ pub fn render(frame: &mut Frame, pr_data: Option<&PrData>, cv: &mut CommitsViewS
     frame.render_stateful_widget(list, area, &mut list_state);
 }
 
-/// The drill-in: a banner identifying the commit, then its diff rendered with
-/// the shared Diff-tab widget.
 pub fn render_commit_diff(
     frame: &mut Frame,
     pr_data: Option<&PrData>,
@@ -129,11 +126,11 @@ fn build_commit_line(c: &Commit, is_last: bool, now: DateTime<Utc>, width: usize
     ];
     let right_visible: usize = right_spans.iter().map(Span::width).sum();
 
-    let left_fixed = graph.chars().count() + short_oid.chars().count() + 2; // 2 spaces after oid
+    let left_fixed = graph.chars().count() + short_oid.chars().count() + 2;
     let headline = format::truncate_ellipsis(
         &c.headline,
         width
-            .saturating_sub(left_fixed + right_visible + 2) // 2-col min gap before right block
+            .saturating_sub(left_fixed + right_visible + 2)
             .max(10),
     );
 
