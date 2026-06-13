@@ -203,18 +203,25 @@ generic `/`-search interception runs first (typing mode captures characters;
 
 - **`screens/pr_list/`** — the table (fixed columns, flexing title), status
   filter picker modal, and list key handling.
-- **`screens/pr_detail/`** — header + tab bar + one module per tab:
-  `description` (markdown), `overview` (timeline + sidebar), `diff/`
-  (file tree + pane), `commits` (list + drill-in banner reusing `diff/`),
-  `checks` (builds). `key_to_action` here also resolves the Esc cascade
+- **`screens/pr_detail/`** — `mod.rs` does header + tab bar + render
+  dispatch; one module per tab: `description` (markdown), `overview`
+  (timeline + sidebar), `diff/` (file tree + pane), `commits` (list +
+  drill-in banner reusing `diff/`), `checks` (builds). `comment.rs` is the
+  comment/conversation component — it owns every way a comment is drawn
+  (the diff pane's inline thread, the overview's standalone comment and
+  review-thread boxes) over a shared `author_line` + `comment_body` + diff-snippet
+  core, so `overview` stays pure timeline/sidebar composition. `keys.rs` holds
+  `key_to_action`, which resolves the Esc cascade
   (pane → tree → drill-in → list → PR list) and Ctrl+D/U routing.
 - **`widgets.rs`** — shared rendering primitives: `boxed` (rounded-border
   boxes built as `Line`s so they can nest inside scrolling paragraphs),
   `framed_panel` (the rounded panel + header band shared by the diff tree
   and pane), `loaded_or_placeholder` (the loading/failed rows every
-  fetch-backed tab shares), `empty` (the muted `(no …)` one-liner),
+  fetch-backed tab shares), `empty_state` (the muted `(no …)` one-liner),
   `scrolled_paragraph` (clamp-scroll + scrollbar +
-  viewport write-back), `loading` (the spinner row), `reactions_line`
+  viewport write-back), `loading` (the spinner row), `author_line` (the grey
+  "who · when" line under every comment and timeline event — caller's lead
+  spans + a muted `· <relative age>` suffix), `reactions_line`
   (powerline-capped pills; your own reactions get the accent-tinted
   background), search highlighting, diff row builders.
 - **`table.rs`** — the declarative table engine for the PR-list grid:
