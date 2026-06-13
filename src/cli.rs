@@ -1,8 +1,7 @@
 use std::process::ExitCode;
 
-use crate::app;
 use crate::app::preflight::{self, PreflightError};
-use crate::providers::{Provider, github};
+use crate::providers::{Provider, bitbucket_dc, github};
 
 pub enum Dispatch {
     Done(ExitCode),
@@ -63,13 +62,18 @@ fn print_help() {
 
 fn run_auth(args: &[String]) -> ExitCode {
     match args.first().map(String::as_str) {
-        Some("login") | None => match app::auth::run_login() {
-            Ok(()) => ExitCode::SUCCESS,
-            Err(err) => {
-                eprintln!("tuipr: {err}");
-                ExitCode::from(1)
+        Some("login") | None => {
+            let result = preflight::origin_host()
+                .map_err(|e| e.to_string())
+                .and_then(|host| bitbucket_dc::auth::login(&host));
+            match result {
+                Ok(()) => ExitCode::SUCCESS,
+                Err(err) => {
+                    eprintln!("tuipr: {err}");
+                    ExitCode::from(1)
+                }
             }
-        },
+        }
         Some(other) => {
             eprintln!("tuipr: unknown auth subcommand `{other}`. Try `tuipr auth login`.");
             ExitCode::from(2)
@@ -99,7 +103,7 @@ fn ensure_ready() -> Result<Provider, PreflightError> {
 }
 
 fn run_keyring_test() -> ExitCode {
-    use crate::app::auth::SERVICE;
+    use crate::providers::bitbucket_dc::auth::SERVICE;
     use keyring::Entry;
 
     const ACCOUNT: &str = "tuipr-keyring-test.localhost";

@@ -104,7 +104,7 @@ pub fn run() -> Result<Provider, PreflightError> {
                     remote: remote.clone(),
                 }
             })?;
-            let pat = crate::app::auth::load_pat(&host)
+            let pat = bitbucket_dc::auth::load_pat(&host)
                 .ok_or_else(|| PreflightError::DcNotAuthenticated { host: host.clone() })?;
             tracing::info!(
                 "bitbucket dc preflight ok for {}/{}/{}",
@@ -144,6 +144,11 @@ fn classify_host(host: &str) -> Result<HostKind, PreflightError> {
             reason,
         }),
     }
+}
+
+pub(crate) fn origin_host() -> Result<String, PreflightError> {
+    let remote = read_origin_remote()?;
+    parse_remote_host(&remote).ok_or(PreflightError::UnparseableRemote { remote })
 }
 
 pub(super) fn read_origin_remote() -> Result<String, PreflightError> {

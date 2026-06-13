@@ -50,9 +50,17 @@ classifies it:
   the interactive `gh auth login` and retries preflight once.
 - any other host → probe `/rest/api/1.0/application-properties`
   (`providers/bitbucket_dc/probe.rs`) to detect a Data Center instance, then
-  load its PAT from the OS keyring (`app/auth.rs`). No PAT → the error tells
-  the user to run `tuipr auth login`, which prompts for a token, validates it
-  against the same endpoint (`bitbucket_dc/token.rs`), and stores it.
+  load its PAT from the OS keyring (`providers/bitbucket_dc/auth.rs`). No PAT →
+  the error tells the user to run `tuipr auth login`, which prompts for a
+  token, validates it against the same endpoint, and stores it.
+
+Each provider owns its auth in its own module — `providers/github/auth.rs`
+(gh delegation: is-installed / is-authenticated / launch-login) and
+`providers/bitbucket_dc/auth.rs` (PAT lifecycle: keyring load/store, prompt,
+validate). They share no logic — GitHub's credentials live in `gh`,
+Bitbucket's in tuipr's keyring — so there's no unified `Provider::login()`;
+the orchestration (which provider, resolve host, recover interactively) is
+`preflight` + `cli`.
 
 The result is a `providers::Provider` — the only value carried from startup
 into the TUI.
