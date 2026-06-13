@@ -10,12 +10,12 @@ pub enum Action {
     Detail(DetailAction),
     Diff(DiffAction),
     Commits(CommitsAction),
-    Search(SearchInput),
+    Search(SearchAction),
     Loaded(LoadedAction),
 }
 
 #[derive(Debug, Clone, Copy)]
-pub enum SearchInput {
+pub enum SearchAction {
     Open,
     Type(char),
     Backspace,
