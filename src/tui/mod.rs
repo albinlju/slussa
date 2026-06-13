@@ -10,7 +10,7 @@ use ratatui::{
 };
 
 use crate::app::{
-    action::{Action, SearchInput},
+    action::{Action, SearchAction},
     state::{AppState, Screen, SearchState, SearchTarget},
 };
 
@@ -28,17 +28,17 @@ pub fn key_to_action(state: &AppState, key: KeyEvent) -> Option<Action> {
         if search.open {
             if !key.modifiers.contains(KeyModifiers::CONTROL) {
                 match key.code {
-                    KeyCode::Char(c) => return Some(Action::Search(SearchInput::Type(c))),
-                    KeyCode::Backspace => return Some(Action::Search(SearchInput::Backspace)),
-                    KeyCode::Esc => return Some(Action::Search(SearchInput::Cancel)),
+                    KeyCode::Char(c) => return Some(Action::Search(SearchAction::Type(c))),
+                    KeyCode::Backspace => return Some(Action::Search(SearchAction::Backspace)),
+                    KeyCode::Esc => return Some(Action::Search(SearchAction::Cancel)),
                     KeyCode::Enter if highlight => {
-                        return Some(Action::Search(SearchInput::Confirm));
+                        return Some(Action::Search(SearchAction::Confirm));
                     }
                     _ => {}
                 }
             }
         } else if key.code == KeyCode::Char('/') {
-            return Some(Action::Search(SearchInput::Open));
+            return Some(Action::Search(SearchAction::Open));
         }
     }
 

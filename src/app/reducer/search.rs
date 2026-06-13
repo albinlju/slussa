@@ -1,30 +1,30 @@
 use crate::app::{
     App,
-    action::SearchInput,
+    action::SearchAction,
     file_tree::TreeRow,
     state::{SearchState, SearchTarget},
 };
 
 impl App {
-    pub(super) fn apply_search(&mut self, input: SearchInput) {
+    pub(super) fn apply_search(&mut self, action: SearchAction) {
         let Some(target) = self.state.search_target() else {
             return;
         };
         let search = self.search_mut(target);
-        match input {
-            SearchInput::Open => {
+        match action {
+            SearchAction::Open => {
                 search.open = true;
                 return;
             }
-            SearchInput::Confirm => {
+            SearchAction::Confirm => {
                 search.open = false;
                 return;
             }
-            SearchInput::Type(c) => search.query.push(c),
-            SearchInput::Backspace => {
+            SearchAction::Type(c) => search.query.push(c),
+            SearchAction::Backspace => {
                 search.query.pop();
             }
-            SearchInput::Cancel => {
+            SearchAction::Cancel => {
                 search.open = false;
                 search.query.clear();
             }

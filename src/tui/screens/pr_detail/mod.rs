@@ -16,7 +16,7 @@ use ratatui::{
 
 use crate::{
     app::{
-        action::{Action, CommitsAction, DetailAction, DiffAction, SearchInput},
+        action::{Action, CommitsAction, DetailAction, DiffAction, SearchAction},
         state::{AppState, DetailTab, DiffFocus, DiffViewState, LoadState, PrData, Screen, UiMemory},
     },
     domain::{
@@ -503,7 +503,7 @@ pub(in crate::tui) fn key_to_action(state: &AppState, key: KeyEvent) -> Option<A
             && (tab == DetailTab::Diff || (tab == DetailTab::Commits && drilled));
         if in_diff_pane {
             if !state.ui.active_diff_view().pane_search.query.is_empty() {
-                return Some(Action::Search(SearchInput::Cancel));
+                return Some(Action::Search(SearchAction::Cancel));
             }
             return Some(Action::Diff(DiffAction::FocusTree));
         }
