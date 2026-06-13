@@ -66,7 +66,7 @@ pub fn run() -> Result<Provider, PreflightError> {
         }
         HostKind::BitbucketCloud => Err(PreflightError::BitbucketCloudUnsupported),
         HostKind::BitbucketDc => {
-            let coords = bitbucket_dc::remote::parse(&remote, &host).ok_or_else(|| {
+            let repo = bitbucket_dc::remote::locate(&remote, &host).ok_or_else(|| {
                 PreflightError::DcUnparseableRemote {
                     host: host.clone(),
                     remote: remote.clone(),
@@ -77,13 +77,10 @@ pub fn run() -> Result<Provider, PreflightError> {
             tracing::info!(
                 "bitbucket dc preflight ok for {}/{}/{}",
                 host,
-                coords.project_key,
-                coords.repo_slug
+                repo.project_key,
+                repo.repo_slug
             );
-            Ok(Provider::BitbucketDc(bitbucket_dc::Config {
-                repo: coords,
-                pat,
-            }))
+            Ok(Provider::BitbucketDc(bitbucket_dc::Config { repo, pat }))
         }
     }
 }
