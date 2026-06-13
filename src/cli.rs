@@ -1,6 +1,7 @@
 use std::process::ExitCode;
 
 use crate::app::preflight::{self, PreflightError};
+use crate::app::remote;
 use crate::providers::{Provider, bitbucket_dc, github};
 
 pub enum Dispatch {
@@ -63,7 +64,7 @@ fn print_help() {
 fn run_auth(args: &[String]) -> ExitCode {
     match args.first().map(String::as_str) {
         Some("login") | None => {
-            let result = preflight::origin_host()
+            let result = remote::origin_host()
                 .map_err(|e| e.to_string())
                 .and_then(|host| bitbucket_dc::auth::login(&host));
             match result {
