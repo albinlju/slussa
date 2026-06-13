@@ -27,6 +27,8 @@ pub mod preflight;
 pub mod reducer;
 pub mod state;
 
+const SPINNER_INTERVAL: Duration = Duration::from_millis(100);
+
 pub struct App {
     pub state: AppState,
     pub(crate) backend: Backend,
@@ -49,32 +51,35 @@ impl App {
         self.state.cache.prs = LoadState::Loading;
         self.spawn_load_prs();
 
-        let mut interval = time::interval(Duration::from_millis(16));
-        interval.set_missed_tick_behavior(time::MissedTickBehavior::Skip);
-
         let mut events = EventStream::new();
-        terminal.draw(|f| render(f, &mut self.state))?;
+        self.draw(terminal)?;
 
         loop {
+            let animating = self.state.is_loading();
             tokio::select! {
-                _ = interval.tick() => {
-                    terminal.draw(|f| render(f, &mut self.state))?;
-                }
-                Some(Ok(event)) = events.next() => {
-                    if let Event::Key(key) = event
-                        && key.kind == KeyEventKind::Press
-                        && let Some(action) = key_to_action(&self.state, key)
-                    {
-                        self.action_tx.send(action).ok();
+                () = time::sleep(SPINNER_INTERVAL), if animating => self.draw(terminal)?,
+                Some(Ok(event)) = events.next() => match event {
+                    Event::Key(key) if key.kind == KeyEventKind::Press => {
+                        if let Some(action) = key_to_action(&self.state, key) {
+                            self.action_tx.send(action).ok();
+                        }
                     }
-                }
-                Some(action) = self.action_rx.recv() => {
-                    match action {
-                        Action::Quit => return Ok(()),
-                        other => self.apply(other),
+                    Event::Resize(_, _) => self.draw(terminal)?,
+                    _ => {}
+                },
+                Some(action) = self.action_rx.recv() => match action {
+                    Action::Quit => return Ok(()),
+                    other => {
+                        self.apply(other);
+                        self.draw(terminal)?;
                     }
-                }
+                },
             }
         }
+    }
+
+    fn draw(&mut self, terminal: &mut DefaultTerminal) -> std::io::Result<()> {
+        terminal.draw(|f| render(f, &mut self.state))?;
+        Ok(())
     }
 }
