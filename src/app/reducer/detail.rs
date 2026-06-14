@@ -44,6 +44,6 @@ impl App {
 
     fn reset_tab_state(&mut self) {
         self.state.ui.diff.focus = DiffFocus::Tree;
-        self.state.ui.commits.drilled = None;
+        self.state.ui.commits.open_commit = None;
     }
 }

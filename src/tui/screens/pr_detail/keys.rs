@@ -16,7 +16,7 @@ pub(in crate::tui) fn key_to_action(state: &AppState, key: KeyEvent) -> Option<A
     let Screen::Detail { tab, .. } = state.screen else {
         return None;
     };
-    let drilled = state.ui.commits.drilled.is_some();
+    let viewing_commit = state.ui.commits.open_commit.is_some();
     let diff_focus = state.ui.active_diff_view().focus;
 
     if key.modifiers.contains(KeyModifiers::CONTROL) {
@@ -29,14 +29,14 @@ pub(in crate::tui) fn key_to_action(state: &AppState, key: KeyEvent) -> Option<A
 
     if key.code == KeyCode::Esc {
         let in_diff_pane = diff_focus == DiffFocus::Pane
-            && (tab == DetailTab::Diff || (tab == DetailTab::Commits && drilled));
+            && (tab == DetailTab::Diff || (tab == DetailTab::Commits && viewing_commit));
         if in_diff_pane {
             if !state.ui.active_diff_view().pane_search.query.is_empty() {
                 return Some(Action::Search(SearchAction::Cancel));
             }
             return Some(Action::Diff(DiffAction::FocusTree));
         }
-        if tab == DetailTab::Commits && drilled {
+        if tab == DetailTab::Commits && viewing_commit {
             return Some(Action::Commits(CommitsAction::Back));
         }
         return Some(Action::Detail(DetailAction::Back));
@@ -56,7 +56,7 @@ pub(in crate::tui) fn key_to_action(state: &AppState, key: KeyEvent) -> Option<A
 
     match tab {
         DetailTab::Diff => diff_nav_action(key.code, state.ui.active_diff_view()).map(Action::Diff),
-        DetailTab::Commits if drilled => match key.code {
+        DetailTab::Commits if viewing_commit => match key.code {
             KeyCode::Char('[') => Some(Action::Commits(CommitsAction::StepCommit(-1))),
             KeyCode::Char(']') => Some(Action::Commits(CommitsAction::StepCommit(1))),
             _ => diff_nav_action(key.code, state.ui.active_diff_view()).map(Action::Diff),
@@ -146,7 +146,7 @@ fn half_page_scroll(state: &AppState, tab: DetailTab, down: bool) -> Option<Acti
             state.ui.overview_viewport,
         )))),
         DetailTab::Diff => Some(Action::Diff(diff_half_page(&state.ui.diff, down))),
-        DetailTab::Commits if state.ui.commits.drilled.is_some() => {
+        DetailTab::Commits if state.ui.commits.open_commit.is_some() => {
             Some(Action::Diff(diff_half_page(&state.ui.commits.diff, down)))
         }
         DetailTab::Commits => Some(Action::Commits(CommitsAction::MoveSelection(step(
