@@ -1,7 +1,7 @@
 use chrono::{DateTime, Utc};
 use ratatui::{
     Frame,
-    layout::{Constraint, Direction, Layout, Rect},
+    layout::{Constraint, Direction, Rect},
     style::{Color, Modifier, Style},
     text::{Line, Span},
     widgets::{Block, Borders, Padding, Paragraph, Wrap},
@@ -17,7 +17,7 @@ use crate::{
         review::ReviewerState,
     },
     tui::{
-        format,
+        format, layout,
         theme::{self, Theme},
         widgets,
     },
@@ -36,11 +36,12 @@ pub fn render(
     area: Rect,
 ) {
     let (timeline_area, sidebar_area) = if area.width >= SIDEBAR_BREAKPOINT {
-        let chunks = Layout::default()
-            .direction(Direction::Horizontal)
-            .constraints([Constraint::Min(0), Constraint::Length(SIDEBAR_WIDTH)])
-            .split(area);
-        (chunks[0], Some(chunks[1]))
+        let [timeline, sidebar] = layout::split(
+            area,
+            Direction::Horizontal,
+            [Constraint::Min(0), Constraint::Length(SIDEBAR_WIDTH)],
+        );
+        (timeline, Some(sidebar))
     } else {
         (area, None)
     };
