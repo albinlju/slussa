@@ -35,7 +35,7 @@ impl App {
             return None;
         };
         let detail = self.state.cache.details.get(&pr_id)?;
-        let state = match &self.state.ui.commits.drilled {
+        let state = match &self.state.ui.commits.open_commit {
             Some(oid) => detail.commit_diffs.get(oid)?,
             None => &detail.diff,
         };

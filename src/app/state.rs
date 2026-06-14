@@ -101,7 +101,7 @@ pub struct UiMemory {
 
 impl UiMemory {
     pub fn active_diff_view(&self) -> &DiffViewState {
-        if self.commits.drilled.is_some() {
+        if self.commits.open_commit.is_some() {
             &self.commits.diff
         } else {
             &self.diff
@@ -109,7 +109,7 @@ impl UiMemory {
     }
 
     pub fn active_diff_view_mut(&mut self) -> &mut DiffViewState {
-        if self.commits.drilled.is_some() {
+        if self.commits.open_commit.is_some() {
             &mut self.commits.diff
         } else {
             &mut self.diff
@@ -186,7 +186,7 @@ pub struct CommitsViewState {
     pub selected: usize,
     pub viewport: u16,
     pub search: SearchState,
-    pub drilled: Option<String>,
+    pub open_commit: Option<String>,
     pub diff: DiffViewState,
 }
 
@@ -261,9 +261,9 @@ impl AppState {
         match self.screen {
             Screen::List => (!self.ui.filter_picker_open).then_some(SearchTarget::List),
             Screen::Detail { tab, .. } => {
-                let drilled = self.ui.commits.drilled.is_some();
+                let viewing_commit = self.ui.commits.open_commit.is_some();
                 match tab {
-                    DetailTab::Commits if !drilled => Some(SearchTarget::Commits),
+                    DetailTab::Commits if !viewing_commit => Some(SearchTarget::Commits),
                     DetailTab::Diff | DetailTab::Commits => {
                         match self.ui.active_diff_view().focus {
                             DiffFocus::Tree => Some(SearchTarget::DiffTree),

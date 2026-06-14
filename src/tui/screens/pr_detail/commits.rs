@@ -49,7 +49,7 @@ pub fn render_commit_diff(
     cv: &mut CommitsViewState,
     area: Rect,
 ) {
-    let Some(oid) = cv.drilled.clone() else {
+    let Some(oid) = cv.open_commit.clone() else {
         return;
     };
     let [banner_area, diff_area] =
@@ -57,7 +57,7 @@ pub fn render_commit_diff(
 
     render_commit_banner(frame, pr_data, &oid, banner_area);
 
-    let diff_state = pr_data.and_then(|d| d.commit_diffs.get(&oid));
+    let diff_state = super::active_diff(Some(&oid), pr_data);
     super::diff::render(frame, diff_state, threads, &mut cv.diff, diff_area);
 }
 

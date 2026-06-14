@@ -12,7 +12,7 @@ impl App {
         match action {
             CommitsAction::MoveSelection(delta) => self.commits_move_selection(delta),
             CommitsAction::Open => self.commits_open_selected(),
-            CommitsAction::Back => self.state.ui.commits.drilled = None,
+            CommitsAction::Back => self.state.ui.commits.open_commit = None,
             CommitsAction::StepCommit(delta) => {
                 let before = self.state.ui.commits.selected;
                 self.commits_move_selection(delta);
@@ -49,7 +49,7 @@ impl App {
         else {
             return;
         };
-        self.state.ui.commits.drilled = Some(oid.clone());
+        self.state.ui.commits.open_commit = Some(oid.clone());
         self.state.ui.commits.diff = DiffViewState::default();
         self.ensure_commit_diff(oid);
     }
