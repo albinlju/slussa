@@ -5,7 +5,7 @@ use std::collections::HashSet;
 
 use ratatui::{
     Frame,
-    layout::{Constraint, Direction, Layout, Rect},
+    layout::{Constraint, Direction, Rect},
 };
 
 use crate::{
@@ -18,6 +18,7 @@ use crate::{
         diff::{Diff, DiffLine, FileDiff},
     },
     tui::{
+        layout,
         screens::pr_detail::diff::{pane::PaneView, tree::TreeView},
         widgets,
     },
@@ -38,14 +39,11 @@ pub fn render(
         return;
     }
 
-    let chunks = Layout::default()
-        .direction(Direction::Horizontal)
-        .constraints([
-            Constraint::Percentage(28),
-            Constraint::Length(1),
-            Constraint::Min(0),
-        ])
-        .split(area);
+    let [tree_area, _, pane_area] = layout::split(
+        area,
+        Direction::Horizontal,
+        [Constraint::Percentage(28), Constraint::Length(1), Constraint::Min(0)],
+    );
 
     let file_stats: Vec<(u32, u32)> = diff.files.iter().map(count_file_stats).collect();
 
@@ -55,8 +53,8 @@ pub fn render(
         .map(|f| file_comment_count(f, review_threads))
         .collect();
 
-    ui_diff.pane_viewport = chunks[2].height.saturating_sub(4);
-    ui_diff.tree_viewport = chunks[0].height.saturating_sub(4);
+    ui_diff.pane_viewport = pane_area.height.saturating_sub(4);
+    ui_diff.tree_viewport = tree_area.height.saturating_sub(4);
 
     let tree_focused = matches!(ui_diff.focus, DiffFocus::Tree);
     let rows = build_visible_rows(&diff.files, &ui_diff.collapsed, &ui_diff.tree_search.query);
@@ -67,7 +65,7 @@ pub fn render(
         comment_counts: &comment_counts,
         focused: tree_focused,
     }
-    .render(frame, chunks[0]);
+    .render(frame, tree_area);
 
     let pane_query = if ui_diff.pane_search.open {
         ""
@@ -83,7 +81,7 @@ pub fn render(
         focused: !tree_focused,
         query: pane_query,
     }
-    .render(frame, &mut ui_diff.pane_scroll, chunks[2]);
+    .render(frame, &mut ui_diff.pane_scroll, pane_area);
     ui_diff.pane_item_count = pane_item_count;
     ui_diff.pane_matches = pane_matches;
 }

@@ -1,7 +1,7 @@
 use chrono::{DateTime, Utc};
 use ratatui::{
     Frame,
-    layout::{Constraint, Direction, Layout, Rect},
+    layout::{Constraint, Direction, Rect},
     style::{Modifier, Style},
     text::{Line, Span},
     widgets::{Block, Borders, List, ListItem, ListState, Paragraph},
@@ -10,7 +10,7 @@ use ratatui::{
 use crate::{
     app::state::{CommitsViewState, LoadState, PrData},
     domain::{comment::ReviewThread, commit::Commit},
-    tui::{format, theme, widgets},
+    tui::{format, layout, theme, widgets},
 };
 
 pub fn render(frame: &mut Frame, pr_data: Option<&PrData>, cv: &mut CommitsViewState, area: Rect) {
@@ -52,15 +52,13 @@ pub fn render_commit_diff(
     let Some(oid) = cv.drilled.clone() else {
         return;
     };
-    let chunks = Layout::default()
-        .direction(Direction::Vertical)
-        .constraints([Constraint::Length(2), Constraint::Min(0)])
-        .split(area);
+    let [banner_area, diff_area] =
+        layout::split(area, Direction::Vertical, [Constraint::Length(2), Constraint::Min(0)]);
 
-    render_commit_banner(frame, pr_data, &oid, chunks[0]);
+    render_commit_banner(frame, pr_data, &oid, banner_area);
 
     let diff_state = pr_data.and_then(|d| d.commit_diffs.get(&oid));
-    super::diff::render(frame, diff_state, threads, &mut cv.diff, chunks[1]);
+    super::diff::render(frame, diff_state, threads, &mut cv.diff, diff_area);
 }
 
 fn render_commit_banner(frame: &mut Frame, pr_data: Option<&PrData>, oid: &str, area: Rect) {

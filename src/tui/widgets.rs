@@ -1,7 +1,7 @@
 use chrono::{DateTime, Utc};
 use ratatui::{
     Frame,
-    layout::{Constraint, Direction, Layout, Rect},
+    layout::{Constraint, Direction, Rect},
     style::{Color, Modifier, Style},
     text::{Line, Span},
     widgets::{Block, BorderType, Borders, Paragraph},
@@ -9,7 +9,7 @@ use ratatui::{
 
 use crate::app::state::LoadState;
 use crate::domain::comment::Reaction;
-use crate::tui::{format, theme};
+use crate::tui::{format, layout, theme};
 
 pub(super) fn author_line(
     mut lead: Vec<Span<'static>>,
@@ -33,18 +33,19 @@ pub(super) fn framed_panel(frame: &mut Frame, area: Rect, focused: bool) -> (Rec
     let inner = block.inner(area);
     frame.render_widget(block, area);
 
-    let chunks = Layout::default()
-        .direction(Direction::Vertical)
-        .constraints([Constraint::Length(2), Constraint::Min(0)])
-        .split(inner);
+    let [band_area, body_area] = layout::split(
+        inner,
+        Direction::Vertical,
+        [Constraint::Length(2), Constraint::Min(0)],
+    );
 
     let header_band = Block::default()
         .borders(Borders::BOTTOM)
         .border_style(Style::default().fg(theme.divider));
-    let header_inner = header_band.inner(chunks[0]);
-    frame.render_widget(header_band, chunks[0]);
+    let header_inner = header_band.inner(band_area);
+    frame.render_widget(header_band, band_area);
 
-    (header_inner, chunks[1])
+    (header_inner, body_area)
 }
 
 pub(super) fn empty_state(text: &str) -> Paragraph<'static> {
@@ -91,7 +92,7 @@ pub(super) fn scrolled_paragraph(
 
     if max_scroll > 0 {
         let bar = scrollbar(*scroll, max_scroll, area.height);
-        frame.render_widget(Paragraph::new(bar), scrollbar_area(area));
+        frame.render_widget(Paragraph::new(bar), layout::scrollbar_area(area));
     }
 }
 
@@ -247,15 +248,6 @@ pub(super) fn scrollbar(scroll: u16, max_scroll: u16, height: u16) -> Vec<Line<'
             }
         })
         .collect()
-}
-
-pub(super) fn scrollbar_area(area: Rect) -> Rect {
-    Rect {
-        x: area.x + area.width.saturating_sub(1),
-        y: area.y,
-        width: 1,
-        height: area.height,
-    }
 }
 
 pub(super) fn box_text_width(outer: u16) -> u16 {

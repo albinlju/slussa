@@ -11,7 +11,7 @@ pub(in crate::tui) use keys::key_to_action;
 
 use ratatui::{
     Frame,
-    layout::{Constraint, Direction, Layout, Rect},
+    layout::{Constraint, Direction, Rect},
     style::{Modifier, Style},
     text::{Line, Span},
     widgets::{Block, BorderType, Borders, Padding, Paragraph},
@@ -20,7 +20,7 @@ use ratatui::{
 use crate::{
     app::state::{AppState, DetailTab, DiffFocus, LoadState, PrData, UiMemory},
     domain::{comment::ReviewThread, diff::FileDiff, pr::PullRequest},
-    tui::{theme, widgets},
+    tui::{layout, theme, widgets},
 };
 
 impl DetailTab {
@@ -60,41 +60,29 @@ pub(in crate::tui) fn render(
     };
 
     let theme = theme::current();
-    let outer_chunks = Layout::default()
-        .direction(Direction::Vertical)
-        .constraints([Constraint::Min(0), Constraint::Length(1)])
-        .split(area);
+    let [main_area, footer_area] =
+        layout::split(area, Direction::Vertical, [Constraint::Min(0), Constraint::Length(1)]);
 
     let outer = Block::default()
         .borders(Borders::ALL)
         .border_type(BorderType::Rounded)
         .border_style(Style::default().fg(theme.border));
-    let inner = outer.inner(outer_chunks[0]);
-    frame.render_widget(outer, outer_chunks[0]);
+    let inner = outer.inner(main_area);
+    frame.render_widget(outer, main_area);
 
-    let chunks = Layout::default()
-        .direction(Direction::Vertical)
-        .constraints([
-            Constraint::Length(3),
-            Constraint::Length(1),
-            Constraint::Min(0),
-        ])
-        .split(inner);
+    let [header_area, _gap, content_area] = layout::split(
+        inner,
+        Direction::Vertical,
+        [Constraint::Length(3), Constraint::Length(1), Constraint::Min(0)],
+    );
 
-    render_header(frame, pr, chunks[0]);
+    render_header(frame, pr, header_area);
     let drilled = state.ui.commits.drilled.is_some();
     let help_focus = state.ui.active_diff_view().focus;
     let pr_data = state.cache.details.get(&pr.id);
-    let footer = detail_footer(
-        state,
-        pr_data,
-        tab,
-        drilled,
-        help_focus,
-        outer_chunks[1].width,
-    );
-    render_tabs_and_content(frame, pr, pr_data, &mut state.ui, tab, chunks[2]);
-    render_help(frame, tab, drilled, help_focus, footer, outer_chunks[1]);
+    let footer = detail_footer(state, pr_data, tab, drilled, help_focus, footer_area.width);
+    render_tabs_and_content(frame, pr, pr_data, &mut state.ui, tab, content_area);
+    render_help(frame, tab, drilled, help_focus, footer, footer_area);
 }
 
 fn detail_footer(
@@ -206,22 +194,17 @@ fn render_tabs_and_content(
         tab_spans.push(Span::styled(format!("{}  {}", t.icon(), t.label()), style));
     }
 
-    let chunks = Layout::default()
-        .direction(Direction::Vertical)
-        .constraints([
-            Constraint::Length(3),
-            Constraint::Min(0),
-        ])
-        .split(area);
+    let [tabs_area, content_area] =
+        layout::split(area, Direction::Vertical, [Constraint::Length(3), Constraint::Min(0)]);
 
     let tabs_block = Block::default()
         .borders(Borders::TOP | Borders::BOTTOM)
         .border_style(Style::default().fg(theme.divider));
-    let tabs_inner = tabs_block.inner(chunks[0]);
-    frame.render_widget(tabs_block, chunks[0]);
+    let tabs_inner = tabs_block.inner(tabs_area);
+    frame.render_widget(tabs_block, tabs_area);
     frame.render_widget(Paragraph::new(Line::from(tab_spans)), tabs_inner);
 
-    render_content(frame, pr, pr_data, ui, tab, chunks[1]);
+    render_content(frame, pr, pr_data, ui, tab, content_area);
 }
 
 fn render_header(frame: &mut Frame, pr: &PullRequest, area: Rect) {

@@ -14,7 +14,7 @@ use crate::{
         comment::ReviewThread,
         diff::{Diff, DiffLine, FileDiff},
     },
-    tui::{screens::pr_detail::render_inline_thread, theme, widgets},
+    tui::{layout, screens::pr_detail::render_inline_thread, theme, widgets},
 };
 
 const DIFF_GUTTER: &str = "  ";
@@ -100,7 +100,7 @@ impl PaneView<'_> {
 
         if max_scroll > 0 {
             let bar = widgets::scrollbar(scroll, max_scroll, body_area.height);
-            frame.render_widget(Paragraph::new(bar), widgets::scrollbar_area(body_area));
+            frame.render_widget(Paragraph::new(bar), layout::scrollbar_area(body_area));
         }
 
         (nav_items.len(), matches)
