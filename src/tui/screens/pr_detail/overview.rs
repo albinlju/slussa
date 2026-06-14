@@ -1,3 +1,5 @@
+use std::cmp::Reverse;
+
 use chrono::{DateTime, Utc};
 use ratatui::{
     Frame,
@@ -16,11 +18,7 @@ use crate::{
         pr::PullRequest,
         review::ReviewerState,
     },
-    tui::{
-        format, layout,
-        theme::{self, Theme},
-        widgets,
-    },
+    tui::{format, layout, theme, widgets},
 };
 
 const TIMELINE_COL: u16 = 2;
@@ -52,19 +50,71 @@ pub fn render(
     render_timeline(frame, pr_data, ui, timeline_area);
 }
 
+fn render_sidebar(frame: &mut Frame, pr: &PullRequest, pr_data: Option<&PrData>, area: Rect) {
+    let theme = theme::current();
+    let block = Block::default()
+        .borders(Borders::LEFT)
+        .border_style(Style::default().fg(theme.divider))
+        .padding(Padding::horizontal(1));
+    let inner = block.inner(area);
+    frame.render_widget(block, area);
+
+    let now = Utc::now();
+    let mut lines: Vec<Line<'static>> = Vec::new();
+
+    section_heading(&mut lines, "Reviewers");
+    lines.extend(reviewers(pr));
+    lines.push(Line::default());
+
+    section_heading(&mut lines, "Builds");
+    lines.extend(builds_summary(pr_data));
+    lines.push(Line::default());
+
+    if !pr.labels.is_empty() {
+        section_heading(&mut lines, "Labels");
+        lines.extend(labels(pr));
+        lines.push(Line::default());
+    }
+
+    section_heading(&mut lines, "Details");
+    lines.extend(details(pr, now));
+
+    frame.render_widget(Paragraph::new(lines).wrap(Wrap { trim: false }), inner);
+}
+
 fn section_heading(lines: &mut Vec<Line<'static>>, title: &str) {
     let theme = theme::current();
     lines.push(Line::from(Span::styled(
         title.to_string(),
-        Style::default().fg(theme.muted).add_modifier(Modifier::BOLD),
+        Style::default()
+            .fg(theme.muted)
+            .add_modifier(Modifier::BOLD),
     )));
 }
 
-fn muted_line(text: &str) -> Line<'static> {
-    Line::from(Span::styled(
-        text.to_string(),
-        Style::default().fg(theme::current().muted),
-    ))
+fn reviewers(pr: &PullRequest) -> Vec<Line<'static>> {
+    let theme = theme::current();
+    if pr.reviewers.is_empty() {
+        return vec![muted_line("—")];
+    }
+    pr.reviewers
+        .iter()
+        .map(|r| {
+            let (icon, color) = match r.state {
+                ReviewerState::Approved => ("\u{f058}", theme.success), //  check-circle
+                ReviewerState::ChangesRequested => ("\u{f057}", theme.error), //  times-circle
+                ReviewerState::Commented => ("\u{f10c}", theme.muted),  //  circle-o
+            };
+            Line::from(vec![
+                Span::styled(icon, Style::default().fg(color)),
+                Span::raw(" "),
+                Span::styled(
+                    format!("@{}", r.author.username),
+                    Style::default().fg(theme.info),
+                ),
+            ])
+        })
+        .collect()
 }
 
 fn builds_summary(pr_data: Option<&PrData>) -> Vec<Line<'static>> {
@@ -87,56 +137,17 @@ fn builds_summary(pr_data: Option<&PrData>) -> Vec<Line<'static>> {
     }
 }
 
-fn render_sidebar(frame: &mut Frame, pr: &PullRequest, pr_data: Option<&PrData>, area: Rect) {
+fn labels(pr: &PullRequest) -> Vec<Line<'static>> {
+    let accent = Style::default().fg(theme::current().accent);
+    pr.labels
+        .iter()
+        .map(|label| Line::from(Span::styled(label.clone(), accent)))
+        .collect()
+}
+
+fn details(pr: &PullRequest, now: DateTime<Utc>) -> Vec<Line<'static>> {
     let theme = theme::current();
-    let block = Block::default()
-        .borders(Borders::LEFT)
-        .border_style(Style::default().fg(theme.divider))
-        .padding(Padding::horizontal(1));
-    let inner = block.inner(area);
-    frame.render_widget(block, area);
-
-    let now = Utc::now();
-    let mut lines: Vec<Line<'static>> = Vec::new();
-
-    section_heading(&mut lines, "Reviewers");
-    if pr.reviewers.is_empty() {
-        lines.push(muted_line("—"));
-    } else {
-        for r in &pr.reviewers {
-            let (icon, color) = match r.state {
-                ReviewerState::Approved => ("\u{f058}", theme.success), //  check-circle
-                ReviewerState::ChangesRequested => ("\u{f057}", theme.error), //  times-circle
-                ReviewerState::Commented => ("\u{f10c}", theme.muted),  //  circle-o
-            };
-            lines.push(Line::from(vec![
-                Span::styled(icon, Style::default().fg(color)),
-                Span::raw(" "),
-                Span::styled(
-                    format!("@{}", r.author.username),
-                    Style::default().fg(theme.info),
-                ),
-            ]));
-        }
-    }
-    lines.push(Line::default());
-
-    section_heading(&mut lines, "Builds");
-    lines.extend(builds_summary(pr_data));
-    lines.push(Line::default());
-
-    if !pr.labels.is_empty() {
-        section_heading(&mut lines, "Labels");
-        for label in &pr.labels {
-            lines.push(Line::from(Span::styled(
-                label.clone(),
-                Style::default().fg(theme.accent),
-            )));
-        }
-        lines.push(Line::default());
-    }
-
-    section_heading(&mut lines, "Details");
+    let fg = Style::default().fg(theme.fg);
     let detail = |key: &str, value: Vec<Span<'static>>| -> Line<'static> {
         let mut spans = vec![Span::styled(
             format!("{key:<8}"),
@@ -145,45 +156,51 @@ fn render_sidebar(frame: &mut Frame, pr: &PullRequest, pr_data: Option<&PrData>,
         spans.extend(value);
         Line::from(spans)
     };
-    let fg = Style::default().fg(theme.fg);
-    lines.push(detail(
-        "opened",
-        vec![Span::styled(format::relative_age(pr.created, now), fg)],
-    ));
-    lines.push(detail(
-        "updated",
-        vec![Span::styled(format::relative_age(pr.updated, now), fg)],
-    ));
-    lines.push(detail(
-        "diff",
-        vec![
-            Span::styled(
-                format!("+{}", pr.additions),
-                Style::default().fg(theme.diff_added),
-            ),
-            Span::raw(" "),
-            Span::styled(
-                format!("-{}", pr.deletions),
-                Style::default().fg(theme.diff_removed),
-            ),
-        ],
-    ));
-    lines.push(detail(
-        "files",
-        vec![Span::styled(pr.changed_files.to_string(), fg)],
-    ));
+    vec![
+        detail(
+            "opened",
+            vec![Span::styled(format::relative_age(pr.created, now), fg)],
+        ),
+        detail(
+            "updated",
+            vec![Span::styled(format::relative_age(pr.updated, now), fg)],
+        ),
+        detail(
+            "diff",
+            vec![
+                Span::styled(
+                    format!("+{}", pr.additions),
+                    Style::default().fg(theme.diff_added),
+                ),
+                Span::raw(" "),
+                Span::styled(
+                    format!("-{}", pr.deletions),
+                    Style::default().fg(theme.diff_removed),
+                ),
+            ],
+        ),
+        detail(
+            "files",
+            vec![Span::styled(pr.changed_files.to_string(), fg)],
+        ),
+    ]
+}
 
-    frame.render_widget(Paragraph::new(lines).wrap(Wrap { trim: false }), inner);
+fn muted_line(text: &str) -> Line<'static> {
+    Line::from(Span::styled(
+        text.to_string(),
+        Style::default().fg(theme::current().muted),
+    ))
 }
 
 fn render_timeline(frame: &mut Frame, pr_data: Option<&PrData>, ui: &mut UiMemory, area: Rect) {
-    let Some(bundle) =
+    let Some(activity) =
         widgets::loaded_or_placeholder(frame, pr_data.map(|d| &d.activity), "activity", area)
     else {
         return;
     };
 
-    if bundle.comments.is_empty() && bundle.threads.is_empty() && bundle.events.is_empty() {
+    if activity.comments.is_empty() && activity.threads.is_empty() && activity.events.is_empty() {
         frame.render_widget(widgets::empty_state("(no activity)"), area);
         return;
     }
@@ -193,16 +210,16 @@ fn render_timeline(frame: &mut Frame, pr_data: Option<&PrData>, ui: &mut UiMemor
         _ => None,
     });
 
-    let lines = build_overview_lines(
-        &bundle.comments,
-        &bundle.threads,
-        &bundle.events,
+    let timeline_content = build_timeline(
+        &activity.comments,
+        &activity.threads,
+        &activity.events,
         diff,
         area.width.saturating_sub(1 + TIMELINE_COL),
     );
     widgets::scrolled_paragraph(
         frame,
-        lines,
+        timeline_content,
         &mut ui.overview_scroll,
         &mut ui.overview_viewport,
         area,
@@ -212,70 +229,70 @@ fn render_timeline(frame: &mut Frame, pr_data: Option<&PrData>, ui: &mut UiMemor
 enum TimelineItem<'a> {
     Comment(&'a Comment),
     Review(&'a ReviewThread),
-    Activity(&'a TimelineEvent),
+    Event(&'a TimelineEvent),
 }
 
 impl TimelineItem<'_> {
     fn timestamp(&self) -> DateTime<Utc> {
         match self {
             TimelineItem::Comment(c) => c.created,
-            TimelineItem::Review(t) => t
-                .comments
-                .first().map_or_else(Utc::now, |c| c.created),
-            TimelineItem::Activity(e) => e.created,
+            TimelineItem::Review(t) => t.comments.first().map_or_else(Utc::now, |c| c.created),
+            TimelineItem::Event(e) => e.created,
         }
     }
 }
 
-fn build_overview_lines(
+fn build_timeline(
     comments: &[Comment],
     threads: &[ReviewThread],
-    activity: &[TimelineEvent],
+    events: &[TimelineEvent],
     diff: Option<&Diff>,
     width: u16,
 ) -> Vec<Line<'static>> {
+    let mut items: Vec<TimelineItem<'_>> =
+        Vec::with_capacity(comments.len() + threads.len() + events.len());
+    items.extend(comments.iter().map(TimelineItem::Comment));
+    items.extend(threads.iter().map(TimelineItem::Review));
+    items.extend(events.iter().map(TimelineItem::Event));
+    items.sort_by_key(|item| Reverse(item.timestamp()));
+
     let theme = theme::current();
-    let mut events: Vec<TimelineItem<'_>> =
-        Vec::with_capacity(comments.len() + threads.len() + activity.len());
-    events.extend(comments.iter().map(TimelineItem::Comment));
-    events.extend(threads.iter().map(TimelineItem::Review));
-    events.extend(activity.iter().map(TimelineItem::Activity));
-    events.sort_by_key(|e| std::cmp::Reverse(e.timestamp()));
-
     let now = Utc::now();
-
-    let blocks: Vec<(EventStyle, Vec<Line<'static>>)> = events
+    let blocks: Vec<(Color, Vec<Line<'static>>)> = items
         .iter()
-        .filter_map(|event| match event {
+        .filter_map(|item| match item {
             TimelineItem::Comment(c) => {
-                Some((EventStyle::Comment, super::comment::comment_box(c, width, now)))
+                Some((theme.info, super::comment::comment_box(c, width, now)))
             }
-            TimelineItem::Review(t) => super::comment::review_thread_box(t, diff, width, now)
-                .map(|l| (EventStyle::Review, l)),
-            TimelineItem::Activity(e) => {
-                let (color, lines) = activity_lines(e, now);
-                Some((EventStyle::Activity(color), lines))
+            TimelineItem::Review(t) => {
+                super::comment::review_thread_box(t, diff, width, now).map(|l| (theme.accent, l))
             }
+            TimelineItem::Event(e) => Some(event_lines(e, now)),
         })
         .collect();
 
-    let connector_style = Style::default().fg(theme.divider);
-    let connector = Span::styled("│ ", connector_style);
+    timeline_rail(blocks)
+}
+
+fn timeline_rail(blocks: Vec<(Color, Vec<Line<'static>>)>) -> Vec<Line<'static>> {
+    let connector = Span::styled("│ ", Style::default().fg(theme::current().divider));
 
     let mut all: Vec<Line<'static>> = Vec::new();
-    for (i, (style, lines)) in blocks.into_iter().enumerate() {
+    for (i, (color, lines)) in blocks.into_iter().enumerate() {
         if i > 0 {
             all.push(Line::from(connector.clone()));
             all.push(Line::from(connector.clone()));
         }
         let circle = Span::styled(
             "● ",
-            Style::default()
-                .fg(style.color(theme))
-                .add_modifier(Modifier::BOLD),
+            Style::default().fg(color).add_modifier(Modifier::BOLD),
         );
         for (j, line) in lines.into_iter().enumerate() {
-            let marker = if j == 0 { circle.clone() } else { connector.clone() };
+            let marker = if j == 0 {
+                circle.clone()
+            } else {
+                connector.clone()
+            };
             let mut spans = vec![marker];
             spans.extend(line.spans);
             all.push(Line::from(spans));
@@ -288,24 +305,7 @@ fn build_overview_lines(
     all
 }
 
-#[derive(Clone, Copy)]
-enum EventStyle {
-    Comment,
-    Review,
-    Activity(Color),
-}
-
-impl EventStyle {
-    fn color(self, theme: &Theme) -> Color {
-        match self {
-            Self::Comment => theme.info,
-            Self::Review => theme.accent,
-            Self::Activity(c) => c,
-        }
-    }
-}
-
-fn activity_lines(event: &TimelineEvent, now: DateTime<Utc>) -> (Color, Vec<Line<'static>>) {
+fn event_lines(event: &TimelineEvent, now: DateTime<Utc>) -> (Color, Vec<Line<'static>>) {
     let theme = theme::current();
 
     let header = |verb: String, color: Color| -> Line<'static> {
