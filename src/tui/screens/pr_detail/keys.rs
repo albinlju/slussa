@@ -18,11 +18,29 @@ pub(in crate::tui) fn key_to_action(state: &AppState, key: KeyEvent) -> Option<A
     let viewing_commit = state.ui.commits.open_commit.is_some();
     let code = key.code;
 
+    if state.ui.approve_box_open {
+        return match code {
+            KeyCode::Left | KeyCode::Char('h') | KeyCode::Up | KeyCode::Char('k') => {
+                Some(Action::Detail(DetailAction::ApproveMove(-1)))
+            }
+            KeyCode::Right | KeyCode::Char('l') | KeyCode::Down | KeyCode::Char('j') => {
+                Some(Action::Detail(DetailAction::ApproveMove(1)))
+            }
+            KeyCode::Enter => Some(Action::Detail(DetailAction::SubmitApprove)),
+            KeyCode::Esc | KeyCode::Char('a') => Some(Action::Detail(DetailAction::CloseApprove)),
+            _ => None,
+        };
+    }
+
     if code == KeyCode::Char('?') {
         return Some(Action::Detail(DetailAction::ToggleHelp));
     }
     if state.ui.help_open {
         return (code == KeyCode::Esc).then_some(Action::Detail(DetailAction::ToggleHelp));
+    }
+
+    if code == KeyCode::Char('a') {
+        return Some(Action::Detail(DetailAction::OpenApprove));
     }
 
     escape_action(state, tab, viewing_commit, code)
