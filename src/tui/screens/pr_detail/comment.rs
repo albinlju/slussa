@@ -9,7 +9,7 @@ use crate::{
         comment::{Comment, ReviewThread, split_suggestions},
         diff::{Diff, DiffLine},
     },
-    tui::{icons, markdown, theme, widgets},
+    tui::{format, icons, markdown, theme, widgets},
 };
 
 pub(in crate::tui) fn render_inline_thread(
@@ -21,7 +21,7 @@ pub(in crate::tui) fn render_inline_thread(
 ) -> Vec<Line<'static>> {
     let theme = theme::current();
     let border = if active { theme.accent } else { theme.divider };
-    let header = thread_status_header(thread, width);
+    let (title, meta) = thread_status_header(thread);
 
     let anchor = thread.line.or(thread.old_line).zip(anchor_text);
     let mut body: Vec<Line<'static>> = Vec::new();
@@ -39,18 +39,14 @@ pub(in crate::tui) fn render_inline_thread(
         ));
     }
 
-    widgets::boxed(header, body, width, border)
+    widgets::boxed(title, meta, body, width, border)
 }
 
 pub(super) fn comment_box(comment: &Comment, width: u16, now: DateTime<Utc>) -> Vec<Line<'static>> {
-    let header = author_line(
-        &comment.author.username,
-        Some(" commented"),
-        comment.created,
-        now,
-    );
+    let title = author_title(&comment.author.username, Some(" commented"));
+    let meta = age_spans(comment.created, now);
     let body = comment_body(comment, None, width);
-    widgets::boxed(header, body, width, theme::current().divider)
+    widgets::boxed(title, meta, body, width, theme::current().divider)
 }
 
 pub(super) fn review_thread_box(
@@ -62,16 +58,12 @@ pub(super) fn review_thread_box(
     let theme = theme::current();
     let first = thread.comments.first()?;
     let text_width = widgets::box_text_width(width);
-    let header = author_line(
-        &first.author.username,
-        Some(" commented"),
-        first.created,
-        now,
-    );
+    let mut title = author_title(&first.author.username, Some(" commented"));
+    let meta = age_spans(first.created, now);
 
     let mut body: Vec<Line<'static>> = Vec::new();
 
-    let inner_header = anchor_header(thread);
+    let location = anchor_header(thread);
     let inner_text_width = widgets::box_text_width(text_width);
     let (snippet, anchor_text) = diff
         .map(|d| {
@@ -89,10 +81,12 @@ pub(super) fn review_thread_box(
         .iter()
         .any(|comment| !split_suggestions(&comment.content).1.is_empty());
     if snippet.is_empty() || has_suggestion {
-        body.push(inner_header);
+        title.push(Span::styled(" · ", Style::default().fg(theme.muted)));
+        title.extend(location);
     } else {
         body.extend(widgets::boxed(
-            inner_header,
+            location,
+            vec![],
             snippet,
             text_width,
             theme.divider,
@@ -116,7 +110,7 @@ pub(super) fn review_thread_box(
         }
     }
 
-    Some(widgets::boxed(header, body, width, theme.divider))
+    Some(widgets::boxed(title, meta, body, width, theme.divider))
 }
 
 fn comment_entry(
@@ -138,18 +132,29 @@ fn author_line(
     created: DateTime<Utc>,
     now: DateTime<Utc>,
 ) -> Line<'static> {
+    widgets::author_line(author_title(name, note), created, now)
+}
+
+fn author_title(name: &str, note: Option<&str>) -> Vec<Span<'static>> {
     let theme = theme::current();
-    let mut lead = vec![Span::styled(
+    let mut spans = vec![Span::styled(
         name.to_string(),
         Style::default().fg(theme.info).add_modifier(Modifier::BOLD),
     )];
     if let Some(note) = note {
-        lead.push(Span::styled(
+        spans.push(Span::styled(
             note.to_string(),
             Style::default().fg(theme.muted),
         ));
     }
-    widgets::author_line(lead, created, now)
+    spans
+}
+
+fn age_spans(created: DateTime<Utc>, now: DateTime<Utc>) -> Vec<Span<'static>> {
+    vec![Span::styled(
+        format::relative_age(created, now),
+        Style::default().fg(theme::current().muted),
+    )]
 }
 
 fn comment_body(
@@ -226,8 +231,6 @@ fn suggestion_box(
             Style::default().fg(theme.diff_added),
         ));
     }
-    let header = Line::from(widgets::justify_between(left, right, text_w));
-
     let start = anchor.map(|(n, _)| n);
     let num_width = start.map_or(0, |n| {
         (n + new_lines.len().saturating_sub(1)).to_string().len()
@@ -258,12 +261,11 @@ fn suggestion_box(
         ));
     }
 
-    widgets::boxed(header, rows, width, theme.suggestion)
+    widgets::boxed(left, right, rows, width, theme.suggestion)
 }
 
-fn thread_status_header(thread: &ReviewThread, width: u16) -> Line<'static> {
+fn thread_status_header(thread: &ReviewThread) -> (Vec<Span<'static>>, Vec<Span<'static>>) {
     let theme = theme::current();
-    let text_w = widgets::box_text_width(width);
     let (icon, label, accent) = if thread.resolved {
         (icons::CHECK_CIRCLE, "Resolved conversation", theme.success)
     } else {
@@ -276,7 +278,7 @@ fn thread_status_header(thread: &ReviewThread, width: u16) -> Line<'static> {
         format!("{count} comments")
     };
 
-    let left = vec![
+    let title = vec![
         Span::styled(
             icon,
             Style::default().fg(accent).add_modifier(Modifier::BOLD),
@@ -287,11 +289,11 @@ fn thread_status_header(thread: &ReviewThread, width: u16) -> Line<'static> {
             Style::default().fg(theme.fg).add_modifier(Modifier::BOLD),
         ),
     ];
-    let right = vec![Span::styled(count_label, Style::default().fg(theme.muted))];
-    Line::from(widgets::justify_between(left, right, text_w as usize))
+    let meta = vec![Span::styled(count_label, Style::default().fg(theme.muted))];
+    (title, meta)
 }
 
-fn anchor_header(thread: &ReviewThread) -> Line<'static> {
+fn anchor_header(thread: &ReviewThread) -> Vec<Span<'static>> {
     let theme = theme::current();
     let location = match thread.line.or(thread.old_line) {
         Some(l) => format!("{}:{}", thread.path, l),
@@ -304,7 +306,7 @@ fn anchor_header(thread: &ReviewThread) -> Line<'static> {
             Style::default().fg(theme.success),
         ));
     }
-    Line::from(spans)
+    spans
 }
 
 const SNIPPET_CONTEXT: usize = 3;

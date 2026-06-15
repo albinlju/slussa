@@ -96,9 +96,7 @@ fn section_heading(lines: &mut Vec<Line<'static>>, title: &str) {
     let theme = theme::current();
     lines.push(Line::from(Span::styled(
         title.to_string(),
-        Style::default()
-            .fg(theme.muted)
-            .add_modifier(Modifier::BOLD),
+        Style::default().fg(theme.fg).add_modifier(Modifier::BOLD),
     )));
 }
 
