@@ -96,7 +96,7 @@ impl Theme {
 
 pub fn current() -> &'static Theme {
     static SELECTED: OnceLock<&'static Theme> = OnceLock::new();
-    *SELECTED.get_or_init(|| match std::env::var("TUIPR_THEME").as_deref() {
+    SELECTED.get_or_init(|| match std::env::var("TUIPR_THEME").as_deref() {
         Ok("gruvbox") => &GRUVBOX,
         _ => &TERMINAL,
     })

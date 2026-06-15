@@ -268,7 +268,8 @@ pub(super) fn box_text_width(outer: u16) -> u16 {
 }
 
 pub(super) fn boxed(
-    header: Line<'static>,
+    title: Vec<Span<'static>>,
+    meta: Vec<Span<'static>>,
     body: Vec<Line<'static>>,
     width: u16,
     border: Color,
@@ -277,17 +278,39 @@ pub(super) fn boxed(
     let inner = (width as usize).saturating_sub(2);
     let text_w = inner.saturating_sub(2);
 
-    let bar = |s: String| Line::from(Span::styled(s, style));
-
     let mut out: Vec<Line<'static>> = Vec::new();
-    out.push(bar(format!("╭{}╮", "─".repeat(inner))));
-    out.push(wrap_box_line(header, text_w, style));
-    out.push(bar(format!("├{}┤", "─".repeat(inner))));
+    out.push(title_border(title, meta, width as usize, style));
     for line in body {
         out.push(wrap_box_line(line, text_w, style));
     }
-    out.push(bar(format!("╰{}╯", "─".repeat(inner))));
+    out.push(Line::from(Span::styled(
+        format!("╰{}╯", "─".repeat(inner)),
+        style,
+    )));
     out
+}
+
+// `╭─ title ──────── meta ─╮` — header embedded in the top border, meta right-aligned.
+fn title_border(
+    title: Vec<Span<'static>>,
+    meta: Vec<Span<'static>>,
+    width: usize,
+    style: Style,
+) -> Line<'static> {
+    let title_w: usize = title.iter().map(Span::width).sum();
+    let meta_w: usize = meta.iter().map(Span::width).sum();
+    let mut spans = vec![Span::styled("╭─ ", style)];
+    spans.extend(title);
+    if meta_w == 0 {
+        let fill = width.saturating_sub(title_w + 5).max(1);
+        spans.push(Span::styled(format!(" {}╮", "─".repeat(fill)), style));
+    } else {
+        let fill = width.saturating_sub(title_w + meta_w + 8).max(1);
+        spans.push(Span::styled(format!(" {} ", "─".repeat(fill)), style));
+        spans.extend(meta);
+        spans.push(Span::styled(" ─╮", style));
+    }
+    Line::from(spans)
 }
 
 fn wrap_box_line(line: Line<'static>, text_w: usize, border: Style) -> Line<'static> {
