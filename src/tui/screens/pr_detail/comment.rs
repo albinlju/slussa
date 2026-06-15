@@ -12,14 +12,22 @@ use crate::{
     tui::{markdown, theme, widgets},
 };
 
-fn author_line(name: &str, note: Option<&str>, created: DateTime<Utc>, now: DateTime<Utc>) -> Line<'static> {
+fn author_line(
+    name: &str,
+    note: Option<&str>,
+    created: DateTime<Utc>,
+    now: DateTime<Utc>,
+) -> Line<'static> {
     let theme = theme::current();
     let mut lead = vec![Span::styled(
         name.to_string(),
         Style::default().fg(theme.info).add_modifier(Modifier::BOLD),
     )];
     if let Some(note) = note {
-        lead.push(Span::styled(note.to_string(), Style::default().fg(theme.muted)));
+        lead.push(Span::styled(
+            note.to_string(),
+            Style::default().fg(theme.muted),
+        ));
     }
     widgets::author_line(lead, created, now)
 }
@@ -93,12 +101,13 @@ pub(in crate::tui) fn render_inline_thread(
     widgets::boxed(header, body, width, border)
 }
 
-pub(super) fn comment_box(
-    comment: &Comment,
-    width: u16,
-    now: DateTime<Utc>,
-) -> Vec<Line<'static>> {
-    let header = author_line(&comment.author.username, Some(" commented"), comment.created, now);
+pub(super) fn comment_box(comment: &Comment, width: u16, now: DateTime<Utc>) -> Vec<Line<'static>> {
+    let header = author_line(
+        &comment.author.username,
+        Some(" commented"),
+        comment.created,
+        now,
+    );
     let body = comment_body(comment, None, width);
     widgets::boxed(header, body, width, theme::current().divider)
 }
@@ -112,7 +121,12 @@ pub(super) fn review_thread_box(
     let theme = theme::current();
     let first = thread.comments.first()?;
     let text_width = widgets::box_text_width(width);
-    let header = author_line(&first.author.username, Some(" commented"), first.created, now);
+    let header = author_line(
+        &first.author.username,
+        Some(" commented"),
+        first.created,
+        now,
+    );
 
     let mut body: Vec<Line<'static>> = Vec::new();
 
@@ -131,10 +145,16 @@ pub(super) fn review_thread_box(
 
     let inner_text_width = widgets::box_text_width(text_width);
     let (snippet, anchor_text) = diff
-        .map(|d| diff_snippet(d, &thread.path, thread.line, thread.old_line, inner_text_width))
+        .map(|d| {
+            diff_snippet(
+                d,
+                &thread.path,
+                thread.line,
+                thread.old_line,
+                inner_text_width,
+            )
+        })
         .unwrap_or_default();
-    // A suggestion repeats the anchored line, so the snippet box is dropped
-    // when any comment carries one (to avoid showing the line twice).
     let has_suggestion = thread
         .comments
         .iter()
@@ -142,7 +162,12 @@ pub(super) fn review_thread_box(
     if snippet.is_empty() || has_suggestion {
         body.push(inner_header);
     } else {
-        body.extend(widgets::boxed(inner_header, snippet, text_width, theme.divider));
+        body.extend(widgets::boxed(
+            inner_header,
+            snippet,
+            text_width,
+            theme.divider,
+        ));
     }
     let anchor = thread.line.or(thread.old_line).zip(anchor_text.as_deref());
 
@@ -165,7 +190,11 @@ pub(super) fn review_thread_box(
     Some(widgets::boxed(header, body, width, theme.divider))
 }
 
-fn comment_body(comment: &Comment, anchor: Option<(usize, &str)>, width: u16) -> Vec<Line<'static>> {
+fn comment_body(
+    comment: &Comment,
+    anchor: Option<(usize, &str)>,
+    width: u16,
+) -> Vec<Line<'static>> {
     let text_w = widgets::box_text_width(width);
     let (prose, suggestions) = split_suggestions(&comment.content);
     let mut lines: Vec<Line<'static>> = Vec::new();
@@ -220,8 +249,9 @@ fn suggestion_box(
     let header = Line::from(widgets::justify_between(left, right, text_w));
 
     let start = anchor.map(|(n, _)| n);
-    let num_width = start
-        .map_or(0, |n| (n + new_lines.len().saturating_sub(1)).to_string().len());
+    let num_width = start.map_or(0, |n| {
+        (n + new_lines.len().saturating_sub(1)).to_string().len()
+    });
     let mut rows: Vec<Line<'static>> = Vec::new();
     if let Some((n, old)) = anchor {
         rows.push(widgets::numbered_diff_row(
@@ -277,7 +307,12 @@ fn diff_snippet(
         let mut new_no = hunk.new_start;
         let mut old_no = hunk.old_start;
         for dl in &hunk.lines {
-            rows.push(Row { dl, new_no, old_no, hunk: hunk_idx });
+            rows.push(Row {
+                dl,
+                new_no,
+                old_no,
+                hunk: hunk_idx,
+            });
             match dl {
                 DiffLine::Added(_) => new_no += 1,
                 DiffLine::Removed(_) => old_no += 1,
@@ -301,7 +336,6 @@ fn diff_snippet(
         DiffLine::Added(c) | DiffLine::Removed(c) | DiffLine::Context(c) => c.clone(),
     };
 
-    // Context must not bleed in from the previous hunk (non-adjacent lines).
     let hunk_start = rows[..anchor]
         .iter()
         .rposition(|r| r.hunk != rows[anchor].hunk)

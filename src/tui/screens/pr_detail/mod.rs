@@ -1,10 +1,9 @@
-pub mod checks;
+mod build_status;
 pub mod comment;
-pub mod commits;
-pub mod description;
-pub mod diff;
 pub mod keys;
-pub mod overview;
+mod tabs;
+
+use tabs::{builds, commits, description, diff, overview};
 
 pub(super) use comment::render_inline_thread;
 pub(in crate::tui) use keys::key_to_action;
@@ -319,7 +318,7 @@ fn render_content(
                 commits::render(frame, pr_data, &mut ui.commits, inset);
             }
         }
-        DetailTab::Builds => checks::render(frame, pr_data, inset),
+        DetailTab::Builds => builds::render(frame, pr_data, inset),
     }
 }
 

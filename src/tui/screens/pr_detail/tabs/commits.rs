@@ -103,7 +103,7 @@ pub fn render_commit_diff(
 
     render_commit_banner(frame, pr_data, &oid, banner_area);
 
-    let diff_state = super::active_diff(Some(&oid), pr_data);
+    let diff_state = super::super::active_diff(Some(&oid), pr_data);
     super::diff::render(frame, diff_state, threads, &mut cv.diff, diff_area);
 }
 

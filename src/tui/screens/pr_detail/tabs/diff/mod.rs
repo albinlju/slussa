@@ -17,12 +17,10 @@ use crate::{
         comment::ReviewThread,
         diff::{Diff, DiffLine, FileDiff},
     },
-    tui::{
-        layout,
-        screens::pr_detail::diff::{pane::PaneView, tree::TreeView},
-        widgets,
-    },
+    tui::{layout, widgets},
 };
+
+use self::{pane::PaneView, tree::TreeView};
 
 pub fn render(
     frame: &mut Frame,

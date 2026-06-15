@@ -120,7 +120,7 @@ fn reviewers(pr: &PullRequest) -> Vec<Line<'static>> {
 fn builds_summary(pr_data: Option<&PrData>) -> Vec<Line<'static>> {
     match pr_data.map(|d| &d.builds) {
         Some(LoadState::Loaded(builds)) if !builds.is_empty() => {
-            let stats = super::checks::build_stats(builds);
+            let stats = super::super::build_status::build_stats(builds);
             vec![
                 Line::from(Span::styled(
                     format!("{}/{} passing", stats.passing, stats.total),
@@ -128,7 +128,7 @@ fn builds_summary(pr_data: Option<&PrData>) -> Vec<Line<'static>> {
                         .fg(stats.accent())
                         .add_modifier(Modifier::BOLD),
                 )),
-                Line::from(super::checks::progress_bar(builds)),
+                Line::from(super::super::build_status::progress_bar(builds)),
             ]
         }
         Some(LoadState::Loaded(_)) => vec![muted_line("no builds")],
@@ -262,10 +262,10 @@ fn build_timeline(
         .iter()
         .filter_map(|item| match item {
             TimelineItem::Comment(c) => {
-                Some((theme.info, super::comment::comment_box(c, width, now)))
+                Some((theme.info, super::super::comment::comment_box(c, width, now)))
             }
             TimelineItem::Review(t) => {
-                super::comment::review_thread_box(t, diff, width, now).map(|l| (theme.accent, l))
+                super::super::comment::review_thread_box(t, diff, width, now).map(|l| (theme.accent, l))
             }
             TimelineItem::Event(e) => Some(event_block(e, now)),
         })
