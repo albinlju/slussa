@@ -12,68 +12,92 @@ pub(in crate::tui) fn key_to_action(state: &AppState, key: KeyEvent) -> Option<A
     if key.code == KeyCode::Char('q') {
         return Some(Action::Quit);
     }
-
     let Screen::Detail { tab, .. } = state.screen else {
         return None;
     };
     let viewing_commit = state.ui.commits.open_commit.is_some();
-    let diff_focus = state.ui.active_diff_view().focus;
+    let code = dispatch_code(key);
 
+    escape_action(state, tab, viewing_commit, code)
+        .or_else(|| tab_select_key(code))
+        .or_else(|| tab_key(state, tab, viewing_commit, code))
+}
+
+fn dispatch_code(key: KeyEvent) -> KeyCode {
     if key.modifiers.contains(KeyModifiers::CONTROL) {
         match key.code {
-            KeyCode::Char('d') => return half_page_scroll(state, tab, true),
-            KeyCode::Char('u') => return half_page_scroll(state, tab, false),
+            KeyCode::Char('d') => return KeyCode::PageDown,
+            KeyCode::Char('u') => return KeyCode::PageUp,
             _ => {}
         }
     }
+    key.code
+}
 
-    if key.code == KeyCode::Esc {
-        let in_diff_pane = diff_focus == DiffFocus::Pane
-            && (tab == DetailTab::Diff || (tab == DetailTab::Commits && viewing_commit));
-        if in_diff_pane {
-            if !state.ui.active_diff_view().pane_search.query.is_empty() {
-                return Some(Action::Search(SearchAction::Cancel));
-            }
-            return Some(Action::Diff(DiffAction::FocusTree));
-        }
-        if tab == DetailTab::Commits && viewing_commit {
-            return Some(Action::Commits(CommitsAction::Back));
-        }
-        return Some(Action::Detail(DetailAction::Back));
+fn escape_action(
+    state: &AppState,
+    tab: DetailTab,
+    viewing_commit: bool,
+    code: KeyCode,
+) -> Option<Action> {
+    if code != KeyCode::Esc {
+        return None;
     }
+    let view = state.ui.active_diff_view();
+    let in_diff_pane = view.focus == DiffFocus::Pane
+        && (tab == DetailTab::Diff || (tab == DetailTab::Commits && viewing_commit));
+    if in_diff_pane {
+        if !view.pane_search.query.is_empty() {
+            return Some(Action::Search(SearchAction::Cancel));
+        }
+        return Some(Action::Diff(DiffAction::FocusTree));
+    }
+    if tab == DetailTab::Commits && viewing_commit {
+        return Some(Action::Commits(CommitsAction::Back));
+    }
+    Some(Action::Detail(DetailAction::Back))
+}
 
-    match key.code {
-        KeyCode::Tab => return Some(Action::Detail(DetailAction::NextTab)),
-        KeyCode::BackTab => return Some(Action::Detail(DetailAction::PrevTab)),
+fn tab_select_key(code: KeyCode) -> Option<Action> {
+    match code {
+        KeyCode::Tab => Some(Action::Detail(DetailAction::NextTab)),
+        KeyCode::BackTab => Some(Action::Detail(DetailAction::PrevTab)),
         KeyCode::Char(c @ '1'..='5') => {
             let idx = (c as u8 - b'1') as usize;
-            if let Some(&t) = DetailTab::ALL.get(idx) {
-                return Some(Action::Detail(DetailAction::SelectTab(t)));
-            }
+            DetailTab::ALL
+                .get(idx)
+                .map(|&t| Action::Detail(DetailAction::SelectTab(t)))
         }
-        _ => {}
+        _ => None,
     }
+}
 
+fn tab_key(
+    state: &AppState,
+    tab: DetailTab,
+    viewing_commit: bool,
+    code: KeyCode,
+) -> Option<Action> {
     match tab {
-        DetailTab::Diff => diff_nav_action(key.code, state.ui.active_diff_view()).map(Action::Diff),
-        DetailTab::Commits if viewing_commit => match key.code {
+        DetailTab::Diff => diff_nav_action(code, state.ui.active_diff_view()).map(Action::Diff),
+        DetailTab::Commits if viewing_commit => match code {
             KeyCode::Char('[') => Some(Action::Commits(CommitsAction::StepCommit(-1))),
             KeyCode::Char(']') => Some(Action::Commits(CommitsAction::StepCommit(1))),
-            _ => diff_nav_action(key.code, state.ui.active_diff_view()).map(Action::Diff),
+            _ => diff_nav_action(code, state.ui.active_diff_view()).map(Action::Diff),
         },
-        DetailTab::Commits => scroll_delta(key.code, state.ui.commits.viewport)
+        DetailTab::Commits => scroll_delta(code, state.ui.commits.viewport)
             .map(|d| Action::Commits(CommitsAction::MoveSelection(d)))
-            .or_else(|| match key.code {
+            .or_else(|| match code {
                 KeyCode::Enter => Some(Action::Commits(CommitsAction::Open)),
-                _ => tab_nav(key.code),
+                _ => tab_nav(code),
             }),
-        DetailTab::Overview => scroll_delta(key.code, state.ui.overview_viewport)
+        DetailTab::Overview => scroll_delta(code, state.ui.overview_viewport)
             .map(|d| Action::Detail(DetailAction::OverviewScroll(d)))
-            .or_else(|| tab_nav(key.code)),
-        DetailTab::Description => scroll_delta(key.code, state.ui.description_viewport)
+            .or_else(|| tab_nav(code)),
+        DetailTab::Description => scroll_delta(code, state.ui.description_viewport)
             .map(|d| Action::Detail(DetailAction::DescriptionScroll(d)))
-            .or_else(|| tab_nav(key.code)),
-        DetailTab::Builds => tab_nav(key.code),
+            .or_else(|| tab_nav(code)),
+        DetailTab::Builds => tab_nav(code),
     }
 }
 
@@ -97,61 +121,33 @@ fn tab_nav(code: KeyCode) -> Option<Action> {
 
 fn diff_nav_action(code: KeyCode, view: &DiffViewState) -> Option<DiffAction> {
     match view.focus {
-        DiffFocus::Tree => match code {
-            KeyCode::Down | KeyCode::Char('j') => Some(DiffAction::MoveCursor(1)),
-            KeyCode::Up | KeyCode::Char('k') => Some(DiffAction::MoveCursor(-1)),
-            KeyCode::PageDown => Some(DiffAction::MoveCursor(half_page(view.tree_viewport))),
-            KeyCode::PageUp => Some(DiffAction::MoveCursor(-half_page(view.tree_viewport))),
-            KeyCode::Enter => Some(DiffAction::EnterPane),
-            KeyCode::Char(' ') => Some(DiffAction::ToggleAtCursor),
-            KeyCode::Left | KeyCode::Char('h') => Some(DiffAction::CollapseAtCursor),
-            KeyCode::Right | KeyCode::Char('l') => Some(DiffAction::ExpandAtCursor),
-            _ => None,
-        },
-        DiffFocus::Pane => match code {
-            KeyCode::Down | KeyCode::Char('j') => Some(DiffAction::MovePaneCursor(1)),
-            KeyCode::Up | KeyCode::Char('k') => Some(DiffAction::MovePaneCursor(-1)),
-            KeyCode::PageDown => Some(DiffAction::MovePaneCursor(half_page(view.pane_viewport))),
-            KeyCode::PageUp => Some(DiffAction::MovePaneCursor(-half_page(view.pane_viewport))),
-            KeyCode::Char('n') if !view.pane_search.query.is_empty() => {
-                Some(DiffAction::JumpMatch(1))
-            }
-            KeyCode::Char('N') if !view.pane_search.query.is_empty() => {
-                Some(DiffAction::JumpMatch(-1))
-            }
-            KeyCode::Enter | KeyCode::Left | KeyCode::Char('h') => Some(DiffAction::FocusTree),
-            _ => None,
-        },
+        DiffFocus::Tree => tree_key(code, view),
+        DiffFocus::Pane => pane_key(code, view),
     }
 }
 
-fn diff_half_page(view: &DiffViewState, down: bool) -> DiffAction {
-    let step = |v| if down { half_page(v) } else { -half_page(v) };
-    match view.focus {
-        DiffFocus::Pane => DiffAction::MovePaneCursor(step(view.pane_viewport)),
-        DiffFocus::Tree => DiffAction::MoveCursor(step(view.tree_viewport)),
+fn tree_key(code: KeyCode, view: &DiffViewState) -> Option<DiffAction> {
+    if let Some(delta) = scroll_delta(code, view.tree_viewport) {
+        return Some(DiffAction::MoveCursor(delta));
+    }
+    match code {
+        KeyCode::Enter => Some(DiffAction::EnterPane),
+        KeyCode::Char(' ') => Some(DiffAction::ToggleAtCursor),
+        KeyCode::Left | KeyCode::Char('h') => Some(DiffAction::CollapseAtCursor),
+        KeyCode::Right | KeyCode::Char('l') => Some(DiffAction::ExpandAtCursor),
+        _ => None,
     }
 }
 
-fn half_page_scroll(state: &AppState, tab: DetailTab, down: bool) -> Option<Action> {
-    let step = |viewport| {
-        let h = half_page(viewport);
-        if down { h } else { -h }
-    };
-    match tab {
-        DetailTab::Description => Some(Action::Detail(DetailAction::DescriptionScroll(step(
-            state.ui.description_viewport,
-        )))),
-        DetailTab::Overview => Some(Action::Detail(DetailAction::OverviewScroll(step(
-            state.ui.overview_viewport,
-        )))),
-        DetailTab::Diff => Some(Action::Diff(diff_half_page(&state.ui.diff, down))),
-        DetailTab::Commits if state.ui.commits.open_commit.is_some() => {
-            Some(Action::Diff(diff_half_page(&state.ui.commits.diff, down)))
-        }
-        DetailTab::Commits => Some(Action::Commits(CommitsAction::MoveSelection(step(
-            state.ui.commits.viewport,
-        )))),
-        DetailTab::Builds => None,
+fn pane_key(code: KeyCode, view: &DiffViewState) -> Option<DiffAction> {
+    if let Some(delta) = scroll_delta(code, view.pane_viewport) {
+        return Some(DiffAction::MovePaneCursor(delta));
+    }
+    let searching = !view.pane_search.query.is_empty();
+    match code {
+        KeyCode::Char('n') if searching => Some(DiffAction::JumpMatch(1)),
+        KeyCode::Char('N') if searching => Some(DiffAction::JumpMatch(-1)),
+        KeyCode::Enter | KeyCode::Left | KeyCode::Char('h') => Some(DiffAction::FocusTree),
+        _ => None,
     }
 }
