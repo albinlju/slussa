@@ -5,7 +5,7 @@ use crate::{
     },
     domain::{ci::CiSummary, pr::PullRequest, review::ReviewerState},
     tui::{
-        layout,
+        icons, layout,
         screens::half_page,
         table::{self, Cell, Column, Width},
         theme, widgets,
@@ -223,10 +223,11 @@ fn row_cells(pr: &PullRequest) -> Vec<Cell> {
     };
 
     let (ci_sym, ci_color) = match pr.ci {
-        CiSummary::Success => ("\u{f058}", theme.success), //  check-circle
-        CiSummary::Failed => ("\u{f057}", theme.error),    //  times-circle
-        CiSummary::Pending => ("\u{f017}", theme.warning), //  clock
-        CiSummary::Unknown => ("\u{f042}", theme.muted), //  adjust (half circle — neutral/not run)
+        CiSummary::Success => (icons::CHECK_CIRCLE, theme.success),
+        CiSummary::Failed => (icons::TIMES_CIRCLE, theme.error),
+        CiSummary::Pending => (icons::CLOCK, theme.warning),
+        // adjust — half circle, neutral/not run
+        CiSummary::Unknown => (icons::ADJUST, theme.muted),
     };
 
     let comm_text = if pr.comment_count == 0 {

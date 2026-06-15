@@ -15,7 +15,7 @@ use crate::{
         comment::ReviewThread,
         diff::{Diff, DiffLine, FileDiff},
     },
-    tui::{layout, screens::pr_detail::render_inline_thread, theme, widgets},
+    tui::{icons, layout, screens::pr_detail::render_inline_thread, theme, widgets},
 };
 
 const DIFF_GUTTER: &str = "  ";
@@ -282,7 +282,7 @@ fn render_pane_header(
         let (line, removed) = m.anchor();
         let is_thread = matches!(m.kind, NavKind::Thread { .. });
         let label = if is_thread {
-            format!("  \u{f075} L{line}") //  comment on this line
+            format!("  {} L{line}", icons::COMMENT)
         } else if removed {
             format!("  L{line} (old)")
         } else {

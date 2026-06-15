@@ -9,7 +9,7 @@ use ratatui::{
 use crate::{
     app::state::PrData,
     domain::ci::{Build, BuildState},
-    tui::{format, theme, widgets},
+    tui::{format, icons, theme, widgets},
 };
 
 use super::super::build_status::{OverallState, build_stats, progress_bar, state_color};
@@ -104,11 +104,11 @@ fn build_row(build: &Build, name_col: usize, width: usize) -> Line<'static> {
 
 fn state_glyph(state: BuildState) -> (&'static str, &'static str) {
     match state {
-        BuildState::Successful => ("\u{f058}", "passing"),  //  check-circle
-        BuildState::Failed => ("\u{f057}", "failed"),       //  times-circle
-        BuildState::InProgress => ("\u{f111}", "running"),  //  circle
-        BuildState::Cancelled => ("\u{f05e}", "cancelled"), //  ban
-        BuildState::Unknown => ("\u{f059}", "unknown"),     //  question-circle
+        BuildState::Successful => (icons::CHECK_CIRCLE, "passing"),
+        BuildState::Failed => (icons::TIMES_CIRCLE, "failed"),
+        BuildState::InProgress => (icons::CIRCLE, "running"),
+        BuildState::Cancelled => (icons::BAN, "cancelled"),
+        BuildState::Unknown => (icons::QUESTION_CIRCLE, "unknown"),
     }
 }
 

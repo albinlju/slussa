@@ -9,41 +9,8 @@ use crate::{
         comment::{Comment, ReviewThread, split_suggestions},
         diff::{Diff, DiffLine},
     },
-    tui::{markdown, theme, widgets},
+    tui::{icons, markdown, theme, widgets},
 };
-
-fn author_line(
-    name: &str,
-    note: Option<&str>,
-    created: DateTime<Utc>,
-    now: DateTime<Utc>,
-) -> Line<'static> {
-    let theme = theme::current();
-    let mut lead = vec![Span::styled(
-        name.to_string(),
-        Style::default().fg(theme.info).add_modifier(Modifier::BOLD),
-    )];
-    if let Some(note) = note {
-        lead.push(Span::styled(
-            note.to_string(),
-            Style::default().fg(theme.muted),
-        ));
-    }
-    widgets::author_line(lead, created, now)
-}
-
-fn comment_entry(
-    name: &str,
-    note: Option<&str>,
-    comment: &Comment,
-    anchor: Option<(usize, &str)>,
-    width: u16,
-    now: DateTime<Utc>,
-) -> Vec<Line<'static>> {
-    let mut lines = vec![author_line(name, note, comment.created, now)];
-    lines.extend(comment_body(comment, anchor, width));
-    lines
-}
 
 pub(in crate::tui) fn render_inline_thread(
     thread: &ReviewThread,
@@ -53,34 +20,8 @@ pub(in crate::tui) fn render_inline_thread(
     anchor_text: Option<&str>,
 ) -> Vec<Line<'static>> {
     let theme = theme::current();
-    let text_w = widgets::box_text_width(width);
     let border = if active { theme.accent } else { theme.divider };
-
-    let (icon, label, accent) = if thread.resolved {
-        ("\u{f058}", "Resolved conversation", theme.success) //  check-circle
-    } else {
-        ("\u{f071}", "Unresolved", theme.warning) //  exclamation-triangle
-    };
-    let count = thread.comments.len();
-    let count_label = if count == 1 {
-        "1 comment".to_string()
-    } else {
-        format!("{count} comments")
-    };
-
-    let left = vec![
-        Span::styled(
-            icon,
-            Style::default().fg(accent).add_modifier(Modifier::BOLD),
-        ),
-        Span::raw(" "),
-        Span::styled(
-            label,
-            Style::default().fg(theme.fg).add_modifier(Modifier::BOLD),
-        ),
-    ];
-    let right = vec![Span::styled(count_label, Style::default().fg(theme.muted))];
-    let header = Line::from(widgets::justify_between(left, right, text_w as usize));
+    let header = thread_status_header(thread, width);
 
     let anchor = thread.line.or(thread.old_line).zip(anchor_text);
     let mut body: Vec<Line<'static>> = Vec::new();
@@ -130,19 +71,7 @@ pub(super) fn review_thread_box(
 
     let mut body: Vec<Line<'static>> = Vec::new();
 
-    let location = match thread.line.or(thread.old_line) {
-        Some(l) => format!("{}:{}", thread.path, l),
-        None => thread.path.clone(),
-    };
-    let mut anchor_spans = vec![Span::styled(location, Style::default().fg(theme.accent))];
-    if thread.resolved {
-        anchor_spans.push(Span::styled(
-            " · resolved",
-            Style::default().fg(theme.success),
-        ));
-    }
-    let inner_header = Line::from(anchor_spans);
-
+    let inner_header = anchor_header(thread);
     let inner_text_width = widgets::box_text_width(text_width);
     let (snippet, anchor_text) = diff
         .map(|d| {
@@ -190,11 +119,40 @@ pub(super) fn review_thread_box(
     Some(widgets::boxed(header, body, width, theme.divider))
 }
 
-fn comment_body(
+fn comment_entry(
+    name: &str,
+    note: Option<&str>,
     comment: &Comment,
     anchor: Option<(usize, &str)>,
     width: u16,
+    now: DateTime<Utc>,
 ) -> Vec<Line<'static>> {
+    let mut lines = vec![author_line(name, note, comment.created, now)];
+    lines.extend(comment_body(comment, anchor, width));
+    lines
+}
+
+fn author_line(
+    name: &str,
+    note: Option<&str>,
+    created: DateTime<Utc>,
+    now: DateTime<Utc>,
+) -> Line<'static> {
+    let theme = theme::current();
+    let mut lead = vec![Span::styled(
+        name.to_string(),
+        Style::default().fg(theme.info).add_modifier(Modifier::BOLD),
+    )];
+    if let Some(note) = note {
+        lead.push(Span::styled(
+            note.to_string(),
+            Style::default().fg(theme.muted),
+        ));
+    }
+    widgets::author_line(lead, created, now)
+}
+
+fn comment_body(comment: &Comment, anchor: Option<(usize, &str)>, width: u16) -> Vec<Line<'static>> {
     let text_w = widgets::box_text_width(width);
     let (prose, suggestions) = split_suggestions(&comment.content);
     let mut lines: Vec<Line<'static>> = Vec::new();
@@ -281,6 +239,52 @@ fn suggestion_box(
     widgets::boxed(header, rows, width, theme.suggestion)
 }
 
+fn thread_status_header(thread: &ReviewThread, width: u16) -> Line<'static> {
+    let theme = theme::current();
+    let text_w = widgets::box_text_width(width);
+    let (icon, label, accent) = if thread.resolved {
+        (icons::CHECK_CIRCLE, "Resolved conversation", theme.success)
+    } else {
+        (icons::EXCLAMATION_TRIANGLE, "Unresolved", theme.warning)
+    };
+    let count = thread.comments.len();
+    let count_label = if count == 1 {
+        "1 comment".to_string()
+    } else {
+        format!("{count} comments")
+    };
+
+    let left = vec![
+        Span::styled(
+            icon,
+            Style::default().fg(accent).add_modifier(Modifier::BOLD),
+        ),
+        Span::raw(" "),
+        Span::styled(
+            label,
+            Style::default().fg(theme.fg).add_modifier(Modifier::BOLD),
+        ),
+    ];
+    let right = vec![Span::styled(count_label, Style::default().fg(theme.muted))];
+    Line::from(widgets::justify_between(left, right, text_w as usize))
+}
+
+fn anchor_header(thread: &ReviewThread) -> Line<'static> {
+    let theme = theme::current();
+    let location = match thread.line.or(thread.old_line) {
+        Some(l) => format!("{}:{}", thread.path, l),
+        None => thread.path.clone(),
+    };
+    let mut spans = vec![Span::styled(location, Style::default().fg(theme.accent))];
+    if thread.resolved {
+        spans.push(Span::styled(
+            " · resolved",
+            Style::default().fg(theme.success),
+        ));
+    }
+    Line::from(spans)
+}
+
 const SNIPPET_CONTEXT: usize = 3;
 
 fn diff_snippet(
@@ -304,23 +308,13 @@ fn diff_snippet(
 
     let mut rows: Vec<Row> = Vec::new();
     for (hunk_idx, hunk) in file.hunks.iter().enumerate() {
-        let mut new_no = hunk.new_start;
-        let mut old_no = hunk.old_start;
-        for dl in &hunk.lines {
+        for (dl, new_no, old_no) in hunk.numbered_lines() {
             rows.push(Row {
                 dl,
                 new_no,
                 old_no,
                 hunk: hunk_idx,
             });
-            match dl {
-                DiffLine::Added(_) => new_no += 1,
-                DiffLine::Removed(_) => old_no += 1,
-                DiffLine::Context(_) => {
-                    new_no += 1;
-                    old_no += 1;
-                }
-            }
         }
     }
 
@@ -332,9 +326,7 @@ fn diff_snippet(
     let Some(anchor) = anchor else {
         return (Vec::new(), None);
     };
-    let anchor_text = match rows[anchor].dl {
-        DiffLine::Added(c) | DiffLine::Removed(c) | DiffLine::Context(c) => c.clone(),
-    };
+    let anchor_text = rows[anchor].dl.content().to_string();
 
     let hunk_start = rows[..anchor]
         .iter()

@@ -23,7 +23,7 @@ use crate::{
         diff::{Diff, FileDiff},
         pr::PullRequest,
     },
-    tui::{layout, theme, widgets},
+    tui::{icons, layout, theme, widgets},
 };
 
 impl DetailTab {
@@ -39,11 +39,11 @@ impl DetailTab {
 
     pub fn icon(self) -> &'static str {
         match self {
-            Self::Description => "\u{f15c}", //  file-text
-            Self::Overview => "\u{f086}",    //  comments
-            Self::Diff => "\u{f440}",        //  diff
-            Self::Commits => "\u{f417}",     //  git-commit
-            Self::Builds => "\u{f085}",      //  cogs
+            Self::Description => icons::FILE_TEXT,
+            Self::Overview => icons::COMMENTS,
+            Self::Diff => icons::DIFF,
+            Self::Commits => icons::GIT_COMMIT,
+            Self::Builds => icons::COGS,
         }
     }
 }

@@ -11,7 +11,7 @@ use crate::app::{
     state::DiffViewState,
 };
 use crate::domain::diff::Diff;
-use crate::tui::{theme, widgets};
+use crate::tui::{icons, theme, widgets};
 
 pub(super) fn render(
     frame: &mut Frame,
@@ -118,7 +118,7 @@ fn file_row(
     let mut right: Vec<Span<'static>> = Vec::new();
     if comments > 0 {
         right.push(Span::styled(
-            format!("\u{f075} {comments}"), //  comment
+            format!("{} {comments}", icons::COMMENT),
             Style::default().fg(theme.info),
         ));
         right.push(Span::raw("  "));

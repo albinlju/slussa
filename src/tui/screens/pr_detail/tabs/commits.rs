@@ -10,7 +10,7 @@ use ratatui::{
 use crate::{
     app::state::{CommitsViewState, LoadState, PrData},
     domain::{comment::ReviewThread, commit::Commit},
-    tui::{format, layout, theme, widgets},
+    tui::{format, icons, layout, theme, widgets},
 };
 
 pub fn render(frame: &mut Frame, pr_data: Option<&PrData>, cv: &mut CommitsViewState, area: Rect) {
@@ -48,7 +48,6 @@ const MIN_HEADLINE: usize = 10;
 fn commit_row(commit: &Commit, is_last: bool, now: DateTime<Utc>, width: usize) -> Line<'static> {
     let theme = theme::current();
     let graph = if is_last { "└─ " } else { "├─ " };
-    let short_oid: String = commit.oid.chars().take(7).collect();
     let age = format::relative_age(commit.authored_at, now);
 
     let right = vec![
@@ -68,7 +67,7 @@ fn commit_row(commit: &Commit, is_last: bool, now: DateTime<Utc>, width: usize) 
     ];
     let right_w: usize = right.iter().map(Span::width).sum();
 
-    let oid_cell = format!("{short_oid}  ");
+    let oid_cell = format!("{}  ", short_oid(&commit.oid));
     let prefix_w = graph.chars().count() + oid_cell.chars().count();
     let headline = format::truncate_ellipsis(
         &commit.headline,
@@ -121,12 +120,11 @@ fn render_commit_banner(frame: &mut Frame, pr_data: Option<&PrData>, oid: &str, 
     };
     let found = commits.iter().enumerate().find(|(_, c)| c.oid == oid);
     let total = commits.len();
-    let short: String = oid.chars().take(7).collect();
 
     let mut left = vec![
-        Span::styled("\u{f417} ", Style::default().fg(theme.accent)), //  git-commit
+        Span::styled(format!("{} ", icons::GIT_COMMIT), Style::default().fg(theme.accent)),
         Span::styled(
-            short,
+            short_oid(oid),
             Style::default()
                 .fg(theme.accent)
                 .add_modifier(Modifier::BOLD),
@@ -149,4 +147,8 @@ fn render_commit_banner(frame: &mut Frame, pr_data: Option<&PrData>, oid: &str, 
 
     let line = Line::from(widgets::justify_between(left, right, inner.width as usize));
     frame.render_widget(Paragraph::new(line), inner);
+}
+
+fn short_oid(oid: &str) -> String {
+    oid.chars().take(7).collect()
 }
