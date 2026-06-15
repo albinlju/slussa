@@ -62,9 +62,15 @@ fn tree_header(file_stats: &[(u32, u32)], width: usize) -> Line<'static> {
         Style::default().fg(theme.fg).add_modifier(Modifier::BOLD),
     )];
     let right = vec![
-        Span::styled(format!("+{total_adds}"), Style::default().fg(theme.diff_added)),
+        Span::styled(
+            format!("+{total_adds}"),
+            Style::default().fg(theme.diff_added),
+        ),
         Span::raw(" "),
-        Span::styled(format!("-{total_dels}"), Style::default().fg(theme.diff_removed)),
+        Span::styled(
+            format!("-{total_dels}"),
+            Style::default().fg(theme.diff_removed),
+        ),
     ];
     Line::from(widgets::justify_between(left, right, width))
 }
@@ -98,7 +104,14 @@ fn tree_row(
             name,
             depth,
             file_index,
-        } => file_row(name, *depth, *file_index, file_stats, comment_counts, row_width),
+        } => file_row(
+            name,
+            *depth,
+            *file_index,
+            file_stats,
+            comment_counts,
+            row_width,
+        ),
     }
 }
 

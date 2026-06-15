@@ -1,12 +1,12 @@
 use serde::Deserialize;
 
 use super::{Config, ms_to_utc};
-use crate::providers::bitbucket_dc::http::get_json;
-use crate::providers::error::FetchError;
 use crate::domain::activity::Activity;
 use crate::domain::comment::{Comment, Reaction, ReviewThread};
 use crate::domain::event::{EventKind, PushedCommit, TimelineEvent};
 use crate::domain::user::User;
+use crate::providers::bitbucket_dc::http::get_json;
+use crate::providers::error::FetchError;
 
 #[derive(Debug, Deserialize)]
 struct Page {

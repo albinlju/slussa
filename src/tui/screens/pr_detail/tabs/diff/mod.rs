@@ -50,8 +50,24 @@ pub fn render(
         .collect();
 
     let tree_focused = matches!(ui_diff.focus, DiffFocus::Tree);
-    tree::render(frame, diff, ui_diff, &file_stats, &comment_counts, tree_focused, tree_area);
-    pane::render(frame, diff, ui_diff, &file_stats, review_threads, !tree_focused, pane_area);
+    tree::render(
+        frame,
+        diff,
+        ui_diff,
+        &file_stats,
+        &comment_counts,
+        tree_focused,
+        tree_area,
+    );
+    pane::render(
+        frame,
+        diff,
+        ui_diff,
+        &file_stats,
+        review_threads,
+        !tree_focused,
+        pane_area,
+    );
 }
 
 fn file_comment_count(file: &FileDiff, threads: &[ReviewThread]) -> usize {

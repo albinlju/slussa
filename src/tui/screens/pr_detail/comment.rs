@@ -152,7 +152,11 @@ fn author_line(
     widgets::author_line(lead, created, now)
 }
 
-fn comment_body(comment: &Comment, anchor: Option<(usize, &str)>, width: u16) -> Vec<Line<'static>> {
+fn comment_body(
+    comment: &Comment,
+    anchor: Option<(usize, &str)>,
+    width: u16,
+) -> Vec<Line<'static>> {
     let text_w = widgets::box_text_width(width);
     let (prose, suggestions) = split_suggestions(&comment.content);
     let mut lines: Vec<Line<'static>> = Vec::new();

@@ -1,13 +1,13 @@
-pub mod auth;
 mod activities;
+pub mod auth;
 mod builds;
 mod commits;
 mod diff;
 mod http;
+mod json_diff;
 mod probe;
 mod prs;
 pub mod remote;
-mod json_diff;
 
 use chrono::{DateTime, TimeZone, Utc};
 

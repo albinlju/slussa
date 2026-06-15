@@ -261,11 +261,13 @@ fn build_timeline(
     let blocks: Vec<(Color, Vec<Line<'static>>)> = items
         .iter()
         .filter_map(|item| match item {
-            TimelineItem::Comment(c) => {
-                Some((theme.info, super::super::comment::comment_box(c, width, now)))
-            }
+            TimelineItem::Comment(c) => Some((
+                theme.info,
+                super::super::comment::comment_box(c, width, now),
+            )),
             TimelineItem::Review(t) => {
-                super::super::comment::review_thread_box(t, diff, width, now).map(|l| (theme.accent, l))
+                super::super::comment::review_thread_box(t, diff, width, now)
+                    .map(|l| (theme.accent, l))
             }
             TimelineItem::Event(e) => Some(event_block(e, now)),
         })

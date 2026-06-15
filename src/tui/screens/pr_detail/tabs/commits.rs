@@ -122,7 +122,10 @@ fn render_commit_banner(frame: &mut Frame, pr_data: Option<&PrData>, oid: &str, 
     let total = commits.len();
 
     let mut left = vec![
-        Span::styled(format!("{} ", icons::GIT_COMMIT), Style::default().fg(theme.accent)),
+        Span::styled(
+            format!("{} ", icons::GIT_COMMIT),
+            Style::default().fg(theme.accent),
+        ),
         Span::styled(
             short_oid(oid),
             Style::default()

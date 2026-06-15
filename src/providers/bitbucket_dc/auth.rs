@@ -88,9 +88,15 @@ fn validate_pat(host: &str, pat: &str) -> Result<(), PatError> {
     let detail = server_message(&response.text().unwrap_or_default());
     let code = status.as_u16();
     if status == reqwest::StatusCode::UNAUTHORIZED || status == reqwest::StatusCode::FORBIDDEN {
-        Err(PatError::Rejected { status: code, detail })
+        Err(PatError::Rejected {
+            status: code,
+            detail,
+        })
     } else {
-        Err(PatError::ServerError { status: code, detail })
+        Err(PatError::ServerError {
+            status: code,
+            detail,
+        })
     }
 }
 

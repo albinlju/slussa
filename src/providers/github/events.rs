@@ -1,10 +1,10 @@
 use chrono::{DateTime, Utc};
 use serde::Deserialize;
 
-use crate::providers::error::FetchError;
-use crate::providers::github::cli::run_gh_json;
 use crate::domain::event::{EventKind, TimelineEvent};
 use crate::domain::user::User;
+use crate::providers::error::FetchError;
+use crate::providers::github::cli::run_gh_json;
 
 #[derive(Debug, Deserialize)]
 #[serde(rename_all = "camelCase")]
