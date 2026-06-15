@@ -28,27 +28,31 @@ pub fn render(frame: &mut Frame, state: &mut AppState) {
 
 pub fn key_to_action(state: &AppState, key: KeyEvent) -> Option<Action> {
     let key = normalize_key(key);
-    if let Some((search, highlight)) = active_search(state) {
-        if search.open {
-            if !key.modifiers.contains(KeyModifiers::CONTROL) {
-                match key.code {
-                    KeyCode::Char(c) => return Some(Action::Search(SearchAction::Type(c))),
-                    KeyCode::Backspace => return Some(Action::Search(SearchAction::Backspace)),
-                    KeyCode::Esc => return Some(Action::Search(SearchAction::Cancel)),
-                    KeyCode::Enter if highlight => {
-                        return Some(Action::Search(SearchAction::Confirm));
-                    }
-                    _ => {}
-                }
-            }
-        } else if key.code == KeyCode::Char('/') {
-            return Some(Action::Search(SearchAction::Open));
-        }
+    if let Some((search, highlight)) = active_search(state)
+        && let Some(action) = search_action(search, highlight, key)
+    {
+        return Some(action);
     }
 
     match state.screen {
         Screen::List => pr_list::key_to_action(state, key),
         Screen::Detail { .. } => pr_detail::key_to_action(state, key),
+    }
+}
+
+fn search_action(search: &SearchState, highlight: bool, key: KeyEvent) -> Option<Action> {
+    if !search.open {
+        return (key.code == KeyCode::Char('/')).then_some(Action::Search(SearchAction::Open));
+    }
+    if key.modifiers.contains(KeyModifiers::CONTROL) {
+        return None;
+    }
+    match key.code {
+        KeyCode::Char(c) => Some(Action::Search(SearchAction::Type(c))),
+        KeyCode::Backspace => Some(Action::Search(SearchAction::Backspace)),
+        KeyCode::Esc => Some(Action::Search(SearchAction::Cancel)),
+        KeyCode::Enter if highlight => Some(Action::Search(SearchAction::Confirm)),
+        _ => None,
     }
 }
 
