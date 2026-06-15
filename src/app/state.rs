@@ -88,6 +88,8 @@ pub struct UiMemory {
     pub list_search: SearchState,
     pub filter_picker_open: bool,
     pub filter_picker_cursor: usize,
+    pub approve_box_open: bool,
+    pub approve_box_cursor: usize,
     pub diff: DiffViewState,
     pub commits: CommitsViewState,
     pub description_scroll: u16,

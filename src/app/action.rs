@@ -43,6 +43,10 @@ pub enum DetailAction {
     DescriptionScroll(i16),
     OverviewScroll(i16),
     ToggleHelp,
+    OpenApprove,
+    CloseApprove,
+    ApproveMove(i16),
+    SubmitApprove,
 }
 
 #[derive(Debug, Clone, Copy)]

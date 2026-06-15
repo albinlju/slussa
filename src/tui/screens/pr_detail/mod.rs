@@ -13,7 +13,7 @@ use ratatui::{
     layout::{Constraint, Direction, Rect},
     style::{Modifier, Style},
     text::{Line, Span},
-    widgets::{Block, BorderType, Borders, Padding, Paragraph},
+    widgets::{Block, BorderType, Borders, Clear, Padding, Paragraph},
 };
 
 use crate::{
@@ -97,6 +97,9 @@ pub(in crate::tui) fn render(
 
     if let Some(help_area) = help_area {
         render_help_panel(frame, help_area);
+    }
+    if state.ui.approve_box_open {
+        render_approve_box(frame, state.ui.approve_box_cursor, area);
     }
 }
 
@@ -387,5 +390,52 @@ fn render_help_panel(frame: &mut Frame, area: Rect) {
             Line::from(spans)
         })
         .collect();
+    frame.render_widget(Paragraph::new(lines), inner);
+}
+
+const APPROVE_OPTIONS: [&str; 2] = ["Yes", "No"];
+
+fn render_approve_box(frame: &mut Frame, cursor: usize, area: Rect) {
+    let theme = theme::current();
+    let selected = Style::default()
+        .bg(theme.highlight_bg)
+        .add_modifier(Modifier::BOLD);
+    let normal = Style::default().fg(theme.muted);
+
+    let mut lines = vec![
+        Line::from(Span::styled(
+            "Approve this PR?",
+            Style::default().fg(theme.fg),
+        )),
+        Line::default(),
+    ];
+    for (i, label) in APPROVE_OPTIONS.iter().enumerate() {
+        let marker = if i == cursor { "▶ " } else { "  " };
+        let style = if i == cursor { selected } else { normal };
+        lines.push(Line::from(vec![
+            Span::styled(marker, Style::default().fg(theme.accent)),
+            Span::styled(format!(" {label} "), style),
+        ]));
+    }
+
+    let content_w = lines.iter().map(Line::width).max().unwrap_or(0) as u16;
+    let popup_w = (content_w + 4).min(area.width);
+    let popup_h = (lines.len() as u16 + 2).min(area.height);
+    let popup = Rect {
+        x: area.x + area.width.saturating_sub(popup_w) / 2,
+        y: area.y + area.height.saturating_sub(popup_h) / 2,
+        width: popup_w,
+        height: popup_h,
+    };
+
+    frame.render_widget(Clear, popup);
+    let block = Block::default()
+        .borders(Borders::ALL)
+        .border_type(BorderType::Rounded)
+        .title(" Approve ")
+        .border_style(Style::default().fg(theme.accent))
+        .padding(Padding::horizontal(1));
+    let inner = block.inner(popup);
+    frame.render_widget(block, popup);
     frame.render_widget(Paragraph::new(lines), inner);
 }

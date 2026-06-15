@@ -19,7 +19,25 @@ impl App {
                 self.state.ui.overview_scroll = super::scroll(self.state.ui.overview_scroll, delta);
             }
             DetailAction::ToggleHelp => self.state.ui.help_open = !self.state.ui.help_open,
+            DetailAction::OpenApprove => {
+                self.state.ui.approve_box_open = true;
+                self.state.ui.approve_box_cursor = 0;
+            }
+            DetailAction::CloseApprove => self.state.ui.approve_box_open = false,
+            DetailAction::ApproveMove(delta) => {
+                self.state.ui.approve_box_cursor =
+                    super::step_index(self.state.ui.approve_box_cursor, delta, 2);
+            }
+            DetailAction::SubmitApprove => self.submit_approve(),
         }
+    }
+
+    fn submit_approve(&mut self) {
+        // cursor 0 = Yes, 1 = No
+        if self.state.ui.approve_box_cursor == 0 {
+            // TODO: call the provider approve write here.
+        }
+        self.state.ui.approve_box_open = false;
     }
 
     fn back_to_list(&mut self) {
