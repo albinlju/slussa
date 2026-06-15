@@ -17,7 +17,10 @@ use ratatui::{
 };
 
 use crate::{
-    app::state::{AppState, DetailTab, DiffFocus, LoadState, PrData, SearchState, UiMemory},
+    app::state::{
+        AppState, CommentDraft, ConfirmKind, DetailTab, DiffFocus, LoadState, PrData, SearchState,
+        UiMemory,
+    },
     domain::{
         comment::ReviewThread,
         diff::{Diff, FileDiff},
@@ -98,8 +101,8 @@ pub(in crate::tui) fn render(
     if let Some(help_area) = help_area {
         render_help_panel(frame, help_area);
     }
-    if state.ui.approve_box_open {
-        render_approve_box(frame, state.ui.approve_box_cursor, area);
+    if let Some(kind) = state.ui.confirm {
+        render_confirm_box(frame, kind, state.ui.confirm_cursor, area);
     }
 }
 
@@ -110,12 +113,28 @@ fn render_footer_bar(
     tab: DetailTab,
     area: Rect,
 ) {
-    let line = if let Some(search) = active_search(state, pr_data, tab, area.width) {
+    let line = if let Some(draft) = &state.ui.comment_draft {
+        comment_prompt(draft)
+    } else if state.ui.comment_pending {
+        widgets::loading("posting comment…")
+    } else if let Some(search) = active_search(state, pr_data, tab, area.width) {
         search
     } else {
         widgets::footer(area.width, DETAIL_ACTIONS)
     };
     frame.render_widget(Paragraph::new(line), area);
+}
+
+fn comment_prompt(draft: &CommentDraft) -> Line<'static> {
+    let theme = theme::current();
+    Line::from(vec![
+        Span::styled(
+            format!("  comment {}:{} ▏ ", draft.anchor.path, draft.anchor.line),
+            Style::default().fg(theme.muted),
+        ),
+        Span::styled(draft.text.clone(), Style::default().fg(theme.fg)),
+        Span::styled("█", Style::default().fg(theme.accent)),
+    ])
 }
 
 fn active_search(
@@ -393,9 +412,9 @@ fn render_help_panel(frame: &mut Frame, area: Rect) {
     frame.render_widget(Paragraph::new(lines), inner);
 }
 
-const APPROVE_OPTIONS: [&str; 2] = ["Yes", "No"];
+const CONFIRM_OPTIONS: [&str; 2] = ["Yes", "No"];
 
-fn render_approve_box(frame: &mut Frame, cursor: usize, area: Rect) {
+fn render_confirm_box(frame: &mut Frame, kind: ConfirmKind, cursor: usize, area: Rect) {
     let theme = theme::current();
     let selected = Style::default()
         .bg(theme.highlight_bg)
@@ -403,13 +422,10 @@ fn render_approve_box(frame: &mut Frame, cursor: usize, area: Rect) {
     let normal = Style::default().fg(theme.muted);
 
     let mut lines = vec![
-        Line::from(Span::styled(
-            "Approve this PR?",
-            Style::default().fg(theme.fg),
-        )),
+        Line::from(Span::styled(kind.prompt(), Style::default().fg(theme.fg))),
         Line::default(),
     ];
-    for (i, label) in APPROVE_OPTIONS.iter().enumerate() {
+    for (i, label) in CONFIRM_OPTIONS.iter().enumerate() {
         let marker = if i == cursor { "▶ " } else { "  " };
         let style = if i == cursor { selected } else { normal };
         lines.push(Line::from(vec![
@@ -432,7 +448,7 @@ fn render_approve_box(frame: &mut Frame, cursor: usize, area: Rect) {
     let block = Block::default()
         .borders(Borders::ALL)
         .border_type(BorderType::Rounded)
-        .title(" Approve ")
+        .title(" Confirm ")
         .border_style(Style::default().fg(theme.accent))
         .padding(Padding::horizontal(1));
     let inner = block.inner(popup);

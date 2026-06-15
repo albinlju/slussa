@@ -1,6 +1,7 @@
 mod activities;
 pub mod auth;
 mod builds;
+mod comments;
 mod commits;
 mod diff;
 mod http;
@@ -13,6 +14,7 @@ use chrono::{DateTime, TimeZone, Utc};
 
 pub use activities::fetch as fetch_activity;
 pub use builds::fetch_builds;
+pub use comments::post_comment;
 pub use commits::fetch_commits;
 pub use diff::{fetch_commit_diff, fetch_diff};
 pub use probe::is_instance;

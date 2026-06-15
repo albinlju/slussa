@@ -13,7 +13,7 @@ use ratatui::{
 };
 
 use crate::app::{
-    action::{Action, SearchAction},
+    action::{Action, DetailAction, SearchAction},
     state::{AppState, Screen, SearchState, SearchTarget},
 };
 
@@ -28,6 +28,17 @@ pub fn render(frame: &mut Frame, state: &mut AppState) {
 
 pub fn key_to_action(state: &AppState, key: KeyEvent) -> Option<Action> {
     let key = normalize_key(key);
+
+    if state.ui.comment_draft.is_some() {
+        return match key.code {
+            KeyCode::Char(c) => Some(Action::Detail(DetailAction::CommentType(c))),
+            KeyCode::Backspace => Some(Action::Detail(DetailAction::CommentBackspace)),
+            KeyCode::Enter => Some(Action::Detail(DetailAction::CommentSubmit)),
+            KeyCode::Esc => Some(Action::Detail(DetailAction::CommentCancel)),
+            _ => None,
+        };
+    }
+
     if let Some((search, highlight)) = active_search(state)
         && let Some(action) = search_action(search, highlight, key)
     {

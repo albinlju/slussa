@@ -88,8 +88,8 @@ pub struct UiMemory {
     pub list_search: SearchState,
     pub filter_picker_open: bool,
     pub filter_picker_cursor: usize,
-    pub approve_box_open: bool,
-    pub approve_box_cursor: usize,
+    pub confirm: Option<ConfirmKind>,
+    pub confirm_cursor: usize,
     pub diff: DiffViewState,
     pub commits: CommitsViewState,
     pub description_scroll: u16,
@@ -97,6 +97,34 @@ pub struct UiMemory {
     pub description_viewport: u16,
     pub overview_viewport: u16,
     pub help_open: bool,
+    pub comment_draft: Option<CommentDraft>,
+    pub comment_pending: bool,
+}
+
+#[derive(Debug, Clone)]
+pub struct CommentAnchor {
+    pub path: String,
+    pub line: usize,
+    pub removed: bool,
+}
+
+#[derive(Debug, Clone)]
+pub struct CommentDraft {
+    pub anchor: CommentAnchor,
+    pub text: String,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ConfirmKind {
+    Approve,
+}
+
+impl ConfirmKind {
+    pub fn prompt(self) -> &'static str {
+        match self {
+            Self::Approve => "Approve this PR?",
+        }
+    }
 }
 
 impl UiMemory {
@@ -171,6 +199,7 @@ pub struct DiffViewState {
     pub tree_search: SearchState,
     pub pane_search: SearchState,
     pub pane_matches: Vec<usize>,
+    pub pane_anchor: Option<CommentAnchor>,
     pub focus: DiffFocus,
 }
 
@@ -288,6 +317,8 @@ impl AppState {
     }
 
     pub fn is_loading(&self) -> bool {
-        self.cache.prs.is_loading() || self.cache.details.values().any(PrData::any_loading)
+        self.ui.comment_pending
+            || self.cache.prs.is_loading()
+            || self.cache.details.values().any(PrData::any_loading)
     }
 }

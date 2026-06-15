@@ -55,4 +55,18 @@ impl Provider {
             Self::BitbucketDc(c) => bitbucket_dc::fetch_activity(c, pr_id),
         }
     }
+
+    pub fn post_comment(
+        &self,
+        pr_id: u64,
+        path: &str,
+        line: usize,
+        removed: bool,
+        body: &str,
+    ) -> Result<(), FetchError> {
+        match self {
+            Self::GitHub => github::post_comment(pr_id, path, line, removed, body),
+            Self::BitbucketDc(c) => bitbucket_dc::post_comment(c, pr_id, path, line, removed, body),
+        }
+    }
 }

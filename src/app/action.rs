@@ -1,5 +1,5 @@
 use crate::{
-    app::state::DetailTab,
+    app::state::{ConfirmKind, DetailTab},
     domain::{activity::Activity, ci::Build, commit::Commit, diff::Diff, pr::PullRequest},
 };
 
@@ -43,10 +43,15 @@ pub enum DetailAction {
     DescriptionScroll(i16),
     OverviewScroll(i16),
     ToggleHelp,
-    OpenApprove,
-    CloseApprove,
-    ApproveMove(i16),
-    SubmitApprove,
+    OpenConfirm(ConfirmKind),
+    CloseConfirm,
+    ConfirmMove(i16),
+    SubmitConfirm,
+    OpenComment,
+    CommentType(char),
+    CommentBackspace,
+    CommentSubmit,
+    CommentCancel,
 }
 
 #[derive(Debug, Clone, Copy)]
@@ -77,4 +82,5 @@ pub enum LoadedAction {
     Builds(u64, Result<Vec<Build>, String>),
     Activity(u64, Result<Activity, String>),
     CommitDiff(u64, String, Result<Diff, String>),
+    Commented(u64, Result<(), String>),
 }

@@ -40,6 +40,7 @@
 - [ ] **Labels in the list** — colored and filterable (shown in Overview today).
 - [ ] **Errors visible in the UI** instead of panics when a fetch/parse fails.
 - [ ] **Reply to / resolve a comment thread** — the cursor-focus groundwork is already in place.
+- [ ] **Optimistic comment insert** — show a just-posted line comment instantly (local insert into `activity`) instead of the ~3-5s wait for the refetch; needs current-user to attribute it correctly. ("posting…" indicator is already done.)
 - [ ] **Manual / auto refresh** (`r`) — re-fetch without restarting.
 - [ ] **Build jobs auto update status** — Builds should re-fetch status automatically while open tab
 - [ ] **Approve / Request changes / Comment** — needs a small text-input mode.
