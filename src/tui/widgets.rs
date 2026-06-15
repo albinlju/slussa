@@ -357,23 +357,13 @@ pub(super) fn numbered_diff_row(
     let visible = gutter.len() + prefix.len() + 1 + Span::raw(content).width();
     let pad = row_w.saturating_sub(visible);
 
-    let gutter_style = match bg {
-        Some(bg) => Style::default().fg(theme::current().muted).bg(bg),
-        None => Style::default().fg(theme::current().muted),
+    let apply_bg = |style: Style| match bg {
+        Some(bg) => style.bg(bg),
+        None => style,
     };
-    let prefix_style = {
-        let s = Style::default()
-            .fg(prefix_fg)
-            .add_modifier(Modifier::BOLD);
-        match bg {
-            Some(bg) => s.bg(bg),
-            None => s,
-        }
-    };
-    let text_style = match bg {
-        Some(bg) => Style::default().fg(text_fg).bg(bg),
-        None => Style::default().fg(text_fg),
-    };
+    let gutter_style = apply_bg(Style::default().fg(theme::current().muted));
+    let prefix_style = apply_bg(Style::default().fg(prefix_fg).add_modifier(Modifier::BOLD));
+    let text_style = apply_bg(Style::default().fg(text_fg));
 
     Line::from(vec![
         Span::styled(gutter, gutter_style),
