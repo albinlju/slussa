@@ -18,6 +18,13 @@ pub(in crate::tui) fn key_to_action(state: &AppState, key: KeyEvent) -> Option<A
     let viewing_commit = state.ui.commits.open_commit.is_some();
     let code = key.code;
 
+    if code == KeyCode::Char('?') {
+        return Some(Action::Detail(DetailAction::ToggleHelp));
+    }
+    if state.ui.help_open {
+        return (code == KeyCode::Esc).then_some(Action::Detail(DetailAction::ToggleHelp));
+    }
+
     escape_action(state, tab, viewing_commit, code)
         .or_else(|| tab_select_key(code))
         .or_else(|| tab_key(state, tab, viewing_commit, code))

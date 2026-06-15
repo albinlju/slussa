@@ -36,7 +36,6 @@ impl DetailTab {
             Self::Builds => "Builds",
         }
     }
-
 }
 
 pub(in crate::tui) fn render(
@@ -54,11 +53,25 @@ pub(in crate::tui) fn render(
     };
 
     let theme = theme::current();
-    let [main_area, footer_area] = layout::split(
-        area,
-        Direction::Vertical,
-        [Constraint::Min(0), Constraint::Length(1)],
-    );
+    let (main_area, footer_area, help_area) = if state.ui.help_open {
+        let [main, footer, help] = layout::split(
+            area,
+            Direction::Vertical,
+            [
+                Constraint::Min(0),
+                Constraint::Length(1),
+                Constraint::Percentage(30),
+            ],
+        );
+        (main, footer, Some(help))
+    } else {
+        let [main, footer] = layout::split(
+            area,
+            Direction::Vertical,
+            [Constraint::Min(0), Constraint::Length(1)],
+        );
+        (main, footer, None)
+    };
 
     let outer = Block::default()
         .borders(Borders::ALL)
@@ -81,6 +94,10 @@ pub(in crate::tui) fn render(
     let pr_data = state.cache.details.get(&pr.id);
     render_tabs_and_content(frame, pr, pr_data, &mut state.ui, tab, content_area);
     render_footer_bar(frame, state, pr_data, tab, footer_area);
+
+    if let Some(help_area) = help_area {
+        render_help_panel(frame, help_area);
+    }
 }
 
 fn render_footer_bar(
@@ -93,9 +110,7 @@ fn render_footer_bar(
     let line = if let Some(search) = active_search(state, pr_data, tab, area.width) {
         search
     } else {
-        let viewing_commit = state.ui.commits.open_commit.is_some();
-        let focus = state.ui.active_diff_view().focus;
-        widgets::footer(area.width, footer_hint(tab, viewing_commit, focus))
+        widgets::footer(area.width, DETAIL_ACTIONS)
     };
     frame.render_widget(Paragraph::new(line), area);
 }
@@ -322,21 +337,55 @@ fn activity_threads(pr_data: Option<&PrData>) -> &[ReviewThread] {
         .unwrap_or(&[])
 }
 
-fn footer_hint(tab: DetailTab, viewing_commit: bool, focus: DiffFocus) -> &'static str {
-    match (tab, viewing_commit, focus) {
-        (DetailTab::Diff, _, DiffFocus::Tree) => {
-            "j/k: files  ^d/^u: page  enter: open  h/l: fold  esc: back"
-        }
-        (DetailTab::Diff, _, DiffFocus::Pane) => "j/k: line  ^d/^u: page  h/esc: tree  q: quit",
-        (DetailTab::Commits, true, DiffFocus::Tree) => {
-            "j/k: files  enter: open  [ ]: prev/next  esc: list"
-        }
-        (DetailTab::Commits, true, DiffFocus::Pane) => {
-            "j/k: line  [ ]: prev/next commit  h/esc: tree"
-        }
-        (DetailTab::Commits, false, _) => {
-            "j/k: commits  ^d/^u: page  enter: view diff  h/l: tab  esc: back"
-        }
-        _ => "1-5 / h/l: tab  j/k: scroll  ^d/^u: page  esc: back",
-    }
+const DETAIL_ACTIONS: &str = "a: approve  c: comment  m: merge";
+
+const HELP_KEYS: &[(&str, &str)] = &[
+    ("j/k", "move up/down"),
+    ("^d/^u", "half-page"),
+    ("h/l", "switch tab / fold"),
+    ("1-5", "select tab"),
+    ("enter", "open / view"),
+    ("space", "toggle fold"),
+    ("/", "search"),
+    ("n/N", "next/prev match"),
+    ("[ ]", "prev/next commit"),
+    ("esc", "back"),
+    ("a", "approve"),
+    ("c", "comment"),
+    ("m", "merge"),
+    ("?", "toggle help"),
+    ("q", "quit"),
+];
+
+fn render_help_panel(frame: &mut Frame, area: Rect) {
+    let theme = theme::current();
+    let block = Block::default()
+        .borders(Borders::ALL)
+        .border_type(BorderType::Rounded)
+        .title(" Help ")
+        .border_style(Style::default().fg(theme.accent))
+        .padding(Padding::symmetric(1, 1));
+    let inner = block.inner(area);
+    frame.render_widget(block, area);
+
+    let key_style = Style::default().fg(theme.accent).add_modifier(Modifier::BOLD);
+    let desc_style = Style::default().fg(theme.muted);
+    let key_w = HELP_KEYS.iter().map(|(k, _)| k.len()).max().unwrap_or(0);
+    let desc_w = HELP_KEYS.iter().map(|(_, d)| d.len()).max().unwrap_or(0);
+    let rows = (inner.height as usize).clamp(1, HELP_KEYS.len());
+    let cols = HELP_KEYS.len().div_ceil(rows);
+
+    let lines: Vec<Line<'static>> = (0..rows)
+        .map(|r| {
+            let mut spans: Vec<Span<'static>> = Vec::new();
+            for c in 0..cols {
+                if let Some((k, d)) = HELP_KEYS.get(c * rows + r) {
+                    spans.push(Span::styled(format!("{k:<key_w$}  "), key_style));
+                    spans.push(Span::styled(format!("{d:<w$}", w = desc_w + 3), desc_style));
+                }
+            }
+            Line::from(spans)
+        })
+        .collect();
+    frame.render_widget(Paragraph::new(lines), inner);
 }

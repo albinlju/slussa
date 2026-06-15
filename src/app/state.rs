@@ -94,6 +94,7 @@ pub struct UiMemory {
     pub overview_scroll: u16,
     pub description_viewport: u16,
     pub overview_viewport: u16,
+    pub help_open: bool,
 }
 
 impl UiMemory {
