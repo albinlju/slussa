@@ -22,14 +22,12 @@ pub(super) fn truncate_ellipsis(s: &str, max: usize) -> String {
 pub(super) fn relative_age(when: DateTime<Utc>, now: DateTime<Utc>) -> String {
     let delta = now - when;
     let days = delta.num_days();
+    let hours = delta.num_hours();
     if days >= 1 {
         format!("{days}d ago")
+    } else if hours >= 1 {
+        format!("{hours}h ago")
     } else {
-        let hours = delta.num_hours();
-        if hours >= 1 {
-            format!("{hours}h ago")
-        } else {
-            "just now".to_string()
-        }
+        "just now".to_string()
     }
 }
