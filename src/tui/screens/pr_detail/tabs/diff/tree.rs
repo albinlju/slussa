@@ -19,13 +19,12 @@ pub(super) fn render(
     ui_diff: &mut DiffViewState,
     file_stats: &[(u32, u32)],
     comment_counts: &[usize],
-    focused: bool,
     area: Rect,
 ) {
     ui_diff.tree_viewport = area.height.saturating_sub(4);
     let rows = build_visible_rows(&diff.files, &ui_diff.collapsed, &ui_diff.tree_search.query);
 
-    let (header_inner, body) = widgets::framed_panel(frame, area, focused);
+    let (header_inner, body) = widgets::framed_panel(frame, area);
     let header_width = (header_inner.width as usize).saturating_sub(1);
     frame.render_widget(
         Paragraph::new(tree_header(file_stats, header_width)),

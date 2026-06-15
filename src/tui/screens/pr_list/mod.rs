@@ -227,11 +227,7 @@ fn row_cells(pr: &PullRequest) -> Vec<Cell> {
         CiSummary::Unknown => (icons::ADJUST, theme.muted),
     };
 
-    let comm_text = if pr.comment_count == 0 {
-        "—".to_string()
-    } else {
-        pr.comment_count.to_string()
-    };
+    let comm_text = pr.comment_count.to_string();
 
     let (rev_text, rev_color) = review_summary(&pr.reviewers);
 
@@ -245,7 +241,7 @@ fn row_cells(pr: &PullRequest) -> Vec<Cell> {
             pr.author.username.clone(),
             Style::default().fg(theme.info),
         )],
-        vec![Span::raw(pr.title.clone())],
+        vec![Span::styled(pr.title.clone(), Style::default().fg(theme.fg))],
         vec![Span::styled(ci_sym, Style::default().fg(ci_color))],
         vec![
             Span::styled(

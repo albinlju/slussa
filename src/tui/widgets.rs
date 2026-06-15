@@ -23,13 +23,12 @@ pub(super) fn author_line(
     Line::from(lead)
 }
 
-pub(super) fn framed_panel(frame: &mut Frame, area: Rect, focused: bool) -> (Rect, Rect) {
+pub(super) fn framed_panel(frame: &mut Frame, area: Rect) -> (Rect, Rect) {
     let theme = theme::current();
-    let border = if focused { theme.accent } else { theme.divider };
     let block = Block::default()
         .borders(Borders::ALL)
         .border_type(BorderType::Rounded)
-        .border_style(Style::default().fg(border));
+        .border_style(Style::default().fg(theme.divider));
     let inner = block.inner(area);
     frame.render_widget(block, area);
 
@@ -142,7 +141,22 @@ pub(super) fn spinner_frame() -> &'static str {
 pub(super) fn footer(width: u16, hints: &str) -> Line<'static> {
     let theme = theme::current();
     let muted = Style::default().fg(theme.muted);
-    let left = vec![Span::styled(format!("  {hints}"), muted)];
+    let key = Style::default().fg(theme.accent).add_modifier(Modifier::BOLD);
+
+    let mut left = vec![Span::raw("  ")];
+    for (i, segment) in hints.split("  ").enumerate() {
+        if i > 0 {
+            left.push(Span::styled("  ", muted));
+        }
+        match segment.split_once(": ") {
+            Some((keys, desc)) => {
+                left.push(Span::styled(keys.to_string(), key));
+                left.push(Span::styled(format!(": {desc}"), muted));
+            }
+            None => left.push(Span::styled(segment.to_string(), muted)),
+        }
+    }
+
     let version = format!("v{}", env!("CARGO_PKG_VERSION"));
     let right = vec![
         Span::styled(icons::HEART, Style::default().fg(theme.orange)),

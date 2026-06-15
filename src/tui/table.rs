@@ -54,7 +54,7 @@ impl<'a> Table<'a> {
 
     pub fn header(&self) -> Line<'static> {
         let style = Style::default()
-            .fg(theme::current().fg)
+            .fg(theme::current().muted)
             .add_modifier(Modifier::BOLD);
         let cells: Vec<Cell> = self
             .cols

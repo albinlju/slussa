@@ -161,7 +161,7 @@ fn comment_body(
     let (prose, suggestions) = split_suggestions(&comment.content);
     let mut lines: Vec<Line<'static>> = Vec::new();
     if !prose.trim().is_empty() {
-        lines.extend(markdown::render_no_margin(&prose, text_w));
+        lines.extend(paint_fg(markdown::render_no_margin(&prose, text_w)));
     }
     for suggestion in &suggestions {
         lines.push(Line::raw(""));
@@ -172,6 +172,24 @@ fn comment_body(
         lines.push(line);
     }
     lines
+}
+
+// Markdown (glamour) renders body text dimmer than the theme foreground; repaint
+// each span's fg so comment prose reads in fg.
+fn paint_fg(lines: Vec<Line<'static>>) -> Vec<Line<'static>> {
+    let fg = theme::current().fg;
+    lines
+        .into_iter()
+        .map(|line| {
+            let style = line.style;
+            let spans: Vec<Span<'static>> = line
+                .spans
+                .into_iter()
+                .map(|s| Span::styled(s.content, s.style.fg(fg)))
+                .collect();
+            Line::from(spans).style(style)
+        })
+        .collect()
 }
 
 fn suggestion_box(
