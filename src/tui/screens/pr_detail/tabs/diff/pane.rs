@@ -50,7 +50,7 @@ pub(super) fn render(
 
     let theme = theme::current();
 
-    let (header_inner, body_area) = widgets::framed_panel(frame, area, focused);
+    let (header_inner, body_area) = widgets::framed_panel(frame, area);
     let active = focused.then_some(pane_cursor);
     let DiffBody {
         mut lines,

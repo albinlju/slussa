@@ -255,7 +255,7 @@ fn render_header(frame: &mut Frame, pr: &PullRequest, area: Rect) {
         Span::styled(format!("#{} ", pr.id), Style::default().fg(theme.muted)),
         Span::styled(
             pr.title.clone(),
-            Style::default().add_modifier(Modifier::BOLD),
+            Style::default().fg(theme.fg).add_modifier(Modifier::BOLD),
         ),
     ]);
 
@@ -273,10 +273,10 @@ fn render_header(frame: &mut Frame, pr: &PullRequest, area: Rect) {
             format!(" @{}", pr.author.username),
             Style::default().fg(theme.info),
         ),
-        Span::raw("  wants to merge  "),
+        Span::styled("  wants to merge  ", Style::default().fg(theme.muted)),
         Span::styled(pr.source_branch.clone(), Style::default().fg(theme.orange)),
         Span::raw(" → "),
-        Span::styled(pr.target_branch.clone(), Style::default().fg(theme.accent)),
+        Span::styled(pr.target_branch.clone(), Style::default().fg(theme.info)),
     ];
     let meta_line = Line::from(left_spans);
 

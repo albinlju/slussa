@@ -22,6 +22,7 @@ use crate::{
 };
 
 const TIMELINE_COL: u16 = 2;
+const TIMELINE_RIGHT_PAD: u16 = 3;
 
 const SIDEBAR_WIDTH: u16 = 30;
 const SIDEBAR_BREAKPOINT: u16 = 64;
@@ -33,21 +34,30 @@ pub fn render(
     ui: &mut UiMemory,
     area: Rect,
 ) {
-    let (timeline_area, sidebar_area) = if area.width >= SIDEBAR_BREAKPOINT {
-        let [timeline, sidebar] = layout::split(
+    let (body_area, sidebar_area, scrollbar_area) = if area.width >= SIDEBAR_BREAKPOINT {
+        let [body, sidebar, scrollbar] = layout::split(
             area,
             Direction::Horizontal,
-            [Constraint::Min(0), Constraint::Length(SIDEBAR_WIDTH)],
+            [
+                Constraint::Min(0),
+                Constraint::Length(SIDEBAR_WIDTH),
+                Constraint::Length(1),
+            ],
         );
-        (timeline, Some(sidebar))
+        (body, Some(sidebar), scrollbar)
     } else {
-        (area, None)
+        let [body, scrollbar] = layout::split(
+            area,
+            Direction::Horizontal,
+            [Constraint::Min(0), Constraint::Length(1)],
+        );
+        (body, None, scrollbar)
     };
 
     if let Some(sidebar) = sidebar_area {
         render_sidebar(frame, pr, pr_data, sidebar);
     }
-    render_timeline(frame, pr_data, ui, timeline_area);
+    render_timeline(frame, pr_data, ui, body_area, scrollbar_area);
 }
 
 fn render_sidebar(frame: &mut Frame, pr: &PullRequest, pr_data: Option<&PrData>, area: Rect) {
@@ -193,7 +203,13 @@ fn muted_line(text: &str) -> Line<'static> {
     ))
 }
 
-fn render_timeline(frame: &mut Frame, pr_data: Option<&PrData>, ui: &mut UiMemory, area: Rect) {
+fn render_timeline(
+    frame: &mut Frame,
+    pr_data: Option<&PrData>,
+    ui: &mut UiMemory,
+    area: Rect,
+    scrollbar_area: Rect,
+) {
     let Some(activity) =
         widgets::loaded_or_placeholder(frame, pr_data.map(|d| &d.activity), "activity", area)
     else {
@@ -210,20 +226,31 @@ fn render_timeline(frame: &mut Frame, pr_data: Option<&PrData>, ui: &mut UiMemor
         _ => None,
     });
 
-    let timeline_content = build_timeline(
+    let content = build_timeline(
         &activity.comments,
         &activity.threads,
         &activity.events,
         diff,
-        area.width.saturating_sub(1 + TIMELINE_COL),
+        area.width.saturating_sub(TIMELINE_RIGHT_PAD + TIMELINE_COL),
     );
-    widgets::scrolled_paragraph(
-        frame,
-        timeline_content,
-        &mut ui.overview_scroll,
-        &mut ui.overview_viewport,
-        area,
+
+    let max_scroll = content.len().saturating_sub(area.height as usize) as u16;
+    ui.overview_scroll = ui.overview_scroll.min(max_scroll);
+    ui.overview_viewport = area.height;
+
+    let content_area = Rect {
+        width: area.width.saturating_sub(TIMELINE_RIGHT_PAD),
+        ..area
+    };
+    frame.render_widget(
+        Paragraph::new(content).scroll((ui.overview_scroll, 0)),
+        content_area,
     );
+
+    if max_scroll > 0 {
+        let bar = widgets::scrollbar(ui.overview_scroll, max_scroll, scrollbar_area.height);
+        frame.render_widget(Paragraph::new(bar), scrollbar_area);
+    }
 }
 
 enum TimelineItem<'a> {
