@@ -267,7 +267,7 @@ fn build_timeline(
             TimelineItem::Review(t) => {
                 super::comment::review_thread_box(t, diff, width, now).map(|l| (theme.accent, l))
             }
-            TimelineItem::Event(e) => Some(event_lines(e, now)),
+            TimelineItem::Event(e) => Some(event_block(e, now)),
         })
         .collect();
 
@@ -305,7 +305,7 @@ fn timeline_rail(blocks: Vec<(Color, Vec<Line<'static>>)>) -> Vec<Line<'static>>
     all
 }
 
-fn event_lines(event: &TimelineEvent, now: DateTime<Utc>) -> (Color, Vec<Line<'static>>) {
+fn event_block(event: &TimelineEvent, now: DateTime<Utc>) -> (Color, Vec<Line<'static>>) {
     let theme = theme::current();
 
     let header = |verb: String, color: Color| -> Line<'static> {
