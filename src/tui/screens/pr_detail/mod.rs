@@ -23,7 +23,7 @@ use crate::{
         diff::{Diff, FileDiff},
         pr::PullRequest,
     },
-    tui::{icons, layout, theme, widgets},
+    tui::{layout, theme, widgets},
 };
 
 impl DetailTab {
@@ -37,15 +37,6 @@ impl DetailTab {
         }
     }
 
-    pub fn icon(self) -> &'static str {
-        match self {
-            Self::Description => icons::FILE_TEXT,
-            Self::Overview => icons::COMMENTS,
-            Self::Diff => icons::DIFF,
-            Self::Commits => icons::GIT_COMMIT,
-            Self::Builds => icons::COGS,
-        }
-    }
 }
 
 pub(in crate::tui) fn render(
@@ -242,7 +233,7 @@ fn tab_bar(tab: DetailTab) -> Line<'static> {
             spans.push(Span::styled(" · ", sep));
         }
         let style = if i == tab.index() { active } else { inactive };
-        spans.push(Span::styled(format!("{}  {}", t.icon(), t.label()), style));
+        spans.push(Span::styled(t.label(), style));
     }
     Line::from(spans)
 }

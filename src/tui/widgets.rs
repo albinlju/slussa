@@ -389,35 +389,6 @@ pub(super) fn numbered_diff_row(
     ])
 }
 
-pub(super) fn diff_bg_row(
-    gutter: &'static str,
-    prefix: &'static str,
-    content: &str,
-    prefix_fg: Color,
-    bg: Color,
-    text_fg: Color,
-    row_w: usize,
-) -> Line<'static> {
-    let visible = gutter.len() + prefix.len() + Span::raw(content).width();
-    let pad = row_w.saturating_sub(visible);
-    let mut spans: Vec<Span<'static>> = Vec::with_capacity(3);
-    if !gutter.is_empty() {
-        spans.push(Span::styled(gutter, Style::default().bg(bg)));
-    }
-    spans.push(Span::styled(
-        prefix,
-        Style::default()
-            .fg(prefix_fg)
-            .bg(bg)
-            .add_modifier(Modifier::BOLD),
-    ));
-    spans.push(Span::styled(
-        format!("{content}{}", " ".repeat(pad)),
-        Style::default().fg(text_fg).bg(bg),
-    ));
-    Line::from(spans)
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
