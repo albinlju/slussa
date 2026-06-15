@@ -310,7 +310,6 @@ fn timeline_rail(blocks: Vec<(Color, Vec<Line<'static>>)>) -> Vec<Line<'static>>
     for (i, (color, lines)) in blocks.into_iter().enumerate() {
         if i > 0 {
             all.push(Line::from(connector.clone()));
-            all.push(Line::from(connector.clone()));
         }
         let circle = Span::styled(
             "● ",

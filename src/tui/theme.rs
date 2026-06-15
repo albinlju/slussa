@@ -1,3 +1,5 @@
+use std::sync::OnceLock;
+
 use ratatui::style::Color;
 
 use crate::domain::pr::PrStatus;
@@ -22,8 +24,6 @@ pub struct Theme {
     pub diff_added: Color,
     pub diff_removed: Color,
     pub diff_context: Color,
-    pub diff_added_bg: Color,
-    pub diff_removed_bg: Color,
     pub status_open: Color,
     pub status_draft: Color,
     pub status_merged: Color,
@@ -49,12 +49,38 @@ pub const GRUVBOX: Theme = Theme {
     diff_added: Color::Rgb(0xb8, 0xbb, 0x26),
     diff_removed: Color::Rgb(0xfb, 0x49, 0x34),
     diff_context: Color::Rgb(0xa8, 0x99, 0x84),
-    diff_added_bg: Color::Rgb(0x32, 0x40, 0x1e),
-    diff_removed_bg: Color::Rgb(0x40, 0x22, 0x1e),
     status_open: Color::Rgb(0xb8, 0xbb, 0x26),
     status_draft: Color::Rgb(0x92, 0x83, 0x74),
     status_merged: Color::Rgb(0xd3, 0x86, 0x9b),
     status_declined: Color::Rgb(0xfb, 0x49, 0x34),
+};
+
+// Named ANSI colors so the palette inherits the terminal's own theme and degrades
+// on low-color terminals. fg/bg stay Reset (terminal default). The Indexed(_) ones
+// are the spots ANSI can't express adaptively (subtle backgrounds, orange).
+pub const TERMINAL: Theme = Theme {
+    fg: Color::Reset,
+    bg: Color::Reset,
+    muted: Color::Gray,
+    border: Color::Yellow,
+    divider: Color::DarkGray,
+    highlight_bg: Color::Indexed(238),
+    accent: Color::Yellow,
+    accent_bg: Color::Indexed(238),
+    suggestion: Color::Magenta,
+    success: Color::Green,
+    warning: Color::Yellow,
+    error: Color::Red,
+    info: Color::Cyan,
+    link: Color::Blue,
+    orange: Color::Indexed(208),
+    diff_added: Color::Green,
+    diff_removed: Color::Red,
+    diff_context: Color::DarkGray,
+    status_open: Color::Green,
+    status_draft: Color::DarkGray,
+    status_merged: Color::Magenta,
+    status_declined: Color::Red,
 };
 
 impl Theme {
@@ -69,5 +95,9 @@ impl Theme {
 }
 
 pub fn current() -> &'static Theme {
-    &GRUVBOX
+    static SELECTED: OnceLock<&'static Theme> = OnceLock::new();
+    *SELECTED.get_or_init(|| match std::env::var("TUIPR_THEME").as_deref() {
+        Ok("gruvbox") => &GRUVBOX,
+        _ => &TERMINAL,
+    })
 }

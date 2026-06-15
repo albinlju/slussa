@@ -143,7 +143,7 @@ fn build_diff_body(
 
         for (diff_line, new_no, old_no) in hunk.numbered_lines() {
             let rendered_row = lines.len();
-            lines.push(styled_diff_row(diff_line, width));
+            lines.push(styled_diff_row(diff_line));
 
             let removed = matches!(diff_line, DiffLine::Removed(_));
             let line = if removed { old_no } else { new_no };
@@ -191,33 +191,17 @@ fn build_diff_body(
     }
 }
 
-fn styled_diff_row(diff_line: &DiffLine, width: u16) -> Line<'static> {
+fn styled_diff_row(diff_line: &DiffLine) -> Line<'static> {
     let theme = theme::current();
-    let row_w = width as usize;
-    match diff_line {
-        DiffLine::Added(c) => widgets::diff_bg_row(
-            DIFF_GUTTER,
-            "+",
-            c,
-            theme.diff_added,
-            theme.diff_added_bg,
-            theme.fg,
-            row_w,
-        ),
-        DiffLine::Removed(c) => widgets::diff_bg_row(
-            DIFF_GUTTER,
-            "-",
-            c,
-            theme.diff_removed,
-            theme.diff_removed_bg,
-            theme.fg,
-            row_w,
-        ),
-        DiffLine::Context(c) => Line::styled(
-            format!("{DIFF_GUTTER} {c}"),
-            Style::default().fg(theme.diff_context),
-        ),
-    }
+    let (marker, color) = match diff_line {
+        DiffLine::Added(_) => ('+', theme.diff_added),
+        DiffLine::Removed(_) => ('-', theme.diff_removed),
+        DiffLine::Context(_) => (' ', theme.diff_context),
+    };
+    Line::styled(
+        format!("{DIFF_GUTTER}{marker}{}", diff_line.content()),
+        Style::default().fg(color),
+    )
 }
 
 type CommentIndex<'a> = HashMap<usize, Vec<&'a ReviewThread>>;

@@ -240,8 +240,8 @@ fn suggestion_box(
             "-",
             old,
             theme.diff_removed,
-            Some(theme.diff_removed_bg),
-            theme.muted,
+            None,
+            theme.diff_removed,
             text_w,
         ));
     }
@@ -252,8 +252,8 @@ fn suggestion_box(
             "+",
             new,
             theme.diff_added,
-            Some(theme.diff_added_bg),
-            theme.fg,
+            None,
+            theme.diff_added,
             text_w,
         ));
     }
@@ -374,8 +374,8 @@ fn diff_snippet(
                 "+",
                 c,
                 theme.diff_added,
-                Some(theme.diff_added_bg),
-                theme.fg,
+                None,
+                theme.diff_added,
                 row_w,
             ),
             DiffLine::Removed(c) => widgets::numbered_diff_row(
@@ -384,8 +384,8 @@ fn diff_snippet(
                 "-",
                 c,
                 theme.diff_removed,
-                Some(theme.diff_removed_bg),
-                theme.muted,
+                None,
+                theme.diff_removed,
                 row_w,
             ),
             DiffLine::Context(c) => widgets::numbered_diff_row(
