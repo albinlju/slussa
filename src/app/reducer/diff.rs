@@ -55,10 +55,9 @@ impl App {
     }
 
     fn diff_enter_pane(&mut self) {
-        let rows = self.current_visible_rows();
-        match rows.get(self.diff_view().cursor) {
+        match self.row_at_cursor() {
             Some(TreeRow::File { file_index, .. }) => {
-                self.focus_file(*file_index);
+                self.focus_file(file_index);
                 self.diff_view_mut().focus = DiffFocus::Pane;
             }
             Some(TreeRow::Dir { .. }) => self.diff_toggle_at_cursor(),
@@ -107,16 +106,9 @@ impl App {
     }
 
     fn diff_toggle_at_cursor(&mut self) {
-        let rows = self.current_visible_rows();
-        match rows.get(self.diff_view().cursor) {
-            Some(TreeRow::Dir { expanded, .. }) => {
-                let collapse = *expanded;
-                self.set_dir_collapsed_at_cursor(collapse);
-            }
-            Some(TreeRow::File { file_index, .. }) => {
-                let idx = *file_index;
-                self.focus_file(idx);
-            }
+        match self.row_at_cursor() {
+            Some(TreeRow::Dir { expanded, .. }) => self.set_dir_collapsed_at_cursor(expanded),
+            Some(TreeRow::File { file_index, .. }) => self.focus_file(file_index),
             None => {}
         }
     }
@@ -130,9 +122,7 @@ impl App {
     }
 
     fn set_dir_collapsed_at_cursor(&mut self, collapsed: bool) {
-        let rows = self.current_visible_rows();
-        if let Some(TreeRow::Dir { path, .. }) = rows.get(self.diff_view().cursor) {
-            let path = path.clone();
+        if let Some(TreeRow::Dir { path, .. }) = self.row_at_cursor() {
             let set = &mut self.diff_view_mut().collapsed;
             if collapsed {
                 set.insert(path);
@@ -140,6 +130,11 @@ impl App {
                 set.remove(&path);
             }
         }
+    }
+
+    fn row_at_cursor(&self) -> Option<TreeRow> {
+        let rows = self.current_visible_rows();
+        rows.get(self.diff_view().cursor).cloned()
     }
 
     pub(super) fn current_visible_rows(&self) -> Vec<TreeRow> {
