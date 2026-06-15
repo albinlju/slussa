@@ -3,7 +3,11 @@ use crate::{
         action::{Action, ListAction},
         state::{AppState, LoadState, SearchState, StatusFilter},
     },
-    domain::{ci::CiSummary, pr::PullRequest, review::ReviewerState},
+    domain::{
+        ci::CiSummary,
+        pr::PullRequest,
+        review::{Reviewer, ReviewerState},
+    },
     tui::{
         icons, layout,
         screens::half_page,
@@ -11,12 +15,12 @@ use crate::{
         theme, widgets,
     },
 };
-use chrono::Utc;
+use chrono::{DateTime, Utc};
 use ratatui::{
     Frame,
-    crossterm::event::{KeyCode, KeyEvent, KeyModifiers},
+    crossterm::event::{KeyCode, KeyEvent},
     layout::{Constraint, Direction, Rect},
-    style::{Modifier, Style},
+    style::{Color, Modifier, Style},
     text::{Line, Span},
     widgets::{Block, BorderType, Borders, Clear, List, ListItem, ListState, Paragraph},
 };
@@ -213,14 +217,7 @@ fn row_cells(pr: &PullRequest) -> Vec<Cell> {
     let theme = theme::current();
     let muted = Style::default().fg(theme.muted);
 
-    let days_old = (Utc::now() - pr.created).num_days();
-    let age = if days_old == 0 {
-        "today".to_string()
-    } else if days_old == 1 {
-        "1d".to_string()
-    } else {
-        format!("{days_old}d")
-    };
+    let age = age_label(pr.created);
 
     let (ci_sym, ci_color) = match pr.ci {
         CiSummary::Success => (icons::CHECK_CIRCLE, theme.success),
@@ -236,28 +233,7 @@ fn row_cells(pr: &PullRequest) -> Vec<Cell> {
         pr.comment_count.to_string()
     };
 
-    let (rev_text, rev_color) = if pr.reviewers.is_empty() {
-        ("—".to_string(), theme.muted)
-    } else {
-        let approved = pr
-            .reviewers
-            .iter()
-            .filter(|r| r.state == ReviewerState::Approved)
-            .count();
-        let total = pr.reviewers.len();
-        let any_blocking = pr
-            .reviewers
-            .iter()
-            .any(|r| r.state == ReviewerState::ChangesRequested);
-        let color = if any_blocking {
-            theme.error
-        } else if approved == total {
-            theme.success
-        } else {
-            theme.warning
-        };
-        (format!("{approved}/{total}"), color)
-    };
+    let (rev_text, rev_color) = review_summary(&pr.reviewers);
 
     vec![
         vec![Span::styled(format!("#{}", pr.id), muted)],
@@ -288,6 +264,37 @@ fn row_cells(pr: &PullRequest) -> Vec<Cell> {
     ]
 }
 
+fn age_label(created: DateTime<Utc>) -> String {
+    match (Utc::now() - created).num_days() {
+        0 => "today".to_string(),
+        1 => "1d".to_string(),
+        days => format!("{days}d"),
+    }
+}
+
+fn review_summary(reviewers: &[Reviewer]) -> (String, Color) {
+    let theme = theme::current();
+    if reviewers.is_empty() {
+        return ("—".to_string(), theme.muted);
+    }
+    let approved = reviewers
+        .iter()
+        .filter(|r| r.state == ReviewerState::Approved)
+        .count();
+    let total = reviewers.len();
+    let any_blocking = reviewers
+        .iter()
+        .any(|r| r.state == ReviewerState::ChangesRequested);
+    let color = if any_blocking {
+        theme.error
+    } else if approved == total {
+        theme.success
+    } else {
+        theme.warning
+    };
+    (format!("{approved}/{total}"), color)
+}
+
 pub(in crate::tui) fn key_to_action(state: &AppState, key: KeyEvent) -> Option<Action> {
     if state.ui.filter_picker_open {
         return match key.code {
@@ -301,14 +308,6 @@ pub(in crate::tui) fn key_to_action(state: &AppState, key: KeyEvent) -> Option<A
     }
 
     let half = half_page(state.ui.list_viewport);
-    if key.modifiers.contains(KeyModifiers::CONTROL) {
-        return match key.code {
-            KeyCode::Char('d') => Some(Action::List(ListAction::MoveSelection(half))),
-            KeyCode::Char('u') => Some(Action::List(ListAction::MoveSelection(-half))),
-            _ => None,
-        };
-    }
-
     match key.code {
         KeyCode::Char('q') => Some(Action::Quit),
         KeyCode::Char('f') => Some(Action::List(ListAction::OpenFilterPicker)),

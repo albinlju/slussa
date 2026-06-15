@@ -27,6 +27,7 @@ pub fn render(frame: &mut Frame, state: &mut AppState) {
 }
 
 pub fn key_to_action(state: &AppState, key: KeyEvent) -> Option<Action> {
+    let key = normalize_key(key);
     if let Some((search, highlight)) = active_search(state) {
         if search.open {
             if !key.modifiers.contains(KeyModifiers::CONTROL) {
@@ -49,6 +50,18 @@ pub fn key_to_action(state: &AppState, key: KeyEvent) -> Option<Action> {
         Screen::List => pr_list::key_to_action(state, key),
         Screen::Detail { .. } => pr_detail::key_to_action(state, key),
     }
+}
+
+fn normalize_key(mut key: KeyEvent) -> KeyEvent {
+    if key.modifiers.contains(KeyModifiers::CONTROL) {
+        match key.code {
+            KeyCode::Char('d') => key.code = KeyCode::PageDown,
+            KeyCode::Char('u') => key.code = KeyCode::PageUp,
+            _ => return key,
+        }
+        key.modifiers.remove(KeyModifiers::CONTROL);
+    }
+    key
 }
 
 fn active_search(state: &AppState) -> Option<(&SearchState, bool)> {

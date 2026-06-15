@@ -1,4 +1,4 @@
-use ratatui::crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
+use ratatui::crossterm::event::{KeyCode, KeyEvent};
 
 use crate::{
     app::{
@@ -16,22 +16,11 @@ pub(in crate::tui) fn key_to_action(state: &AppState, key: KeyEvent) -> Option<A
         return None;
     };
     let viewing_commit = state.ui.commits.open_commit.is_some();
-    let code = dispatch_code(key);
+    let code = key.code;
 
     escape_action(state, tab, viewing_commit, code)
         .or_else(|| tab_select_key(code))
         .or_else(|| tab_key(state, tab, viewing_commit, code))
-}
-
-fn dispatch_code(key: KeyEvent) -> KeyCode {
-    if key.modifiers.contains(KeyModifiers::CONTROL) {
-        match key.code {
-            KeyCode::Char('d') => return KeyCode::PageDown,
-            KeyCode::Char('u') => return KeyCode::PageUp,
-            _ => {}
-        }
-    }
-    key.code
 }
 
 fn escape_action(
