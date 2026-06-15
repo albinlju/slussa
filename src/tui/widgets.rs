@@ -338,7 +338,10 @@ fn take_to_width(s: &str, max: usize) -> String {
     out
 }
 
-#[expect(clippy::too_many_arguments, reason = "one styled diff row — splitting the args adds no clarity")]
+#[expect(
+    clippy::too_many_arguments,
+    reason = "one styled diff row — splitting the args adds no clarity"
+)]
 pub(super) fn numbered_diff_row(
     line_num: Option<u32>,
     num_width: usize,

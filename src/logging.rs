@@ -23,6 +23,7 @@ pub fn init() -> std::io::Result<()> {
 }
 
 pub fn log_path() -> PathBuf {
-    dirs::data_dir().map_or_else(|| PathBuf::from("."), |d| d.join("tuipr"))
+    dirs::data_dir()
+        .map_or_else(|| PathBuf::from("."), |d| d.join("tuipr"))
         .join("tuipr.log")
 }

@@ -34,8 +34,7 @@ impl App {
             SearchTarget::Commits => self.state.ui.commits.selected = 0,
             SearchTarget::DiffTree => {
                 self.state.ui.active_diff_view_mut().cursor = 0;
-                if let Some(TreeRow::File { file_index, .. }) =
-                    self.current_visible_rows().first()
+                if let Some(TreeRow::File { file_index, .. }) = self.current_visible_rows().first()
                 {
                     let idx = *file_index;
                     self.focus_file(idx);

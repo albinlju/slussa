@@ -1,12 +1,12 @@
 use chrono::{DateTime, Utc};
 use serde::Deserialize;
 
-use crate::providers::error::FetchError;
-use crate::providers::github::cli::run_gh_json;
 use crate::domain::ci::CiSummary;
 use crate::domain::pr::{PrStatus, PullRequest};
 use crate::domain::review::{Reviewer, ReviewerState};
 use crate::domain::user::User;
+use crate::providers::error::FetchError;
+use crate::providers::github::cli::run_gh_json;
 
 #[derive(Debug, Default, Deserialize)]
 struct GhAuthor {

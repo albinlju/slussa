@@ -1,14 +1,14 @@
 use serde::Deserialize;
 
 use super::{Config, ms_to_utc};
-use crate::providers::bitbucket_dc::http::get_json;
-use crate::providers::error::FetchError;
 use crate::domain::{
     ci::CiSummary,
     pr::{PrStatus, PullRequest},
     review::{Reviewer, ReviewerState},
     user::User,
 };
+use crate::providers::bitbucket_dc::http::get_json;
+use crate::providers::error::FetchError;
 
 #[derive(Debug, Deserialize)]
 struct PagedPrs {

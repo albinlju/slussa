@@ -1,7 +1,7 @@
 use crate::app::{
+    App,
     action::DetailAction,
     state::{DetailTab, DiffFocus, Screen},
-    App,
 };
 
 impl App {

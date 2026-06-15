@@ -98,8 +98,7 @@ mod tests {
 
     #[test]
     fn keeps_diff_lines_starting_with_double_plus_or_minus() {
-        let text =
-            "diff --git a/x.c b/x.c\n--- a/x.c\n+++ b/x.c\n@@ -1,2 +1,2 @@\n int i = 0;\n---i;\n+++i;\n";
+        let text = "diff --git a/x.c b/x.c\n--- a/x.c\n+++ b/x.c\n@@ -1,2 +1,2 @@\n int i = 0;\n---i;\n+++i;\n";
         let diff = parse(text);
         let lines = &diff.files[0].hunks[0].lines;
         assert!(matches!(&lines[0], DiffLine::Context(s) if s == "int i = 0;"));

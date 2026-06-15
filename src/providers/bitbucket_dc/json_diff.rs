@@ -1,9 +1,9 @@
 use serde::Deserialize;
 
 use super::Config;
+use crate::domain::diff::{Diff, DiffLine, FileDiff, Hunk};
 use crate::providers::bitbucket_dc::http::get_json;
 use crate::providers::error::FetchError;
-use crate::domain::diff::{Diff, DiffLine, FileDiff, Hunk};
 
 #[derive(Debug, Deserialize)]
 struct BbDiffResponse {

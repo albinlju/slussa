@@ -19,9 +19,9 @@ use chrono::{DateTime, Utc};
 use serde::Deserialize;
 use serde::de::DeserializeOwned;
 
-use crate::providers::error::FetchError;
 use crate::domain::comment::{Comment, Reaction};
 use crate::domain::user::User;
+use crate::providers::error::FetchError;
 
 pub(super) fn run_pr_graphql<P: DeserializeOwned>(
     query: &str,

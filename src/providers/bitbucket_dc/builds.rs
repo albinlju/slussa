@@ -1,9 +1,9 @@
 use serde::Deserialize;
 
 use super::Config;
+use crate::domain::ci::{Build, BuildState};
 use crate::providers::bitbucket_dc::http::get_json;
 use crate::providers::error::FetchError;
-use crate::domain::ci::{Build, BuildState};
 
 #[derive(Debug, Deserialize)]
 #[serde(rename_all = "camelCase")]

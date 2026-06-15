@@ -1,8 +1,8 @@
 use serde::Deserialize;
 
+use crate::domain::comment::ReviewThread;
 use crate::providers::error::FetchError;
 use crate::providers::github::{COMMENT_FIELDS, GqlComment, map_gql_comment, run_pr_graphql};
-use crate::domain::comment::ReviewThread;
 
 #[derive(Debug, Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -46,7 +46,12 @@ pub fn fetch_review_threads(pr_number: u64) -> Result<Vec<ReviewThread>, FetchEr
              }} }} }} }} }}"
     );
     let pr: GqlPullRequest = run_pr_graphql(&query, pr_number)?;
-    Ok(pr.review_threads.nodes.into_iter().map(map_thread).collect())
+    Ok(pr
+        .review_threads
+        .nodes
+        .into_iter()
+        .map(map_thread)
+        .collect())
 }
 
 fn map_thread(t: GqlThread) -> ReviewThread {
@@ -106,11 +111,19 @@ mod tests {
         let reactions = &t.comments[0].reactions;
         assert_eq!(reactions.len(), 2);
         assert_eq!(
-            (reactions[0].emoji.as_str(), reactions[0].count, reactions[0].mine),
+            (
+                reactions[0].emoji.as_str(),
+                reactions[0].count,
+                reactions[0].mine
+            ),
             ("👍", 4, true)
         );
         assert_eq!(
-            (reactions[1].emoji.as_str(), reactions[1].count, reactions[1].mine),
+            (
+                reactions[1].emoji.as_str(),
+                reactions[1].count,
+                reactions[1].mine
+            ),
             ("👀", 3, false)
         );
     }

@@ -68,10 +68,7 @@ impl SearchState {
     }
 
     pub fn filter_commits<'a>(&self, commits: &'a [Commit]) -> Vec<&'a Commit> {
-        commits
-            .iter()
-            .filter(|c| self.matches_commit(c))
-            .collect()
+        commits.iter().filter(|c| self.matches_commit(c)).collect()
     }
 }
 
