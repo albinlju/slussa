@@ -28,7 +28,7 @@ pub fn render(frame: &mut Frame, pr_data: Option<&PrData>, area: Rect) {
 fn render_builds(frame: &mut Frame, builds: &[Build], area: Rect) {
     let width = area.width as usize;
     let mut lines: Vec<Line<'static>> = Vec::with_capacity(builds.len() + 2);
-    lines.push(summary_line(builds));
+    lines.push(status_summary(builds));
     lines.push(Line::default());
 
     let name_col = builds
@@ -81,7 +81,7 @@ pub(super) fn build_stats(builds: &[Build]) -> BuildStats {
     }
 }
 
-fn summary_line(builds: &[Build]) -> Line<'static> {
+fn status_summary(builds: &[Build]) -> Line<'static> {
     let theme = theme::current();
     let stats = build_stats(builds);
     let (passing, total, accent) = (stats.passing, stats.total, stats.accent());

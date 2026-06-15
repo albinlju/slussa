@@ -24,7 +24,7 @@ fn author_line(name: &str, note: Option<&str>, created: DateTime<Utc>, now: Date
     widgets::author_line(lead, created, now)
 }
 
-fn comment_lines(
+fn comment_entry(
     name: &str,
     note: Option<&str>,
     comment: &Comment,
@@ -80,7 +80,7 @@ pub(in crate::tui) fn render_inline_thread(
         if i > 0 {
             body.push(Line::raw(""));
         }
-        body.extend(comment_lines(
+        body.extend(comment_entry(
             &comment.author.username,
             None,
             comment,
@@ -151,7 +151,7 @@ pub(super) fn review_thread_box(
             body.extend(comment_body(comment, anchor, width));
         } else {
             body.push(Line::raw(""));
-            body.extend(comment_lines(
+            body.extend(comment_entry(
                 &format!("↳ @{}", comment.author.username),
                 None,
                 comment,
@@ -174,7 +174,7 @@ fn comment_body(comment: &Comment, anchor: Option<(usize, &str)>, width: u16) ->
     }
     for suggestion in &suggestions {
         lines.push(Line::raw(""));
-        lines.extend(suggestion_lines(anchor, suggestion, text_w));
+        lines.extend(suggestion_box(anchor, suggestion, text_w));
     }
     if let Some(line) = widgets::reactions_line(&comment.reactions) {
         lines.push(Line::raw(""));
@@ -183,7 +183,7 @@ fn comment_body(comment: &Comment, anchor: Option<(usize, &str)>, width: u16) ->
     lines
 }
 
-fn suggestion_lines(
+fn suggestion_box(
     anchor: Option<(usize, &str)>,
     suggestion: &str,
     width: u16,

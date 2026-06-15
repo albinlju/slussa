@@ -33,13 +33,56 @@ pub fn render(frame: &mut Frame, pr_data: Option<&PrData>, cv: &mut CommitsViewS
     let items: Vec<ListItem> = filtered
         .iter()
         .enumerate()
-        .map(|(i, c)| ListItem::new(build_commit_line(c, i == last_idx, now, width)))
+        .map(|(i, commit)| ListItem::new(commit_row(commit, i == last_idx, now, width)))
         .collect();
 
     let list = List::new(items).highlight_style(Style::default().bg(theme.highlight_bg));
     let mut list_state = ListState::default();
     list_state.select(Some(cv.selected.min(last_idx)));
     frame.render_stateful_widget(list, area, &mut list_state);
+}
+
+const COL_GAP: usize = 2;
+const MIN_HEADLINE: usize = 10;
+
+fn commit_row(commit: &Commit, is_last: bool, now: DateTime<Utc>, width: usize) -> Line<'static> {
+    let theme = theme::current();
+    let graph = if is_last { "└─ " } else { "├─ " };
+    let short_oid: String = commit.oid.chars().take(7).collect();
+    let age = format::relative_age(commit.authored_at, now);
+
+    let right = vec![
+        Span::styled(commit.author_name.clone(), Style::default().fg(theme.info)),
+        Span::raw("  "),
+        Span::styled(
+            format!("+{}", commit.additions),
+            Style::default().fg(theme.diff_added),
+        ),
+        Span::raw(" "),
+        Span::styled(
+            format!("-{}", commit.deletions),
+            Style::default().fg(theme.diff_removed),
+        ),
+        Span::styled("  · ", Style::default().fg(theme.muted)),
+        Span::styled(age, Style::default().fg(theme.muted)),
+    ];
+    let right_w: usize = right.iter().map(Span::width).sum();
+
+    let oid_cell = format!("{short_oid}  ");
+    let prefix_w = graph.chars().count() + oid_cell.chars().count();
+    let headline = format::truncate_ellipsis(
+        &commit.headline,
+        width
+            .saturating_sub(prefix_w + right_w + COL_GAP)
+            .max(MIN_HEADLINE),
+    );
+
+    let left = vec![
+        Span::styled(graph, Style::default().fg(theme.muted)),
+        Span::styled(oid_cell, Style::default().fg(theme.accent)),
+        Span::raw(headline),
+    ];
+    Line::from(widgets::justify_between(left, right, width))
 }
 
 pub fn render_commit_diff(
@@ -52,8 +95,11 @@ pub fn render_commit_diff(
     let Some(oid) = cv.open_commit.clone() else {
         return;
     };
-    let [banner_area, diff_area] =
-        layout::split(area, Direction::Vertical, [Constraint::Length(2), Constraint::Min(0)]);
+    let [banner_area, diff_area] = layout::split(
+        area,
+        Direction::Vertical,
+        [Constraint::Length(2), Constraint::Min(0)],
+    );
 
     render_commit_banner(frame, pr_data, &oid, banner_area);
 
@@ -81,7 +127,9 @@ fn render_commit_banner(frame: &mut Frame, pr_data: Option<&PrData>, oid: &str, 
         Span::styled("\u{f417} ", Style::default().fg(theme.accent)), //  git-commit
         Span::styled(
             short,
-            Style::default().fg(theme.accent).add_modifier(Modifier::BOLD),
+            Style::default()
+                .fg(theme.accent)
+                .add_modifier(Modifier::BOLD),
         ),
     ];
     if let Some((idx, commit)) = found {
@@ -89,7 +137,10 @@ fn render_commit_banner(frame: &mut Frame, pr_data: Option<&PrData>, oid: &str, 
             format!("  {}/{}  ", idx + 1, total),
             Style::default().fg(theme.muted),
         ));
-        left.push(Span::styled(commit.headline.clone(), Style::default().fg(theme.fg)));
+        left.push(Span::styled(
+            commit.headline.clone(),
+            Style::default().fg(theme.fg),
+        ));
     }
     let right = vec![Span::styled(
         "[ ]: prev/next   esc: list",
@@ -98,50 +149,4 @@ fn render_commit_banner(frame: &mut Frame, pr_data: Option<&PrData>, oid: &str, 
 
     let line = Line::from(widgets::justify_between(left, right, inner.width as usize));
     frame.render_widget(Paragraph::new(line), inner);
-}
-
-fn build_commit_line(c: &Commit, is_last: bool, now: DateTime<Utc>, width: usize) -> Line<'static> {
-    let theme = theme::current();
-    let graph = if is_last { "└─ " } else { "├─ " };
-    let short_oid: String = c.oid.chars().take(7).collect();
-    let age = format::relative_age(c.authored_at, now);
-
-    let right_spans: Vec<Span<'static>> = vec![
-        Span::styled(c.author_name.clone(), Style::default().fg(theme.info)),
-        Span::raw("  "),
-        Span::styled(
-            format!("+{}", c.additions),
-            Style::default().fg(theme.diff_added),
-        ),
-        Span::raw(" "),
-        Span::styled(
-            format!("-{}", c.deletions),
-            Style::default().fg(theme.diff_removed),
-        ),
-        Span::styled("  · ", Style::default().fg(theme.muted)),
-        Span::styled(age, Style::default().fg(theme.muted)),
-    ];
-    let right_visible: usize = right_spans.iter().map(Span::width).sum();
-
-    let left_fixed = graph.chars().count() + short_oid.chars().count() + 2;
-    let headline = format::truncate_ellipsis(
-        &c.headline,
-        width
-            .saturating_sub(left_fixed + right_visible + 2)
-            .max(10),
-    );
-
-    let used = left_fixed + Span::raw(headline.as_str()).width() + right_visible;
-    let pad = width.saturating_sub(used).max(2);
-
-    let mut spans: Vec<Span<'static>> = Vec::with_capacity(4 + right_spans.len());
-    spans.push(Span::styled(graph, Style::default().fg(theme.muted)));
-    spans.push(Span::styled(
-        format!("{short_oid}  "),
-        Style::default().fg(theme.accent),
-    ));
-    spans.push(Span::raw(headline));
-    spans.push(Span::raw(" ".repeat(pad)));
-    spans.extend(right_spans);
-    Line::from(spans)
 }
