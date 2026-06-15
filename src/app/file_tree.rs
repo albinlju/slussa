@@ -83,7 +83,9 @@ fn insert(node: &mut Node, segments: &[&str], file_index: usize) {
             .children
             .iter()
             .position(|c| c.name == head && c.is_dir());
-        if let Some(idx) = pos { insert(&mut node.children[idx], rest, file_index) } else {
+        if let Some(idx) = pos {
+            insert(&mut node.children[idx], rest, file_index);
+        } else {
             let mut new_child = Node {
                 name: head.to_string(),
                 full_path: new_path,
