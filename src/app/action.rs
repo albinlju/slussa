@@ -42,6 +42,7 @@ pub enum DetailAction {
     SelectTab(DetailTab),
     DescriptionScroll(i16),
     OverviewScroll(i16),
+    ToggleHelp,
 }
 
 #[derive(Debug, Clone, Copy)]

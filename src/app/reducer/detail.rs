@@ -18,11 +18,13 @@ impl App {
             DetailAction::OverviewScroll(delta) => {
                 self.state.ui.overview_scroll = super::scroll(self.state.ui.overview_scroll, delta);
             }
+            DetailAction::ToggleHelp => self.state.ui.help_open = !self.state.ui.help_open,
         }
     }
 
     fn back_to_list(&mut self) {
         self.state.screen = Screen::List;
+        self.state.ui.help_open = false;
     }
 
     fn next_tab(&mut self) {
