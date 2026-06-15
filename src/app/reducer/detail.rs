@@ -1,7 +1,7 @@
 use crate::app::{
     App,
     action::DetailAction,
-    state::{DetailTab, DiffFocus, Screen},
+    state::{CommentDraft, DetailTab, DiffFocus, Screen},
 };
 
 impl App {
@@ -19,25 +19,64 @@ impl App {
                 self.state.ui.overview_scroll = super::scroll(self.state.ui.overview_scroll, delta);
             }
             DetailAction::ToggleHelp => self.state.ui.help_open = !self.state.ui.help_open,
-            DetailAction::OpenApprove => {
-                self.state.ui.approve_box_open = true;
-                self.state.ui.approve_box_cursor = 0;
+            DetailAction::OpenConfirm(kind) => {
+                self.state.ui.confirm = Some(kind);
+                self.state.ui.confirm_cursor = 0;
             }
-            DetailAction::CloseApprove => self.state.ui.approve_box_open = false,
-            DetailAction::ApproveMove(delta) => {
-                self.state.ui.approve_box_cursor =
-                    super::step_index(self.state.ui.approve_box_cursor, delta, 2);
+            DetailAction::CloseConfirm => self.state.ui.confirm = None,
+            DetailAction::ConfirmMove(delta) => {
+                self.state.ui.confirm_cursor =
+                    super::step_index(self.state.ui.confirm_cursor, delta, 2);
             }
-            DetailAction::SubmitApprove => self.submit_approve(),
+            DetailAction::SubmitConfirm => self.submit_confirm(),
+            DetailAction::OpenComment => self.open_comment(),
+            DetailAction::CommentType(c) => {
+                if let Some(draft) = &mut self.state.ui.comment_draft {
+                    draft.text.push(c);
+                }
+            }
+            DetailAction::CommentBackspace => {
+                if let Some(draft) = &mut self.state.ui.comment_draft {
+                    draft.text.pop();
+                }
+            }
+            DetailAction::CommentSubmit => self.submit_comment(),
+            DetailAction::CommentCancel => self.state.ui.comment_draft = None,
         }
     }
 
-    fn submit_approve(&mut self) {
-        // cursor 0 = Yes, 1 = No
-        if self.state.ui.approve_box_cursor == 0 {
-            // TODO: call the provider approve write here.
+    fn open_comment(&mut self) {
+        let view = self.state.ui.active_diff_view();
+        let anchor = (view.focus == DiffFocus::Pane)
+            .then(|| view.pane_anchor.clone())
+            .flatten();
+        if let Some(anchor) = anchor {
+            self.state.ui.comment_draft = Some(CommentDraft {
+                anchor,
+                text: String::new(),
+            });
         }
-        self.state.ui.approve_box_open = false;
+    }
+
+    fn submit_comment(&mut self) {
+        let Some(draft) = self.state.ui.comment_draft.take() else {
+            return;
+        };
+        if draft.text.trim().is_empty() {
+            return;
+        }
+        if let Screen::Detail { pr_id, .. } = self.state.screen {
+            self.state.ui.comment_pending = true;
+            self.spawn_comment(pr_id, draft.anchor, draft.text);
+        }
+    }
+
+    fn submit_confirm(&mut self) {
+        if self.state.ui.confirm_cursor == 0 {
+            // cursor 0 = Yes. TODO: match on self.state.ui.confirm and spawn the
+            // write (currently only ConfirmKind::Approve).
+        }
+        self.state.ui.confirm = None;
     }
 
     fn back_to_list(&mut self) {

@@ -10,7 +10,7 @@ use ratatui::{
 };
 
 use crate::{
-    app::state::DiffViewState,
+    app::state::{CommentAnchor, DiffViewState},
     domain::{
         comment::ReviewThread,
         diff::{Diff, DiffLine, FileDiff},
@@ -36,6 +36,7 @@ pub(super) fn render(
     let Some(file) = diff.files.get(bounded) else {
         ui_diff.pane_item_count = 0;
         ui_diff.pane_matches = Vec::new();
+        ui_diff.pane_anchor = None;
         return;
     };
     let (adds, dels) = file_stats.get(bounded).copied().unwrap_or((0, 0));
@@ -88,6 +89,14 @@ pub(super) fn render(
         frame.render_widget(Paragraph::new(bar), layout::scrollbar_area(body_area));
     }
 
+    ui_diff.pane_anchor = cursor.map(|m| {
+        let (line, removed) = m.anchor();
+        CommentAnchor {
+            path: file.path.clone(),
+            line,
+            removed,
+        }
+    });
     ui_diff.pane_scroll = scroll;
     ui_diff.pane_item_count = nav_items.len();
     ui_diff.pane_matches = matches;

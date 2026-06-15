@@ -64,3 +64,43 @@ pub(super) fn get_json<T: DeserializeOwned>(
         FetchError::ParseFailed(e.to_string())
     })
 }
+
+pub(super) fn post_json<B: serde::Serialize>(
+    base_url: &str,
+    path: &str,
+    pat: &str,
+    body: &B,
+) -> Result<(), FetchError> {
+    let url = format!("{base_url}{path}");
+    tracing::debug!("POST {url}");
+    let response = client()?
+        .post(&url)
+        .bearer_auth(pat)
+        .header("Accept", "application/json")
+        .json(body)
+        .send()
+        .map_err(|e| {
+            tracing::warn!("http send failed: {e}");
+            FetchError::Network(e.to_string())
+        })?;
+
+    let status = response.status();
+    if status == reqwest::StatusCode::UNAUTHORIZED || status == reqwest::StatusCode::FORBIDDEN {
+        let host = base_url
+            .trim_start_matches("https://")
+            .trim_start_matches("http://")
+            .trim_end_matches('/')
+            .to_string();
+        tracing::warn!("auth failed on {host} ({status})");
+        return Err(FetchError::NotAuthenticated { host });
+    }
+    if !status.is_success() {
+        let body = response.text().unwrap_or_default();
+        tracing::warn!("http {} on {url}: {body}", status.as_u16());
+        return Err(FetchError::HttpFailed {
+            status: status.as_u16(),
+            body,
+        });
+    }
+    Ok(())
+}

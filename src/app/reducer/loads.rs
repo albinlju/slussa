@@ -26,12 +26,21 @@ impl App {
             LoadedAction::Activity(pr_id, r) => {
                 log_outcome("activity", Some(pr_id), &r);
                 self.pr_data_mut(pr_id).activity = LoadState::from_result(r);
+                self.state.ui.comment_pending = false;
             }
             LoadedAction::CommitDiff(pr_id, oid, r) => {
                 log_outcome("commit-diff", Some(pr_id), &r);
                 self.pr_data_mut(pr_id)
                     .commit_diffs
                     .insert(oid, LoadState::from_result(r));
+            }
+            LoadedAction::Commented(pr_id, r) => {
+                log_outcome("comment", Some(pr_id), &r);
+                if r.is_ok() {
+                    self.spawn_load_activity(pr_id);
+                } else {
+                    self.state.ui.comment_pending = false;
+                }
             }
         }
     }

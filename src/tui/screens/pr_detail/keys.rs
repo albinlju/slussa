@@ -3,7 +3,7 @@ use ratatui::crossterm::event::{KeyCode, KeyEvent};
 use crate::{
     app::{
         action::{Action, CommitsAction, DetailAction, DiffAction, SearchAction},
-        state::{AppState, DetailTab, DiffFocus, DiffViewState, Screen},
+        state::{AppState, ConfirmKind, DetailTab, DiffFocus, DiffViewState, Screen},
     },
     tui::screens::half_page,
 };
@@ -18,16 +18,16 @@ pub(in crate::tui) fn key_to_action(state: &AppState, key: KeyEvent) -> Option<A
     let viewing_commit = state.ui.commits.open_commit.is_some();
     let code = key.code;
 
-    if state.ui.approve_box_open {
+    if state.ui.confirm.is_some() {
         return match code {
-            KeyCode::Left | KeyCode::Char('h') | KeyCode::Up | KeyCode::Char('k') => {
-                Some(Action::Detail(DetailAction::ApproveMove(-1)))
+            KeyCode::Left | KeyCode::Up | KeyCode::Char('h' | 'k') => {
+                Some(Action::Detail(DetailAction::ConfirmMove(-1)))
             }
-            KeyCode::Right | KeyCode::Char('l') | KeyCode::Down | KeyCode::Char('j') => {
-                Some(Action::Detail(DetailAction::ApproveMove(1)))
+            KeyCode::Right | KeyCode::Down | KeyCode::Char('j' | 'l') => {
+                Some(Action::Detail(DetailAction::ConfirmMove(1)))
             }
-            KeyCode::Enter => Some(Action::Detail(DetailAction::SubmitApprove)),
-            KeyCode::Esc | KeyCode::Char('a') => Some(Action::Detail(DetailAction::CloseApprove)),
+            KeyCode::Enter => Some(Action::Detail(DetailAction::SubmitConfirm)),
+            KeyCode::Esc => Some(Action::Detail(DetailAction::CloseConfirm)),
             _ => None,
         };
     }
@@ -40,7 +40,10 @@ pub(in crate::tui) fn key_to_action(state: &AppState, key: KeyEvent) -> Option<A
     }
 
     if code == KeyCode::Char('a') {
-        return Some(Action::Detail(DetailAction::OpenApprove));
+        return Some(Action::Detail(DetailAction::OpenConfirm(ConfirmKind::Approve)));
+    }
+    if code == KeyCode::Char('c') {
+        return Some(Action::Detail(DetailAction::OpenComment));
     }
 
     escape_action(state, tab, viewing_commit, code)

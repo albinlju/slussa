@@ -10,11 +10,16 @@ pub(super) fn run_gh(args: &[&str]) -> Result<Vec<u8>, FetchError> {
             FetchError::GhMissing
         })?;
     if !output.status.success() {
+        // gh writes its short "(HTTP nnn)" line to stderr but the detailed error
+        // body (e.g. 422 validation fields) to stdout — capture both.
         let stderr = String::from_utf8_lossy(&output.stderr).into_owned();
-        tracing::warn!("gh exited {:?}: {}", output.status.code(), stderr.trim());
+        let body = String::from_utf8_lossy(&output.stdout).into_owned();
+        let detail = format!("{} {}", stderr.trim(), body.trim());
+        let detail = detail.trim().to_string();
+        tracing::warn!("gh exited {:?}: {detail}", output.status.code());
         return Err(FetchError::GhFailed {
             code: output.status.code(),
-            stderr,
+            stderr: detail,
         });
     }
     Ok(output.stdout)
