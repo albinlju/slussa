@@ -85,7 +85,11 @@ impl App {
         }
         let cur = view.pane_cursor;
         let next = if delta >= 0 {
-            matches.iter().copied().find(|&m| m > cur).unwrap_or(matches[0])
+            matches
+                .iter()
+                .copied()
+                .find(|&m| m > cur)
+                .unwrap_or(matches[0])
         } else {
             matches
                 .iter()

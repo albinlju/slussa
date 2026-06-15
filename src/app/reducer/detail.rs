@@ -1,4 +1,8 @@
-use crate::app::{App, action::DetailAction, state::{DetailTab, DiffFocus, Screen}};
+use crate::app::{
+    action::DetailAction,
+    state::{DetailTab, DiffFocus, Screen},
+    App,
+};
 
 impl App {
     pub(super) fn apply_detail(&mut self, action: DetailAction) {
