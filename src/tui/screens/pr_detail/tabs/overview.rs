@@ -18,7 +18,7 @@ use crate::{
         pr::PullRequest,
         review::ReviewerState,
     },
-    tui::{format, layout, theme, widgets},
+    tui::{format, icons, layout, theme, widgets},
 };
 
 const TIMELINE_COL: u16 = 2;
@@ -101,9 +101,9 @@ fn reviewers(pr: &PullRequest) -> Vec<Line<'static>> {
         .iter()
         .map(|r| {
             let (icon, color) = match r.state {
-                ReviewerState::Approved => ("\u{f058}", theme.success), //  check-circle
-                ReviewerState::ChangesRequested => ("\u{f057}", theme.error), //  times-circle
-                ReviewerState::Commented => ("\u{f10c}", theme.muted),  //  circle-o
+                ReviewerState::Approved => (icons::CHECK_CIRCLE, theme.success),
+                ReviewerState::ChangesRequested => (icons::TIMES_CIRCLE, theme.error),
+                ReviewerState::Commented => (icons::CIRCLE_O, theme.muted),
             };
             Line::from(vec![
                 Span::styled(icon, Style::default().fg(color)),

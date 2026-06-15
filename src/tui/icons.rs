@@ -1,0 +1,16 @@
+pub const CHECK_CIRCLE: &str = "\u{f058}";
+pub const TIMES_CIRCLE: &str = "\u{f057}";
+pub const QUESTION_CIRCLE: &str = "\u{f059}";
+pub const CIRCLE: &str = "\u{f111}";
+pub const CIRCLE_O: &str = "\u{f10c}";
+pub const BAN: &str = "\u{f05e}";
+pub const EXCLAMATION_TRIANGLE: &str = "\u{f071}";
+pub const CLOCK: &str = "\u{f017}";
+pub const ADJUST: &str = "\u{f042}";
+pub const COMMENT: &str = "\u{f075}";
+pub const COMMENTS: &str = "\u{f086}";
+pub const FILE_TEXT: &str = "\u{f15c}";
+pub const DIFF: &str = "\u{f440}";
+pub const GIT_COMMIT: &str = "\u{f417}";
+pub const COGS: &str = "\u{f085}";
+pub const HEART: &str = "\u{f004}";

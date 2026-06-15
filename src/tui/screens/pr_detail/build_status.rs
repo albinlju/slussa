@@ -5,7 +5,7 @@ use ratatui::{
 
 use crate::{
     domain::ci::{Build, BuildState},
-    tui::{theme, widgets},
+    tui::{icons, theme, widgets},
 };
 
 pub(super) struct BuildStats {
@@ -69,9 +69,9 @@ impl OverallState {
     pub(super) fn glyph(self) -> (String, &'static str) {
         match self {
             Self::Running => (widgets::spinner_frame().to_string(), "Checks running"),
-            Self::Failed => ("\u{f057}".to_string(), "Some checks failed"), //  times-circle
-            Self::AllPassed => ("\u{f058}".to_string(), "All checks passed"), //  check-circle
-            Self::Partial => ("\u{f059}".to_string(), "Checks complete"),   //  question-circle
+            Self::Failed => (icons::TIMES_CIRCLE.to_string(), "Some checks failed"),
+            Self::AllPassed => (icons::CHECK_CIRCLE.to_string(), "All checks passed"),
+            Self::Partial => (icons::QUESTION_CIRCLE.to_string(), "Checks complete"),
         }
     }
 }

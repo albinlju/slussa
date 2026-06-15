@@ -1,4 +1,5 @@
 pub mod format;
+pub mod icons;
 pub mod layout;
 pub mod markdown;
 pub mod screens;

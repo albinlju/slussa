@@ -9,7 +9,7 @@ use ratatui::{
 
 use crate::app::state::LoadState;
 use crate::domain::comment::Reaction;
-use crate::tui::{format, layout, theme};
+use crate::tui::{format, icons, layout, theme};
 
 pub(super) fn author_line(
     mut lead: Vec<Span<'static>>,
@@ -144,12 +144,11 @@ pub(super) fn footer(width: u16, hints: &str) -> Line<'static> {
     let muted = Style::default().fg(theme.muted);
     let left = vec![Span::styled(format!("  {hints}"), muted)];
     let version = format!("v{}", env!("CARGO_PKG_VERSION"));
-    // Nerd Font glyphs: \u{f004} heart, \u{f059} question-circle.
     let right = vec![
-        Span::styled("\u{f004}", Style::default().fg(theme.orange)),
+        Span::styled(icons::HEART, Style::default().fg(theme.orange)),
         Span::styled(" donate", muted),
         Span::raw("    "),
-        Span::styled("\u{f059}", muted),
+        Span::styled(icons::QUESTION_CIRCLE, muted),
         Span::styled(" help", muted),
         Span::raw("    "),
         Span::styled(version, muted),
