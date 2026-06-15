@@ -78,21 +78,9 @@ impl PaneView<'_> {
             lines[row] = highlight_row(std::mem::take(&mut lines[row]), body_area.width as usize);
         }
 
-        let total = lines.len();
         let visible = body_area.height as usize;
-        let max_scroll = total.saturating_sub(visible) as u16;
-
-        let mut scroll = (*pane_scroll).min(max_scroll) as usize;
-        if let Some(m) = cursor {
-            let top = m.rendered_row;
-            let bottom = m.rendered_row + m.row_span.saturating_sub(1);
-            if top < scroll {
-                scroll = top;
-            } else if visible > 0 && bottom >= scroll + visible {
-                scroll = bottom + 1 - visible;
-            }
-        }
-        let scroll = (scroll as u16).min(max_scroll);
+        let max_scroll = lines.len().saturating_sub(visible) as u16;
+        let scroll = scroll_to_cursor(*pane_scroll, cursor, lines.len(), visible);
         *pane_scroll = scroll;
 
         let paragraph = Paragraph::new(lines).scroll((scroll, 0));
@@ -105,6 +93,23 @@ impl PaneView<'_> {
 
         (nav_items.len(), matches)
     }
+}
+
+// Clamp the scroll offset so the cursor stays on screen: scroll up if it's
+// above the viewport, down if its last row is below.
+fn scroll_to_cursor(current: u16, cursor: Option<&NavItem>, total: usize, visible: usize) -> u16 {
+    let max_scroll = total.saturating_sub(visible) as u16;
+    let mut scroll = current.min(max_scroll) as usize;
+    if let Some(m) = cursor {
+        let top = m.rendered_row;
+        let bottom = m.rendered_row + m.row_span.saturating_sub(1);
+        if top < scroll {
+            scroll = top;
+        } else if visible > 0 && bottom >= scroll + visible {
+            scroll = bottom + 1 - visible;
+        }
+    }
+    (scroll as u16).min(max_scroll)
 }
 
 fn render_pane_header(
@@ -205,6 +210,23 @@ impl NavItem {
     }
 }
 
+type CommentIndex<'a> = HashMap<usize, Vec<&'a ReviewThread>>;
+
+// Bucket a file's threads by the line they anchor to: new-side `line` if set,
+// otherwise old-side `old_line`. Returned as (new-side, old-side).
+fn index_comments<'a>(threads: &'a [ReviewThread], path: &str) -> (CommentIndex<'a>, CommentIndex<'a>) {
+    let mut by_new: CommentIndex = HashMap::new();
+    let mut by_old: CommentIndex = HashMap::new();
+    for thread in threads.iter().filter(|t| t.path == path) {
+        if let Some(line) = thread.line {
+            by_new.entry(line).or_default().push(thread);
+        } else if let Some(old) = thread.old_line {
+            by_old.entry(old).or_default().push(thread);
+        }
+    }
+    (by_new, by_old)
+}
+
 fn build_diff_body(
     file: &FileDiff,
     threads: &[ReviewThread],
@@ -218,16 +240,7 @@ fn build_diff_body(
     let mut matches: Vec<usize> = Vec::new();
     let query_lower = query.to_lowercase();
 
-    let mut comments_at: HashMap<usize, Vec<&ReviewThread>> = HashMap::new();
-    let mut comments_at_old: HashMap<usize, Vec<&ReviewThread>> = HashMap::new();
-    for thread in threads.iter().filter(|t| t.path == file.path) {
-        if let Some(line) = thread.line {
-            comments_at.entry(line).or_default().push(thread);
-        } else if let Some(old) = thread.old_line {
-            comments_at_old.entry(old).or_default().push(thread);
-        }
-    }
-
+    let (comments_at, comments_at_old) = index_comments(threads, &file.path);
     let now = Utc::now();
 
     let thread_width = width.saturating_sub(2 * DIFF_GUTTER_COLS);
@@ -255,13 +268,8 @@ fn build_diff_body(
                 row_span: 1,
                 kind: NavKind::Line { line, removed },
             });
-            if !query_lower.is_empty() {
-                let text = match diff_line {
-                    DiffLine::Added(t) | DiffLine::Removed(t) | DiffLine::Context(t) => t,
-                };
-                if text.to_lowercase().contains(&query_lower) {
-                    matches.push(item_idx);
-                }
+            if !query_lower.is_empty() && diff_line.content().to_lowercase().contains(&query_lower) {
+                matches.push(item_idx);
             }
 
             let threads_here = match diff_line {
@@ -269,9 +277,7 @@ fn build_diff_body(
                 _ => comments_at.get(&new_line_num),
             };
             if let Some(threads_here) = threads_here {
-                let anchor_text = match diff_line {
-                    DiffLine::Added(t) | DiffLine::Removed(t) | DiffLine::Context(t) => t.as_str(),
-                };
+                let anchor_text = diff_line.content();
                 for thread in threads_here {
                     let idx = nav_items.len();
                     let start = lines.len();

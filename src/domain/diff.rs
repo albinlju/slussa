@@ -22,3 +22,11 @@ pub enum DiffLine {
     Removed(String),
     Context(String),
 }
+
+impl DiffLine {
+    pub fn content(&self) -> &str {
+        match self {
+            DiffLine::Added(c) | DiffLine::Removed(c) | DiffLine::Context(c) => c,
+        }
+    }
+}
