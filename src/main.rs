@@ -34,10 +34,9 @@ fn run_tui(provider: Provider) -> ExitCode {
         }
     };
 
+    let current_user = provider.current_user().unwrap_or_default();
+
     rt.block_on(async move {
-        // Identity is non-fatal: an empty user just means we never treat a PR as
-        // the viewer's own (approve stays offered, and fails gracefully if misused).
-        let current_user = provider.current_user().unwrap_or_default();
         let app = App::new(provider, current_user);
         let mut terminal = ratatui::init();
         let result = app.run(&mut terminal).await;
