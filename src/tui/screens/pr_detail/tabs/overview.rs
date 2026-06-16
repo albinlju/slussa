@@ -362,6 +362,7 @@ fn timeline_rail(blocks: Vec<TimelineBlock>) -> (Vec<Line<'static>>, Vec<ItemNav
     for (i, block) in blocks.into_iter().enumerate() {
         if i > 0 {
             all.push(Line::raw(""));
+            all.push(Line::raw(""));
         }
         let start = all.len();
         let span = block.lines.len();

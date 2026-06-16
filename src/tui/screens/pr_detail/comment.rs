@@ -9,7 +9,7 @@ use crate::{
         comment::{Comment, ReviewThread, split_suggestions},
         diff::{Diff, DiffLine},
     },
-    tui::{format, icons, markdown, theme, widgets},
+    tui::{format, markdown, theme, widgets},
 };
 
 pub(in crate::tui) fn render_inline_thread(
@@ -21,49 +21,21 @@ pub(in crate::tui) fn render_inline_thread(
     author: &str,
 ) -> Vec<Line<'static>> {
     let theme = theme::current();
-    let border = if active { theme.accent } else { theme.divider };
-    let title = match thread.comments.first() {
-        Some(c) => thread_title(thread, c, author),
-        None => Vec::new(),
-    };
-    let meta = thread_status_header(thread).0;
-
+    let frame = if active { theme.accent } else { theme.divider };
     let anchor = thread.line.or(thread.old_line).zip(anchor_text);
-    let body = thread_body(thread, anchor, width, now, author);
+    let has_suggestion = thread
+        .comments
+        .iter()
+        .any(|c| !split_suggestions(&c.content).1.is_empty());
 
-    widgets::boxed(title, meta, body, width, border)
-}
-
-fn thread_title(thread: &ReviewThread, first: &Comment, author: &str) -> Vec<Span<'static>> {
-    let theme = theme::current();
-    let mut spans = vec![Span::styled(
-        first.author.username.clone(),
-        Style::default().fg(theme.info).add_modifier(Modifier::BOLD),
-    )];
-    if first.author.username == author {
-        spans.push(Span::styled(" · author", Style::default().fg(theme.muted)));
+    // The code line is already in the diff, so no header/snippet — just the
+    // conversation, rendered exactly like the Overview.
+    let mut out: Vec<Line<'static>> = Vec::new();
+    if !has_suggestion {
+        out.push(header_line(Vec::new(), status_label(thread), width));
     }
-    let context = match thread.line.or(thread.old_line) {
-        Some(l) => format!(" · {}:{l}", thread.path),
-        None if thread.path.is_empty() => " · comment thread".to_string(),
-        None => format!(" · {}", thread.path),
-    };
-    spans.push(Span::styled(context, Style::default().fg(theme.muted)));
-    if let Some(label) = reply_count_label(thread.comments.len().saturating_sub(1)) {
-        spans.push(Span::styled(
-            format!(" · {label}"),
-            Style::default().fg(theme.muted),
-        ));
-    }
-    spans
-}
-
-fn reply_count_label(replies: usize) -> Option<String> {
-    match replies {
-        0 => None,
-        1 => Some("1 reply".to_string()),
-        n => Some(format!("{n} replies")),
-    }
+    out.extend(conversation(thread, anchor, width, now, author, frame, ""));
+    out
 }
 
 pub(super) fn comment_box(
@@ -318,53 +290,6 @@ fn align_snippet(lines: Vec<Line<'static>>) -> Vec<Line<'static>> {
         .collect()
 }
 
-const REPLY_INDENT: u16 = 3;
-
-/// A threaded reply, drawn under its parent with a git-graph branch (`├─`/`└─`).
-fn reply_entry(
-    comment: &Comment,
-    anchor: Option<(usize, &str)>,
-    width: u16,
-    now: DateTime<Utc>,
-    last: bool,
-    author: &str,
-) -> Vec<Line<'static>> {
-    let muted = Style::default().fg(theme::current().muted);
-    let mut raw = vec![author_line(
-        &comment.author.username,
-        comment_role(comment, author),
-        comment.created,
-        now,
-    )];
-    raw.extend(comment_body(
-        comment,
-        anchor,
-        widgets::box_text_width(width.saturating_sub(REPLY_INDENT)),
-        "",
-    ));
-
-    let head = if last { "└─ " } else { "├─ " };
-    let cont = if last { "   " } else { "│  " };
-    raw.into_iter()
-        .enumerate()
-        .map(|(j, line)| {
-            let gutter = if j == 0 { head } else { cont };
-            let mut spans = vec![Span::styled(gutter.to_string(), muted)];
-            spans.extend(line.spans);
-            Line::from(spans).style(line.style)
-        })
-        .collect()
-}
-
-fn author_line(
-    name: &str,
-    note: Option<&str>,
-    created: DateTime<Utc>,
-    now: DateTime<Utc>,
-) -> Line<'static> {
-    widgets::author_line(author_title(name, note), created, now)
-}
-
 fn comment_role(comment: &Comment, author: &str) -> Option<&'static str> {
     if comment.author.username == author {
         Some(" · author")
@@ -373,32 +298,6 @@ fn comment_role(comment: &Comment, author: &str) -> Option<&'static str> {
     } else {
         None
     }
-}
-
-/// Renders every comment in a thread: root inline, replies branched with `├─`/`└─`.
-fn thread_body(
-    thread: &ReviewThread,
-    anchor: Option<(usize, &str)>,
-    width: u16,
-    now: DateTime<Utc>,
-    author: &str,
-) -> Vec<Line<'static>> {
-    let last = thread.comments.len().saturating_sub(1);
-    let mut body: Vec<Line<'static>> = Vec::new();
-    for (i, comment) in thread.comments.iter().enumerate() {
-        if i == 0 {
-            body.push(author_line(
-                &comment.author.username,
-                comment_role(comment, author),
-                comment.created,
-                now,
-            ));
-            body.extend(comment_body(comment, anchor, widgets::box_text_width(width), ""));
-        } else {
-            body.extend(reply_entry(comment, anchor, width, now, i == last, author));
-        }
-    }
-    body
 }
 
 fn author_title(name: &str, note: Option<&str>) -> Vec<Span<'static>> {
@@ -531,35 +430,6 @@ fn suggestion_actions() -> Line<'static> {
         Span::raw(" "),
         label("add to batch"),
     ])
-}
-
-fn thread_status_header(thread: &ReviewThread) -> (Vec<Span<'static>>, Vec<Span<'static>>) {
-    let theme = theme::current();
-    let (icon, label, accent) = if thread.resolved {
-        (icons::CHECK_CIRCLE, "Resolved conversation", theme.success)
-    } else {
-        (icons::EXCLAMATION_TRIANGLE, "Unresolved", theme.warning)
-    };
-    let count = thread.comments.len();
-    let count_label = if count == 1 {
-        "1 comment".to_string()
-    } else {
-        format!("{count} comments")
-    };
-
-    let title = vec![
-        Span::styled(
-            icon,
-            Style::default().fg(accent).add_modifier(Modifier::BOLD),
-        ),
-        Span::raw(" "),
-        Span::styled(
-            label,
-            Style::default().fg(theme.fg).add_modifier(Modifier::BOLD),
-        ),
-    ];
-    let meta = vec![Span::styled(count_label, Style::default().fg(theme.muted))];
-    (title, meta)
 }
 
 const SNIPPET_CONTEXT: usize = 3;
