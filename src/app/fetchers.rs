@@ -75,10 +75,13 @@ impl App {
         );
     }
 
-    pub(super) fn spawn_comment(&self, pr_id: u64, anchor: CommentAnchor, text: String) {
+    pub(super) fn spawn_comment(&self, pr_id: u64, anchor: Option<CommentAnchor>, text: String) {
         let provider = self.provider.clone();
         self.spawn_fetch(
-            move || provider.post_comment(pr_id, &anchor.path, anchor.line, anchor.removed, &text),
+            move || match anchor {
+                Some(a) => provider.post_comment(pr_id, &a.path, a.line, a.removed, &text),
+                None => provider.post_pr_comment(pr_id, &text),
+            },
             move |r| Action::Loaded(LoadedAction::Commented(pr_id, r)),
         );
     }

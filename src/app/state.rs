@@ -44,6 +44,7 @@ pub struct AppState {
     pub cache: Cache,
     pub ui: UiMemory,
     pub screen: Screen,
+    pub current_user: String,
 }
 
 #[derive(Debug, Default)]
@@ -110,8 +111,13 @@ pub struct CommentAnchor {
 
 #[derive(Debug, Clone)]
 pub struct CommentDraft {
-    pub anchor: CommentAnchor,
+    pub anchor: Option<CommentAnchor>,
     pub text: String,
+}
+
+pub enum CommentTarget {
+    Line(CommentAnchor),
+    Pr,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -286,6 +292,37 @@ pub enum Screen {
 }
 
 impl AppState {
+    pub fn viewing_own_pr(&self, pr_id: u64) -> bool {
+        if self.current_user.is_empty() {
+            return false;
+        }
+        let LoadState::Loaded(prs) = &self.cache.prs else {
+            return false;
+        };
+        prs.iter()
+            .any(|pr| pr.id == pr_id && pr.author.username == self.current_user)
+    }
+
+    pub fn comment_target(&self) -> Option<CommentTarget> {
+        let Screen::Detail { tab, .. } = self.screen else {
+            return None;
+        };
+        match tab {
+            DetailTab::Overview => Some(CommentTarget::Pr),
+            DetailTab::Diff => self.pane_line_target(),
+            DetailTab::Commits if self.ui.commits.open_commit.is_some() => self.pane_line_target(),
+            _ => None,
+        }
+    }
+
+    fn pane_line_target(&self) -> Option<CommentTarget> {
+        let view = self.ui.active_diff_view();
+        (view.focus == DiffFocus::Pane)
+            .then(|| view.pane_anchor.clone())
+            .flatten()
+            .map(CommentTarget::Line)
+    }
+
     pub fn search_target(&self) -> Option<SearchTarget> {
         match self.screen {
             Screen::List => (!self.ui.filter_picker_open).then_some(SearchTarget::List),

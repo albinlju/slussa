@@ -1,7 +1,7 @@
 use crate::app::{
     App,
     action::DetailAction,
-    state::{CommentDraft, DetailTab, DiffFocus, Screen},
+    state::{CommentDraft, CommentTarget, DetailTab, DiffFocus, Screen},
 };
 
 impl App {
@@ -46,16 +46,15 @@ impl App {
     }
 
     fn open_comment(&mut self) {
-        let view = self.state.ui.active_diff_view();
-        let anchor = (view.focus == DiffFocus::Pane)
-            .then(|| view.pane_anchor.clone())
-            .flatten();
-        if let Some(anchor) = anchor {
-            self.state.ui.comment_draft = Some(CommentDraft {
-                anchor,
-                text: String::new(),
-            });
-        }
+        let anchor = match self.state.comment_target() {
+            Some(CommentTarget::Line(anchor)) => Some(anchor),
+            Some(CommentTarget::Pr) => None,
+            None => return,
+        };
+        self.state.ui.comment_draft = Some(CommentDraft {
+            anchor,
+            text: String::new(),
+        });
     }
 
     fn submit_comment(&mut self) {

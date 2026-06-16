@@ -52,6 +52,18 @@ pub fn post_comment(
     Ok(())
 }
 
+pub fn post_pr_comment(pr_number: u64, body: &str) -> Result<(), FetchError> {
+    super::cli::run_gh(&[
+        "api",
+        "--method",
+        "POST",
+        &format!("repos/{{owner}}/{{repo}}/issues/{pr_number}/comments"),
+        "-f",
+        &format!("body={body}"),
+    ])?;
+    Ok(())
+}
+
 fn head_sha(pr_number: u64) -> Result<String, FetchError> {
     let out = super::cli::run_gh(&[
         "api",

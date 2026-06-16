@@ -12,15 +12,21 @@ pub mod remote;
 
 use chrono::{DateTime, TimeZone, Utc};
 
+use crate::providers::error::FetchError;
+
 pub use activities::fetch as fetch_activity;
 pub use builds::fetch_builds;
-pub use comments::post_comment;
+pub use comments::{post_comment, post_pr_comment};
 pub use commits::fetch_commits;
 pub use diff::{fetch_commit_diff, fetch_diff};
 pub use probe::is_instance;
 pub use prs::fetch_prs;
 
 pub(super) const APP_PROPERTIES_PATH: &str = "/rest/api/1.0/application-properties";
+
+pub fn current_user(config: &Config) -> Result<String, FetchError> {
+    http::current_user(&config.repo.base_url, APP_PROPERTIES_PATH, &config.pat)
+}
 
 #[derive(Clone, Debug)]
 pub struct RepoLocation {
