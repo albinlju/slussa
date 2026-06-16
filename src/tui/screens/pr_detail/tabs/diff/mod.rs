@@ -22,6 +22,7 @@ pub fn render(
     diff_state: Option<&LoadState<Diff>>,
     review_threads: &[ReviewThread],
     ui_diff: &mut DiffViewState,
+    author: &str,
     area: Rect,
 ) {
     let Some(diff) = widgets::loaded_or_placeholder(frame, diff_state, "diff", area) else {
@@ -58,6 +59,7 @@ pub fn render(
         &file_stats,
         review_threads,
         pane_focused,
+        author,
         pane_area,
     );
 }

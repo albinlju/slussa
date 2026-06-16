@@ -7,6 +7,8 @@ pub struct Comment {
     pub content: String,
     pub created: DateTime<Utc>,
     pub reactions: Vec<Reaction>,
+    /// Id to hang a reply under, when the provider threads this comment (None = no threading).
+    pub reply_to: Option<u64>,
 }
 
 #[derive(Debug, Clone)]

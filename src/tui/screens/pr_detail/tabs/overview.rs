@@ -21,7 +21,6 @@ use crate::{
     tui::{format, icons, layout, theme, widgets},
 };
 
-const TIMELINE_COL: u16 = 2;
 const TIMELINE_RIGHT_PAD: u16 = 3;
 
 const SIDEBAR_WIDTH: u16 = 30;
@@ -57,7 +56,7 @@ pub fn render(
     if let Some(sidebar) = sidebar_area {
         render_sidebar(frame, pr, pr_data, sidebar);
     }
-    render_timeline(frame, pr_data, ui, body_area, scrollbar_area);
+    render_timeline(frame, pr_data, ui, &pr.author.username, body_area, scrollbar_area);
 }
 
 fn render_sidebar(frame: &mut Frame, pr: &PullRequest, pr_data: Option<&PrData>, area: Rect) {
@@ -205,6 +204,7 @@ fn render_timeline(
     frame: &mut Frame,
     pr_data: Option<&PrData>,
     ui: &mut UiMemory,
+    author: &str,
     area: Rect,
     scrollbar_area: Rect,
 ) {
@@ -224,16 +224,30 @@ fn render_timeline(
         _ => None,
     });
 
-    let content = build_timeline(
+    let count = timeline_count(&activity.comments, &activity.threads, &activity.events);
+    let cursor = ui.overview_cursor.min(count.saturating_sub(1));
+    ui.overview_item_count = count;
+    ui.overview_cursor = cursor;
+
+    let blocks = build_blocks(
         &activity.comments,
         &activity.threads,
         &activity.events,
         diff,
-        area.width.saturating_sub(TIMELINE_RIGHT_PAD + TIMELINE_COL),
+        area.width.saturating_sub(TIMELINE_RIGHT_PAD),
+        cursor,
+        author,
     );
 
-    let max_scroll = content.len().saturating_sub(area.height as usize) as u16;
-    ui.overview_scroll = ui.overview_scroll.min(max_scroll);
+    let (content, navs) = timeline_rail(blocks);
+    ui.overview_reply = navs.get(cursor).and_then(|n| n.reply_to);
+
+    let viewport = area.height as usize;
+    let max_scroll = content.len().saturating_sub(viewport) as u16;
+    let scroll = navs.get(cursor).map_or(ui.overview_scroll, |n| {
+        scroll_to_item(ui.overview_scroll, n.start, n.span, content.len(), viewport)
+    });
+    ui.overview_scroll = scroll.min(max_scroll);
     ui.overview_viewport = area.height;
 
     let content_area = Rect {
@@ -249,6 +263,19 @@ fn render_timeline(
         let bar = widgets::scrollbar(ui.overview_scroll, max_scroll, scrollbar_area.height);
         frame.render_widget(Paragraph::new(bar), scrollbar_area);
     }
+}
+
+fn scroll_to_item(scroll: u16, start: usize, span: usize, total: usize, viewport: usize) -> u16 {
+    let max_scroll = total.saturating_sub(viewport) as u16;
+    let start = start as u16;
+    let end = start + (span.max(1) as u16) - 1;
+    let mut s = scroll.min(max_scroll);
+    if start < s {
+        s = start;
+    } else if viewport > 0 && end >= s + viewport as u16 {
+        s = end.saturating_sub(viewport as u16 - 1);
+    }
+    s.min(max_scroll)
 }
 
 enum TimelineItem<'a> {
@@ -267,13 +294,30 @@ impl TimelineItem<'_> {
     }
 }
 
-fn build_timeline(
+struct TimelineBlock {
+    lines: Vec<Line<'static>>,
+    reply_to: Option<u64>,
+}
+
+struct ItemNav {
+    start: usize,
+    span: usize,
+    reply_to: Option<u64>,
+}
+
+fn timeline_count(comments: &[Comment], threads: &[ReviewThread], events: &[TimelineEvent]) -> usize {
+    comments.len() + events.len() + threads.iter().filter(|t| !t.comments.is_empty()).count()
+}
+
+fn build_blocks(
     comments: &[Comment],
     threads: &[ReviewThread],
     events: &[TimelineEvent],
     diff: Option<&Diff>,
     width: u16,
-) -> Vec<Line<'static>> {
+    focused: usize,
+    author: &str,
+) -> Vec<TimelineBlock> {
     let mut items: Vec<TimelineItem<'_>> =
         Vec::with_capacity(comments.len() + threads.len() + events.len());
     items.extend(comments.iter().map(TimelineItem::Comment));
@@ -281,54 +325,58 @@ fn build_timeline(
     items.extend(events.iter().map(TimelineItem::Event));
     items.sort_by_key(|item| Reverse(item.timestamp()));
 
-    let theme = theme::current();
     let now = Utc::now();
-    let blocks: Vec<(Color, Vec<Line<'static>>)> = items
-        .iter()
-        .filter_map(|item| match item {
-            TimelineItem::Comment(c) => Some((
-                theme.info,
-                super::super::comment::comment_box(c, width, now),
-            )),
+    let mut blocks: Vec<TimelineBlock> = Vec::new();
+    for item in &items {
+        let active = blocks.len() == focused;
+        let block = match item {
+            TimelineItem::Comment(c) => Some(TimelineBlock {
+                lines: super::super::comment::comment_box(c, width, now, active, author),
+                reply_to: c.reply_to,
+            }),
             TimelineItem::Review(t) => {
-                super::super::comment::review_thread_box(t, diff, width, now)
-                    .map(|l| (theme.accent, l))
+                super::super::comment::review_thread_box(t, diff, width, now, active, author)
+                    .map(|lines| TimelineBlock {
+                        lines,
+                        reply_to: t.reply_to,
+                    })
             }
-            TimelineItem::Event(e) => Some(event_block(e, now)),
-        })
-        .collect();
-
-    timeline_rail(blocks)
+            TimelineItem::Event(e) => {
+                let (_, lines) = event_block(e, now);
+                Some(TimelineBlock {
+                    lines,
+                    reply_to: None,
+                })
+            }
+        };
+        if let Some(block) = block {
+            blocks.push(block);
+        }
+    }
+    blocks
 }
 
-fn timeline_rail(blocks: Vec<(Color, Vec<Line<'static>>)>) -> Vec<Line<'static>> {
-    let connector = Span::styled("│ ", Style::default().fg(theme::current().divider));
-
+fn timeline_rail(blocks: Vec<TimelineBlock>) -> (Vec<Line<'static>>, Vec<ItemNav>) {
     let mut all: Vec<Line<'static>> = Vec::new();
-    for (i, (color, lines)) in blocks.into_iter().enumerate() {
+    let mut navs: Vec<ItemNav> = Vec::new();
+    for (i, block) in blocks.into_iter().enumerate() {
         if i > 0 {
-            all.push(Line::from(connector.clone()));
+            all.push(Line::raw(""));
         }
-        let circle = Span::styled(
-            "● ",
-            Style::default().fg(color).add_modifier(Modifier::BOLD),
-        );
-        for (j, line) in lines.into_iter().enumerate() {
-            let marker = if j == 0 {
-                circle.clone()
-            } else {
-                connector.clone()
-            };
-            let mut spans = vec![marker];
-            spans.extend(line.spans);
-            all.push(Line::from(spans));
-        }
+        let start = all.len();
+        let span = block.lines.len();
+        all.extend(block.lines);
+        navs.push(ItemNav {
+            start,
+            span,
+            reply_to: block.reply_to,
+        });
     }
 
     if all.is_empty() {
         all.push(Line::default());
     }
-    all
+    (all, navs)
 }
 
 fn event_block(event: &TimelineEvent, now: DateTime<Utc>) -> (Color, Vec<Line<'static>>) {

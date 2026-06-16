@@ -21,6 +21,7 @@ use crate::{
 const DIFF_GUTTER: &str = "  ";
 const DIFF_GUTTER_COLS: u16 = 2;
 
+#[allow(clippy::too_many_arguments)]
 pub(super) fn render(
     frame: &mut Frame,
     diff: &Diff,
@@ -28,6 +29,7 @@ pub(super) fn render(
     file_stats: &[(u32, u32)],
     threads: &[ReviewThread],
     focused: bool,
+    author: &str,
     area: Rect,
 ) {
     ui_diff.pane_viewport = area.height.saturating_sub(4);
@@ -58,7 +60,7 @@ pub(super) fn render(
         mut lines,
         nav_items,
         matches,
-    } = build_diff_body(file, threads, body_area.width, active, query);
+    } = build_diff_body(file, threads, body_area.width, active, query, author);
     let cursor = active.and_then(|i| nav_items.get(i));
 
     if !query.is_empty() {
@@ -144,6 +146,7 @@ fn build_diff_body(
     width: u16,
     active: Option<usize>,
     query: &str,
+    author: &str,
 ) -> DiffBody {
     let theme = theme::current();
     let mut lines: Vec<Line> = Vec::new();
@@ -194,6 +197,7 @@ fn build_diff_body(
                     now,
                     active == Some(idx),
                     diff_line.content(),
+                    author,
                 );
                 nav_items.push(NavItem {
                     rendered_row: start,
@@ -253,8 +257,9 @@ fn push_thread_lines(
     now: chrono::DateTime<Utc>,
     active: bool,
     anchor_text: &str,
+    author: &str,
 ) -> usize {
-    let rendered = render_inline_thread(thread, thread_width, now, active, Some(anchor_text));
+    let rendered = render_inline_thread(thread, thread_width, now, active, Some(anchor_text), author);
     let count = rendered.len();
     for tline in rendered {
         let line_style = tline.style;

@@ -15,8 +15,12 @@ impl App {
                 self.state.ui.description_scroll =
                     super::scroll(self.state.ui.description_scroll, delta);
             }
-            DetailAction::OverviewScroll(delta) => {
-                self.state.ui.overview_scroll = super::scroll(self.state.ui.overview_scroll, delta);
+            DetailAction::OverviewMove(delta) => {
+                self.state.ui.overview_cursor = super::step_index(
+                    self.state.ui.overview_cursor,
+                    delta,
+                    self.state.ui.overview_item_count,
+                );
             }
             DetailAction::ToggleHelp => self.state.ui.help_open = !self.state.ui.help_open,
             DetailAction::OpenConfirm(kind) => {
