@@ -77,6 +77,13 @@ impl Provider {
         }
     }
 
+    pub fn reply_comment(&self, pr_id: u64, parent: u64, body: &str) -> Result<(), FetchError> {
+        match self {
+            Self::GitHub => github::reply_comment(pr_id, parent, body),
+            Self::BitbucketDc(c) => bitbucket_dc::reply_comment(c, pr_id, parent, body),
+        }
+    }
+
     pub fn current_user(&self) -> Result<String, FetchError> {
         match self {
             Self::GitHub => github::current_user(),

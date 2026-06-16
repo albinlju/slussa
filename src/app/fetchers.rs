@@ -4,7 +4,7 @@ use crate::{
     app::{
         App,
         action::{Action, LoadedAction},
-        state::CommentAnchor,
+        state::CommentTarget,
     },
     providers::FetchError,
 };
@@ -75,12 +75,15 @@ impl App {
         );
     }
 
-    pub(super) fn spawn_comment(&self, pr_id: u64, anchor: Option<CommentAnchor>, text: String) {
+    pub(super) fn spawn_comment(&self, pr_id: u64, target: CommentTarget, text: String) {
         let provider = self.provider.clone();
         self.spawn_fetch(
-            move || match anchor {
-                Some(a) => provider.post_comment(pr_id, &a.path, a.line, a.removed, &text),
-                None => provider.post_pr_comment(pr_id, &text),
+            move || match target {
+                CommentTarget::Line(a) => {
+                    provider.post_comment(pr_id, &a.path, a.line, a.removed, &text)
+                }
+                CommentTarget::Pr => provider.post_pr_comment(pr_id, &text),
+                CommentTarget::Reply(parent) => provider.reply_comment(pr_id, parent, &text),
             },
             move |r| Action::Loaded(LoadedAction::Commented(pr_id, r)),
         );

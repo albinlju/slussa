@@ -11,7 +11,7 @@ mod review_threads;
 
 pub use activities::fetch as fetch_activity;
 pub use builds::fetch_builds;
-pub use comments::{post_comment, post_pr_comment};
+pub use comments::{post_comment, post_pr_comment, reply_comment};
 pub use commits::fetch_commits;
 pub use diff::{fetch_commit_diff, fetch_diff};
 pub use prs::fetch_prs;
@@ -64,12 +64,14 @@ struct GqlRepository<P> {
     pull_request: P,
 }
 
-pub(super) const COMMENT_FIELDS: &str = "body createdAt author { login } \
+pub(super) const COMMENT_FIELDS: &str = "databaseId body createdAt author { login } \
     reactionGroups { content viewerHasReacted users { totalCount } }";
 
 #[derive(Debug, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub(super) struct GqlComment {
+    #[serde(default)]
+    database_id: Option<u64>,
     #[serde(default)]
     body: String,
     created_at: DateTime<Utc>,

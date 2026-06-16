@@ -18,7 +18,8 @@ use ratatui::{
 
 use crate::{
     app::state::{
-        AppState, CommentDraft, ConfirmKind, DetailTab, DiffFocus, LoadState, PrData, SearchState,
+        AppState, CommentDraft, CommentTarget, ConfirmKind, DetailTab, DiffFocus, LoadState, PrData,
+        SearchState,
         UiMemory,
     },
     domain::{
@@ -136,9 +137,12 @@ fn footer_actions(state: &AppState, tab: DetailTab, own_pr: bool) -> String {
     if !own_pr {
         parts.push("a: approve");
     }
-    // Line comment only shows once you're on a row inside the diff pane.
-    if state.comment_target().is_some() {
-        parts.push("c: comment");
+    // Line comment only shows once you're on a row inside the diff pane;
+    // on a thread it becomes a reply.
+    match state.comment_target() {
+        Some(CommentTarget::Reply(_)) => parts.push("c: reply"),
+        Some(_) => parts.push("c: comment"),
+        None => {}
     }
     parts.push("m: merge");
     parts.join("  ")
@@ -146,9 +150,10 @@ fn footer_actions(state: &AppState, tab: DetailTab, own_pr: bool) -> String {
 
 fn comment_prompt(draft: &CommentDraft) -> Line<'static> {
     let theme = theme::current();
-    let label = match &draft.anchor {
-        Some(a) => format!("  comment {}:{} ▏ ", a.path, a.line),
-        None => "  comment ▏ ".to_owned(),
+    let label = match &draft.target {
+        CommentTarget::Line(a) => format!("  comment {}:{} ▏ ", a.path, a.line),
+        CommentTarget::Pr => "  comment ▏ ".to_owned(),
+        CommentTarget::Reply(_) => "  reply ▏ ".to_owned(),
     };
     Line::from(vec![
         Span::styled(label, Style::default().fg(theme.muted)),

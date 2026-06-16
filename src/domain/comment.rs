@@ -44,6 +44,8 @@ pub struct ReviewThread {
     pub old_line: Option<usize>,
     pub comments: Vec<Comment>,
     pub resolved: bool,
+    /// Id of the comment a reply should hang under (None = can't reply, e.g. no id parsed).
+    pub reply_to: Option<u64>,
 }
 
 #[cfg(test)]

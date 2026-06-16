@@ -58,6 +58,8 @@ struct Anchor {
 #[derive(Debug, Deserialize)]
 #[serde(rename_all = "camelCase")]
 struct BbComment {
+    #[serde(default)]
+    id: u64,
     author: BbUser,
     text: String,
     created_date: i64,
@@ -168,6 +170,7 @@ fn make_thread(anchor: Anchor, root: &BbComment) -> ReviewThread {
         old_line,
         resolved: root.state.eq_ignore_ascii_case("RESOLVED"),
         comments,
+        reply_to: (root.id != 0).then_some(root.id),
     }
 }
 
@@ -259,6 +262,7 @@ mod tests {
         assert_eq!(bundle.threads[0].path, "src/x.rs");
         assert_eq!(bundle.threads[0].line, Some(42));
         assert_eq!(bundle.threads[0].comments.len(), 2);
+        assert_eq!(bundle.threads[0].reply_to, Some(2));
 
         assert_eq!(bundle.events.len(), 3);
         assert_eq!(bundle.events[0].kind, EventKind::Opened);

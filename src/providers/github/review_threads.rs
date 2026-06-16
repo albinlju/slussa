@@ -61,12 +61,14 @@ fn map_thread(t: GqlThread) -> ReviewThread {
     } else {
         (anchor, None)
     };
+    let reply_to = t.comments.nodes.first().and_then(|c| c.database_id);
     ReviewThread {
         path: t.path,
         line,
         old_line,
         resolved: t.is_resolved,
         comments: t.comments.nodes.into_iter().map(map_gql_comment).collect(),
+        reply_to,
     }
 }
 
@@ -82,6 +84,7 @@ mod tests {
             "originalLine": 7,
             "diffSide": "LEFT",
             "comments": { "nodes": [{
+                "databaseId": 555,
                 "body": "old line looks wrong",
                 "createdAt": "2026-06-06T13:09:13Z",
                 "author": { "login": "ana" },
@@ -107,6 +110,7 @@ mod tests {
         let t = &threads[0];
         assert!(t.resolved);
         assert_eq!((t.line, t.old_line), (None, Some(7)));
+        assert_eq!(t.reply_to, Some(555));
 
         let reactions = &t.comments[0].reactions;
         assert_eq!(reactions.len(), 2);
