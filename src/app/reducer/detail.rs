@@ -1,7 +1,7 @@
 use crate::app::{
     App,
     action::DetailAction,
-    state::{CommentDraft, CommentTarget, DetailTab, DiffFocus, Screen},
+    state::{CommentDraft, DetailTab, DiffFocus, Screen},
 };
 
 impl App {
@@ -46,13 +46,11 @@ impl App {
     }
 
     fn open_comment(&mut self) {
-        let anchor = match self.state.comment_target() {
-            Some(CommentTarget::Line(anchor)) => Some(anchor),
-            Some(CommentTarget::Pr) => None,
-            None => return,
+        let Some(target) = self.state.comment_target() else {
+            return;
         };
         self.state.ui.comment_draft = Some(CommentDraft {
-            anchor,
+            target,
             text: String::new(),
         });
     }
@@ -66,7 +64,7 @@ impl App {
         }
         if let Screen::Detail { pr_id, .. } = self.state.screen {
             self.state.ui.comment_pending = true;
-            self.spawn_comment(pr_id, draft.anchor, draft.text);
+            self.spawn_comment(pr_id, draft.target, draft.text);
         }
     }
 

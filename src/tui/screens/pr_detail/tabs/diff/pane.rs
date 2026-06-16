@@ -37,6 +37,7 @@ pub(super) fn render(
         ui_diff.pane_item_count = 0;
         ui_diff.pane_matches = Vec::new();
         ui_diff.pane_anchor = None;
+        ui_diff.pane_reply = None;
         return;
     };
     let (adds, dels) = file_stats.get(bounded).copied().unwrap_or((0, 0));
@@ -97,6 +98,7 @@ pub(super) fn render(
             removed,
         }
     });
+    ui_diff.pane_reply = cursor.and_then(NavItem::reply_to);
     ui_diff.pane_scroll = scroll;
     ui_diff.pane_item_count = nav_items.len();
     ui_diff.pane_matches = matches;
@@ -104,7 +106,7 @@ pub(super) fn render(
 
 enum NavKind {
     Line { line: usize, removed: bool },
-    Thread { line: usize, removed: bool },
+    Thread { line: usize, removed: bool, reply_to: Option<u64> },
 }
 
 struct NavItem {
@@ -116,7 +118,16 @@ struct NavItem {
 impl NavItem {
     fn anchor(&self) -> (usize, bool) {
         match self.kind {
-            NavKind::Line { line, removed } | NavKind::Thread { line, removed } => (line, removed),
+            NavKind::Line { line, removed } | NavKind::Thread { line, removed, .. } => {
+                (line, removed)
+            }
+        }
+    }
+
+    fn reply_to(&self) -> Option<u64> {
+        match self.kind {
+            NavKind::Thread { reply_to, .. } => reply_to,
+            NavKind::Line { .. } => None,
         }
     }
 }
@@ -187,7 +198,11 @@ fn build_diff_body(
                 nav_items.push(NavItem {
                     rendered_row: start,
                     row_span: span,
-                    kind: NavKind::Thread { line, removed },
+                    kind: NavKind::Thread {
+                        line,
+                        removed,
+                        reply_to: thread.reply_to,
+                    },
                 });
             }
         }

@@ -111,13 +111,15 @@ pub struct CommentAnchor {
 
 #[derive(Debug, Clone)]
 pub struct CommentDraft {
-    pub anchor: Option<CommentAnchor>,
+    pub target: CommentTarget,
     pub text: String,
 }
 
+#[derive(Debug, Clone)]
 pub enum CommentTarget {
     Line(CommentAnchor),
     Pr,
+    Reply(u64),
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -206,6 +208,7 @@ pub struct DiffViewState {
     pub pane_search: SearchState,
     pub pane_matches: Vec<usize>,
     pub pane_anchor: Option<CommentAnchor>,
+    pub pane_reply: Option<u64>,
     pub focus: DiffFocus,
 }
 
@@ -317,10 +320,13 @@ impl AppState {
 
     fn pane_line_target(&self) -> Option<CommentTarget> {
         let view = self.ui.active_diff_view();
-        (view.focus == DiffFocus::Pane)
-            .then(|| view.pane_anchor.clone())
-            .flatten()
-            .map(CommentTarget::Line)
+        if view.focus != DiffFocus::Pane {
+            return None;
+        }
+        if let Some(parent) = view.pane_reply {
+            return Some(CommentTarget::Reply(parent));
+        }
+        view.pane_anchor.clone().map(CommentTarget::Line)
     }
 
     pub fn search_target(&self) -> Option<SearchTarget> {

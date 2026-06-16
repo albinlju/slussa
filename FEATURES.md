@@ -39,7 +39,7 @@
 - [ ] **Mergeability in the pr list** — conflict / behind-base indicators.
 - [ ] **Labels in the list** — colored and filterable (shown in Overview today).
 - [ ] **Errors visible in the UI** instead of panics when a fetch/parse fails.
-- [ ] **Reply to / resolve a comment thread** — the cursor-focus groundwork is already in place.
+- [ ] **Resolve / unresolve a comment thread** — reply is done (`c` on a focused thread posts a threaded reply, GitHub + Bitbucket); resolving the thread is what's left.
 - [ ] **Optimistic comment insert** — show a just-posted line comment instantly (local insert into `activity`) instead of the ~3-5s wait for the refetch; needs current-user to attribute it correctly. ("posting…" indicator is already done.)
 - [ ] **Manual / auto refresh** (`r`) — re-fetch without restarting.
 - [ ] **Build jobs auto update status** — Builds should re-fetch status automatically while open tab
