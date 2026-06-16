@@ -187,6 +187,7 @@ fn map_comment(c: &BbComment) -> Comment {
         content: c.text.clone(),
         created: ms_to_utc(c.created_date),
         reactions: map_reactions(&c.properties),
+        reply_to: (c.id != 0).then_some(c.id),
     }
 }
 

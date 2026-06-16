@@ -129,9 +129,12 @@ fn render_footer_bar(
 }
 
 fn footer_actions(state: &AppState, tab: DetailTab, own_pr: bool) -> String {
-    // Overview is the conversation tab — only a (PR-level) comment belongs there.
+    // Overview is the conversation tab — comment, or reply when a thread is focused.
     if tab == DetailTab::Overview {
-        return "c: comment".to_owned();
+        return match state.comment_target() {
+            Some(CommentTarget::Reply(_)) => "c: reply".to_owned(),
+            _ => "c: comment".to_owned(),
+        };
     }
     let mut parts: Vec<&str> = Vec::new();
     if !own_pr {
@@ -361,12 +364,19 @@ fn render_content(
         DetailTab::Diff => {
             let threads = activity_threads(pr_data);
             let diff = active_diff(ui.commits.open_commit.as_deref(), pr_data);
-            diff::render(frame, diff, threads, &mut ui.diff, inset);
+            diff::render(frame, diff, threads, &mut ui.diff, &pr.author.username, inset);
         }
         DetailTab::Commits => {
             if ui.commits.open_commit.is_some() {
                 let threads = activity_threads(pr_data);
-                commits::render_commit_diff(frame, pr_data, threads, &mut ui.commits, inset);
+                commits::render_commit_diff(
+                    frame,
+                    pr_data,
+                    threads,
+                    &mut ui.commits,
+                    &pr.author.username,
+                    inset,
+                );
             } else {
                 commits::render(frame, pr_data, &mut ui.commits, inset);
             }

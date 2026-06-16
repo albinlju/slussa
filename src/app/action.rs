@@ -41,7 +41,7 @@ pub enum DetailAction {
     PrevTab,
     SelectTab(DetailTab),
     DescriptionScroll(i16),
-    OverviewScroll(i16),
+    OverviewMove(i16),
     ToggleHelp,
     OpenConfirm(ConfirmKind),
     CloseConfirm,

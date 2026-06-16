@@ -111,7 +111,7 @@ fn tab_key(
                 _ => tab_nav(code),
             }),
         DetailTab::Overview => scroll_delta(code, state.ui.overview_viewport)
-            .map(|d| Action::Detail(DetailAction::OverviewScroll(d)))
+            .map(|d| Action::Detail(DetailAction::OverviewMove(d)))
             .or_else(|| tab_nav(code)),
         DetailTab::Description => scroll_delta(code, state.ui.description_viewport)
             .map(|d| Action::Detail(DetailAction::DescriptionScroll(d)))

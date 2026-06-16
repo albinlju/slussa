@@ -95,6 +95,9 @@ pub struct UiMemory {
     pub commits: CommitsViewState,
     pub description_scroll: u16,
     pub overview_scroll: u16,
+    pub overview_cursor: usize,
+    pub overview_item_count: usize,
+    pub overview_reply: Option<u64>,
     pub description_viewport: u16,
     pub overview_viewport: u16,
     pub help_open: bool,
@@ -311,7 +314,11 @@ impl AppState {
             return None;
         };
         match tab {
-            DetailTab::Overview => Some(CommentTarget::Pr),
+            DetailTab::Overview => Some(
+                self.ui
+                    .overview_reply
+                    .map_or(CommentTarget::Pr, CommentTarget::Reply),
+            ),
             DetailTab::Diff => self.pane_line_target(),
             DetailTab::Commits if self.ui.commits.open_commit.is_some() => self.pane_line_target(),
             _ => None,

@@ -21,7 +21,16 @@ pub fn fetch_comments(pr_number: u64) -> Result<Vec<Comment>, FetchError> {
              comments(first: 100) {{ nodes {{ {COMMENT_FIELDS} }} }} }} }} }}"
     );
     let pr: GqlPullRequest = run_pr_graphql(&query, pr_number)?;
-    Ok(pr.comments.nodes.into_iter().map(map_gql_comment).collect())
+    // Issue comments are flat: a reply is just another top-level PR comment.
+    Ok(pr
+        .comments
+        .nodes
+        .into_iter()
+        .map(|c| Comment {
+            reply_to: None,
+            ..map_gql_comment(c)
+        })
+        .collect())
 }
 
 pub fn post_comment(

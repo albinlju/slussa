@@ -124,6 +124,9 @@ pub(super) fn map_gql_comment(c: GqlComment) -> Comment {
         content: c.body,
         created: c.created_at,
         reactions,
+        // Review-thread comments reply via this databaseId; issue comments are
+        // flat and get None overridden in fetch_comments.
+        reply_to: c.database_id,
     }
 }
 
