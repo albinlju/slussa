@@ -11,7 +11,7 @@ mod review_threads;
 
 pub use activities::fetch as fetch_activity;
 pub use builds::fetch_builds;
-pub use comments::post_comment;
+pub use comments::{post_comment, post_pr_comment};
 pub use commits::fetch_commits;
 pub use diff::{fetch_commit_diff, fetch_diff};
 pub use prs::fetch_prs;
@@ -23,6 +23,11 @@ use serde::de::DeserializeOwned;
 use crate::domain::comment::{Comment, Reaction};
 use crate::domain::user::User;
 use crate::providers::error::FetchError;
+
+pub fn current_user() -> Result<String, FetchError> {
+    let out = cli::run_gh(&["api", "user", "--jq", ".login"])?;
+    Ok(String::from_utf8_lossy(&out).trim().to_owned())
+}
 
 pub(super) fn run_pr_graphql<P: DeserializeOwned>(
     query: &str,

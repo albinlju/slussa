@@ -12,7 +12,7 @@ pub(in crate::tui) fn key_to_action(state: &AppState, key: KeyEvent) -> Option<A
     if key.code == KeyCode::Char('q') {
         return Some(Action::Quit);
     }
-    let Screen::Detail { tab, .. } = state.screen else {
+    let Screen::Detail { tab, pr_id } = state.screen else {
         return None;
     };
     let viewing_commit = state.ui.commits.open_commit.is_some();
@@ -39,7 +39,9 @@ pub(in crate::tui) fn key_to_action(state: &AppState, key: KeyEvent) -> Option<A
         return (code == KeyCode::Esc).then_some(Action::Detail(DetailAction::ToggleHelp));
     }
 
-    if code == KeyCode::Char('a') {
+    // You can't approve your own PR (GitHub/Bitbucket both reject it), so we
+    // don't offer it — mirrors the greyed-out approve in their web UIs.
+    if code == KeyCode::Char('a') && !state.viewing_own_pr(pr_id) {
         return Some(Action::Detail(DetailAction::OpenConfirm(ConfirmKind::Approve)));
     }
     if code == KeyCode::Char('c') {

@@ -37,10 +37,13 @@ pub struct App {
 }
 
 impl App {
-    pub fn new(provider: Provider) -> Self {
+    pub fn new(provider: Provider, current_user: String) -> Self {
         let (action_tx, action_rx) = mpsc::unbounded_channel();
         Self {
-            state: AppState::default(),
+            state: AppState {
+                current_user,
+                ..AppState::default()
+            },
             provider,
             action_tx,
             action_rx,

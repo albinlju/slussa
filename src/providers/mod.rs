@@ -69,4 +69,18 @@ impl Provider {
             Self::BitbucketDc(c) => bitbucket_dc::post_comment(c, pr_id, path, line, removed, body),
         }
     }
+
+    pub fn post_pr_comment(&self, pr_id: u64, body: &str) -> Result<(), FetchError> {
+        match self {
+            Self::GitHub => github::post_pr_comment(pr_id, body),
+            Self::BitbucketDc(c) => bitbucket_dc::post_pr_comment(c, pr_id, body),
+        }
+    }
+
+    pub fn current_user(&self) -> Result<String, FetchError> {
+        match self {
+            Self::GitHub => github::current_user(),
+            Self::BitbucketDc(c) => bitbucket_dc::current_user(c),
+        }
+    }
 }

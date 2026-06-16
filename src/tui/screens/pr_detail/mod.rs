@@ -94,9 +94,10 @@ pub(in crate::tui) fn render(
     );
 
     render_header(frame, pr, header_area);
+    let own_pr = state.viewing_own_pr(pr_id);
     let pr_data = state.cache.details.get(&pr.id);
     render_tabs_and_content(frame, pr, pr_data, &mut state.ui, tab, content_area);
-    render_footer_bar(frame, state, pr_data, tab, footer_area);
+    render_footer_bar(frame, state, pr_data, tab, own_pr, footer_area);
 
     if let Some(help_area) = help_area {
         render_help_panel(frame, help_area);
@@ -111,6 +112,7 @@ fn render_footer_bar(
     state: &AppState,
     pr_data: Option<&PrData>,
     tab: DetailTab,
+    own_pr: bool,
     area: Rect,
 ) {
     let line = if let Some(draft) = &state.ui.comment_draft {
@@ -120,18 +122,36 @@ fn render_footer_bar(
     } else if let Some(search) = active_search(state, pr_data, tab, area.width) {
         search
     } else {
-        widgets::footer(area.width, DETAIL_ACTIONS)
+        widgets::footer(area.width, &footer_actions(state, tab, own_pr))
     };
     frame.render_widget(Paragraph::new(line), area);
 }
 
+fn footer_actions(state: &AppState, tab: DetailTab, own_pr: bool) -> String {
+    // Overview is the conversation tab — only a (PR-level) comment belongs there.
+    if tab == DetailTab::Overview {
+        return "c: comment".to_owned();
+    }
+    let mut parts: Vec<&str> = Vec::new();
+    if !own_pr {
+        parts.push("a: approve");
+    }
+    // Line comment only shows once you're on a row inside the diff pane.
+    if state.comment_target().is_some() {
+        parts.push("c: comment");
+    }
+    parts.push("m: merge");
+    parts.join("  ")
+}
+
 fn comment_prompt(draft: &CommentDraft) -> Line<'static> {
     let theme = theme::current();
+    let label = match &draft.anchor {
+        Some(a) => format!("  comment {}:{} ▏ ", a.path, a.line),
+        None => "  comment ▏ ".to_owned(),
+    };
     Line::from(vec![
-        Span::styled(
-            format!("  comment {}:{} ▏ ", draft.anchor.path, draft.anchor.line),
-            Style::default().fg(theme.muted),
-        ),
+        Span::styled(label, Style::default().fg(theme.muted)),
         Span::styled(draft.text.clone(), Style::default().fg(theme.fg)),
         Span::styled("█", Style::default().fg(theme.accent)),
     ])
@@ -359,7 +379,6 @@ fn activity_threads(pr_data: Option<&PrData>) -> &[ReviewThread] {
         .unwrap_or(&[])
 }
 
-const DETAIL_ACTIONS: &str = "a: approve  c: comment  m: merge";
 
 const HELP_KEYS: &[(&str, &str)] = &[
     ("j/k", "move up/down"),
