@@ -39,7 +39,7 @@
 - [ ] **Mergeability in the pr list** — conflict / behind-base indicators.
 - [ ] **Labels in the list** — colored and filterable (shown in Overview today).
 - [ ] **Errors visible in the UI** instead of panics when a fetch/parse fails.
-- [ ] **Resolve / unresolve a comment thread** — reply is done (`c` on a focused thread posts a threaded reply, GitHub + Bitbucket); resolving the thread is what's left.
+- [ ] **Resolve / unresolve a comment thread** (`r`) — reply is done (`c` on a focused thread posts a threaded reply, GitHub + Bitbucket); resolving the thread is what's left. A **resolved** thread should *collapse* in the diff to a one-line summary (`✓ resolved · N comments · @who`, expandable), like GitHub's Files-changed view, while staying visible in the Overview timeline.
 - [ ] **Optimistic comment insert** — show a just-posted line comment instantly (local insert into `activity`) instead of the ~3-5s wait for the refetch; needs current-user to attribute it correctly. ("posting…" indicator is already done.)
 - [ ] **Manual / auto refresh** (`r`) — re-fetch without restarting.
 - [ ] **Build jobs auto update status** — Builds should re-fetch status automatically while open tab
@@ -57,7 +57,7 @@
 - [ ] **Binary / image files** — a clear "(binary file)" instead of a broken diff.
 - [ ] **Jump to next / prev unresolved thread** (`]c` / `[c`).
 - [ ] **Resolved / unresolved filter** in the Overview.
-- [ ] **Outdated comments** — mark comments whose line changed since they were made.
+- [ ] **Outdated comments** — a thread whose anchored line no longer exists in the current diff is *outdated*: hide it from the diff (like GitHub) and show it only in the Overview timeline. Needs comparing each thread's anchor against the loaded diff.
 - [ ] **Review as a group** — bundle a review's comments + summary + state (approved / changes requested), instead of loose timeline entries.
 - [ ] **Bitbucket "tasks"** — show the checkable to-do items on a PR.
 - [ ] **Linked issues / cross-references** — "closes #123".
