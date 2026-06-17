@@ -19,6 +19,17 @@ impl App {
             DiffAction::JumpMatch(delta) => self.diff_jump_match(delta),
             DiffAction::EnterPane => self.diff_enter_pane(),
             DiffAction::FocusTree => self.diff_view_mut().focus = DiffFocus::Tree,
+            DiffAction::ToggleThreadExpand => self.diff_toggle_thread_expand(),
+        }
+    }
+
+    fn diff_toggle_thread_expand(&mut self) {
+        let view = self.diff_view_mut();
+        let Some(id) = view.pane_thread.as_ref().and_then(|t| t.comment_id) else {
+            return;
+        };
+        if !view.expanded_threads.insert(id) {
+            view.expanded_threads.remove(&id);
         }
     }
 

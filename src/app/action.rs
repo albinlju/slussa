@@ -69,6 +69,7 @@ pub enum DiffAction {
     JumpMatch(i16),
     EnterPane,
     FocusTree,
+    ToggleThreadExpand,
 }
 
 #[derive(Debug, Clone, Copy)]

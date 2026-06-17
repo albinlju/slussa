@@ -19,9 +19,16 @@ pub(in crate::tui) fn render_inline_thread(
     active: bool,
     anchor_text: Option<&str>,
     author: &str,
+    expanded: bool,
 ) -> Vec<Line<'static>> {
     let theme = theme::current();
     let frame = if active { theme.accent } else { theme.divider };
+
+    // A resolved thread collapses to a one-line summary until expanded (`space`).
+    if thread.resolved && !expanded {
+        return vec![collapse_summary(thread, false, active)];
+    }
+
     let anchor = thread.line.or(thread.old_line).zip(anchor_text);
     let has_suggestion = thread
         .comments
@@ -29,11 +36,47 @@ pub(in crate::tui) fn render_inline_thread(
         .any(|c| !split_suggestions(&c.content).1.is_empty());
 
     let mut out: Vec<Line<'static>> = Vec::new();
-    if !has_suggestion {
+    if thread.resolved {
+        out.push(collapse_summary(thread, true, active));
+    } else if !has_suggestion {
         out.push(status_rule(status_label(thread), width, frame));
     }
     out.extend(conversation(thread, anchor, width, now, author, frame, "", None));
     out
+}
+
+/// `▸ ✓ resolved · @author · N comments` — the collapsed/expanded thread header.
+/// Collapsed has no border to mark focus, so the arrow carries it (accent).
+fn collapse_summary(thread: &ReviewThread, expanded: bool, active: bool) -> Line<'static> {
+    let theme = theme::current();
+    let author = thread
+        .comments
+        .first()
+        .map(|c| c.author.username.clone())
+        .unwrap_or_default();
+    let n = thread.comments.len();
+    let count = if n == 1 {
+        "1 comment".to_string()
+    } else {
+        format!("{n} comments")
+    };
+    // No border when collapsed, so accent the arrow + meta to mark focus.
+    let focus_color = if !expanded && active {
+        theme.accent
+    } else {
+        theme.muted
+    };
+    Line::from(vec![
+        Span::styled(
+            if expanded { "▾ " } else { "▸ " },
+            Style::default().fg(focus_color),
+        ),
+        Span::styled("✓ resolved", Style::default().fg(theme.success)),
+        Span::styled(
+            format!(" · {author} · {count}"),
+            Style::default().fg(focus_color),
+        ),
+    ])
 }
 
 fn status_rule(label: Vec<Span<'static>>, width: u16, color: Color) -> Line<'static> {

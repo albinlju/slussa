@@ -25,6 +25,10 @@
 - [x] **Suggestions (display)** — `suggestion` blocks in review comments render as
   a "◆ Suggested change" box with the anchored line as `−`, the proposed lines as
   `+`, and a `−1 +N` stat. Applying/batching is a separate backlog item.
+- [x] **Comment actions** — reply (`r`), edit (`e`) / delete (`d`) your own comments
+  (Ctrl-j/k sub-cursor to pick one in a thread), and resolve/unresolve (`R`). Resolved
+  threads collapse to a one-line summary in the diff (`space` to expand); the Overview
+  keeps the full thread.
 ---
 
 ## Backlog
@@ -39,7 +43,6 @@
 - [ ] **Mergeability in the pr list** — conflict / behind-base indicators.
 - [ ] **Labels in the list** — colored and filterable (shown in Overview today).
 - [ ] **Errors visible in the UI** instead of panics when a fetch/parse fails.
-- [ ] **Resolve / unresolve a comment thread** (`r`) — reply is done (`c` on a focused thread posts a threaded reply, GitHub + Bitbucket); resolving the thread is what's left. A **resolved** thread should *collapse* in the diff to a one-line summary (`✓ resolved · N comments · @who`, expandable), like GitHub's Files-changed view, while staying visible in the Overview timeline.
 - [ ] **Optimistic comment insert** — show a just-posted line comment instantly (local insert into `activity`) instead of the ~3-5s wait for the refetch; needs current-user to attribute it correctly. ("posting…" indicator is already done.)
 - [ ] **Manual / auto refresh** (`r`) — re-fetch without restarting.
 - [ ] **Build jobs auto update status** — Builds should re-fetch status automatically while open tab
