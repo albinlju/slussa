@@ -243,6 +243,9 @@ pub struct DiffViewState {
     pub pane_anchor: Option<CommentAnchor>,
     pub pane_reply: Option<u64>,
     pub pane_thread: Option<ThreadRef>,
+    /// Root-comment ids of resolved threads the user has expanded (otherwise
+    /// resolved threads render collapsed in the diff).
+    pub expanded_threads: HashSet<u64>,
     pub focus: DiffFocus,
 }
 

@@ -1,4 +1,4 @@
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 
 use chrono::Utc;
 use ratatui::{
@@ -61,7 +61,15 @@ pub(super) fn render(
         mut lines,
         nav_items,
         matches,
-    } = build_diff_body(file, threads, body_area.width, active, query, author);
+    } = build_diff_body(
+        file,
+        threads,
+        body_area.width,
+        active,
+        query,
+        author,
+        &ui_diff.expanded_threads,
+    );
     let cursor = active.and_then(|i| nav_items.get(i));
 
     if !query.is_empty() {
@@ -167,6 +175,7 @@ struct DiffBody {
     matches: Vec<usize>,
 }
 
+#[allow(clippy::too_many_arguments)]
 fn build_diff_body(
     file: &FileDiff,
     threads: &[ReviewThread],
@@ -174,6 +183,7 @@ fn build_diff_body(
     active: Option<usize>,
     query: &str,
     author: &str,
+    expanded: &HashSet<u64>,
 ) -> DiffBody {
     let theme = theme::current();
     let mut lines: Vec<Line> = Vec::new();
@@ -217,6 +227,8 @@ fn build_diff_body(
             for thread in threads_here.into_iter().flatten() {
                 let idx = nav_items.len();
                 let start = lines.len();
+                // Resolved threads stay collapsed unless the user expanded this one.
+                let is_expanded = thread.reply_to.is_none_or(|id| expanded.contains(&id));
                 let span = push_thread_lines(
                     &mut lines,
                     thread,
@@ -225,6 +237,7 @@ fn build_diff_body(
                     active == Some(idx),
                     diff_line.content(),
                     author,
+                    is_expanded,
                 );
                 nav_items.push(NavItem {
                     rendered_row: start,
@@ -279,6 +292,7 @@ fn index_comments<'a>(
     (by_new, by_old)
 }
 
+#[allow(clippy::too_many_arguments)]
 fn push_thread_lines(
     lines: &mut Vec<Line<'static>>,
     thread: &ReviewThread,
@@ -287,8 +301,17 @@ fn push_thread_lines(
     active: bool,
     anchor_text: &str,
     author: &str,
+    expanded: bool,
 ) -> usize {
-    let rendered = render_inline_thread(thread, thread_width, now, active, Some(anchor_text), author);
+    let rendered = render_inline_thread(
+        thread,
+        thread_width,
+        now,
+        active,
+        Some(anchor_text),
+        author,
+        expanded,
+    );
     let count = rendered.len();
     for tline in rendered {
         let line_style = tline.style;
