@@ -100,6 +100,14 @@ impl App {
         );
     }
 
+    pub(super) fn spawn_approve(&self, pr_id: u64, user: String) {
+        let provider = self.provider.clone();
+        self.spawn_fetch(
+            move || provider.approve(pr_id, &user),
+            move |r| Action::Loaded(LoadedAction::Commented(pr_id, r)),
+        );
+    }
+
     pub(super) fn spawn_resolve_thread(
         &self,
         pr_id: u64,

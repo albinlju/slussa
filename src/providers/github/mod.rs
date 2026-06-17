@@ -32,6 +32,18 @@ pub fn current_user() -> Result<String, FetchError> {
     Ok(String::from_utf8_lossy(&out).trim().to_owned())
 }
 
+pub fn approve(pr_number: u64) -> Result<(), FetchError> {
+    cli::run_gh(&[
+        "api",
+        "--method",
+        "POST",
+        &format!("repos/{{owner}}/{{repo}}/pulls/{pr_number}/reviews"),
+        "-f",
+        "event=APPROVE",
+    ])?;
+    Ok(())
+}
+
 pub(super) fn run_pr_graphql<P: DeserializeOwned>(
     query: &str,
     pr_number: u64,
