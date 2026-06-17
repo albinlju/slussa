@@ -163,8 +163,13 @@ impl App {
                     self.spawn_delete_comment(pr_id, id, review);
                 }
             }
-            // Approve is still unwired (backlog item).
-            Some(ConfirmKind::Approve) | None => {}
+            Some(ConfirmKind::Approve) => {
+                if let Screen::Detail { pr_id, .. } = self.state.screen {
+                    self.state.ui.comment_pending = true;
+                    self.spawn_approve(pr_id, self.state.current_user.clone());
+                }
+            }
+            None => {}
         }
     }
 

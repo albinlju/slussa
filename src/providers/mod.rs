@@ -132,6 +132,15 @@ impl Provider {
         }
     }
 
+    /// `user` is the current user's slug (Bitbucket needs it for the participant
+    /// endpoint; GitHub ignores it).
+    pub fn approve(&self, pr_id: u64, user: &str) -> Result<(), FetchError> {
+        match self {
+            Self::GitHub => github::approve(pr_id),
+            Self::BitbucketDc(c) => bitbucket_dc::approve(c, pr_id, user),
+        }
+    }
+
     pub fn current_user(&self) -> Result<String, FetchError> {
         match self {
             Self::GitHub => github::current_user(),

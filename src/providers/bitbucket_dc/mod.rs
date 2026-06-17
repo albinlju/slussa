@@ -31,6 +31,15 @@ pub fn current_user(config: &Config) -> Result<String, FetchError> {
     http::current_user(&config.repo.base_url, APP_PROPERTIES_PATH, &config.pat)
 }
 
+pub fn approve(config: &Config, pr_id: u64, user: &str) -> Result<(), FetchError> {
+    let endpoint = format!(
+        "/rest/api/1.0/projects/{}/repos/{}/pull-requests/{pr_id}/participants/{user}",
+        config.repo.project_key, config.repo.repo_slug,
+    );
+    let body = serde_json::json!({ "status": "APPROVED" });
+    http::put_json(&config.repo.base_url, &endpoint, &config.pat, &body)
+}
+
 #[derive(Clone, Debug)]
 pub struct RepoLocation {
     pub base_url: String,
