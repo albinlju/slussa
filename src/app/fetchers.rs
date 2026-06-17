@@ -19,7 +19,7 @@ impl App {
         let tx = self.action_tx.clone();
         tokio::spawn(async move {
             let result = match task::spawn_blocking(fetch).await {
-                Ok(r) => r.map_err(|e| e.to_string()),
+                Ok(r) => r.map_err(|e| e.user_message()),
                 Err(join_err) => Err(format!("worker thread panicked: {join_err}")),
             };
             tx.send(make_action(result)).ok();

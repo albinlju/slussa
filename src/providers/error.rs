@@ -10,6 +10,61 @@ pub enum FetchError {
     ParseFailed(String),
 }
 
+impl FetchError {
+    /// A short, human-facing message for the UI (popup / failed-load state).
+    /// The raw `Display` form is kept for logs.
+    pub fn user_message(&self) -> String {
+        match self {
+            Self::GhMissing => "GitHub CLI (gh) isn't installed or on your PATH.".to_owned(),
+            Self::GhFailed { stderr, .. } => {
+                api_message(stderr).unwrap_or_else(|| clean_gh(stderr))
+            }
+            Self::HttpFailed { status, body } => api_message(body).unwrap_or_else(|| match status {
+                401 | 403 => "Not authorized — check your token's permissions.".to_owned(),
+                404 => "Not found.".to_owned(),
+                _ => format!("Request failed (HTTP {status})."),
+            }),
+            Self::Network(_) => "Couldn't reach the server.".to_owned(),
+            Self::NotAuthenticated { host } => {
+                format!("Not logged in to {host} — run `tuipr auth login`.")
+            }
+            Self::ParseFailed(_) => "Couldn't read the server response.".to_owned(),
+        }
+    }
+}
+
+/// Pull the meaningful message out of a JSON error body (GitHub and Bitbucket
+/// both use `errors[].message` and/or a top-level `message`).
+fn api_message(raw: &str) -> Option<String> {
+    let start = raw.find('{')?;
+    let v: serde_json::Value = serde_json::from_str(raw[start..].trim()).ok()?;
+    if let Some(errors) = v.get("errors").and_then(|e| e.as_array()) {
+        let msgs: Vec<String> = errors
+            .iter()
+            .filter_map(|e| {
+                e.as_str()
+                    .or_else(|| e.get("message").and_then(serde_json::Value::as_str))
+                    .map(str::to_owned)
+            })
+            .collect();
+        if !msgs.is_empty() {
+            return Some(msgs.join("; "));
+        }
+    }
+    v.get("message")
+        .and_then(serde_json::Value::as_str)
+        .map(str::to_owned)
+}
+
+/// Strip `gh:` noise and a trailing `(HTTP nnn)` when there's no JSON body.
+fn clean_gh(stderr: &str) -> String {
+    let s = stderr.trim().strip_prefix("gh:").unwrap_or(stderr).trim();
+    match s.find("(HTTP") {
+        Some(i) => s[..i].trim_end().to_owned(),
+        None => s.to_owned(),
+    }
+}
+
 impl fmt::Display for FetchError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
@@ -37,5 +92,40 @@ impl fmt::Display for FetchError {
             }
             Self::ParseFailed(msg) => write!(f, "couldn't parse response: {msg}"),
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn user_message_extracts_github_validation_error() {
+        let err = FetchError::GhFailed {
+            code: Some(1),
+            stderr: "gh: Validation Failed (HTTP 422) {\"message\":\"Validation Failed\",\
+                \"errors\":[{\"resource\":\"PullRequestReview\",\"code\":\"custom\",\
+                \"message\":\"Can not approve your own pull request\"}]}"
+                .to_string(),
+        };
+        assert_eq!(err.user_message(), "Can not approve your own pull request");
+    }
+
+    #[test]
+    fn user_message_extracts_bitbucket_error() {
+        let err = FetchError::HttpFailed {
+            status: 409,
+            body: "{\"errors\":[{\"message\":\"You are already a reviewer.\"}]}".to_string(),
+        };
+        assert_eq!(err.user_message(), "You are already a reviewer.");
+    }
+
+    #[test]
+    fn user_message_cleans_gh_noise_without_json() {
+        let err = FetchError::GhFailed {
+            code: Some(1),
+            stderr: "gh: Could not resolve to a Repository (HTTP 404)".to_string(),
+        };
+        assert_eq!(err.user_message(), "Could not resolve to a Repository");
     }
 }
