@@ -10,7 +10,7 @@ use ratatui::{
 };
 
 use crate::{
-    app::state::{CommentAnchor, DiffViewState},
+    app::state::{CommentAnchor, DiffViewState, ThreadRef},
     domain::{
         comment::ReviewThread,
         diff::{Diff, DiffLine, FileDiff},
@@ -40,6 +40,7 @@ pub(super) fn render(
         ui_diff.pane_matches = Vec::new();
         ui_diff.pane_anchor = None;
         ui_diff.pane_reply = None;
+        ui_diff.pane_thread = None;
         return;
     };
     let (adds, dels) = file_stats.get(bounded).copied().unwrap_or((0, 0));
@@ -101,14 +102,24 @@ pub(super) fn render(
         }
     });
     ui_diff.pane_reply = cursor.and_then(NavItem::reply_to);
+    ui_diff.pane_thread = cursor.and_then(NavItem::thread_ref);
     ui_diff.pane_scroll = scroll;
     ui_diff.pane_item_count = nav_items.len();
     ui_diff.pane_matches = matches;
 }
 
 enum NavKind {
-    Line { line: usize, removed: bool },
-    Thread { line: usize, removed: bool, reply_to: Option<u64> },
+    Line {
+        line: usize,
+        removed: bool,
+    },
+    Thread {
+        line: usize,
+        removed: bool,
+        reply_to: Option<u64>,
+        node_id: Option<String>,
+        resolved: bool,
+    },
 }
 
 struct NavItem {
@@ -129,6 +140,22 @@ impl NavItem {
     fn reply_to(&self) -> Option<u64> {
         match self.kind {
             NavKind::Thread { reply_to, .. } => reply_to,
+            NavKind::Line { .. } => None,
+        }
+    }
+
+    fn thread_ref(&self) -> Option<ThreadRef> {
+        match &self.kind {
+            NavKind::Thread {
+                reply_to,
+                node_id,
+                resolved,
+                ..
+            } => Some(ThreadRef {
+                node_id: node_id.clone(),
+                comment_id: *reply_to,
+                resolved: *resolved,
+            }),
             NavKind::Line { .. } => None,
         }
     }
@@ -206,6 +233,8 @@ fn build_diff_body(
                         line,
                         removed,
                         reply_to: thread.reply_to,
+                        node_id: thread.node_id.clone(),
+                        resolved: thread.resolved,
                     },
                 });
             }

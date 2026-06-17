@@ -178,6 +178,7 @@ fn make_thread(anchor: Anchor, root: &BbComment) -> ReviewThread {
         resolved: root.thread_resolved || root.state.eq_ignore_ascii_case("RESOLVED"),
         comments,
         reply_to: (root.id != 0).then_some(root.id),
+        node_id: None,
     }
 }
 

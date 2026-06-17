@@ -111,6 +111,27 @@ impl Provider {
         }
     }
 
+    /// Resolve/unresolve a thread. GitHub needs the GraphQL thread `node_id`;
+    /// Bitbucket toggles the root comment's state via `comment_id`.
+    pub fn set_thread_resolved(
+        &self,
+        pr_id: u64,
+        node_id: Option<&str>,
+        comment_id: Option<u64>,
+        resolved: bool,
+    ) -> Result<(), FetchError> {
+        match self {
+            Self::GitHub => match node_id {
+                Some(id) => github::set_thread_resolved(id, resolved),
+                None => Ok(()),
+            },
+            Self::BitbucketDc(c) => match comment_id {
+                Some(id) => bitbucket_dc::set_thread_resolved(c, pr_id, id, resolved),
+                None => Ok(()),
+            },
+        }
+    }
+
     pub fn current_user(&self) -> Result<String, FetchError> {
         match self {
             Self::GitHub => github::current_user(),

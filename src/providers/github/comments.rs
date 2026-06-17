@@ -110,6 +110,18 @@ pub fn delete_comment(comment_id: u64, review: bool) -> Result<(), FetchError> {
     Ok(())
 }
 
+pub fn set_thread_resolved(node_id: &str, resolved: bool) -> Result<(), FetchError> {
+    let mutation = if resolved {
+        "resolveReviewThread"
+    } else {
+        "unresolveReviewThread"
+    };
+    let query =
+        format!("mutation {{ {mutation}(input: {{ threadId: \"{node_id}\" }}) {{ thread {{ isResolved }} }} }}");
+    super::cli::run_gh(&["api", "graphql", "-f", &format!("query={query}")])?;
+    Ok(())
+}
+
 fn head_sha(pr_number: u64) -> Result<String, FetchError> {
     let out = super::cli::run_gh(&[
         "api",

@@ -32,6 +32,7 @@ impl App {
             DetailAction::OverviewSubMove(delta) => self.overview_sub_move(delta),
             DetailAction::EditComment => self.edit_selected_comment(),
             DetailAction::DeleteComment => self.delete_selected_comment(),
+            DetailAction::ResolveThread => self.toggle_resolve_thread(),
             DetailAction::CommentType(c) => {
                 if let Some(draft) = &mut self.state.ui.comment_draft {
                     draft.text.push(c);
@@ -86,6 +87,23 @@ impl App {
             },
             text: content,
         });
+    }
+
+    fn toggle_resolve_thread(&mut self) {
+        let Some(thread) = self.state.focused_thread() else {
+            return;
+        };
+        // Bitbucket needs a comment id, GitHub a node id — bail if neither is set.
+        if thread.node_id.is_none() && thread.comment_id.is_none() {
+            return;
+        }
+        let node_id = thread.node_id.clone();
+        let comment_id = thread.comment_id;
+        let resolved = !thread.resolved;
+        if let Screen::Detail { pr_id, .. } = self.state.screen {
+            self.state.ui.comment_pending = true;
+            self.spawn_resolve_thread(pr_id, node_id, comment_id, resolved);
+        }
     }
 
     fn delete_selected_comment(&mut self) {
