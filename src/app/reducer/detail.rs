@@ -1,7 +1,7 @@
 use crate::app::{
     App,
     action::DetailAction,
-    state::{CommentDraft, DetailTab, DiffFocus, Screen},
+    state::{CommentDraft, CommentTarget, DetailTab, DiffFocus, Screen},
 };
 
 impl App {
@@ -15,13 +15,7 @@ impl App {
                 self.state.ui.description_scroll =
                     super::scroll(self.state.ui.description_scroll, delta);
             }
-            DetailAction::OverviewMove(delta) => {
-                self.state.ui.overview_cursor = super::step_index(
-                    self.state.ui.overview_cursor,
-                    delta,
-                    self.state.ui.overview_item_count,
-                );
-            }
+            DetailAction::OverviewMove(delta) => self.overview_move(delta),
             DetailAction::ToggleHelp => self.state.ui.help_open = !self.state.ui.help_open,
             DetailAction::OpenConfirm(kind) => {
                 self.state.ui.confirm = Some(kind);
@@ -34,6 +28,7 @@ impl App {
             }
             DetailAction::SubmitConfirm => self.submit_confirm(),
             DetailAction::OpenComment => self.open_comment(),
+            DetailAction::OpenReply => self.open_reply(),
             DetailAction::CommentType(c) => {
                 if let Some(draft) = &mut self.state.ui.comment_draft {
                     draft.text.push(c);
@@ -49,8 +44,28 @@ impl App {
         }
     }
 
+    fn overview_move(&mut self, delta: i16) {
+        let ui = &mut self.state.ui;
+        // j/k jumps between comments only when there are at least two to jump
+        // between; with 0 or 1 there's nothing to navigate, so scroll the
+        // timeline directly (and events outside the comment stay reachable).
+        if ui.overview_item_count <= 1 {
+            ui.overview_scroll = super::scroll(ui.overview_scroll, delta);
+        } else {
+            ui.overview_cursor = super::step_index(ui.overview_cursor, delta, ui.overview_item_count);
+        }
+    }
+
     fn open_comment(&mut self) {
-        let Some(target) = self.state.comment_target() else {
+        self.open_draft(self.state.comment_target());
+    }
+
+    fn open_reply(&mut self) {
+        self.open_draft(self.state.reply_target());
+    }
+
+    fn open_draft(&mut self, target: Option<CommentTarget>) {
+        let Some(target) = target else {
             return;
         };
         self.state.ui.comment_draft = Some(CommentDraft {

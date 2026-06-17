@@ -224,7 +224,7 @@ fn render_timeline(
         _ => None,
     });
 
-    let count = timeline_count(&activity.comments, &activity.threads, &activity.events);
+    let count = focusable_count(&activity.comments, &activity.threads);
     let cursor = ui.overview_cursor.min(count.saturating_sub(1));
     ui.overview_item_count = count;
     ui.overview_cursor = cursor;
@@ -240,13 +240,29 @@ fn render_timeline(
     );
 
     let (content, navs) = timeline_rail(blocks);
-    ui.overview_reply = navs.get(cursor).and_then(|n| n.reply_to);
+
+    // The cursor walks only the focusable items; resolve it to the matching nav
+    // for highlight-scroll and the reply target.
+    let focused = navs.iter().filter(|n| n.focusable).nth(cursor);
+    ui.overview_reply = focused.and_then(|n| n.reply_to);
 
     let viewport = area.height as usize;
     let max_scroll = content.len().saturating_sub(viewport) as u16;
-    let scroll = navs.get(cursor).map_or(ui.overview_scroll, |n| {
-        scroll_to_item(ui.overview_scroll, n.start, n.span, content.len(), viewport)
-    });
+    let scroll = if count <= 1 {
+        // 0 or 1 comments: nothing to jump between — the timeline scrolls freely
+        // (driven by the reducer) so events above/below stay reachable.
+        ui.overview_scroll
+    } else if cursor == 0 {
+        // On the first comment, pin to the top so newer events above it show.
+        0
+    } else if cursor + 1 == count {
+        // On the last comment, pin to the bottom so trailing events show.
+        max_scroll
+    } else {
+        focused.map_or(ui.overview_scroll, |n| {
+            scroll_to_item(ui.overview_scroll, n.start, n.span, content.len(), viewport)
+        })
+    };
     ui.overview_scroll = scroll.min(max_scroll);
     ui.overview_viewport = area.height;
 
@@ -297,16 +313,22 @@ impl TimelineItem<'_> {
 struct TimelineBlock {
     lines: Vec<Line<'static>>,
     reply_to: Option<u64>,
+    /// Comments and review threads are focus targets for j/k; events render
+    /// inline for context but the cursor skips them.
+    focusable: bool,
 }
 
 struct ItemNav {
     start: usize,
     span: usize,
     reply_to: Option<u64>,
+    focusable: bool,
 }
 
-fn timeline_count(comments: &[Comment], threads: &[ReviewThread], events: &[TimelineEvent]) -> usize {
-    comments.len() + events.len() + threads.iter().filter(|t| !t.comments.is_empty()).count()
+/// How many items the cursor can land on: comments and non-empty review threads.
+/// Events are shown inline but aren't focus targets.
+fn focusable_count(comments: &[Comment], threads: &[ReviewThread]) -> usize {
+    comments.len() + threads.iter().filter(|t| !t.comments.is_empty()).count()
 }
 
 fn build_blocks(
@@ -327,30 +349,40 @@ fn build_blocks(
 
     let now = Utc::now();
     let mut blocks: Vec<TimelineBlock> = Vec::new();
+    // `focus_idx` counts only focusable blocks, so the cursor (which indexes
+    // comments/threads) lines up with the block we mark active.
+    let mut focus_idx = 0;
     for item in &items {
-        let active = blocks.len() == focused;
-        let block = match item {
-            TimelineItem::Comment(c) => Some(TimelineBlock {
-                lines: super::super::comment::comment_box(c, width, now, active, author),
-                reply_to: c.reply_to,
-            }),
+        let active = focus_idx == focused;
+        match item {
+            TimelineItem::Comment(c) => {
+                blocks.push(TimelineBlock {
+                    lines: super::super::comment::comment_box(c, width, now, active, author),
+                    reply_to: c.reply_to,
+                    focusable: true,
+                });
+                focus_idx += 1;
+            }
             TimelineItem::Review(t) => {
-                super::super::comment::review_thread_box(t, diff, width, now, active, author)
-                    .map(|lines| TimelineBlock {
+                if let Some(lines) =
+                    super::super::comment::review_thread_box(t, diff, width, now, active, author)
+                {
+                    blocks.push(TimelineBlock {
                         lines,
                         reply_to: t.reply_to,
-                    })
+                        focusable: true,
+                    });
+                    focus_idx += 1;
+                }
             }
             TimelineItem::Event(e) => {
                 let (_, lines) = event_block(e, now);
-                Some(TimelineBlock {
+                blocks.push(TimelineBlock {
                     lines,
                     reply_to: None,
-                })
+                    focusable: false,
+                });
             }
-        };
-        if let Some(block) = block {
-            blocks.push(block);
         }
     }
     blocks
@@ -371,6 +403,7 @@ fn timeline_rail(blocks: Vec<TimelineBlock>) -> (Vec<Line<'static>>, Vec<ItemNav
             start,
             span,
             reply_to: block.reply_to,
+            focusable: block.focusable,
         });
     }
 
