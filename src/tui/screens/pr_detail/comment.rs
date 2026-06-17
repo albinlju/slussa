@@ -28,14 +28,22 @@ pub(in crate::tui) fn render_inline_thread(
         .iter()
         .any(|c| !split_suggestions(&c.content).1.is_empty());
 
-    // The code line is already in the diff, so no header/snippet — just the
-    // conversation, rendered exactly like the Overview.
     let mut out: Vec<Line<'static>> = Vec::new();
     if !has_suggestion {
-        out.push(header_line(Vec::new(), status_label(thread), width));
+        out.push(status_rule(status_label(thread), width, frame));
     }
     out.extend(conversation(thread, anchor, width, now, author, frame, ""));
     out
+}
+
+fn status_rule(label: Vec<Span<'static>>, width: u16, color: Color) -> Line<'static> {
+    let style = Style::default().fg(color);
+    let label_w: usize = label.iter().map(Span::width).sum();
+    let fill = (width as usize).saturating_sub(label_w + 3).max(1);
+    let mut spans = vec![Span::styled(format!("{} ", "─".repeat(fill)), style)];
+    spans.extend(label);
+    spans.push(Span::styled(" ─", style));
+    Line::from(spans)
 }
 
 pub(super) fn comment_box(
@@ -104,8 +112,6 @@ pub(super) fn review_thread_box(
         .any(|comment| !split_suggestions(&comment.content).1.is_empty());
 
     let mut out: Vec<Line<'static>> = Vec::new();
-    // A suggestion thread folds its location into the suggested-change border,
-    // so it needs no separate header row.
     if !has_suggestion {
         out.push(header_line(
             vec![Span::styled(loc.clone(), Style::default().fg(theme.accent))],
@@ -115,23 +121,31 @@ pub(super) fn review_thread_box(
     }
 
     let (snippet, anchor_text) = diff
-        .map(|d| diff_snippet(d, &thread.path, thread.line, thread.old_line, width.saturating_sub(2)))
+        .map(|d| {
+            diff_snippet(
+                d,
+                &thread.path,
+                thread.line,
+                thread.old_line,
+                width.saturating_sub(2),
+            )
+        })
         .unwrap_or_default();
     let anchor = thread.line.or(thread.old_line).zip(anchor_text.as_deref());
 
     if !has_suggestion && !snippet.is_empty() {
         out.extend(bracket(align_snippet(snippet), width, frame));
     }
-    out.extend(conversation(thread, anchor, width, now, author, frame, &loc));
+    out.extend(conversation(
+        thread, anchor, width, now, author, frame, &loc,
+    ));
     Some(out)
 }
 
-/// A header row with left meta and a right-aligned label.
 fn header_line(left: Vec<Span<'static>>, right: Vec<Span<'static>>, width: u16) -> Line<'static> {
     Line::from(widgets::justify_between(left, right, width as usize))
 }
 
-/// An open-right bracket frame (`┌`/`│`/`└`) around `body`.
 fn bracket(body: Vec<Line<'static>>, width: u16, color: Color) -> Vec<Line<'static>> {
     let style = Style::default().fg(color);
     let rule = |corner: &str| {
@@ -150,8 +164,6 @@ fn bracket(body: Vec<Line<'static>>, width: u16, color: Color) -> Vec<Line<'stat
     out
 }
 
-/// Comments under a thread: a dotted `┊` trunk, but a comment that carries a
-/// suggestion breaks out into its own framed box.
 fn conversation(
     thread: &ReviewThread,
     anchor: Option<(usize, &str)>,
@@ -162,7 +174,7 @@ fn conversation(
     loc: &str,
 ) -> Vec<Line<'static>> {
     let theme = theme::current();
-    let style = Style::default().fg(theme.divider);
+    let style = Style::default().fg(frame);
     let last = thread.comments.len().saturating_sub(1);
     let mut out: Vec<Line<'static>> = Vec::new();
     for (i, comment) in thread.comments.iter().enumerate() {
@@ -209,8 +221,6 @@ fn prefix_gutter(line: Line<'static>, gutter: &'static str, style: Style) -> Lin
     Line::from(spans).style(line.style)
 }
 
-/// An open-right frame with the header embedded in the top rule:
-/// `┌─ left ──────── right ─`, `│ body`, `└──────`.
 fn framed(
     left: Vec<Span<'static>>,
     right: Vec<Span<'static>>,
@@ -272,8 +282,6 @@ fn author_meta(
     spans
 }
 
-/// Drops the diff gutter's leading space so code lines start in the same column
-/// as the comment text below them.
 fn align_snippet(lines: Vec<Line<'static>>) -> Vec<Line<'static>> {
     lines
         .into_iter()
@@ -337,8 +345,6 @@ fn comment_body(
     lines
 }
 
-// Markdown (glamour) renders body text dimmer than the theme foreground; repaint
-// each span's fg so comment prose reads in fg.
 fn paint_fg(lines: Vec<Line<'static>>) -> Vec<Line<'static>> {
     let fg = theme::current().fg;
     lines
@@ -404,7 +410,10 @@ fn suggestion_box(
     let right = if loc.is_empty() {
         Vec::new()
     } else {
-        vec![Span::styled(loc.to_string(), Style::default().fg(theme.accent))]
+        vec![Span::styled(
+            loc.to_string(),
+            Style::default().fg(theme.accent),
+        )]
     };
     let mut out = framed(title, right, rows, width, theme.suggestion);
     out.push(Line::raw(""));
@@ -417,7 +426,9 @@ fn suggestion_actions() -> Line<'static> {
     let key = |k: &str| {
         Span::styled(
             k.to_string(),
-            Style::default().fg(theme.accent).add_modifier(Modifier::BOLD),
+            Style::default()
+                .fg(theme.accent)
+                .add_modifier(Modifier::BOLD),
         )
     };
     let label = |l: &str| Span::styled(l.to_string(), Style::default().fg(theme.muted));
