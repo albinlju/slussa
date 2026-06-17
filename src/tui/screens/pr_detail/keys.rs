@@ -17,6 +17,9 @@ pub(in crate::tui) fn key_to_action(state: &AppState, key: KeyEvent) -> Option<A
     };
     let viewing_commit = state.ui.commits.open_commit.is_some();
     let code = key.code;
+    // Single-letter actions fire only unmodified, so Ctrl-d/Ctrl-e/etc. (scroll,
+    // muscle memory) don't accidentally trigger comment/approve actions.
+    let plain = key.modifiers.is_empty();
 
     if state.ui.confirm.is_some() {
         return match code {
@@ -41,13 +44,17 @@ pub(in crate::tui) fn key_to_action(state: &AppState, key: KeyEvent) -> Option<A
 
     // You can't approve your own PR (GitHub/Bitbucket both reject it), so we
     // don't offer it — mirrors the greyed-out approve in their web UIs.
-    if code == KeyCode::Char('a') && tab == DetailTab::Overview && !state.viewing_own_pr(pr_id) {
+    if plain
+        && code == KeyCode::Char('a')
+        && tab == DetailTab::Overview
+        && !state.viewing_own_pr(pr_id)
+    {
         return Some(Action::Detail(DetailAction::OpenConfirm(ConfirmKind::Approve)));
     }
-    if code == KeyCode::Char('c') {
+    if plain && code == KeyCode::Char('c') {
         return Some(Action::Detail(DetailAction::OpenComment));
     }
-    if code == KeyCode::Char('r') {
+    if plain && code == KeyCode::Char('r') {
         return Some(Action::Detail(DetailAction::OpenReply));
     }
     // Overview-only: step individual comments within the focused block (Ctrl-j/k),
@@ -62,10 +69,10 @@ pub(in crate::tui) fn key_to_action(state: &AppState, key: KeyEvent) -> Option<A
                 _ => {}
             }
         }
-        if code == KeyCode::Char('e') {
+        if plain && code == KeyCode::Char('e') {
             return Some(Action::Detail(DetailAction::EditComment));
         }
-        if code == KeyCode::Char('d') {
+        if plain && code == KeyCode::Char('d') {
             return Some(Action::Detail(DetailAction::DeleteComment));
         }
     }
