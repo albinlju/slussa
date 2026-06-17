@@ -36,10 +36,12 @@ impl App {
             }
             LoadedAction::Commented(pr_id, r) => {
                 log_outcome("comment", Some(pr_id), &r);
-                if r.is_ok() {
-                    self.spawn_load_activity(pr_id);
-                } else {
-                    self.state.ui.comment_pending = false;
+                match r {
+                    Ok(()) => self.spawn_load_activity(pr_id),
+                    Err(msg) => {
+                        self.state.ui.comment_pending = false;
+                        self.state.ui.error = Some(msg);
+                    }
                 }
             }
         }

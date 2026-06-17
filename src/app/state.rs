@@ -110,6 +110,8 @@ pub struct UiMemory {
     pub help_open: bool,
     pub comment_draft: Option<CommentDraft>,
     pub comment_pending: bool,
+    /// A failed action's message, shown as a dismissible popup.
+    pub error: Option<String>,
 }
 
 #[derive(Debug, Clone)]

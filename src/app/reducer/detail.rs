@@ -33,6 +33,7 @@ impl App {
             DetailAction::EditComment => self.edit_selected_comment(),
             DetailAction::DeleteComment => self.delete_selected_comment(),
             DetailAction::ResolveThread => self.toggle_resolve_thread(),
+            DetailAction::DismissError => self.state.ui.error = None,
             DetailAction::CommentType(c) => {
                 if let Some(draft) = &mut self.state.ui.comment_draft {
                     draft.text.push(c);

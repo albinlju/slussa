@@ -53,6 +53,7 @@ pub enum DetailAction {
     EditComment,
     DeleteComment,
     ResolveThread,
+    DismissError,
     CommentType(char),
     CommentBackspace,
     CommentSubmit,
