@@ -3,6 +3,9 @@ use chrono::{DateTime, Utc};
 
 #[derive(Debug, Clone)]
 pub struct Comment {
+    /// The comment's own id (GitHub `databaseId`, Bitbucket `id`), used to edit
+    /// or delete it. `None` when the provider didn't supply one.
+    pub id: Option<u64>,
     pub author: User,
     pub content: String,
     pub created: DateTime<Utc>,

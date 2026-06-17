@@ -85,6 +85,31 @@ pub fn reply_comment(pr_number: u64, parent: u64, body: &str) -> Result<(), Fetc
     Ok(())
 }
 
+pub fn edit_comment(comment_id: u64, review: bool, body: &str) -> Result<(), FetchError> {
+    // Review (line) comments live under `pulls`, PR-level ones under `issues`.
+    let kind = if review { "pulls" } else { "issues" };
+    super::cli::run_gh(&[
+        "api",
+        "--method",
+        "PATCH",
+        &format!("repos/{{owner}}/{{repo}}/{kind}/comments/{comment_id}"),
+        "-f",
+        &format!("body={body}"),
+    ])?;
+    Ok(())
+}
+
+pub fn delete_comment(comment_id: u64, review: bool) -> Result<(), FetchError> {
+    let kind = if review { "pulls" } else { "issues" };
+    super::cli::run_gh(&[
+        "api",
+        "--method",
+        "DELETE",
+        &format!("repos/{{owner}}/{{repo}}/{kind}/comments/{comment_id}"),
+    ])?;
+    Ok(())
+}
+
 fn head_sha(pr_number: u64) -> Result<String, FetchError> {
     let out = super::cli::run_gh(&[
         "api",

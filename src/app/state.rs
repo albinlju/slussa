@@ -2,6 +2,7 @@ use std::collections::{HashMap, HashSet};
 
 use crate::domain::activity::Activity;
 use crate::domain::ci::Build;
+use crate::domain::comment::Comment;
 use crate::domain::commit::Commit;
 use crate::domain::diff::Diff;
 use crate::domain::pr::{PrStatus, PullRequest};
@@ -98,6 +99,10 @@ pub struct UiMemory {
     pub overview_cursor: usize,
     pub overview_item_count: usize,
     pub overview_reply: Option<u64>,
+    /// Sub-cursor within the focused block (Ctrl-j/k steps individual comments).
+    pub overview_sub: usize,
+    pub overview_block_len: usize,
+    pub overview_selected: Option<CommentRef>,
     pub description_viewport: u16,
     pub overview_viewport: u16,
     pub help_open: bool,
@@ -123,17 +128,30 @@ pub enum CommentTarget {
     Line(CommentAnchor),
     Pr,
     Reply(u64),
+    /// Editing an existing comment; `review` picks the right provider endpoint.
+    Edit { id: u64, review: bool },
+}
+
+/// The comment the overview sub-cursor points at within the focused block.
+#[derive(Debug, Clone, Copy)]
+pub struct CommentRef {
+    /// `None` when the provider gave no id (can't edit/delete it).
+    pub id: Option<u64>,
+    /// A diff/line comment (vs a PR-level one) — GitHub edits them differently.
+    pub review: bool,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum ConfirmKind {
     Approve,
+    DeleteComment { id: u64, review: bool },
 }
 
 impl ConfirmKind {
     pub fn prompt(self) -> &'static str {
         match self {
             Self::Approve => "Approve this PR?",
+            Self::DeleteComment { .. } => "Delete this comment?",
         }
     }
 }
@@ -307,6 +325,31 @@ impl AppState {
         };
         prs.iter()
             .any(|pr| pr.id == pr_id && pr.author.username == self.current_user)
+    }
+
+    /// The loaded comment with `id` in the current PR's activity, if any.
+    pub fn find_comment(&self, id: u64) -> Option<&Comment> {
+        let Screen::Detail { pr_id, .. } = self.screen else {
+            return None;
+        };
+        let LoadState::Loaded(activity) = &self.cache.details.get(&pr_id)?.activity else {
+            return None;
+        };
+        activity
+            .comments
+            .iter()
+            .chain(activity.threads.iter().flat_map(|t| t.comments.iter()))
+            .find(|c| c.id == Some(id))
+    }
+
+    /// The overview sub-selected comment, but only when it's the viewer's own
+    /// (so it can be edited/deleted). `None` otherwise.
+    pub fn editable_selected(&self) -> Option<CommentRef> {
+        let sel = self.ui.overview_selected?;
+        let id = sel.id?;
+        let comment = self.find_comment(id)?;
+        (!self.current_user.is_empty() && comment.author.username == self.current_user)
+            .then_some(sel)
     }
 
     /// Target for a brand-new comment (`c`): a top-level PR comment in Overview,

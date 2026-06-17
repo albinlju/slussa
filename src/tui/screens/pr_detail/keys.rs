@@ -1,4 +1,4 @@
-use ratatui::crossterm::event::{KeyCode, KeyEvent};
+use ratatui::crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
 
 use crate::{
     app::{
@@ -49,6 +49,25 @@ pub(in crate::tui) fn key_to_action(state: &AppState, key: KeyEvent) -> Option<A
     }
     if code == KeyCode::Char('r') {
         return Some(Action::Detail(DetailAction::OpenReply));
+    }
+    // Overview-only: step individual comments within the focused block (Ctrl-j/k),
+    // then edit/delete the one you land on (the reducer gates on authorship).
+    if tab == DetailTab::Overview {
+        if key.modifiers.contains(KeyModifiers::CONTROL) {
+            match code {
+                KeyCode::Char('j') => return Some(Action::Detail(DetailAction::OverviewSubMove(1))),
+                KeyCode::Char('k') => {
+                    return Some(Action::Detail(DetailAction::OverviewSubMove(-1)));
+                }
+                _ => {}
+            }
+        }
+        if code == KeyCode::Char('e') {
+            return Some(Action::Detail(DetailAction::EditComment));
+        }
+        if code == KeyCode::Char('d') {
+            return Some(Action::Detail(DetailAction::DeleteComment));
+        }
     }
 
     escape_action(state, tab, viewing_commit, code)

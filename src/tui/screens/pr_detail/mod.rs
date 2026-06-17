@@ -137,6 +137,10 @@ fn footer_actions(state: &AppState, tab: DetailTab, own_pr: bool) -> String {
         if state.reply_target().is_some() {
             parts.push("r: reply");
         }
+        if state.editable_selected().is_some() {
+            parts.push("e: edit");
+            parts.push("d: delete");
+        }
         if !own_pr {
             parts.push("a: approve");
         }
@@ -157,6 +161,7 @@ fn comment_prompt(draft: &CommentDraft) -> Line<'static> {
         CommentTarget::Line(a) => format!("  comment {}:{} ▏ ", a.path, a.line),
         CommentTarget::Pr => "  comment ▏ ".to_owned(),
         CommentTarget::Reply(_) => "  reply ▏ ".to_owned(),
+        CommentTarget::Edit { .. } => "  edit ▏ ".to_owned(),
     };
     Line::from(vec![
         Span::styled(label, Style::default().fg(theme.muted)),
@@ -409,6 +414,9 @@ const HELP_KEYS: &[(&str, &str)] = &[
     ("a", "approve"),
     ("c", "comment"),
     ("r", "reply"),
+    ("^j/^k", "step comment"),
+    ("e", "edit own"),
+    ("d", "delete own"),
     ("?", "toggle help"),
     ("q", "quit"),
 ];

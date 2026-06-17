@@ -1,7 +1,7 @@
 use crate::app::{
     App,
     action::DetailAction,
-    state::{CommentDraft, CommentTarget, DetailTab, DiffFocus, Screen},
+    state::{CommentDraft, CommentTarget, ConfirmKind, DetailTab, DiffFocus, Screen},
 };
 
 impl App {
@@ -29,6 +29,9 @@ impl App {
             DetailAction::SubmitConfirm => self.submit_confirm(),
             DetailAction::OpenComment => self.open_comment(),
             DetailAction::OpenReply => self.open_reply(),
+            DetailAction::OverviewSubMove(delta) => self.overview_sub_move(delta),
+            DetailAction::EditComment => self.edit_selected_comment(),
+            DetailAction::DeleteComment => self.delete_selected_comment(),
             DetailAction::CommentType(c) => {
                 if let Some(draft) = &mut self.state.ui.comment_draft {
                     draft.text.push(c);
@@ -52,8 +55,51 @@ impl App {
         if ui.overview_item_count <= 1 {
             ui.overview_scroll = super::scroll(ui.overview_scroll, delta);
         } else {
-            ui.overview_cursor = super::step_index(ui.overview_cursor, delta, ui.overview_item_count);
+            let next = super::step_index(ui.overview_cursor, delta, ui.overview_item_count);
+            if next != ui.overview_cursor {
+                ui.overview_cursor = next;
+                ui.overview_sub = 0; // new block → back to its first comment
+            }
         }
+    }
+
+    fn overview_sub_move(&mut self, delta: i16) {
+        let ui = &mut self.state.ui;
+        ui.overview_sub = super::step_index(ui.overview_sub, delta, ui.overview_block_len);
+    }
+
+    fn edit_selected_comment(&mut self) {
+        let Some(sel) = self.state.editable_selected() else {
+            return;
+        };
+        let Some(id) = sel.id else {
+            return;
+        };
+        let Some(content) = self.state.find_comment(id).map(|c| c.content.clone()) else {
+            return;
+        };
+        // Prefill the draft with the current text so the user edits in place.
+        self.state.ui.comment_draft = Some(CommentDraft {
+            target: CommentTarget::Edit {
+                id,
+                review: sel.review,
+            },
+            text: content,
+        });
+    }
+
+    fn delete_selected_comment(&mut self) {
+        let Some(sel) = self.state.editable_selected() else {
+            return;
+        };
+        let Some(id) = sel.id else {
+            return;
+        };
+        self.state.ui.confirm = Some(ConfirmKind::DeleteComment {
+            id,
+            review: sel.review,
+        });
+        self.state.ui.confirm_cursor = 0;
     }
 
     fn open_comment(&mut self) {
@@ -88,11 +134,20 @@ impl App {
     }
 
     fn submit_confirm(&mut self) {
-        if self.state.ui.confirm_cursor == 0 {
-            // cursor 0 = Yes. TODO: match on self.state.ui.confirm and spawn the
-            // write (currently only ConfirmKind::Approve).
+        let confirm = self.state.ui.confirm.take();
+        if self.state.ui.confirm_cursor != 0 {
+            return; // cursor 0 = Yes
         }
-        self.state.ui.confirm = None;
+        match confirm {
+            Some(ConfirmKind::DeleteComment { id, review }) => {
+                if let Screen::Detail { pr_id, .. } = self.state.screen {
+                    self.state.ui.comment_pending = true;
+                    self.spawn_delete_comment(pr_id, id, review);
+                }
+            }
+            // Approve is still unwired (backlog item).
+            Some(ConfirmKind::Approve) | None => {}
+        }
     }
 
     fn back_to_list(&mut self) {

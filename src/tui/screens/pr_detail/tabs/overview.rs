@@ -10,7 +10,7 @@ use ratatui::{
 };
 
 use crate::{
-    app::state::{LoadState, PrData, UiMemory},
+    app::state::{CommentRef, LoadState, PrData, UiMemory},
     domain::{
         comment::{Comment, ReviewThread},
         diff::Diff,
@@ -236,15 +236,21 @@ fn render_timeline(
         diff,
         area.width.saturating_sub(TIMELINE_RIGHT_PAD),
         cursor,
+        ui.overview_sub,
         author,
     );
 
     let (content, navs) = timeline_rail(blocks);
 
     // The cursor walks only the focusable items; resolve it to the matching nav
-    // for highlight-scroll and the reply target.
+    // for highlight-scroll, reply target, and the per-comment sub-cursor.
     let focused = navs.iter().filter(|n| n.focusable).nth(cursor);
     ui.overview_reply = focused.and_then(|n| n.reply_to);
+    let block_len = focused.map_or(0, |n| n.comments.len());
+    let sub = ui.overview_sub.min(block_len.saturating_sub(1));
+    ui.overview_block_len = block_len;
+    ui.overview_sub = sub;
+    ui.overview_selected = focused.and_then(|n| n.comments.get(sub).copied());
 
     let viewport = area.height as usize;
     let max_scroll = content.len().saturating_sub(viewport) as u16;
@@ -316,6 +322,8 @@ struct TimelineBlock {
     /// Comments and review threads are focus targets for j/k; events render
     /// inline for context but the cursor skips them.
     focusable: bool,
+    /// The individual comments in this block, for the Ctrl-j/k sub-cursor.
+    comments: Vec<CommentRef>,
 }
 
 struct ItemNav {
@@ -323,6 +331,7 @@ struct ItemNav {
     span: usize,
     reply_to: Option<u64>,
     focusable: bool,
+    comments: Vec<CommentRef>,
 }
 
 /// How many items the cursor can land on: comments and non-empty review threads.
@@ -331,6 +340,7 @@ fn focusable_count(comments: &[Comment], threads: &[ReviewThread]) -> usize {
     comments.len() + threads.iter().filter(|t| !t.comments.is_empty()).count()
 }
 
+#[allow(clippy::too_many_arguments)]
 fn build_blocks(
     comments: &[Comment],
     threads: &[ReviewThread],
@@ -338,6 +348,7 @@ fn build_blocks(
     diff: Option<&Diff>,
     width: u16,
     focused: usize,
+    sub: usize,
     author: &str,
 ) -> Vec<TimelineBlock> {
     let mut items: Vec<TimelineItem<'_>> =
@@ -360,17 +371,31 @@ fn build_blocks(
                     lines: super::super::comment::comment_box(c, width, now, active, author),
                     reply_to: c.reply_to,
                     focusable: true,
+                    comments: vec![CommentRef {
+                        id: c.id,
+                        review: false,
+                    }],
                 });
                 focus_idx += 1;
             }
             TimelineItem::Review(t) => {
-                if let Some(lines) =
-                    super::super::comment::review_thread_box(t, diff, width, now, active, author)
-                {
+                // Mark the sub-selected comment only on the focused thread.
+                let selected = active.then_some(sub);
+                if let Some(lines) = super::super::comment::review_thread_box(
+                    t, diff, width, now, active, selected, author,
+                ) {
                     blocks.push(TimelineBlock {
                         lines,
                         reply_to: t.reply_to,
                         focusable: true,
+                        comments: t
+                            .comments
+                            .iter()
+                            .map(|c| CommentRef {
+                                id: c.id,
+                                review: true,
+                            })
+                            .collect(),
                     });
                     focus_idx += 1;
                 }
@@ -381,6 +406,7 @@ fn build_blocks(
                     lines,
                     reply_to: None,
                     focusable: false,
+                    comments: Vec::new(),
                 });
             }
         }
@@ -404,6 +430,7 @@ fn timeline_rail(blocks: Vec<TimelineBlock>) -> (Vec<Line<'static>>, Vec<ItemNav
             span,
             reply_to: block.reply_to,
             focusable: block.focusable,
+            comments: block.comments,
         });
     }
 

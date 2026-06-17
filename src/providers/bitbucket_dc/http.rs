@@ -23,23 +23,20 @@ fn client() -> Result<&'static Client, FetchError> {
     Ok(CLIENT.get_or_init(|| built))
 }
 
-pub(super) fn get_json<T: DeserializeOwned>(
-    base_url: &str,
-    path: &str,
-    pat: &str,
-) -> Result<T, FetchError> {
-    let url = format!("{base_url}{path}");
-    tracing::debug!("GET {url}");
-    let response = client()?
-        .get(&url)
-        .bearer_auth(pat)
-        .header("Accept", "application/json")
-        .send()
-        .map_err(|e| {
-            tracing::warn!("http send failed: {e}");
-            FetchError::Network(e.to_string())
-        })?;
+// Taken by value so it can be passed directly as `.map_err(net_err)`.
+#[allow(clippy::needless_pass_by_value)]
+fn net_err(e: reqwest::Error) -> FetchError {
+    tracing::warn!("http send failed: {e}");
+    FetchError::Network(e.to_string())
+}
 
+/// Maps an auth failure to `NotAuthenticated` and any other non-2xx to
+/// `HttpFailed`, otherwise hands the response back for the caller to read.
+fn check_status(
+    response: reqwest::blocking::Response,
+    base_url: &str,
+    url: &str,
+) -> Result<reqwest::blocking::Response, FetchError> {
     let status = response.status();
     if status == reqwest::StatusCode::UNAUTHORIZED || status == reqwest::StatusCode::FORBIDDEN {
         let host = base_url
@@ -58,7 +55,23 @@ pub(super) fn get_json<T: DeserializeOwned>(
             body,
         });
     }
+    Ok(response)
+}
 
+pub(super) fn get_json<T: DeserializeOwned>(
+    base_url: &str,
+    path: &str,
+    pat: &str,
+) -> Result<T, FetchError> {
+    let url = format!("{base_url}{path}");
+    tracing::debug!("GET {url}");
+    let response = client()?
+        .get(&url)
+        .bearer_auth(pat)
+        .header("Accept", "application/json")
+        .send()
+        .map_err(net_err)?;
+    let response = check_status(response, base_url, &url)?;
     response.json::<T>().map_err(|e| {
         tracing::warn!("json parse failed on {url}: {e}");
         FetchError::ParseFailed(e.to_string())
@@ -101,28 +114,38 @@ pub(super) fn post_json<B: serde::Serialize>(
         .header("Accept", "application/json")
         .json(body)
         .send()
-        .map_err(|e| {
-            tracing::warn!("http send failed: {e}");
-            FetchError::Network(e.to_string())
-        })?;
+        .map_err(net_err)?;
+    check_status(response, base_url, &url)?;
+    Ok(())
+}
 
-    let status = response.status();
-    if status == reqwest::StatusCode::UNAUTHORIZED || status == reqwest::StatusCode::FORBIDDEN {
-        let host = base_url
-            .trim_start_matches("https://")
-            .trim_start_matches("http://")
-            .trim_end_matches('/')
-            .to_string();
-        tracing::warn!("auth failed on {host} ({status})");
-        return Err(FetchError::NotAuthenticated { host });
-    }
-    if !status.is_success() {
-        let body = response.text().unwrap_or_default();
-        tracing::warn!("http {} on {url}: {body}", status.as_u16());
-        return Err(FetchError::HttpFailed {
-            status: status.as_u16(),
-            body,
-        });
-    }
+pub(super) fn put_json<B: serde::Serialize>(
+    base_url: &str,
+    path: &str,
+    pat: &str,
+    body: &B,
+) -> Result<(), FetchError> {
+    let url = format!("{base_url}{path}");
+    tracing::debug!("PUT {url}");
+    let response = client()?
+        .put(&url)
+        .bearer_auth(pat)
+        .header("Accept", "application/json")
+        .json(body)
+        .send()
+        .map_err(net_err)?;
+    check_status(response, base_url, &url)?;
+    Ok(())
+}
+
+pub(super) fn delete(base_url: &str, path: &str, pat: &str) -> Result<(), FetchError> {
+    let url = format!("{base_url}{path}");
+    tracing::debug!("DELETE {url}");
+    let response = client()?
+        .delete(&url)
+        .bearer_auth(pat)
+        .send()
+        .map_err(net_err)?;
+    check_status(response, base_url, &url)?;
     Ok(())
 }
