@@ -6,26 +6,28 @@ use crate::app::{
 
 impl App {
     pub(super) fn apply_loaded(&mut self, action: LoadedAction) {
+        // Any settled fetch clears the footer's refresh indicator.
+        self.state.ui.refreshing = false;
         match action {
             LoadedAction::Prs(r) => {
                 log_outcome("prs", None, &r);
-                self.state.cache.prs = LoadState::from_result(r);
+                self.state.cache.prs.reload(r);
             }
             LoadedAction::Commits(pr_id, r) => {
                 log_outcome("commits", Some(pr_id), &r);
-                self.pr_data_mut(pr_id).commits = LoadState::from_result(r);
+                self.pr_data_mut(pr_id).commits.reload(r);
             }
             LoadedAction::Diff(pr_id, r) => {
                 log_outcome("diff", Some(pr_id), &r);
-                self.pr_data_mut(pr_id).diff = LoadState::from_result(r);
+                self.pr_data_mut(pr_id).diff.reload(r);
             }
             LoadedAction::Builds(pr_id, r) => {
                 log_outcome("builds", Some(pr_id), &r);
-                self.pr_data_mut(pr_id).builds = LoadState::from_result(r);
+                self.pr_data_mut(pr_id).builds.reload(r);
             }
             LoadedAction::Activity(pr_id, r) => {
                 log_outcome("activity", Some(pr_id), &r);
-                self.pr_data_mut(pr_id).activity = LoadState::from_result(r);
+                self.pr_data_mut(pr_id).activity.reload(r);
                 self.state.ui.comment_pending = false;
             }
             LoadedAction::CommitDiff(pr_id, oid, r) => {

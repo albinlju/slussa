@@ -163,7 +163,11 @@ fn render_footer_bar(
     } else if let Some(search) = active_search(state, pr_data, tab, area.width) {
         search
     } else {
-        widgets::footer(area.width, &footer_actions(state, tab, own_pr))
+        widgets::footer(
+            area.width,
+            &footer_actions(state, tab, own_pr),
+            state.ui.refreshing,
+        )
     };
     frame.render_widget(Paragraph::new(line), area);
 }
@@ -457,6 +461,8 @@ const HELP_KEYS: &[(&str, &str)] = &[
     ("^j/^k", "step comment"),
     ("e", "edit own"),
     ("d", "delete own"),
+    ("R", "resolve thread"),
+    ("F", "refresh"),
     ("?", "toggle help"),
     ("q", "quit"),
 ];

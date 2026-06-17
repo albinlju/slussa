@@ -65,6 +65,9 @@ pub(in crate::tui) fn key_to_action(state: &AppState, key: KeyEvent) -> Option<A
     if code == KeyCode::Char('R') {
         return Some(Action::Detail(DetailAction::ResolveThread));
     }
+    if code == KeyCode::Char('F') {
+        return Some(Action::Refresh);
+    }
     // Overview-only: step individual comments within the focused block (Ctrl-j/k),
     // then edit/delete the one you land on (the reducer gates on authorship).
     if tab == DetailTab::Overview {
