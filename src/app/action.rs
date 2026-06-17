@@ -6,6 +6,8 @@ use crate::{
 #[derive(Debug)]
 pub enum Action {
     Quit,
+    /// Force a re-fetch of the active view now (`F`).
+    Refresh,
     List(ListAction),
     Detail(DetailAction),
     Diff(DiffAction),

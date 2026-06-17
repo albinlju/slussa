@@ -5,6 +5,7 @@ pub mod detail;
 pub mod diff;
 pub mod list;
 pub mod loads;
+pub mod refresh;
 pub mod search;
 
 pub(super) fn step_index(current: usize, delta: i16, len: usize) -> usize {
@@ -26,6 +27,7 @@ impl App {
     pub(super) fn apply(&mut self, action: Action) {
         match action {
             Action::Quit => unreachable!("handled in run()"),
+            Action::Refresh => self.force_refresh(),
             Action::List(a) => self.apply_list(a),
             Action::Detail(a) => self.apply_detail(a),
             Action::Diff(a) => self.apply_diff(a),

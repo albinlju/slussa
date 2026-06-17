@@ -83,6 +83,7 @@ pub enum SearchTarget {
 }
 
 #[derive(Debug, Default)]
+#[allow(clippy::struct_excessive_bools)] // a UI-state bag, not a state machine
 pub struct UiMemory {
     pub list_selected: usize,
     pub list_viewport: u16,
@@ -112,6 +113,8 @@ pub struct UiMemory {
     pub comment_pending: bool,
     /// A failed action's message, shown as a dismissible popup.
     pub error: Option<String>,
+    /// A background or manual re-fetch is in flight (shown in the footer).
+    pub refreshing: bool,
 }
 
 #[derive(Debug, Clone)]
@@ -305,6 +308,20 @@ impl<T> LoadState<T> {
         match result {
             Ok(v) => LoadState::Loaded(v),
             Err(e) => LoadState::Failed(e),
+        }
+    }
+
+    /// Apply a (re)fetch result. A failed reload never downgrades data that's
+    /// already loaded — a transient refresh error keeps the stale view rather
+    /// than blanking it.
+    pub fn reload(&mut self, result: Result<T, String>) {
+        match result {
+            Ok(v) => *self = LoadState::Loaded(v),
+            Err(e) => {
+                if !matches!(self, LoadState::Loaded(_)) {
+                    *self = LoadState::Failed(e);
+                }
+            }
         }
     }
 

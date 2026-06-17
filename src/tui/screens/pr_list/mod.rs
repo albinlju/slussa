@@ -101,7 +101,13 @@ pub(in crate::tui) fn render(frame: &mut Frame, state: &mut AppState, area: Rect
     }
 
     let match_count = filtered.as_ref().map_or(0, Vec::len);
-    render_footer(frame, &state.ui.list_search, match_count, footer_area);
+    render_footer(
+        frame,
+        &state.ui.list_search,
+        match_count,
+        state.ui.refreshing,
+        footer_area,
+    );
 
     if state.ui.filter_picker_open {
         render_filter_picker(frame, state, area);
@@ -154,13 +160,20 @@ fn render_table_body(
     frame.render_stateful_widget(list, area, &mut list_state);
 }
 
-fn render_footer(frame: &mut Frame, search: &SearchState, match_count: usize, area: Rect) {
+fn render_footer(
+    frame: &mut Frame,
+    search: &SearchState,
+    match_count: usize,
+    refreshing: bool,
+    area: Rect,
+) {
     let line = if search.open {
         widgets::search_prompt(&search.query, match_count, area.width)
     } else {
         widgets::footer(
             area.width,
-            "j/k: navigate  /: search  ^d/^u: page  enter: open  f: filter  q: quit",
+            "j/k: navigate  /: search  ^d/^u: page  enter: open  f: filter  F: refresh  q: quit",
+            refreshing,
         )
     };
     frame.render_widget(Paragraph::new(line), area);
@@ -306,6 +319,7 @@ pub(in crate::tui) fn key_to_action(state: &AppState, key: KeyEvent) -> Option<A
     let half = half_page(state.ui.list_viewport);
     match key.code {
         KeyCode::Char('q') => Some(Action::Quit),
+        KeyCode::Char('F') => Some(Action::Refresh),
         KeyCode::Char('f') => Some(Action::List(ListAction::OpenFilterPicker)),
         KeyCode::Down | KeyCode::Char('j') => Some(Action::List(ListAction::MoveSelection(1))),
         KeyCode::Up | KeyCode::Char('k') => Some(Action::List(ListAction::MoveSelection(-1))),

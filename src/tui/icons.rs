@@ -9,3 +9,4 @@ pub const ADJUST: &str = "\u{f042}";
 pub const COMMENT: &str = "\u{f075}";
 pub const GIT_COMMIT: &str = "\u{f417}";
 pub const HEART: &str = "\u{f004}";
+pub const REFRESH: &str = "\u{f021}";

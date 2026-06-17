@@ -138,7 +138,7 @@ pub(super) fn spinner_frame() -> &'static str {
     SPINNER_FRAMES[idx]
 }
 
-pub(super) fn footer(width: u16, hints: &str) -> Line<'static> {
+pub(super) fn footer(width: u16, hints: &str, refreshing: bool) -> Line<'static> {
     let theme = theme::current();
     let muted = Style::default().fg(theme.muted);
     let key = Style::default().fg(theme.accent).add_modifier(Modifier::BOLD);
@@ -158,7 +158,13 @@ pub(super) fn footer(width: u16, hints: &str) -> Line<'static> {
     }
 
     let version = format!("v{}", env!("CARGO_PKG_VERSION"));
-    let right = vec![
+    let mut right = Vec::new();
+    if refreshing {
+        right.push(Span::styled(icons::REFRESH, Style::default().fg(theme.warning)));
+        right.push(Span::styled(" refreshing", Style::default().fg(theme.warning)));
+        right.push(Span::raw("    "));
+    }
+    right.extend([
         Span::styled(icons::HEART, Style::default().fg(theme.orange)),
         Span::styled(" donate", muted),
         Span::raw("    "),
@@ -167,7 +173,7 @@ pub(super) fn footer(width: u16, hints: &str) -> Line<'static> {
         Span::raw("    "),
         Span::styled(version, muted),
         Span::raw("  "),
-    ];
+    ]);
     Line::from(justify_between(left, right, width as usize))
 }
 

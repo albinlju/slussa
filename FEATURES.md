@@ -29,6 +29,9 @@
   (Ctrl-j/k sub-cursor to pick one in a thread), and resolve/unresolve (`R`). Resolved
   threads collapse to a one-line summary in the diff (`space` to expand); the Overview
   keeps the full thread.
+- [x] **Auto / manual refresh** — the active view re-fetches in the background (Builds
+  every 15s, everything else every 60s) and on a manual `F`; a `⟳ refreshing` indicator
+  shows in the footer. A failed reload keeps the stale data instead of blanking the view.
 ---
 
 ## Backlog
@@ -44,8 +47,6 @@
 - [ ] **Labels in the list** — colored and filterable (shown in Overview today).
 - [ ] **Errors visible in the UI** — action failures show a dismissible popup with a cleaned-up message (`FetchError::user_message()` pulls the API's `errors[].message` out of the body and drops the CLI/HTTP noise; raw form kept in logs). Remaining: audit fetch/parse paths so a bad response never panics (use `LoadState::Failed` / the popup everywhere instead of `unwrap`).
 - [ ] **Optimistic comment insert** — show a just-posted line comment instantly (local insert into `activity`) instead of the ~3-5s wait for the refetch; needs current-user to attribute it correctly. ("posting…" indicator is already done.)
-- [ ] **Manual / auto refresh** (`r`) — re-fetch without restarting.
-- [ ] **Build jobs auto update status** — Builds should re-fetch status automatically while open tab
 - [ ] **Request changes / unapprove** — approve (`a`) and comment are done; request-changes (with a body) and dropping your own approval are what's left.
 - [ ] **Implement Bitbucket Cloud client** 
 - [ ] **Implement Gitlab client**
