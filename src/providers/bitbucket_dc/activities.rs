@@ -63,8 +63,13 @@ struct BbComment {
     author: BbUser,
     text: String,
     created_date: i64,
+    /// Task state (`OPEN`/`RESOLVED`) — only meaningful for BLOCKER tasks.
     #[serde(default)]
     state: String,
+    /// Whether the conversation was closed via the "Resolve" button. This, not
+    /// `state`, is what a resolved review thread sets (and `state` stays `OPEN`).
+    #[serde(default)]
+    thread_resolved: bool,
     #[serde(default)]
     comments: Vec<BbComment>,
     #[serde(default)]
@@ -168,7 +173,9 @@ fn make_thread(anchor: Anchor, root: &BbComment) -> ReviewThread {
         path: anchor.path,
         line,
         old_line,
-        resolved: root.state.eq_ignore_ascii_case("RESOLVED"),
+        // A thread is resolved either by the "Resolve" button (threadResolved)
+        // or, for a task, by closing the task (state == RESOLVED).
+        resolved: root.thread_resolved || root.state.eq_ignore_ascii_case("RESOLVED"),
         comments,
         reply_to: (root.id != 0).then_some(root.id),
     }
@@ -264,6 +271,7 @@ mod tests {
         assert_eq!(bundle.threads[0].line, Some(42));
         assert_eq!(bundle.threads[0].comments.len(), 2);
         assert_eq!(bundle.threads[0].reply_to, Some(2));
+        assert!(!bundle.threads[0].resolved); // state OPEN, no threadResolved
 
         assert_eq!(bundle.events.len(), 3);
         assert_eq!(bundle.events[0].kind, EventKind::Opened);
@@ -302,6 +310,23 @@ mod tests {
         assert_eq!(reactions[1].emoji, "🎉");
         assert_eq!(reactions[1].count, 1);
         assert!(reactions.iter().all(|r| !r.mine));
+    }
+
+    #[test]
+    fn thread_resolved_flag_marks_thread_resolved() {
+        // Real shape: the "Resolve" button sets threadResolved=true while the
+        // comment's state stays "OPEN" (resolvedDate can even be null).
+        let json = r#"{ "values": [
+            { "action": "COMMENTED", "createdDate": 1,
+              "commentAnchor": { "path": "a.rs", "line": 5, "lineType": "ADDED" },
+              "comment": { "id": 7, "text": "fix this", "createdDate": 1, "updatedDate": 1,
+                           "state": "OPEN", "threadResolved": true,
+                           "author": { "name": "bo" } } }
+        ]}"#;
+        let page: Page = serde_json::from_str(json).unwrap();
+        let bundle = project(page.values);
+        assert_eq!(bundle.threads.len(), 1);
+        assert!(bundle.threads[0].resolved);
     }
 
     #[test]
