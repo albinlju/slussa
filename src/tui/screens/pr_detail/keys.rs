@@ -47,6 +47,9 @@ pub(in crate::tui) fn key_to_action(state: &AppState, key: KeyEvent) -> Option<A
     if code == KeyCode::Char('c') {
         return Some(Action::Detail(DetailAction::OpenComment));
     }
+    if code == KeyCode::Char('r') {
+        return Some(Action::Detail(DetailAction::OpenReply));
+    }
 
     escape_action(state, tab, viewing_commit, code)
         .or_else(|| tab_select_key(code))

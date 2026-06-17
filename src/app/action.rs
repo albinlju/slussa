@@ -48,6 +48,7 @@ pub enum DetailAction {
     ConfirmMove(i16),
     SubmitConfirm,
     OpenComment,
+    OpenReply,
     CommentType(char),
     CommentBackspace,
     CommentSubmit,

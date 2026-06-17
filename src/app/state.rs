@@ -309,18 +309,28 @@ impl AppState {
             .any(|pr| pr.id == pr_id && pr.author.username == self.current_user)
     }
 
+    /// Target for a brand-new comment (`c`): a top-level PR comment in Overview,
+    /// or the focused line in the Diff / commit pane.
     pub fn comment_target(&self) -> Option<CommentTarget> {
         let Screen::Detail { tab, .. } = self.screen else {
             return None;
         };
         match tab {
-            DetailTab::Overview => Some(
-                self.ui
-                    .overview_reply
-                    .map_or(CommentTarget::Pr, CommentTarget::Reply),
-            ),
+            DetailTab::Overview => Some(CommentTarget::Pr),
             DetailTab::Diff => self.pane_line_target(),
             DetailTab::Commits if self.ui.commits.open_commit.is_some() => self.pane_line_target(),
+            _ => None,
+        }
+    }
+
+    /// Target for a reply (`r`): the focused comment/thread in Overview. `None`
+    /// when nothing repliable is focused.
+    pub fn reply_target(&self) -> Option<CommentTarget> {
+        let Screen::Detail { tab, .. } = self.screen else {
+            return None;
+        };
+        match tab {
+            DetailTab::Overview => self.ui.overview_reply.map(CommentTarget::Reply),
             _ => None,
         }
     }

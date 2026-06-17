@@ -129,12 +129,14 @@ fn render_footer_bar(
 }
 
 fn footer_actions(state: &AppState, tab: DetailTab, own_pr: bool) -> String {
-    // Overview is the conversation tab — comment, or reply when a thread is focused.
+    // Overview is the conversation tab — `c` posts a PR comment, `r` replies to
+    // the focused comment/thread (shown only when one is focused).
     if tab == DetailTab::Overview {
-        return match state.comment_target() {
-            Some(CommentTarget::Reply(_)) => "c: reply".to_owned(),
-            _ => "c: comment".to_owned(),
-        };
+        let mut parts = vec!["c: comment"];
+        if state.reply_target().is_some() {
+            parts.push("r: reply");
+        }
+        return parts.join("  ");
     }
     let mut parts: Vec<&str> = Vec::new();
     if !own_pr {
@@ -408,6 +410,7 @@ const HELP_KEYS: &[(&str, &str)] = &[
     ("esc", "back"),
     ("a", "approve"),
     ("c", "comment"),
+    ("r", "reply"),
     ("m", "merge"),
     ("?", "toggle help"),
     ("q", "quit"),
