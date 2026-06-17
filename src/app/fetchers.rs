@@ -99,4 +99,18 @@ impl App {
             move |r| Action::Loaded(LoadedAction::Commented(pr_id, r)),
         );
     }
+
+    pub(super) fn spawn_resolve_thread(
+        &self,
+        pr_id: u64,
+        node_id: Option<String>,
+        comment_id: Option<u64>,
+        resolved: bool,
+    ) {
+        let provider = self.provider.clone();
+        self.spawn_fetch(
+            move || provider.set_thread_resolved(pr_id, node_id.as_deref(), comment_id, resolved),
+            move |r| Action::Loaded(LoadedAction::Commented(pr_id, r)),
+        );
+    }
 }

@@ -19,6 +19,8 @@ struct GqlThreads {
 #[serde(rename_all = "camelCase")]
 struct GqlThread {
     #[serde(default)]
+    id: String,
+    #[serde(default)]
     is_resolved: bool,
     #[serde(default)]
     path: String,
@@ -41,7 +43,7 @@ pub fn fetch_review_threads(pr_number: u64) -> Result<Vec<ReviewThread>, FetchEr
         "query($owner: String!, $name: String!, $pr: Int!) {{ \
            repository(owner: $owner, name: $name) {{ pullRequest(number: $pr) {{ \
              reviewThreads(first: 100) {{ nodes {{ \
-               isResolved path line originalLine diffSide \
+               id isResolved path line originalLine diffSide \
                comments(first: 100) {{ nodes {{ {COMMENT_FIELDS} }} }} \
              }} }} }} }} }}"
     );
@@ -69,6 +71,7 @@ fn map_thread(t: GqlThread) -> ReviewThread {
         resolved: t.is_resolved,
         comments: t.comments.nodes.into_iter().map(map_gql_comment).collect(),
         reply_to,
+        node_id: (!t.id.is_empty()).then_some(t.id),
     }
 }
 

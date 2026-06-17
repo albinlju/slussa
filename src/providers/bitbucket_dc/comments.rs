@@ -69,6 +69,23 @@ pub fn delete_comment(config: &Config, pr_id: u64, comment_id: u64) -> Result<()
     http::delete(&config.repo.base_url, &path, &config.pat)
 }
 
+pub fn set_thread_resolved(
+    config: &Config,
+    pr_id: u64,
+    comment_id: u64,
+    resolved: bool,
+) -> Result<(), FetchError> {
+    let version = comment_version(config, pr_id, comment_id)?;
+    let state = if resolved { "RESOLVED" } else { "OPEN" };
+    let body = serde_json::json!({ "version": version, "state": state });
+    http::put_json(
+        &config.repo.base_url,
+        &comment_path(config, pr_id, comment_id),
+        &config.pat,
+        &body,
+    )
+}
+
 fn comment_path(config: &Config, pr_id: u64, comment_id: u64) -> String {
     format!(
         "/rest/api/1.0/projects/{}/repos/{}/pull-requests/{pr_id}/comments/{comment_id}",

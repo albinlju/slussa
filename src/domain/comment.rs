@@ -51,6 +51,9 @@ pub struct ReviewThread {
     pub resolved: bool,
     /// Id of the comment a reply should hang under (None = can't reply, e.g. no id parsed).
     pub reply_to: Option<u64>,
+    /// GitHub GraphQL thread node id, needed to resolve/unresolve. None on Bitbucket
+    /// (which toggles the root comment's state instead).
+    pub node_id: Option<String>,
 }
 
 #[cfg(test)]

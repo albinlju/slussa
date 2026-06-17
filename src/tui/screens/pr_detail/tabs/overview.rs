@@ -10,7 +10,7 @@ use ratatui::{
 };
 
 use crate::{
-    app::state::{CommentRef, LoadState, PrData, UiMemory},
+    app::state::{CommentRef, LoadState, PrData, ThreadRef, UiMemory},
     domain::{
         comment::{Comment, ReviewThread},
         diff::Diff,
@@ -246,6 +246,7 @@ fn render_timeline(
     // for highlight-scroll, reply target, and the per-comment sub-cursor.
     let focused = navs.iter().filter(|n| n.focusable).nth(cursor);
     ui.overview_reply = focused.and_then(|n| n.reply_to);
+    ui.overview_thread = focused.and_then(|n| n.resolve.clone());
     let block_len = focused.map_or(0, |n| n.comments.len());
     let sub = ui.overview_sub.min(block_len.saturating_sub(1));
     ui.overview_block_len = block_len;
@@ -324,6 +325,8 @@ struct TimelineBlock {
     focusable: bool,
     /// The individual comments in this block, for the Ctrl-j/k sub-cursor.
     comments: Vec<CommentRef>,
+    /// Set when the block is a review thread, so `R` can resolve it.
+    resolve: Option<ThreadRef>,
 }
 
 struct ItemNav {
@@ -332,6 +335,7 @@ struct ItemNav {
     reply_to: Option<u64>,
     focusable: bool,
     comments: Vec<CommentRef>,
+    resolve: Option<ThreadRef>,
 }
 
 /// How many items the cursor can land on: comments and non-empty review threads.
@@ -375,6 +379,7 @@ fn build_blocks(
                         id: c.id,
                         review: false,
                     }],
+                    resolve: None,
                 });
                 focus_idx += 1;
             }
@@ -396,6 +401,11 @@ fn build_blocks(
                                 review: true,
                             })
                             .collect(),
+                        resolve: Some(ThreadRef {
+                            node_id: t.node_id.clone(),
+                            comment_id: t.reply_to,
+                            resolved: t.resolved,
+                        }),
                     });
                     focus_idx += 1;
                 }
@@ -407,6 +417,7 @@ fn build_blocks(
                     reply_to: None,
                     focusable: false,
                     comments: Vec::new(),
+                    resolve: None,
                 });
             }
         }
@@ -431,6 +442,7 @@ fn timeline_rail(blocks: Vec<TimelineBlock>) -> (Vec<Line<'static>>, Vec<ItemNav
             reply_to: block.reply_to,
             focusable: block.focusable,
             comments: block.comments,
+            resolve: block.resolve,
         });
     }
 

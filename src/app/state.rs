@@ -99,6 +99,8 @@ pub struct UiMemory {
     pub overview_cursor: usize,
     pub overview_item_count: usize,
     pub overview_reply: Option<u64>,
+    /// The focused thread in Overview, for resolve/unresolve (`R`).
+    pub overview_thread: Option<ThreadRef>,
     /// Sub-cursor within the focused block (Ctrl-j/k steps individual comments).
     pub overview_sub: usize,
     pub overview_block_len: usize,
@@ -139,6 +141,16 @@ pub struct CommentRef {
     pub id: Option<u64>,
     /// A diff/line comment (vs a PR-level one) — GitHub edits them differently.
     pub review: bool,
+}
+
+/// Identity of a focused thread, for resolve/unresolve.
+#[derive(Debug, Clone)]
+pub struct ThreadRef {
+    /// GitHub GraphQL thread id.
+    pub node_id: Option<String>,
+    /// Root comment id (Bitbucket toggles its state).
+    pub comment_id: Option<u64>,
+    pub resolved: bool,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -230,6 +242,7 @@ pub struct DiffViewState {
     pub pane_matches: Vec<usize>,
     pub pane_anchor: Option<CommentAnchor>,
     pub pane_reply: Option<u64>,
+    pub pane_thread: Option<ThreadRef>,
     pub focus: DiffFocus,
 }
 
@@ -340,6 +353,21 @@ impl AppState {
             .iter()
             .chain(activity.threads.iter().flat_map(|t| t.comments.iter()))
             .find(|c| c.id == Some(id))
+    }
+
+    /// The thread the cursor is on, for resolve/unresolve (`R`).
+    pub fn focused_thread(&self) -> Option<&ThreadRef> {
+        let Screen::Detail { tab, .. } = self.screen else {
+            return None;
+        };
+        match tab {
+            DetailTab::Overview => self.ui.overview_thread.as_ref(),
+            DetailTab::Diff => self.ui.active_diff_view().pane_thread.as_ref(),
+            DetailTab::Commits if self.ui.commits.open_commit.is_some() => {
+                self.ui.active_diff_view().pane_thread.as_ref()
+            }
+            _ => None,
+        }
     }
 
     /// The overview sub-selected comment, but only when it's the viewer's own

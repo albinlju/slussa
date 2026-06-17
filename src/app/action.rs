@@ -52,6 +52,7 @@ pub enum DetailAction {
     OverviewSubMove(i16),
     EditComment,
     DeleteComment,
+    ResolveThread,
     CommentType(char),
     CommentBackspace,
     CommentSubmit,
