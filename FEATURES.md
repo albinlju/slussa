@@ -42,7 +42,8 @@
 - [ ] **Branch ahead / behind base** info.
 - [ ] **Mergeability in the pr list** — conflict / behind-base indicators.
 - [ ] **Labels in the list** — colored and filterable (shown in Overview today).
-- [ ] **Errors visible in the UI** instead of panics when a fetch/parse fails.
+- [ ] **Errors visible in the UI** — action failures (comment/approve/resolve/…) now show a dismissible error popup. Remaining: audit fetch/parse paths so a bad response never panics (use `LoadState::Failed` / the popup everywhere instead of `unwrap`).
+- [ ] **Friendly error messages** — the popup shows the raw provider error (`gh exited Some(1): Validation Failed (HTTP 422): …`). Clean it up: a `FetchError::user_message()` that strips the CLI/HTTP noise and pulls the meaningful text out of the body (GitHub 422 returns JSON with `message` + `errors[].message`; Bitbucket returns `errors[].message`), with a short title per kind (401/403 → "Not authorized" / "Not allowed", network → "Couldn't reach <host>", 422 → the validation message). Keep the raw string as a log-only detail.
 - [ ] **Optimistic comment insert** — show a just-posted line comment instantly (local insert into `activity`) instead of the ~3-5s wait for the refetch; needs current-user to attribute it correctly. ("posting…" indicator is already done.)
 - [ ] **Manual / auto refresh** (`r`) — re-fetch without restarting.
 - [ ] **Build jobs auto update status** — Builds should re-fetch status automatically while open tab

@@ -9,6 +9,10 @@ use crate::{
 };
 
 pub(in crate::tui) fn key_to_action(state: &AppState, key: KeyEvent) -> Option<Action> {
+    // An error popup is modal: any key dismisses it.
+    if state.ui.error.is_some() {
+        return Some(Action::Detail(DetailAction::DismissError));
+    }
     if key.code == KeyCode::Char('q') {
         return Some(Action::Quit);
     }
