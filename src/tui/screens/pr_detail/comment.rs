@@ -67,7 +67,7 @@ pub(super) fn comment_box(
     );
     let mut out = vec![header];
     out.extend(bracket(
-        comment_body(comment, None, width.saturating_sub(2), ""),
+        comment_body(comment, None, width.saturating_sub(2), "", false),
         width,
         frame,
     ));
@@ -199,7 +199,7 @@ fn conversation(
             out.extend(framed(
                 meta,
                 label,
-                comment_body(comment, anchor, width.saturating_sub(2), loc),
+                comment_body(comment, anchor, width.saturating_sub(2), loc, thread.resolved),
                 width,
                 frame,
             ));
@@ -219,7 +219,7 @@ fn conversation(
         } else {
             out.push(prefix_gutter(Line::from(meta), head, style));
         }
-        for line in comment_body(comment, anchor, width.saturating_sub(2), "") {
+        for line in comment_body(comment, anchor, width.saturating_sub(2), "", thread.resolved) {
             out.push(prefix_gutter(line, body_gutter, style));
         }
     }
@@ -339,6 +339,7 @@ fn comment_body(
     anchor: Option<(usize, &str)>,
     text_w: u16,
     loc: &str,
+    resolved: bool,
 ) -> Vec<Line<'static>> {
     let (prose, suggestions) = split_suggestions(&comment.content);
     let mut lines: Vec<Line<'static>> = Vec::new();
@@ -347,7 +348,7 @@ fn comment_body(
     }
     for suggestion in &suggestions {
         lines.push(Line::raw(""));
-        lines.extend(suggestion_box(anchor, suggestion, text_w, loc));
+        lines.extend(suggestion_box(anchor, suggestion, text_w, loc, resolved));
     }
     if let Some(line) = widgets::reactions_line(&comment.reactions) {
         lines.push(Line::raw(""));
@@ -377,6 +378,7 @@ fn suggestion_box(
     suggestion: &str,
     width: u16,
     loc: &str,
+    resolved: bool,
 ) -> Vec<Line<'static>> {
     let theme = theme::current();
     let text_w = (width as usize).saturating_sub(2);
@@ -427,8 +429,11 @@ fn suggestion_box(
         )]
     };
     let mut out = framed(title, right, rows, width, theme.suggestion);
-    out.push(Line::raw(""));
-    out.push(suggestion_actions());
+    // A resolved suggestion can't be applied anymore — drop the action hints.
+    if !resolved {
+        out.push(Line::raw(""));
+        out.push(suggestion_actions());
+    }
     out
 }
 
