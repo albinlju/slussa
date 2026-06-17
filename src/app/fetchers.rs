@@ -84,7 +84,18 @@ impl App {
                 }
                 CommentTarget::Pr => provider.post_pr_comment(pr_id, &text),
                 CommentTarget::Reply(parent) => provider.reply_comment(pr_id, parent, &text),
+                CommentTarget::Edit { id, review } => {
+                    provider.edit_comment(pr_id, id, review, &text)
+                }
             },
+            move |r| Action::Loaded(LoadedAction::Commented(pr_id, r)),
+        );
+    }
+
+    pub(super) fn spawn_delete_comment(&self, pr_id: u64, comment_id: u64, review: bool) {
+        let provider = self.provider.clone();
+        self.spawn_fetch(
+            move || provider.delete_comment(pr_id, comment_id, review),
             move |r| Action::Loaded(LoadedAction::Commented(pr_id, r)),
         );
     }

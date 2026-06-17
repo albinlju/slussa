@@ -32,7 +32,7 @@ pub(in crate::tui) fn render_inline_thread(
     if !has_suggestion {
         out.push(status_rule(status_label(thread), width, frame));
     }
-    out.extend(conversation(thread, anchor, width, now, author, frame, ""));
+    out.extend(conversation(thread, anchor, width, now, author, frame, "", None));
     out
 }
 
@@ -95,6 +95,7 @@ pub(super) fn review_thread_box(
     width: u16,
     now: DateTime<Utc>,
     active: bool,
+    selected: Option<usize>,
     author: &str,
 ) -> Option<Vec<Line<'static>>> {
     let theme = theme::current();
@@ -137,7 +138,7 @@ pub(super) fn review_thread_box(
         out.extend(bracket(align_snippet(snippet), width, frame));
     }
     out.extend(conversation(
-        thread, anchor, width, now, author, frame, &loc,
+        thread, anchor, width, now, author, frame, &loc, selected,
     ));
     Some(out)
 }
@@ -164,6 +165,7 @@ fn bracket(body: Vec<Line<'static>>, width: u16, color: Color) -> Vec<Line<'stat
     out
 }
 
+#[allow(clippy::too_many_arguments)]
 fn conversation(
     thread: &ReviewThread,
     anchor: Option<(usize, &str)>,
@@ -172,6 +174,7 @@ fn conversation(
     author: &str,
     frame: Color,
     loc: &str,
+    selected: Option<usize>,
 ) -> Vec<Line<'static>> {
     let theme = theme::current();
     let style = Style::default().fg(frame);
@@ -207,7 +210,15 @@ fn conversation(
             n if n == last => ("└ ", "  "),
             _ => ("├ ", "┊ "),
         };
-        out.push(prefix_gutter(Line::from(meta), head, style));
+        // The Ctrl-j/k sub-cursor marks the comment e/d will act on.
+        if selected == Some(i) {
+            let marker = Style::default().fg(theme.accent).add_modifier(Modifier::BOLD);
+            let mut spans = vec![Span::styled("▸ ", marker)];
+            spans.extend(meta);
+            out.push(Line::from(spans));
+        } else {
+            out.push(prefix_gutter(Line::from(meta), head, style));
+        }
         for line in comment_body(comment, anchor, width.saturating_sub(2), "") {
             out.push(prefix_gutter(line, body_gutter, style));
         }

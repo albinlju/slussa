@@ -84,6 +84,33 @@ impl Provider {
         }
     }
 
+    /// `review` distinguishes a diff/line comment from a PR-level one — GitHub
+    /// edits them via different endpoints; Bitbucket uses one for both.
+    pub fn edit_comment(
+        &self,
+        pr_id: u64,
+        comment_id: u64,
+        review: bool,
+        body: &str,
+    ) -> Result<(), FetchError> {
+        match self {
+            Self::GitHub => github::edit_comment(comment_id, review, body),
+            Self::BitbucketDc(c) => bitbucket_dc::edit_comment(c, pr_id, comment_id, body),
+        }
+    }
+
+    pub fn delete_comment(
+        &self,
+        pr_id: u64,
+        comment_id: u64,
+        review: bool,
+    ) -> Result<(), FetchError> {
+        match self {
+            Self::GitHub => github::delete_comment(comment_id, review),
+            Self::BitbucketDc(c) => bitbucket_dc::delete_comment(c, pr_id, comment_id),
+        }
+    }
+
     pub fn current_user(&self) -> Result<String, FetchError> {
         match self {
             Self::GitHub => github::current_user(),

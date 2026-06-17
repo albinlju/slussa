@@ -1,3 +1,5 @@
+use serde::Deserialize;
+
 use super::{Config, http};
 use crate::providers::error::FetchError;
 
@@ -46,4 +48,43 @@ pub fn reply_comment(config: &Config, pr_id: u64, parent: u64, text: &str) -> Re
     );
     let body = serde_json::json!({ "text": text, "parent": { "id": parent } });
     http::post_json(&config.repo.base_url, &endpoint, &config.pat, &body)
+}
+
+pub fn edit_comment(config: &Config, pr_id: u64, comment_id: u64, text: &str) -> Result<(), FetchError> {
+    // Editing requires the current version (optimistic locking); fetch it here so
+    // callers (and the domain) never have to carry it.
+    let version = comment_version(config, pr_id, comment_id)?;
+    let body = serde_json::json!({ "version": version, "text": text });
+    http::put_json(
+        &config.repo.base_url,
+        &comment_path(config, pr_id, comment_id),
+        &config.pat,
+        &body,
+    )
+}
+
+pub fn delete_comment(config: &Config, pr_id: u64, comment_id: u64) -> Result<(), FetchError> {
+    let version = comment_version(config, pr_id, comment_id)?;
+    let path = format!("{}?version={version}", comment_path(config, pr_id, comment_id));
+    http::delete(&config.repo.base_url, &path, &config.pat)
+}
+
+fn comment_path(config: &Config, pr_id: u64, comment_id: u64) -> String {
+    format!(
+        "/rest/api/1.0/projects/{}/repos/{}/pull-requests/{pr_id}/comments/{comment_id}",
+        config.repo.project_key, config.repo.repo_slug,
+    )
+}
+
+fn comment_version(config: &Config, pr_id: u64, comment_id: u64) -> Result<u32, FetchError> {
+    #[derive(Deserialize)]
+    struct VersionOnly {
+        version: u32,
+    }
+    let c: VersionOnly = http::get_json(
+        &config.repo.base_url,
+        &comment_path(config, pr_id, comment_id),
+        &config.pat,
+    )?;
+    Ok(c.version)
 }

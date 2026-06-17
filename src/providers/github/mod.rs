@@ -11,7 +11,9 @@ mod review_threads;
 
 pub use activities::fetch as fetch_activity;
 pub use builds::fetch_builds;
-pub use comments::{post_comment, post_pr_comment, reply_comment};
+pub use comments::{
+    delete_comment, edit_comment, post_comment, post_pr_comment, reply_comment,
+};
 pub use commits::fetch_commits;
 pub use diff::{fetch_commit_diff, fetch_diff};
 pub use prs::fetch_prs;
@@ -118,6 +120,7 @@ pub(super) fn map_gql_comment(c: GqlComment) -> Comment {
         })
         .collect();
     Comment {
+        id: c.database_id,
         author: User {
             username: c.author.map(|a| a.login).unwrap_or_default(),
         },
