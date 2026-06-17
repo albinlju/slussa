@@ -129,28 +129,26 @@ fn render_footer_bar(
 }
 
 fn footer_actions(state: &AppState, tab: DetailTab, own_pr: bool) -> String {
-    // Overview is the conversation tab — `c` posts a PR comment, `r` replies to
-    // the focused comment/thread (shown only when one is focused).
+    // Overview is the conversation tab and home of the PR-level actions: `c`
+    // posts a PR comment, `r` replies to the focused thread, `a` approves.
+    // (merge will join these here once it's wired.)
     if tab == DetailTab::Overview {
         let mut parts = vec!["c: comment"];
         if state.reply_target().is_some() {
             parts.push("r: reply");
         }
+        if !own_pr {
+            parts.push("a: approve");
+        }
         return parts.join("  ");
     }
-    let mut parts: Vec<&str> = Vec::new();
-    if !own_pr {
-        parts.push("a: approve");
-    }
-    // Line comment only shows once you're on a row inside the diff pane;
-    // on a thread it becomes a reply.
+    // Other tabs: only the line-comment hint, shown once you're on a row in the
+    // diff pane (a thread turns it into a reply).
     match state.comment_target() {
-        Some(CommentTarget::Reply(_)) => parts.push("c: reply"),
-        Some(_) => parts.push("c: comment"),
-        None => {}
+        Some(CommentTarget::Reply(_)) => "c: reply".to_owned(),
+        Some(_) => "c: comment".to_owned(),
+        None => String::new(),
     }
-    parts.push("m: merge");
-    parts.join("  ")
 }
 
 fn comment_prompt(draft: &CommentDraft) -> Line<'static> {
@@ -411,7 +409,6 @@ const HELP_KEYS: &[(&str, &str)] = &[
     ("a", "approve"),
     ("c", "comment"),
     ("r", "reply"),
-    ("m", "merge"),
     ("?", "toggle help"),
     ("q", "quit"),
 ];
