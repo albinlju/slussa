@@ -34,7 +34,6 @@ pub struct App {
     pub(crate) provider: Provider,
     action_tx: UnboundedSender<Action>,
     action_rx: UnboundedReceiver<Action>,
-    /// When the active view last had a full background re-fetch.
     pub(crate) full_refreshed: Instant,
 }
 
