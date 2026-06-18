@@ -42,7 +42,7 @@ pub(in crate::tui) fn render_inline_thread(
         out.push(status_rule(status_label(thread), width, frame));
     }
     out.extend(conversation(
-        thread, anchor, width, now, author, frame, "", None,
+        thread, anchor, width, now, author, frame, None, false,
     ));
     out
 }
@@ -112,7 +112,7 @@ pub(super) fn comment_box(
     );
     let mut out = vec![header];
     out.extend(bracket(
-        comment_body(comment, None, width.saturating_sub(2), "", false),
+        comment_body(comment, None, width.saturating_sub(2), false),
         width,
         frame,
         theme.divider,
@@ -145,27 +145,40 @@ pub(super) fn review_thread_box(
     author: &str,
 ) -> Option<Vec<Line<'static>>> {
     let theme = theme::current();
-    thread.comments.first()?;
+    let first = thread.comments.first()?;
     let frame = if active { theme.muted } else { theme.divider };
 
-    let loc = match thread.line.or(thread.old_line) {
-        Some(l) => format!("{}:{l}", thread.path),
-        None if thread.path.is_empty() => "comment thread".to_string(),
-        None => thread.path.clone(),
+    let location = match thread.line.or(thread.old_line) {
+        Some(l) => Some(format!("{}:{l}", thread.path)),
+        None if !thread.path.is_empty() => Some(thread.path.clone()),
+        None => None,
     };
     let has_suggestion = thread
         .comments
         .iter()
         .any(|comment| !split_suggestions(&comment.content).1.is_empty());
 
-    let mut out: Vec<Line<'static>> = Vec::new();
-    if !has_suggestion {
-        out.push(header_line(
-            vec![Span::styled(loc.clone(), Style::default().fg(theme.accent))],
-            status_label(thread),
-            width,
-        ));
-    }
+    // The header reads as the opening activity: "@user commented on file:line".
+    let action = if split_suggestions(&first.content).1.is_empty() {
+        "commented"
+    } else {
+        "suggested a change"
+    };
+    let phrase = match &location {
+        Some(l) => format!(" {action} on {l}"),
+        None => format!(" {action}"),
+    };
+    let mut left: Vec<Span<'static>> = vec![Span::styled(
+        format!("@{}", first.author.username),
+        Style::default().fg(theme.info).add_modifier(Modifier::BOLD),
+    )];
+    left.push(Span::styled(phrase, Style::default().fg(theme.muted)));
+    let mut right = status_label(thread);
+    right.push(Span::styled(
+        format!("  ·  {}", format::relative_age(first.created, now)),
+        Style::default().fg(theme.muted),
+    ));
+    let mut out: Vec<Line<'static>> = vec![header_line(left, right, width)];
 
     let (snippet, anchor_text) = diff
         .map(|d| {
@@ -183,8 +196,10 @@ pub(super) fn review_thread_box(
     if !has_suggestion && !snippet.is_empty() {
         out.extend(bracket(align_snippet(snippet), width, frame, theme.divider));
     }
+    // The header carries the first comment's author + time, so the conversation
+    // skips its meta line to avoid repeating it.
     out.extend(conversation(
-        thread, anchor, width, now, author, frame, &loc, selected,
+        thread, anchor, width, now, author, frame, selected, true,
     ));
     Some(out)
 }
@@ -221,39 +236,39 @@ fn conversation(
     now: DateTime<Utc>,
     author: &str,
     frame: Color,
-    loc: &str,
     selected: Option<usize>,
+    skip_first_meta: bool,
 ) -> Vec<Line<'static>> {
     let theme = theme::current();
     let style = Style::default().fg(frame);
     let last = thread.comments.len().saturating_sub(1);
     let mut out: Vec<Line<'static>> = Vec::new();
     for (i, comment) in thread.comments.iter().enumerate() {
+        // The first comment's author/time live in the box header when requested.
+        let suppress = skip_first_meta && i == 0;
         if i > 0 {
             out.push(prefix_gutter(Line::raw(""), "┊ ", style));
         }
-        let meta = author_meta(
-            &comment.author.username,
-            comment_role(comment, author),
-            comment.created,
-            now,
-        );
+        let meta = if suppress {
+            Vec::new()
+        } else {
+            author_meta(
+                &comment.author.username,
+                comment_role(comment, author),
+                comment.created,
+                now,
+            )
+        };
         if !split_suggestions(&comment.content).1.is_empty() {
-            let mut label = status_label(thread);
-            label.push(Span::styled(
-                "   SUGGESTION",
-                Style::default().fg(theme.suggestion),
-            ));
+            let label = if suppress {
+                Vec::new()
+            } else {
+                status_label(thread)
+            };
             out.extend(framed(
                 meta,
                 label,
-                comment_body(
-                    comment,
-                    anchor,
-                    width.saturating_sub(2),
-                    loc,
-                    thread.resolved,
-                ),
+                comment_body(comment, anchor, width.saturating_sub(2), thread.resolved),
                 width,
                 frame,
                 theme.divider,
@@ -266,7 +281,9 @@ fn conversation(
             _ => ("├ ", "┊ "),
         };
         // The Ctrl-j/k sub-cursor marks the comment e/d will act on.
-        if selected == Some(i) {
+        if suppress {
+            // Header already shows the meta; the body hangs straight off the trunk.
+        } else if selected == Some(i) {
             let marker = Style::default()
                 .fg(theme.muted)
                 .add_modifier(Modifier::BOLD);
@@ -276,13 +293,7 @@ fn conversation(
         } else {
             out.push(prefix_gutter(Line::from(meta), head, style));
         }
-        for line in comment_body(
-            comment,
-            anchor,
-            width.saturating_sub(2),
-            "",
-            thread.resolved,
-        ) {
+        for line in comment_body(comment, anchor, width.saturating_sub(2), thread.resolved) {
             out.push(prefix_gutter(line, body_gutter, style));
         }
     }
@@ -403,7 +414,6 @@ fn comment_body(
     comment: &Comment,
     anchor: Option<(usize, &str)>,
     text_w: u16,
-    loc: &str,
     resolved: bool,
 ) -> Vec<Line<'static>> {
     let (prose, suggestions) = split_suggestions(&comment.content);
@@ -413,7 +423,7 @@ fn comment_body(
     }
     for suggestion in &suggestions {
         lines.push(Line::raw(""));
-        lines.extend(suggestion_box(anchor, suggestion, text_w, loc, resolved));
+        lines.extend(suggestion_box(anchor, suggestion, text_w, resolved));
     }
     if let Some(line) = widgets::reactions_line(&comment.reactions) {
         lines.push(Line::raw(""));
@@ -442,7 +452,6 @@ fn suggestion_box(
     anchor: Option<(usize, &str)>,
     suggestion: &str,
     width: u16,
-    loc: &str,
     resolved: bool,
 ) -> Vec<Line<'static>> {
     let theme = theme::current();
@@ -485,17 +494,9 @@ fn suggestion_box(
             .fg(theme::current().fg)
             .add_modifier(Modifier::BOLD),
     )];
-    let right = if loc.is_empty() {
-        Vec::new()
-    } else {
-        vec![Span::styled(
-            loc.to_string(),
-            Style::default().fg(theme.accent),
-        )]
-    };
     let mut out = framed(
         title,
-        right,
+        Vec::new(),
         rows,
         width,
         theme.suggestion,
