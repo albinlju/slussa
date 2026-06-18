@@ -67,7 +67,6 @@ pub enum DiffAction {
     MoveCursor(i16),
     ToggleAtCursor,
     CollapseAtCursor,
-    ExpandAtCursor,
     MovePaneCursor(i16),
     JumpMatch(i16),
     EnterPane,

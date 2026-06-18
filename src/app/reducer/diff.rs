@@ -14,7 +14,6 @@ impl App {
             DiffAction::MoveCursor(delta) => self.diff_move_cursor(delta),
             DiffAction::ToggleAtCursor => self.diff_toggle_at_cursor(),
             DiffAction::CollapseAtCursor => self.diff_collapse_at_cursor(),
-            DiffAction::ExpandAtCursor => self.diff_expand_at_cursor(),
             DiffAction::MovePaneCursor(delta) => self.diff_move_pane_cursor(delta),
             DiffAction::JumpMatch(delta) => self.diff_jump_match(delta),
             DiffAction::EnterPane => self.diff_enter_pane(),
@@ -130,10 +129,6 @@ impl App {
 
     fn diff_collapse_at_cursor(&mut self) {
         self.set_dir_collapsed_at_cursor(true);
-    }
-
-    fn diff_expand_at_cursor(&mut self) {
-        self.set_dir_collapsed_at_cursor(false);
     }
 
     fn set_dir_collapsed_at_cursor(&mut self, collapsed: bool) {
