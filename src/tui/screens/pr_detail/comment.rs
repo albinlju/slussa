@@ -62,18 +62,17 @@ fn collapse_summary(thread: &ReviewThread, expanded: bool, active: bool) -> Line
     } else {
         format!("{n} comments")
     };
-    // No border when collapsed, so accent the arrow + meta to mark focus.
-    let focus_color = if !expanded && active {
-        theme.accent
-    } else {
-        theme.muted
-    };
+    // No border when collapsed, so the whole line takes the focus colour when
+    // active — including the check/"resolved", which is green otherwise.
+    let active = !expanded && active;
+    let focus_color = if active { theme.accent } else { theme.muted };
+    let resolved_color = if active { focus_color } else { theme.success };
     Line::from(vec![
         Span::styled(
             if expanded { "▾ " } else { "▸ " },
             Style::default().fg(focus_color),
         ),
-        Span::styled("✓ resolved", Style::default().fg(theme.success)),
+        Span::styled("✓ resolved", Style::default().fg(resolved_color)),
         Span::styled(
             format!(" · {author} · {count}"),
             Style::default().fg(focus_color),
