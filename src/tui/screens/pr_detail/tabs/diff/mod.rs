@@ -51,7 +51,14 @@ pub fn render(
         .collect();
 
     let pane_focused = matches!(ui_diff.focus, DiffFocus::Pane);
-    tree::render(frame, diff, ui_diff, &file_stats, &comment_counts, tree_area);
+    tree::render(
+        frame,
+        diff,
+        ui_diff,
+        &file_stats,
+        &comment_counts,
+        tree_area,
+    );
     pane::render(
         frame,
         diff,

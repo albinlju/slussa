@@ -41,7 +41,12 @@ pub fn post_pr_comment(config: &Config, pr_id: u64, text: &str) -> Result<(), Fe
     http::post_json(&config.repo.base_url, &endpoint, &config.pat, &body)
 }
 
-pub fn reply_comment(config: &Config, pr_id: u64, parent: u64, text: &str) -> Result<(), FetchError> {
+pub fn reply_comment(
+    config: &Config,
+    pr_id: u64,
+    parent: u64,
+    text: &str,
+) -> Result<(), FetchError> {
     let endpoint = format!(
         "/rest/api/1.0/projects/{}/repos/{}/pull-requests/{pr_id}/comments",
         config.repo.project_key, config.repo.repo_slug,
@@ -50,7 +55,12 @@ pub fn reply_comment(config: &Config, pr_id: u64, parent: u64, text: &str) -> Re
     http::post_json(&config.repo.base_url, &endpoint, &config.pat, &body)
 }
 
-pub fn edit_comment(config: &Config, pr_id: u64, comment_id: u64, text: &str) -> Result<(), FetchError> {
+pub fn edit_comment(
+    config: &Config,
+    pr_id: u64,
+    comment_id: u64,
+    text: &str,
+) -> Result<(), FetchError> {
     // Editing requires the current version (optimistic locking); fetch it here so
     // callers (and the domain) never have to carry it.
     let version = comment_version(config, pr_id, comment_id)?;
@@ -65,7 +75,10 @@ pub fn edit_comment(config: &Config, pr_id: u64, comment_id: u64, text: &str) ->
 
 pub fn delete_comment(config: &Config, pr_id: u64, comment_id: u64) -> Result<(), FetchError> {
     let version = comment_version(config, pr_id, comment_id)?;
-    let path = format!("{}?version={version}", comment_path(config, pr_id, comment_id));
+    let path = format!(
+        "{}?version={version}",
+        comment_path(config, pr_id, comment_id)
+    );
     http::delete(&config.repo.base_url, &path, &config.pat)
 }
 

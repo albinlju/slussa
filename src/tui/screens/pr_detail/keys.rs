@@ -53,7 +53,9 @@ pub(in crate::tui) fn key_to_action(state: &AppState, key: KeyEvent) -> Option<A
         && tab == DetailTab::Overview
         && !state.viewing_own_pr(pr_id)
     {
-        return Some(Action::Detail(DetailAction::OpenConfirm(ConfirmKind::Approve)));
+        return Some(Action::Detail(DetailAction::OpenConfirm(
+            ConfirmKind::Approve,
+        )));
     }
     if plain && code == KeyCode::Char('c') {
         return Some(Action::Detail(DetailAction::OpenComment));
@@ -73,7 +75,9 @@ pub(in crate::tui) fn key_to_action(state: &AppState, key: KeyEvent) -> Option<A
     if tab == DetailTab::Overview {
         if key.modifiers.contains(KeyModifiers::CONTROL) {
             match code {
-                KeyCode::Char('j') => return Some(Action::Detail(DetailAction::OverviewSubMove(1))),
+                KeyCode::Char('j') => {
+                    return Some(Action::Detail(DetailAction::OverviewSubMove(1)));
+                }
                 KeyCode::Char('k') => {
                     return Some(Action::Detail(DetailAction::OverviewSubMove(-1)));
                 }

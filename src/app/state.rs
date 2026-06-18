@@ -136,7 +136,10 @@ pub enum CommentTarget {
     Pr,
     Reply(u64),
     /// Editing an existing comment; `review` picks the right provider endpoint.
-    Edit { id: u64, review: bool },
+    Edit {
+        id: u64,
+        review: bool,
+    },
 }
 
 /// The comment the overview sub-cursor points at within the focused block.

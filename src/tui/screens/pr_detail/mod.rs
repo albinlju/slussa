@@ -18,9 +18,8 @@ use ratatui::{
 
 use crate::{
     app::state::{
-        AppState, CommentDraft, CommentTarget, ConfirmKind, DetailTab, DiffFocus, LoadState, PrData,
-        SearchState,
-        UiMemory,
+        AppState, CommentDraft, CommentTarget, ConfirmKind, DetailTab, DiffFocus, LoadState,
+        PrData, SearchState, UiMemory,
     },
     domain::{
         comment::ReviewThread,
@@ -413,7 +412,14 @@ fn render_content(
         DetailTab::Diff => {
             let threads = activity_threads(pr_data);
             let diff = active_diff(ui.commits.open_commit.as_deref(), pr_data);
-            diff::render(frame, diff, threads, &mut ui.diff, &pr.author.username, inset);
+            diff::render(
+                frame,
+                diff,
+                threads,
+                &mut ui.diff,
+                &pr.author.username,
+                inset,
+            );
         }
         DetailTab::Commits => {
             if ui.commits.open_commit.is_some() {
@@ -442,7 +448,6 @@ fn activity_threads(pr_data: Option<&PrData>) -> &[ReviewThread] {
         })
         .unwrap_or(&[])
 }
-
 
 const HELP_KEYS: &[(&str, &str)] = &[
     ("j/k", "move up/down"),
@@ -478,7 +483,9 @@ fn render_help_panel(frame: &mut Frame, area: Rect) {
     let inner = block.inner(area);
     frame.render_widget(block, area);
 
-    let key_style = Style::default().fg(theme.accent).add_modifier(Modifier::BOLD);
+    let key_style = Style::default()
+        .fg(theme.accent)
+        .add_modifier(Modifier::BOLD);
     let desc_style = Style::default().fg(theme.muted);
     let key_w = HELP_KEYS.iter().map(|(k, _)| k.len()).max().unwrap_or(0);
     let desc_w = HELP_KEYS.iter().map(|(_, d)| d.len()).max().unwrap_or(0);

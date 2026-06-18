@@ -22,6 +22,8 @@ use crate::{
 };
 
 const TIMELINE_RIGHT_PAD: u16 = 3;
+/// The `● ─`/`|  ` gutter drawn down the left of the activity timeline.
+const RAIL_WIDTH: u16 = 3;
 
 const SIDEBAR_WIDTH: u16 = 30;
 const SIDEBAR_BREAKPOINT: u16 = 64;
@@ -56,7 +58,14 @@ pub fn render(
     if let Some(sidebar) = sidebar_area {
         render_sidebar(frame, pr, pr_data, sidebar);
     }
-    render_timeline(frame, pr_data, ui, &pr.author.username, body_area, scrollbar_area);
+    render_timeline(
+        frame,
+        pr_data,
+        ui,
+        &pr.author.username,
+        body_area,
+        scrollbar_area,
+    );
 }
 
 fn render_sidebar(frame: &mut Frame, pr: &PullRequest, pr_data: Option<&PrData>, area: Rect) {
@@ -234,7 +243,7 @@ fn render_timeline(
         &activity.threads,
         &activity.events,
         diff,
-        area.width.saturating_sub(TIMELINE_RIGHT_PAD),
+        area.width.saturating_sub(TIMELINE_RIGHT_PAD + RAIL_WIDTH),
         cursor,
         ui.overview_sub,
         author,
@@ -319,6 +328,8 @@ impl TimelineItem<'_> {
 
 struct TimelineBlock {
     lines: Vec<Line<'static>>,
+    /// Colour of the rail node (`●`) for this activity.
+    node: Color,
     reply_to: Option<u64>,
     /// Comments and review threads are focus targets for j/k; events render
     /// inline for context but the cursor skips them.
@@ -362,6 +373,7 @@ fn build_blocks(
     items.extend(events.iter().map(TimelineItem::Event));
     items.sort_by_key(|item| Reverse(item.timestamp()));
 
+    let theme = theme::current();
     let now = Utc::now();
     let mut blocks: Vec<TimelineBlock> = Vec::new();
     // `focus_idx` counts only focusable blocks, so the cursor (which indexes
@@ -373,6 +385,7 @@ fn build_blocks(
             TimelineItem::Comment(c) => {
                 blocks.push(TimelineBlock {
                     lines: super::super::comment::comment_box(c, width, now, active, author),
+                    node: theme.link,
                     reply_to: c.reply_to,
                     focusable: true,
                     comments: vec![CommentRef {
@@ -391,6 +404,7 @@ fn build_blocks(
                 ) {
                     blocks.push(TimelineBlock {
                         lines,
+                        node: theme.link,
                         reply_to: t.reply_to,
                         focusable: true,
                         comments: t
@@ -411,9 +425,10 @@ fn build_blocks(
                 }
             }
             TimelineItem::Event(e) => {
-                let (_, lines) = event_block(e, now);
+                let (color, lines) = event_block(e, now);
                 blocks.push(TimelineBlock {
                     lines,
+                    node: color,
                     reply_to: None,
                     focusable: false,
                     comments: Vec::new(),
@@ -426,16 +441,36 @@ fn build_blocks(
 }
 
 fn timeline_rail(blocks: Vec<TimelineBlock>) -> (Vec<Line<'static>>, Vec<ItemNav>) {
+    let theme = theme::current();
+    let connector = || Span::styled("|  ", Style::default().fg(theme.divider));
+
     let mut all: Vec<Line<'static>> = Vec::new();
     let mut navs: Vec<ItemNav> = Vec::new();
     for (i, block) in blocks.into_iter().enumerate() {
+        // Connector lines keep the rail unbroken in the gap between activities.
         if i > 0 {
-            all.push(Line::raw(""));
-            all.push(Line::raw(""));
+            all.push(Line::from(connector()));
+            all.push(Line::from(connector()));
         }
         let start = all.len();
         let span = block.lines.len();
-        all.extend(block.lines);
+        // The node keeps its type colour; the dash reaching into the activity is muted.
+        let node = vec![
+            Span::styled(
+                "*",
+                Style::default().fg(block.node).add_modifier(Modifier::BOLD),
+            ),
+            Span::styled("─ ", Style::default().fg(theme.muted)),
+        ];
+        for (j, line) in block.lines.into_iter().enumerate() {
+            let mut spans = if j == 0 {
+                node.clone()
+            } else {
+                vec![connector()]
+            };
+            spans.extend(line.spans);
+            all.push(Line::from(spans));
+        }
         navs.push(ItemNav {
             start,
             span,
@@ -485,13 +520,13 @@ fn event_block(event: &TimelineEvent, now: DateTime<Utc>) -> (Color, Vec<Line<'s
     }
 
     let (verb, color) = match &event.kind {
-        EventKind::Opened => ("opened this pull request", theme.info),
+        EventKind::Opened => ("opened this pull request", theme.success),
         EventKind::Approved => ("approved these changes", theme.success),
         EventKind::ChangesRequested => ("requested changes", theme.error),
         EventKind::ReviewRemoved => ("dismissed their review", theme.muted),
         EventKind::Merged => ("merged this pull request", theme.status_merged),
         EventKind::Declined => ("declined this pull request", theme.status_declined),
-        EventKind::Reopened => ("reopened this pull request", theme.info),
+        EventKind::Reopened => ("reopened this pull request", theme.success),
         EventKind::Pushed(_) => unreachable!("handled above"),
     };
     (color, vec![header(verb.to_string(), color)])

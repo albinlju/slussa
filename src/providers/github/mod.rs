@@ -12,8 +12,7 @@ mod review_threads;
 pub use activities::fetch as fetch_activity;
 pub use builds::fetch_builds;
 pub use comments::{
-    delete_comment, edit_comment, post_comment, post_pr_comment, reply_comment,
-    set_thread_resolved,
+    delete_comment, edit_comment, post_comment, post_pr_comment, reply_comment, set_thread_resolved,
 };
 pub use commits::fetch_commits;
 pub use diff::{fetch_commit_diff, fetch_diff};
