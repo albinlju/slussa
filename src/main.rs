@@ -1,5 +1,6 @@
 mod app;
 mod cli;
+mod config;
 mod domain;
 mod git_url;
 mod logging;
