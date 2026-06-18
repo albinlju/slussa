@@ -13,7 +13,7 @@ pub struct Theme {
     pub divider: Color,
     pub highlight_bg: Color,
     pub accent: Color,
-    pub accent_bg: Color,
+    pub reaction_mine: Color,
     pub suggestion: Color,
     pub success: Color,
     pub warning: Color,
@@ -38,7 +38,7 @@ pub const GRUVBOX: Theme = Theme {
     divider: Color::Rgb(0x46, 0x40, 0x3d),
     highlight_bg: Color::Rgb(0x50, 0x49, 0x45),
     accent: Color::Rgb(0xfa, 0xc8, 0x1c),
-    accent_bg: Color::Rgb(0x42, 0x39, 0x14),
+    reaction_mine: Color::Rgb(0xa8, 0x99, 0x84),
     suggestion: Color::Rgb(0xd3, 0x86, 0x9b),
     success: Color::Rgb(0xb8, 0xbb, 0x26),
     warning: Color::Rgb(0xfa, 0xbd, 0x2f),
@@ -55,18 +55,42 @@ pub const GRUVBOX: Theme = Theme {
     status_declined: Color::Rgb(0xfb, 0x49, 0x34),
 };
 
-// Named ANSI colors so the palette inherits the terminal's own theme and degrades
-// on low-color terminals. fg/bg stay Reset (terminal default). The Indexed(_) ones
-// are the spots ANSI can't express adaptively (subtle backgrounds, orange).
+// Experimental palette — Catppuccin Mocha. A soft, low-contrast dark theme to
+// trial against the terminal/gruvbox looks (`TUIPR_THEME=catppuccin`).
+pub const CATPPUCCIN: Theme = Theme {
+    fg: Color::Rgb(0xcd, 0xd6, 0xf4),
+    bg: Color::Rgb(0x1e, 0x1e, 0x2e),
+    muted: Color::Rgb(0xa6, 0xad, 0xc8),
+    border: Color::Rgb(0x89, 0xb4, 0xfa),
+    divider: Color::Rgb(0x4c, 0x4e, 0x63),
+    highlight_bg: Color::Rgb(0x45, 0x47, 0x5a),
+    accent: Color::Rgb(0x89, 0xb4, 0xfa),
+    reaction_mine: Color::Rgb(0x89, 0xb4, 0xfa),
+    suggestion: Color::Rgb(0xf5, 0xc2, 0xe7),
+    success: Color::Rgb(0xa6, 0xe3, 0xa1),
+    warning: Color::Rgb(0xf9, 0xe2, 0xaf),
+    error: Color::Rgb(0xf3, 0x8b, 0xa8),
+    info: Color::Rgb(0x94, 0xe2, 0xd5),
+    link: Color::Rgb(0x74, 0xc7, 0xec),
+    orange: Color::Rgb(0xfa, 0xb3, 0x87),
+    diff_added: Color::Rgb(0xa6, 0xe3, 0xa1),
+    diff_removed: Color::Rgb(0xf3, 0x8b, 0xa8),
+    diff_context: Color::Rgb(0x6c, 0x70, 0x86),
+    status_open: Color::Rgb(0xa6, 0xe3, 0xa1),
+    status_draft: Color::Rgb(0x6c, 0x70, 0x86),
+    status_merged: Color::Rgb(0xcb, 0xa6, 0xf7),
+    status_declined: Color::Rgb(0xf3, 0x8b, 0xa8),
+};
+
 pub const TERMINAL: Theme = Theme {
     fg: Color::Reset,
     bg: Color::Reset,
     muted: Color::Gray,
-    border: Color::Yellow,
+    border: Color::Reset,
     divider: Color::Indexed(239),
     highlight_bg: Color::Indexed(238),
-    accent: Color::Yellow,
-    accent_bg: Color::Indexed(238),
+    accent: Color::Cyan,
+    reaction_mine: Color::Gray,
     suggestion: Color::Magenta,
     success: Color::Green,
     warning: Color::Yellow,
@@ -98,6 +122,7 @@ pub fn current() -> &'static Theme {
     static SELECTED: OnceLock<&'static Theme> = OnceLock::new();
     SELECTED.get_or_init(|| match std::env::var("TUIPR_THEME").as_deref() {
         Ok("gruvbox") => &GRUVBOX,
+        Ok("catppuccin") => &CATPPUCCIN,
         _ => &TERMINAL,
     })
 }

@@ -114,17 +114,11 @@ pub(super) fn reactions_line(reactions: &[Reaction]) -> Option<Line<'static>> {
         if !spans.is_empty() {
             spans.push(Span::raw(" "));
         }
-        let (bg, fg) = if r.mine {
-            (theme.accent_bg, theme.accent)
-        } else {
-            (theme.highlight_bg, theme.fg)
-        };
-        spans.push(Span::styled("\u{e0b6}", Style::default().fg(bg)));
+        let fg = if r.mine { theme.reaction_mine } else { theme.fg };
         spans.push(Span::styled(
-            format!("{} {}", r.emoji, r.count),
-            Style::default().fg(fg).bg(bg),
+            format!(" {} {} ", r.emoji, r.count),
+            Style::default().fg(fg).bg(theme.highlight_bg),
         ));
-        spans.push(Span::styled("\u{e0b4}", Style::default().fg(bg)));
     }
     Some(Line::from(spans))
 }
@@ -370,17 +364,17 @@ mod tests {
     }
 
     #[test]
-    fn renders_one_capped_pill_per_reaction() {
+    fn renders_one_padded_pill_per_reaction() {
         let line = reactions_line(&[reaction("👍", 2, false), reaction("👀", 3, false)]).unwrap();
-        assert_eq!(text(&line), "\u{e0b6}👍 2\u{e0b4} \u{e0b6}👀 3\u{e0b4}");
+        assert_eq!(text(&line), " 👍 2   👀 3 ");
     }
 
     #[test]
-    fn own_reaction_gets_the_accent_tint() {
+    fn own_reaction_gets_the_accent_text() {
         let theme = theme::current();
         let line = reactions_line(&[reaction("👍", 4, true), reaction("👀", 3, false)]).unwrap();
-        assert_eq!(line.spans[1].style.bg, Some(theme.accent_bg));
-        assert_eq!(line.spans[1].style.fg, Some(theme.accent));
-        assert_eq!(line.spans[5].style.bg, Some(theme.highlight_bg));
+        assert_eq!(line.spans[0].style.bg, Some(theme.highlight_bg));
+        assert_eq!(line.spans[0].style.fg, Some(theme.reaction_mine));
+        assert_eq!(line.spans[2].style.fg, Some(theme.fg));
     }
 }
