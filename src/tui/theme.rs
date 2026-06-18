@@ -55,8 +55,6 @@ pub const GRUVBOX: Theme = Theme {
     status_declined: Color::Rgb(0xfb, 0x49, 0x34),
 };
 
-// Experimental palette — Catppuccin Mocha. A soft, low-contrast dark theme to
-// trial against the terminal/gruvbox looks (`TUIPR_THEME=catppuccin`).
 pub const CATPPUCCIN: Theme = Theme {
     fg: Color::Rgb(0xcd, 0xd6, 0xf4),
     bg: Color::Rgb(0x1e, 0x1e, 0x2e),
@@ -120,9 +118,14 @@ impl Theme {
 
 pub fn current() -> &'static Theme {
     static SELECTED: OnceLock<&'static Theme> = OnceLock::new();
-    SELECTED.get_or_init(|| match std::env::var("TUIPR_THEME").as_deref() {
-        Ok("gruvbox") => &GRUVBOX,
-        Ok("catppuccin") => &CATPPUCCIN,
-        _ => &TERMINAL,
+    SELECTED.get_or_init(|| {
+        let name = std::env::var("TUIPR_THEME")
+            .ok()
+            .or_else(|| crate::config::load().theme);
+        match name.as_deref() {
+            Some("gruvbox") => &GRUVBOX,
+            Some("catppuccin") => &CATPPUCCIN,
+            _ => &TERMINAL,
+        }
     })
 }

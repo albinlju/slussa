@@ -76,7 +76,7 @@
 - [ ] **Viewed-files tracking** — local "mark file reviewed" (GitHub's *Viewed*), saved per PR.
 - [ ] **Help overlay** (`?`) listing all keys.
 - [ ] **Status bar** — provider, repo, match count, loading spinner.
-- [ ] **Config** — repos / providers, default filters, keybindings, theme.
+- [ ] **Config** — repos / providers, default filters, keybindings. *(theme is done: `~/.config/tuipr/config.toml` `theme = "…"`, overridden by `TUIPR_THEME`)*
 - [ ] **Empty / loading / error states** per view (use `LoadState` everywhere).
 - [ ] **Open in browser** (`o`) — the PR / focused file / line. Cheapest big payoff. *(write-adjacent)*
 - [ ] **Copy** (`y`) — SHA / branch / PR URL / permalink to a line.
