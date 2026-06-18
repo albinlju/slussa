@@ -95,6 +95,9 @@ pub(in crate::tui) fn key_to_action(state: &AppState, key: KeyEvent) -> Option<A
     escape_action(state, tab, viewing_commit, code)
         .or_else(|| tab_select_key(code))
         .or_else(|| tab_key(state, tab, viewing_commit, code))
+        // `[`/`]` switch tabs, but only after tab_key so the commit-diff view
+        // keeps them for stepping commits.
+        .or_else(|| tab_bracket_key(code))
 }
 
 fn escape_action(
@@ -123,14 +126,20 @@ fn escape_action(
 
 fn tab_select_key(code: KeyCode) -> Option<Action> {
     match code {
-        KeyCode::Tab => Some(Action::Detail(DetailAction::NextTab)),
-        KeyCode::BackTab => Some(Action::Detail(DetailAction::PrevTab)),
         KeyCode::Char(c @ '1'..='5') => {
             let idx = (c as u8 - b'1') as usize;
             DetailTab::ALL
                 .get(idx)
                 .map(|&t| Action::Detail(DetailAction::SelectTab(t)))
         }
+        _ => None,
+    }
+}
+
+fn tab_bracket_key(code: KeyCode) -> Option<Action> {
+    match code {
+        KeyCode::Char('[') => Some(Action::Detail(DetailAction::PrevTab)),
+        KeyCode::Char(']') => Some(Action::Detail(DetailAction::NextTab)),
         _ => None,
     }
 }
@@ -194,10 +203,10 @@ fn tree_key(code: KeyCode, view: &DiffViewState) -> Option<DiffAction> {
         return Some(DiffAction::MoveCursor(delta));
     }
     match code {
-        KeyCode::Enter => Some(DiffAction::EnterPane),
+        // `l`/Enter steps right into the pane (a file) or drills into a folder.
+        KeyCode::Enter | KeyCode::Right | KeyCode::Char('l') => Some(DiffAction::EnterPane),
         KeyCode::Char(' ') => Some(DiffAction::ToggleAtCursor),
         KeyCode::Left | KeyCode::Char('h') => Some(DiffAction::CollapseAtCursor),
-        KeyCode::Right | KeyCode::Char('l') => Some(DiffAction::ExpandAtCursor),
         _ => None,
     }
 }
