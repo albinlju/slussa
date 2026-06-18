@@ -118,7 +118,6 @@ fn pr_list_container(filter: StatusFilter, count_label: &str) -> Block<'static> 
     let theme = theme::current();
     Block::default()
         .borders(Borders::ALL)
-        .border_type(BorderType::Rounded)
         .border_style(Style::default().fg(theme.border))
         .title(Line::styled(
             format!(" {} ({count_label}) ", filter.label()),

@@ -78,7 +78,6 @@ pub(in crate::tui) fn render(
 
     let outer = Block::default()
         .borders(Borders::ALL)
-        .border_type(BorderType::Rounded)
         .border_style(Style::default().fg(theme.border));
     let inner = outer.inner(main_area);
     frame.render_widget(outer, main_area);

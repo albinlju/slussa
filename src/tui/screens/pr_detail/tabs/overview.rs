@@ -328,8 +328,11 @@ impl TimelineItem<'_> {
 
 struct TimelineBlock {
     lines: Vec<Line<'static>>,
-    /// Colour of the rail node (`●`) for this activity.
+    /// Colour of the rail node (`*`) for this activity.
     node: Color,
+    /// Colour of the dash after the node — tracks the box's left border
+    /// (muted-light when focused, divider otherwise).
+    border: Color,
     reply_to: Option<u64>,
     /// Comments and review threads are focus targets for j/k; events render
     /// inline for context but the cursor skips them.
@@ -386,6 +389,7 @@ fn build_blocks(
                 blocks.push(TimelineBlock {
                     lines: super::super::comment::comment_box(c, width, now, active, author),
                     node: theme.link,
+                    border: if active { theme.muted } else { theme.divider },
                     reply_to: c.reply_to,
                     focusable: true,
                     comments: vec![CommentRef {
@@ -405,6 +409,7 @@ fn build_blocks(
                     blocks.push(TimelineBlock {
                         lines,
                         node: theme.link,
+                        border: if active { theme.muted } else { theme.divider },
                         reply_to: t.reply_to,
                         focusable: true,
                         comments: t
@@ -429,6 +434,7 @@ fn build_blocks(
                 blocks.push(TimelineBlock {
                     lines,
                     node: color,
+                    border: theme.divider,
                     reply_to: None,
                     focusable: false,
                     comments: Vec::new(),
@@ -460,7 +466,7 @@ fn timeline_rail(blocks: Vec<TimelineBlock>) -> (Vec<Line<'static>>, Vec<ItemNav
                 "*",
                 Style::default().fg(block.node).add_modifier(Modifier::BOLD),
             ),
-            Span::styled("─ ", Style::default().fg(theme.muted)),
+            Span::styled("─ ", Style::default().fg(block.border)),
         ];
         for (j, line) in block.lines.into_iter().enumerate() {
             let mut spans = if j == 0 {
