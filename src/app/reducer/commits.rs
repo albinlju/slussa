@@ -8,7 +8,7 @@ use crate::{
 };
 
 impl App {
-    pub(super) fn apply_commits(&mut self, action: CommitsAction) {
+    pub(super) fn commits_actions(&mut self, action: CommitsAction) {
         match action {
             CommitsAction::MoveSelection(delta) => self.commits_move_selection(delta),
             CommitsAction::Open => self.commits_open_selected(),

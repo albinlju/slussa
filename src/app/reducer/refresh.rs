@@ -43,7 +43,7 @@ impl App {
     }
 
     /// Manual `F`: re-fetch the active view right now, ignoring the cadence.
-    pub(super) fn force_refresh(&mut self) {
+    pub(super) fn refresh_actions(&mut self) {
         if self.modal_open() {
             return;
         }

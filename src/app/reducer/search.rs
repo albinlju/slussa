@@ -6,7 +6,7 @@ use crate::app::{
 };
 
 impl App {
-    pub(super) fn apply_search(&mut self, action: SearchAction) {
+    pub(super) fn search_actions(&mut self, action: SearchAction) {
         let Some(target) = self.state.search_target() else {
             return;
         };

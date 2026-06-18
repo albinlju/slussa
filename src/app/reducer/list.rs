@@ -5,7 +5,7 @@ use crate::app::{
 };
 
 impl App {
-    pub(super) fn apply_list(&mut self, action: ListAction) {
+    pub(super) fn list_actions(&mut self, action: ListAction) {
         match action {
             ListAction::MoveSelection(delta) => self.move_selection(delta),
             ListAction::OpenPr(pr_id) => self.open_pr(pr_id),

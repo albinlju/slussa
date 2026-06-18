@@ -5,7 +5,7 @@ use crate::app::{
 };
 
 impl App {
-    pub(super) fn apply_loaded(&mut self, action: LoadedAction) {
+    pub(super) fn loaded_actions(&mut self, action: LoadedAction) {
         // Any settled fetch clears the footer's refresh indicator.
         self.state.ui.refreshing = false;
         match action {
