@@ -22,7 +22,7 @@ pub(in crate::tui) fn render_inline_thread(
     expanded: bool,
 ) -> Vec<Line<'static>> {
     let theme = theme::current();
-    let frame = if active { theme.accent } else { theme.divider };
+    let frame = if active { theme.muted } else { theme.divider };
 
     // A resolved thread collapses to a one-line summary until expanded (`space`).
     if thread.resolved && !expanded {
@@ -41,7 +41,9 @@ pub(in crate::tui) fn render_inline_thread(
     } else if !has_suggestion {
         out.push(status_rule(status_label(thread), width, frame));
     }
-    out.extend(conversation(thread, anchor, width, now, author, frame, "", None));
+    out.extend(conversation(
+        thread, anchor, width, now, author, frame, "", None,
+    ));
     out
 }
 
@@ -97,7 +99,7 @@ pub(super) fn comment_box(
     author: &str,
 ) -> Vec<Line<'static>> {
     let theme = theme::current();
-    let frame = if active { theme.accent } else { theme.divider };
+    let frame = if active { theme.muted } else { theme.divider };
     let header = header_line(
         author_meta(
             &comment.author.username,
@@ -113,6 +115,7 @@ pub(super) fn comment_box(
         comment_body(comment, None, width.saturating_sub(2), "", false),
         width,
         frame,
+        theme.divider,
     ));
     out
 }
@@ -143,7 +146,7 @@ pub(super) fn review_thread_box(
 ) -> Option<Vec<Line<'static>>> {
     let theme = theme::current();
     thread.comments.first()?;
-    let frame = if active { theme.accent } else { theme.divider };
+    let frame = if active { theme.muted } else { theme.divider };
 
     let loc = match thread.line.or(thread.old_line) {
         Some(l) => format!("{}:{l}", thread.path),
@@ -178,7 +181,7 @@ pub(super) fn review_thread_box(
     let anchor = thread.line.or(thread.old_line).zip(anchor_text.as_deref());
 
     if !has_suggestion && !snippet.is_empty() {
-        out.extend(bracket(align_snippet(snippet), width, frame));
+        out.extend(bracket(align_snippet(snippet), width, frame, theme.divider));
     }
     out.extend(conversation(
         thread, anchor, width, now, author, frame, &loc, selected,
@@ -190,21 +193,23 @@ fn header_line(left: Vec<Span<'static>>, right: Vec<Span<'static>>, width: u16) 
     Line::from(widgets::justify_between(left, right, width as usize))
 }
 
-fn bracket(body: Vec<Line<'static>>, width: u16, color: Color) -> Vec<Line<'static>> {
-    let style = Style::default().fg(color);
-    let rule = |corner: &str| {
+/// `left` colours the vertical edge (accent marks focus); `rule` colours the
+/// top/bottom — kept muted so focus only lights up the left border.
+fn bracket(body: Vec<Line<'static>>, width: u16, left: Color, rule: Color) -> Vec<Line<'static>> {
+    let left_style = Style::default().fg(left);
+    let rule_line = |corner: &str| {
         Line::from(Span::styled(
             format!("{corner}{}", "─".repeat((width as usize).saturating_sub(1))),
-            style,
+            Style::default().fg(rule),
         ))
     };
-    let mut out = vec![rule("┌")];
+    let mut out = vec![rule_line("┌")];
     for line in body {
-        let mut spans = vec![Span::styled("│ ", style)];
+        let mut spans = vec![Span::styled("| ", left_style)];
         spans.extend(line.spans);
         out.push(Line::from(spans).style(line.style));
     }
-    out.push(rule("└"));
+    out.push(rule_line("└"));
     out
 }
 
@@ -242,9 +247,16 @@ fn conversation(
             out.extend(framed(
                 meta,
                 label,
-                comment_body(comment, anchor, width.saturating_sub(2), loc, thread.resolved),
+                comment_body(
+                    comment,
+                    anchor,
+                    width.saturating_sub(2),
+                    loc,
+                    thread.resolved,
+                ),
                 width,
                 frame,
+                theme.divider,
             ));
             continue;
         }
@@ -255,14 +267,22 @@ fn conversation(
         };
         // The Ctrl-j/k sub-cursor marks the comment e/d will act on.
         if selected == Some(i) {
-            let marker = Style::default().fg(theme.accent).add_modifier(Modifier::BOLD);
+            let marker = Style::default()
+                .fg(theme.muted)
+                .add_modifier(Modifier::BOLD);
             let mut spans = vec![Span::styled("▸ ", marker)];
             spans.extend(meta);
             out.push(Line::from(spans));
         } else {
             out.push(prefix_gutter(Line::from(meta), head, style));
         }
-        for line in comment_body(comment, anchor, width.saturating_sub(2), "", thread.resolved) {
+        for line in comment_body(
+            comment,
+            anchor,
+            width.saturating_sub(2),
+            "",
+            thread.resolved,
+        ) {
             out.push(prefix_gutter(line, body_gutter, style));
         }
     }
@@ -280,9 +300,11 @@ fn framed(
     right: Vec<Span<'static>>,
     body: Vec<Line<'static>>,
     width: u16,
-    color: Color,
+    left_color: Color,
+    rule: Color,
 ) -> Vec<Line<'static>> {
-    let style = Style::default().fg(color);
+    let style = Style::default().fg(rule);
+    let left_style = Style::default().fg(left_color);
     let w = width as usize;
     let left_w: usize = left.iter().map(Span::width).sum();
     let right_w: usize = right.iter().map(Span::width).sum();
@@ -301,7 +323,7 @@ fn framed(
 
     let mut out = vec![Line::from(top)];
     for line in body {
-        let mut spans = vec![Span::styled("│ ", style)];
+        let mut spans = vec![Span::styled("| ", left_style)];
         spans.extend(line.spans);
         out.push(Line::from(spans).style(line.style));
     }
@@ -471,7 +493,14 @@ fn suggestion_box(
             Style::default().fg(theme.accent),
         )]
     };
-    let mut out = framed(title, right, rows, width, theme.suggestion);
+    let mut out = framed(
+        title,
+        right,
+        rows,
+        width,
+        theme.suggestion,
+        theme.suggestion,
+    );
     // A resolved suggestion can't be applied anymore — drop the action hints.
     if !resolved {
         out.push(Line::raw(""));

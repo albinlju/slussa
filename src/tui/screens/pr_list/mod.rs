@@ -254,7 +254,10 @@ fn row_cells(pr: &PullRequest) -> Vec<Cell> {
             pr.author.username.clone(),
             Style::default().fg(theme.info),
         )],
-        vec![Span::styled(pr.title.clone(), Style::default().fg(theme.fg))],
+        vec![Span::styled(
+            pr.title.clone(),
+            Style::default().fg(theme.fg),
+        )],
         vec![Span::styled(ci_sym, Style::default().fg(ci_color))],
         vec![
             Span::styled(

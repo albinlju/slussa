@@ -116,8 +116,9 @@ pub fn set_thread_resolved(node_id: &str, resolved: bool) -> Result<(), FetchErr
     } else {
         "unresolveReviewThread"
     };
-    let query =
-        format!("mutation {{ {mutation}(input: {{ threadId: \"{node_id}\" }}) {{ thread {{ isResolved }} }} }}");
+    let query = format!(
+        "mutation {{ {mutation}(input: {{ threadId: \"{node_id}\" }}) {{ thread {{ isResolved }} }} }}"
+    );
     super::cli::run_gh(&["api", "graphql", "-f", &format!("query={query}")])?;
     Ok(())
 }

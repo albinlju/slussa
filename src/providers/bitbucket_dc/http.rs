@@ -81,14 +81,10 @@ pub(super) fn get_json<T: DeserializeOwned>(
 pub(super) fn current_user(base_url: &str, path: &str, pat: &str) -> Result<String, FetchError> {
     let url = format!("{base_url}{path}");
     tracing::debug!("GET {url} (whoami)");
-    let response = client()?
-        .get(&url)
-        .bearer_auth(pat)
-        .send()
-        .map_err(|e| {
-            tracing::warn!("http send failed: {e}");
-            FetchError::Network(e.to_string())
-        })?;
+    let response = client()?.get(&url).bearer_auth(pat).send().map_err(|e| {
+        tracing::warn!("http send failed: {e}");
+        FetchError::Network(e.to_string())
+    })?;
     // Bitbucket DC stamps the authenticated account on every response as
     // X-AUSERNAME; unauthenticated requests get "anonymous".
     response

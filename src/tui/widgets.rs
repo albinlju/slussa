@@ -141,7 +141,9 @@ pub(super) fn spinner_frame() -> &'static str {
 pub(super) fn footer(width: u16, hints: &str, refreshing: bool) -> Line<'static> {
     let theme = theme::current();
     let muted = Style::default().fg(theme.muted);
-    let key = Style::default().fg(theme.accent).add_modifier(Modifier::BOLD);
+    let key = Style::default()
+        .fg(theme.accent)
+        .add_modifier(Modifier::BOLD);
 
     let mut left = vec![Span::raw("  ")];
     for (i, segment) in hints.split("  ").enumerate() {
@@ -160,8 +162,14 @@ pub(super) fn footer(width: u16, hints: &str, refreshing: bool) -> Line<'static>
     let version = format!("v{}", env!("CARGO_PKG_VERSION"));
     let mut right = Vec::new();
     if refreshing {
-        right.push(Span::styled(icons::REFRESH, Style::default().fg(theme.warning)));
-        right.push(Span::styled(" refreshing", Style::default().fg(theme.warning)));
+        right.push(Span::styled(
+            icons::REFRESH,
+            Style::default().fg(theme.warning),
+        ));
+        right.push(Span::styled(
+            " refreshing",
+            Style::default().fg(theme.warning),
+        ));
         right.push(Span::raw("    "));
     }
     right.extend([

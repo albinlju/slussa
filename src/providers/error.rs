@@ -19,11 +19,13 @@ impl FetchError {
             Self::GhFailed { stderr, .. } => {
                 api_message(stderr).unwrap_or_else(|| clean_gh(stderr))
             }
-            Self::HttpFailed { status, body } => api_message(body).unwrap_or_else(|| match status {
-                401 | 403 => "Not authorized — check your token's permissions.".to_owned(),
-                404 => "Not found.".to_owned(),
-                _ => format!("Request failed (HTTP {status})."),
-            }),
+            Self::HttpFailed { status, body } => {
+                api_message(body).unwrap_or_else(|| match status {
+                    401 | 403 => "Not authorized — check your token's permissions.".to_owned(),
+                    404 => "Not found.".to_owned(),
+                    _ => format!("Request failed (HTTP {status})."),
+                })
+            }
             Self::Network(_) => "Couldn't reach the server.".to_owned(),
             Self::NotAuthenticated { host } => {
                 format!("Not logged in to {host} — run `tuipr auth login`.")
