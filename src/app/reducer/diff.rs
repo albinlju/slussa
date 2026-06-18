@@ -9,7 +9,7 @@ use crate::{
 };
 
 impl App {
-    pub(super) fn apply_diff(&mut self, action: DiffAction) {
+    pub(super) fn diff_actions(&mut self, action: DiffAction) {
         match action {
             DiffAction::MoveCursor(delta) => self.diff_move_cursor(delta),
             DiffAction::ToggleAtCursor => self.diff_toggle_at_cursor(),

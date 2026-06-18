@@ -27,13 +27,13 @@ impl App {
     pub(super) fn apply(&mut self, action: Action) {
         match action {
             Action::Quit => unreachable!("handled in run()"),
-            Action::Refresh => self.force_refresh(),
-            Action::List(a) => self.apply_list(a),
-            Action::Detail(a) => self.apply_detail(a),
-            Action::Diff(a) => self.apply_diff(a),
-            Action::Commits(a) => self.apply_commits(a),
-            Action::Search(a) => self.apply_search(a),
-            Action::Loaded(a) => self.apply_loaded(a),
+            Action::Refresh => self.refresh_actions(),
+            Action::List(a) => self.list_actions(a),
+            Action::Detail(a) => self.detail_actions(a),
+            Action::Diff(a) => self.diff_actions(a),
+            Action::Commits(a) => self.commits_actions(a),
+            Action::Search(a) => self.search_actions(a),
+            Action::Loaded(a) => self.loaded_actions(a),
         }
     }
 }

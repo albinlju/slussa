@@ -5,7 +5,7 @@ use crate::app::{
 };
 
 impl App {
-    pub(super) fn apply_detail(&mut self, action: DetailAction) {
+    pub(super) fn detail_actions(&mut self, action: DetailAction) {
         match action {
             DetailAction::Back => self.back_to_list(),
             DetailAction::NextTab => self.next_tab(),
