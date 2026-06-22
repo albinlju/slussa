@@ -6,6 +6,7 @@ use crate::domain::comment::Comment;
 use crate::domain::commit::Commit;
 use crate::domain::diff::Diff;
 use crate::domain::pr::{PrStatus, PullRequest};
+use crate::domain::review::ReviewVerdict;
 
 #[derive(Debug, Default, Clone, Copy, PartialEq, Eq)]
 pub enum DetailTab {
@@ -46,6 +47,9 @@ pub struct AppState {
     pub ui: UiMemory,
     pub screen: Screen,
     pub current_user: String,
+    /// Whether the provider supports withdrawing an approval (gates the
+    /// "Unapprove" review verdict). Set once at startup.
+    pub can_unapprove: bool,
 }
 
 #[derive(Debug, Default)]
@@ -93,6 +97,8 @@ pub struct UiMemory {
     pub filter_picker_cursor: usize,
     pub confirm: Option<ConfirmKind>,
     pub confirm_cursor: usize,
+    /// Open review-verdict menu (cursor into `AppState::review_verdicts`).
+    pub review_picker: Option<usize>,
     pub diff: DiffViewState,
     pub commits: CommitsViewState,
     pub description_scroll: u16,
@@ -140,6 +146,11 @@ pub enum CommentTarget {
         id: u64,
         review: bool,
     },
+    /// The summary body of a review verdict that carries one (request changes /
+    /// comment).
+    Review {
+        verdict: ReviewVerdict,
+    },
 }
 
 /// The comment the overview sub-cursor points at within the focused block.
@@ -163,14 +174,12 @@ pub struct ThreadRef {
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum ConfirmKind {
-    Approve,
     DeleteComment { id: u64, review: bool },
 }
 
 impl ConfirmKind {
     pub fn prompt(self) -> &'static str {
         match self {
-            Self::Approve => "Approve this PR?",
             Self::DeleteComment { .. } => "Delete this comment?",
         }
     }
@@ -403,6 +412,20 @@ impl AppState {
         let comment = self.find_comment(id)?;
         (!self.current_user.is_empty() && comment.author.username == self.current_user)
             .then_some(sel)
+    }
+
+    /// The review verdicts to offer in the menu — `Unapprove` only where the
+    /// provider supports withdrawing approval.
+    pub fn review_verdicts(&self) -> Vec<ReviewVerdict> {
+        let mut verdicts = vec![
+            ReviewVerdict::Approve,
+            ReviewVerdict::RequestChanges,
+            ReviewVerdict::Comment,
+        ];
+        if self.can_unapprove {
+            verdicts.push(ReviewVerdict::Unapprove);
+        }
+        verdicts
     }
 
     /// Target for a brand-new comment (`c`): a top-level PR comment in Overview,

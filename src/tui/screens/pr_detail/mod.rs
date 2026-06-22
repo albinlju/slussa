@@ -104,9 +104,54 @@ pub(in crate::tui) fn render(
     if let Some(kind) = state.ui.confirm {
         render_confirm_box(frame, kind, state.ui.confirm_cursor, area);
     }
+    if let Some(cursor) = state.ui.review_picker {
+        render_review_picker(frame, state, cursor, area);
+    }
     if let Some(msg) = &state.ui.error {
         render_error_box(frame, msg, area);
     }
+}
+
+fn render_review_picker(frame: &mut Frame, state: &AppState, cursor: usize, area: Rect) {
+    let theme = theme::current();
+    let selected = Style::default()
+        .bg(theme.highlight_bg)
+        .add_modifier(Modifier::BOLD);
+    let normal = Style::default().fg(theme.muted);
+
+    let mut lines = vec![
+        Line::from(Span::styled("Submit review", Style::default().fg(theme.fg))),
+        Line::default(),
+    ];
+    for (i, verdict) in state.review_verdicts().iter().enumerate() {
+        let marker = if i == cursor { "▶ " } else { "  " };
+        let style = if i == cursor { selected } else { normal };
+        lines.push(Line::from(vec![
+            Span::styled(marker, Style::default().fg(theme.accent)),
+            Span::styled(format!(" {} ", verdict.label()), style),
+        ]));
+    }
+
+    let content_w = lines.iter().map(Line::width).max().unwrap_or(0) as u16;
+    let popup_w = (content_w + 4).min(area.width);
+    let popup_h = (lines.len() as u16 + 2).min(area.height);
+    let popup = Rect {
+        x: area.x + area.width.saturating_sub(popup_w) / 2,
+        y: area.y + area.height.saturating_sub(popup_h) / 2,
+        width: popup_w,
+        height: popup_h,
+    };
+
+    frame.render_widget(Clear, popup);
+    let block = Block::default()
+        .borders(Borders::ALL)
+        .border_type(BorderType::Rounded)
+        .title(" Review ")
+        .border_style(Style::default().fg(theme.accent))
+        .padding(Padding::horizontal(1));
+    let inner = block.inner(popup);
+    frame.render_widget(block, popup);
+    frame.render_widget(Paragraph::new(lines), inner);
 }
 
 fn render_error_box(frame: &mut Frame, message: &str, area: Rect) {
@@ -184,7 +229,7 @@ fn footer_actions(state: &AppState, tab: DetailTab, own_pr: bool) -> String {
             parts.push("d: delete");
         }
         if !own_pr {
-            parts.push("a: approve");
+            parts.push("a: review");
         }
         return parts.join("  ");
     }
@@ -204,6 +249,7 @@ fn comment_prompt(draft: &CommentDraft) -> Line<'static> {
         CommentTarget::Pr => "  comment ▏ ".to_owned(),
         CommentTarget::Reply(_) => "  reply ▏ ".to_owned(),
         CommentTarget::Edit { .. } => "  edit ▏ ".to_owned(),
+        CommentTarget::Review { verdict } => format!("  {} ▏ ", verdict.label().to_lowercase()),
     };
     Line::from(vec![
         Span::styled(label, Style::default().fg(theme.muted)),
@@ -459,7 +505,7 @@ const HELP_KEYS: &[(&str, &str)] = &[
     ("n/N", "next/prev match"),
     ("[ ]", "prev/next tab/commit"),
     ("esc", "back"),
-    ("a", "approve"),
+    ("a", "review"),
     ("c", "comment"),
     ("r", "reply"),
     ("^j/^k", "step comment"),

@@ -23,6 +23,7 @@ use serde::Deserialize;
 use serde::de::DeserializeOwned;
 
 use crate::domain::comment::{Comment, Reaction};
+use crate::domain::review::ReviewVerdict;
 use crate::domain::user::User;
 use crate::providers::error::FetchError;
 
@@ -31,15 +32,23 @@ pub fn current_user() -> Result<String, FetchError> {
     Ok(String::from_utf8_lossy(&out).trim().to_owned())
 }
 
-pub fn approve(pr_number: u64) -> Result<(), FetchError> {
-    cli::run_gh(&[
-        "api",
-        "--method",
-        "POST",
-        &format!("repos/{{owner}}/{{repo}}/pulls/{pr_number}/reviews"),
-        "-f",
-        "event=APPROVE",
-    ])?;
+pub fn submit_review(pr_number: u64, verdict: ReviewVerdict, body: &str) -> Result<(), FetchError> {
+    let event = match verdict {
+        ReviewVerdict::Approve => "APPROVE",
+        ReviewVerdict::RequestChanges => "REQUEST_CHANGES",
+        ReviewVerdict::Comment => "COMMENT",
+        // GitHub reviews are immutable — there's no "undo"; not offered there.
+        ReviewVerdict::Unapprove => return Ok(()),
+    };
+    let endpoint = format!("repos/{{owner}}/{{repo}}/pulls/{pr_number}/reviews");
+    let event_arg = format!("event={event}");
+    let body_arg = format!("body={body}");
+    let mut args: Vec<&str> = vec!["api", "--method", "POST", &endpoint, "-f", &event_arg];
+    if !body.is_empty() {
+        args.push("-f");
+        args.push(&body_arg);
+    }
+    cli::run_gh(&args)?;
     Ok(())
 }
 

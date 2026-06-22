@@ -3,7 +3,7 @@ use ratatui::crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
 use crate::{
     app::{
         action::{Action, CommitsAction, DetailAction, DiffAction, SearchAction},
-        state::{AppState, ConfirmKind, DetailTab, DiffFocus, DiffViewState, Screen},
+        state::{AppState, DetailTab, DiffFocus, DiffViewState, Screen},
     },
     tui::screens::half_page,
 };
@@ -39,6 +39,21 @@ pub(in crate::tui) fn key_to_action(state: &AppState, key: KeyEvent) -> Option<A
         };
     }
 
+    // The review-verdict menu is modal: arrows/hjkl move, enter picks, esc closes.
+    if state.ui.review_picker.is_some() {
+        return match code {
+            KeyCode::Left | KeyCode::Up | KeyCode::Char('h' | 'k') => {
+                Some(Action::Detail(DetailAction::ReviewMove(-1)))
+            }
+            KeyCode::Right | KeyCode::Down | KeyCode::Char('j' | 'l') => {
+                Some(Action::Detail(DetailAction::ReviewMove(1)))
+            }
+            KeyCode::Enter => Some(Action::Detail(DetailAction::ReviewSelect)),
+            KeyCode::Esc => Some(Action::Detail(DetailAction::CloseReviewPicker)),
+            _ => None,
+        };
+    }
+
     if code == KeyCode::Char('?') {
         return Some(Action::Detail(DetailAction::ToggleHelp));
     }
@@ -46,16 +61,13 @@ pub(in crate::tui) fn key_to_action(state: &AppState, key: KeyEvent) -> Option<A
         return (code == KeyCode::Esc).then_some(Action::Detail(DetailAction::ToggleHelp));
     }
 
-    // You can't approve your own PR (GitHub/Bitbucket both reject it), so we
-    // don't offer it — mirrors the greyed-out approve in their web UIs.
+    // `a` opens the review-verdict menu — not for your own PR (you can't review it).
     if plain
         && code == KeyCode::Char('a')
         && tab == DetailTab::Overview
         && !state.viewing_own_pr(pr_id)
     {
-        return Some(Action::Detail(DetailAction::OpenConfirm(
-            ConfirmKind::Approve,
-        )));
+        return Some(Action::Detail(DetailAction::OpenReviewPicker));
     }
     if plain && code == KeyCode::Char('c') {
         return Some(Action::Detail(DetailAction::OpenComment));

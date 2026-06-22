@@ -6,6 +6,7 @@ use crate::{
         action::{Action, LoadedAction},
         state::CommentTarget,
     },
+    domain::review::ReviewVerdict,
     providers::FetchError,
 };
 
@@ -87,6 +88,8 @@ impl App {
                 CommentTarget::Edit { id, review } => {
                     provider.edit_comment(pr_id, id, review, &text)
                 }
+                // Review verdicts are routed to `spawn_submit_review` upstream.
+                CommentTarget::Review { .. } => unreachable!("review target handled separately"),
             },
             move |r| Action::Loaded(LoadedAction::Commented(pr_id, r)),
         );
@@ -100,10 +103,16 @@ impl App {
         );
     }
 
-    pub(super) fn spawn_approve(&self, pr_id: u64, user: String) {
+    pub(super) fn spawn_submit_review(
+        &self,
+        pr_id: u64,
+        verdict: ReviewVerdict,
+        body: String,
+        user: String,
+    ) {
         let provider = self.provider.clone();
         self.spawn_fetch(
-            move || provider.approve(pr_id, &user),
+            move || provider.submit_review(pr_id, verdict, &body, &user),
             move |r| Action::Loaded(LoadedAction::Commented(pr_id, r)),
         );
     }

@@ -17,16 +17,23 @@ impl App {
             }
             DetailAction::OverviewMove(delta) => self.overview_move(delta),
             DetailAction::ToggleHelp => self.state.ui.help_open = !self.state.ui.help_open,
-            DetailAction::OpenConfirm(kind) => {
-                self.state.ui.confirm = Some(kind);
-                self.state.ui.confirm_cursor = 0;
-            }
             DetailAction::CloseConfirm => self.state.ui.confirm = None,
             DetailAction::ConfirmMove(delta) => {
                 self.state.ui.confirm_cursor =
                     super::step_index(self.state.ui.confirm_cursor, delta, 2);
             }
             DetailAction::SubmitConfirm => self.submit_confirm(),
+            DetailAction::OpenReviewPicker => {
+                self.state.ui.review_picker = Some(0);
+            }
+            DetailAction::ReviewMove(delta) => {
+                if let Some(cursor) = self.state.ui.review_picker {
+                    let len = self.state.review_verdicts().len();
+                    self.state.ui.review_picker = Some(super::step_index(cursor, delta, len));
+                }
+            }
+            DetailAction::ReviewSelect => self.select_review(),
+            DetailAction::CloseReviewPicker => self.state.ui.review_picker = None,
             DetailAction::OpenComment => self.open_comment(),
             DetailAction::OpenReply => self.open_reply(),
             DetailAction::OverviewSubMove(delta) => self.overview_sub_move(delta),
@@ -146,9 +153,35 @@ impl App {
         if draft.text.trim().is_empty() {
             return;
         }
-        if let Screen::Detail { pr_id, .. } = self.state.screen {
+        let Screen::Detail { pr_id, .. } = self.state.screen else {
+            return;
+        };
+        self.state.ui.comment_pending = true;
+        match draft.target {
+            // A review summary submits the verdict; everything else is a comment.
+            CommentTarget::Review { verdict } => {
+                let user = self.state.current_user.clone();
+                self.spawn_submit_review(pr_id, verdict, draft.text, user);
+            }
+            target => self.spawn_comment(pr_id, target, draft.text),
+        }
+    }
+
+    /// `a` review menu: bodyless verdicts (approve / unapprove) submit straight
+    /// away; request-changes / comment open the draft for their summary.
+    fn select_review(&mut self) {
+        let Some(cursor) = self.state.ui.review_picker.take() else {
+            return;
+        };
+        let Some(verdict) = self.state.review_verdicts().get(cursor).copied() else {
+            return;
+        };
+        if verdict.needs_body() {
+            self.open_draft(Some(CommentTarget::Review { verdict }));
+        } else if let Screen::Detail { pr_id, .. } = self.state.screen {
             self.state.ui.comment_pending = true;
-            self.spawn_comment(pr_id, draft.target, draft.text);
+            let user = self.state.current_user.clone();
+            self.spawn_submit_review(pr_id, verdict, String::new(), user);
         }
     }
 
@@ -162,12 +195,6 @@ impl App {
                 if let Screen::Detail { pr_id, .. } = self.state.screen {
                     self.state.ui.comment_pending = true;
                     self.spawn_delete_comment(pr_id, id, review);
-                }
-            }
-            Some(ConfirmKind::Approve) => {
-                if let Screen::Detail { pr_id, .. } = self.state.screen {
-                    self.state.ui.comment_pending = true;
-                    self.spawn_approve(pr_id, self.state.current_user.clone());
                 }
             }
             None => {}
