@@ -69,6 +69,24 @@ pub(in crate::tui) fn key_to_action(state: &AppState, key: KeyEvent) -> Option<A
     {
         return Some(Action::Detail(DetailAction::OpenReviewPicker));
     }
+    // `v` runs the batched review: it starts a review the first time, then finishes
+    // it (opening the verdict menu) once one's in progress. Line comments made
+    // while it's open queue into the review instead of posting.
+    if plain
+        && code == KeyCode::Char('v')
+        && (tab == DetailTab::Overview || tab == DetailTab::Diff)
+        && !state.viewing_own_pr(pr_id)
+    {
+        return Some(Action::Detail(if state.ui.pending_review.is_some() {
+            DetailAction::FinishReview
+        } else {
+            DetailAction::StartReview
+        }));
+    }
+    // Shift+V discards an in-progress review and its queued comments.
+    if code == KeyCode::Char('V') && state.ui.pending_review.is_some() {
+        return Some(Action::Detail(DetailAction::AbandonReview));
+    }
     if plain && code == KeyCode::Char('c') {
         return Some(Action::Detail(DetailAction::OpenComment));
     }
@@ -102,6 +120,15 @@ pub(in crate::tui) fn key_to_action(state: &AppState, key: KeyEvent) -> Option<A
         if plain && code == KeyCode::Char('d') {
             return Some(Action::Detail(DetailAction::DeleteComment));
         }
+    }
+
+    // `d` on a queued review comment (diff pane) removes it from the review.
+    if plain
+        && code == KeyCode::Char('d')
+        && (tab == DetailTab::Diff || (tab == DetailTab::Commits && viewing_commit))
+        && state.ui.active_diff_view().pane_pending.is_some()
+    {
+        return Some(Action::Detail(DetailAction::RemovePendingComment));
     }
 
     escape_action(state, tab, viewing_commit, code)

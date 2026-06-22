@@ -19,7 +19,7 @@ use ratatui::{
 use crate::{
     app::state::{
         AppState, CommentDraft, CommentTarget, ConfirmKind, DetailTab, DiffFocus, LoadState,
-        PrData, SearchState, UiMemory,
+        PendingComment, PendingReview, PrData, SearchState, UiMemory,
     },
     domain::{
         comment::CommentThread,
@@ -112,6 +112,16 @@ pub(in crate::tui) fn render(
     }
 }
 
+/// Cap a single-line string to `max` columns, adding an ellipsis when cut, to
+/// keep the review popup from stretching to a long comment's width.
+fn truncate_cols(s: &str, max: usize) -> String {
+    if s.chars().count() <= max {
+        return s.to_owned();
+    }
+    let head: String = s.chars().take(max.saturating_sub(1)).collect();
+    format!("{head}…")
+}
+
 fn render_review_picker(frame: &mut Frame, state: &AppState, cursor: usize, area: Rect) {
     let theme = theme::current();
     let selected = Style::default()
@@ -119,10 +129,33 @@ fn render_review_picker(frame: &mut Frame, state: &AppState, cursor: usize, area
         .add_modifier(Modifier::BOLD);
     let normal = Style::default().fg(theme.muted);
 
-    let mut lines = vec![
-        Line::from(Span::styled("Submit review", Style::default().fg(theme.fg))),
-        Line::default(),
-    ];
+    let mut lines = vec![Line::from(Span::styled(
+        "Submit review",
+        Style::default().fg(theme.fg),
+    ))];
+
+    // Show what the review will carry, so finishing isn't a blind submit.
+    if let Some(review) = &state.ui.pending_review
+        && !review.comments.is_empty()
+    {
+        let n = review.comments.len();
+        let noun = if n == 1 { "comment" } else { "comments" };
+        lines.push(Line::default());
+        lines.push(Line::from(Span::styled(
+            format!("Including {n} {noun}:"),
+            Style::default().fg(theme.muted),
+        )));
+        for pc in &review.comments {
+            let first = pc.text.lines().next().unwrap_or("");
+            let summary = format!("  {}:{}  {first}", pc.anchor.path, pc.anchor.line);
+            lines.push(Line::from(Span::styled(
+                truncate_cols(&summary, 50),
+                Style::default().fg(theme.muted),
+            )));
+        }
+    }
+
+    lines.push(Line::default());
     for (i, verdict) in state.review_verdicts().iter().enumerate() {
         let marker = if i == cursor { "▶ " } else { "  " };
         let style = if i == cursor { selected } else { normal };
@@ -216,9 +249,23 @@ fn render_footer_bar(
 }
 
 fn footer_actions(state: &AppState, tab: DetailTab, own_pr: bool) -> String {
+    // While a batched review is open, surface its state and finish/discard keys
+    // on every tab — line comments queue into it from the Diff too.
+    if let Some(review) = &state.ui.pending_review {
+        let mut parts = vec![
+            format!("reviewing ({})", review.comments.len()),
+            "c: comment".to_owned(),
+        ];
+        if state.reply_target().is_some() {
+            parts.push("r: reply".to_owned());
+        }
+        parts.push("v: finish".to_owned());
+        parts.push("V: discard".to_owned());
+        return parts.join("  ");
+    }
     // Overview is the conversation tab and home of the PR-level actions: `c`
-    // posts a PR comment, `r` replies to the focused thread, `a` approves.
-    // (merge will join these here once it's wired.)
+    // posts a PR comment, `r` replies, `a` submits a quick verdict, `v` starts a
+    // batched review. (merge will join these here once it's wired.)
     if tab == DetailTab::Overview {
         let mut parts = vec!["c: comment"];
         if state.reply_target().is_some() {
@@ -229,7 +276,8 @@ fn footer_actions(state: &AppState, tab: DetailTab, own_pr: bool) -> String {
             parts.push("d: delete");
         }
         if !own_pr {
-            parts.push("a: review");
+            parts.push("a: verdict");
+            parts.push("v: review");
         }
         return parts.join("  ");
     }
@@ -457,10 +505,12 @@ fn render_content(
         DetailTab::Diff => {
             let threads = activity_threads(pr_data);
             let diff = active_diff(ui.commits.open_commit.as_deref(), pr_data);
+            let pending = pending_comments(ui.pending_review.as_ref());
             diff::render(
                 frame,
                 diff,
                 threads,
+                pending,
                 &mut ui.diff,
                 &pr.author.username,
                 inset,
@@ -469,10 +519,12 @@ fn render_content(
         DetailTab::Commits => {
             if ui.commits.open_commit.is_some() {
                 let threads = activity_threads(pr_data);
+                let pending = pending_comments(ui.pending_review.as_ref());
                 commits::render_commit_diff(
                     frame,
                     pr_data,
                     threads,
+                    pending,
                     &mut ui.commits,
                     &pr.author.username,
                     inset,
@@ -483,6 +535,10 @@ fn render_content(
         }
         DetailTab::Builds => builds::render(frame, pr_data, inset),
     }
+}
+
+fn pending_comments(pending: Option<&PendingReview>) -> &[PendingComment] {
+    pending.map_or(&[], |r| r.comments.as_slice())
 }
 
 fn activity_threads(pr_data: Option<&PrData>) -> &[CommentThread] {
@@ -505,7 +561,9 @@ const HELP_KEYS: &[(&str, &str)] = &[
     ("n/N", "next/prev match"),
     ("[ ]", "prev/next tab/commit"),
     ("esc", "back"),
-    ("a", "review"),
+    ("a", "quick verdict"),
+    ("v", "start/finish review"),
+    ("V", "discard review"),
     ("c", "comment"),
     ("r", "reply"),
     ("^j/^k", "step comment"),

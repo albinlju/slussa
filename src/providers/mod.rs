@@ -7,7 +7,7 @@ pub use error::FetchError;
 
 use crate::domain::{
     activity::Activity, ci::Build, commit::Commit, diff::Diff, pr::PullRequest,
-    review::ReviewVerdict,
+    review::{ReviewComment, ReviewVerdict},
 };
 
 #[derive(Clone, Debug)]
@@ -148,6 +148,24 @@ impl Provider {
         match self {
             Self::GitHub => github::submit_review(pr_id, verdict, body),
             Self::BitbucketDc(c) => bitbucket_dc::submit_review(c, pr_id, verdict, body, user),
+        }
+    }
+
+    /// Submit a verdict together with a batch of queued inline `comments` (the
+    /// `v` review flow). With no comments this is the same as `submit_review`.
+    pub fn submit_full_review(
+        &self,
+        pr_id: u64,
+        verdict: ReviewVerdict,
+        body: &str,
+        user: &str,
+        comments: &[ReviewComment],
+    ) -> Result<(), FetchError> {
+        match self {
+            Self::GitHub => github::submit_full_review(pr_id, verdict, body, comments),
+            Self::BitbucketDc(c) => {
+                bitbucket_dc::submit_full_review(c, pr_id, verdict, body, user, comments)
+            }
         }
     }
 

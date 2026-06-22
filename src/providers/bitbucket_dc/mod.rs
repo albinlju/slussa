@@ -12,7 +12,7 @@ pub mod remote;
 
 use chrono::{DateTime, TimeZone, Utc};
 
-use crate::domain::review::ReviewVerdict;
+use crate::domain::review::{ReviewComment, ReviewVerdict};
 use crate::providers::error::FetchError;
 
 pub use activities::fetch as fetch_activity;
@@ -55,6 +55,30 @@ pub fn submit_review(
     );
     let payload = serde_json::json!({ "status": status });
     http::put_json(&config.repo.base_url, &endpoint, &config.pat, &payload)
+}
+
+/// Bitbucket has no batched review: post each queued line comment, then submit
+/// the summary + status. This is *not* atomic — if a later step fails the
+/// earlier posts remain, and the surfaced error is whichever step failed.
+pub fn submit_full_review(
+    config: &Config,
+    pr_id: u64,
+    verdict: ReviewVerdict,
+    body: &str,
+    user: &str,
+    comments: &[ReviewComment],
+) -> Result<(), FetchError> {
+    for (i, c) in comments.iter().enumerate() {
+        if let Err(e) = comments::post_comment(config, pr_id, &c.path, c.line, c.removed, &c.body) {
+            tracing::warn!(
+                "review flush aborted: posted {}/{} comments before failure",
+                i,
+                comments.len(),
+            );
+            return Err(e);
+        }
+    }
+    submit_review(config, pr_id, verdict, body, user)
 }
 
 #[derive(Clone, Debug)]

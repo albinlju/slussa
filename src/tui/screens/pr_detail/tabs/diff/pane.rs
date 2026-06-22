@@ -10,12 +10,12 @@ use ratatui::{
 };
 
 use crate::{
-    app::state::{CommentAnchor, DiffViewState, ThreadRef},
+    app::state::{CommentAnchor, DiffViewState, PendingComment, ThreadRef},
     domain::{
         comment::CommentThread,
         diff::{Diff, DiffLine, FileDiff},
     },
-    tui::{icons, layout, screens::pr_detail::render_inline_thread, theme, widgets},
+    tui::{icons, layout, markdown, screens::pr_detail::render_inline_thread, theme, widgets},
 };
 
 const DIFF_GUTTER: &str = "  ";
@@ -28,6 +28,7 @@ pub(super) fn render(
     ui_diff: &mut DiffViewState,
     file_stats: &[(u32, u32)],
     threads: &[CommentThread],
+    pending: &[PendingComment],
     focused: bool,
     author: &str,
     area: Rect,
@@ -41,6 +42,7 @@ pub(super) fn render(
         ui_diff.pane_anchor = None;
         ui_diff.pane_reply = None;
         ui_diff.pane_thread = None;
+        ui_diff.pane_pending = None;
         return;
     };
     let (adds, dels) = file_stats.get(bounded).copied().unwrap_or((0, 0));
@@ -64,6 +66,7 @@ pub(super) fn render(
     } = build_diff_body(
         file,
         threads,
+        pending,
         body_area.width,
         active,
         query,
@@ -111,6 +114,7 @@ pub(super) fn render(
     });
     ui_diff.pane_reply = cursor.and_then(NavItem::reply_to);
     ui_diff.pane_thread = cursor.and_then(NavItem::thread_ref);
+    ui_diff.pane_pending = cursor.and_then(NavItem::pending_index);
     ui_diff.pane_scroll = scroll;
     ui_diff.pane_item_count = nav_items.len();
     ui_diff.pane_matches = matches;
@@ -128,6 +132,12 @@ enum NavKind {
         node_id: Option<String>,
         resolved: bool,
     },
+    /// A queued (not-yet-posted) review comment — `index` into the pending review.
+    Pending {
+        line: usize,
+        removed: bool,
+        index: usize,
+    },
 }
 
 struct NavItem {
@@ -139,16 +149,23 @@ struct NavItem {
 impl NavItem {
     fn anchor(&self) -> (usize, bool) {
         match self.kind {
-            NavKind::Line { line, removed } | NavKind::Thread { line, removed, .. } => {
-                (line, removed)
-            }
+            NavKind::Line { line, removed }
+            | NavKind::Thread { line, removed, .. }
+            | NavKind::Pending { line, removed, .. } => (line, removed),
         }
     }
 
     fn reply_to(&self) -> Option<u64> {
         match self.kind {
             NavKind::Thread { reply_to, .. } => reply_to,
-            NavKind::Line { .. } => None,
+            NavKind::Line { .. } | NavKind::Pending { .. } => None,
+        }
+    }
+
+    fn pending_index(&self) -> Option<usize> {
+        match self.kind {
+            NavKind::Pending { index, .. } => Some(index),
+            NavKind::Line { .. } | NavKind::Thread { .. } => None,
         }
     }
 
@@ -164,7 +181,7 @@ impl NavItem {
                 comment_id: *reply_to,
                 resolved: *resolved,
             }),
-            NavKind::Line { .. } => None,
+            NavKind::Line { .. } | NavKind::Pending { .. } => None,
         }
     }
 }
@@ -179,6 +196,7 @@ struct DiffBody {
 fn build_diff_body(
     file: &FileDiff,
     threads: &[CommentThread],
+    pending: &[PendingComment],
     width: u16,
     active: Option<usize>,
     query: &str,
@@ -192,6 +210,7 @@ fn build_diff_body(
     let query_lower = query.to_lowercase();
 
     let (comments_at, comments_at_old) = index_comments(threads, &file.path);
+    let (pending_at, pending_at_old) = index_pending(pending, &file.path);
     let now = Utc::now();
     let thread_width = width.saturating_sub(2 * DIFF_GUTTER_COLS);
 
@@ -251,6 +270,27 @@ fn build_diff_body(
                     },
                 });
             }
+
+            let pending_here = if removed {
+                pending_at_old.get(&old_no)
+            } else {
+                pending_at.get(&new_no)
+            };
+            for &(index, pc) in pending_here.into_iter().flatten() {
+                let idx = nav_items.len();
+                let start = lines.len();
+                let span =
+                    push_pending_lines(&mut lines, &pc.text, thread_width, active == Some(idx));
+                nav_items.push(NavItem {
+                    rendered_row: start,
+                    row_span: span,
+                    kind: NavKind::Pending {
+                        line,
+                        removed,
+                        index,
+                    },
+                });
+            }
         }
     }
 
@@ -296,6 +336,72 @@ fn index_comments<'a>(
         }
     }
     (by_new, by_old)
+}
+
+type PendingIndex<'a> = HashMap<usize, Vec<(usize, &'a PendingComment)>>;
+
+/// Bucket the queued review comments for `path` by their anchor line, carrying
+/// each one's index in the original `pending` slice (so `d` can remove it).
+fn index_pending<'a>(pending: &'a [PendingComment], path: &str) -> (PendingIndex<'a>, PendingIndex<'a>) {
+    let mut by_new: PendingIndex = HashMap::new();
+    let mut by_old: PendingIndex = HashMap::new();
+    for (i, pc) in pending.iter().enumerate() {
+        if pc.anchor.path != path {
+            continue;
+        }
+        let bucket = if pc.anchor.removed {
+            &mut by_old
+        } else {
+            &mut by_new
+        };
+        bucket.entry(pc.anchor.line).or_default().push((i, pc));
+    }
+    (by_new, by_old)
+}
+
+/// A queued review comment, rendered as a draft block (accent bar + `pending`
+/// tag) so it reads as not-yet-posted. Returns the row count for nav spans.
+fn push_pending_lines(
+    lines: &mut Vec<Line<'static>>,
+    text: &str,
+    width: u16,
+    active: bool,
+) -> usize {
+    let theme = theme::current();
+    let bar = Style::default().fg(theme.accent);
+    let body_style = Style::default().fg(theme.fg);
+    let row_style = if active {
+        Style::default().bg(theme.highlight_bg)
+    } else {
+        Style::default()
+    };
+    let text_width = width.saturating_sub(2);
+
+    let mut block: Vec<Line<'static>> = vec![Line::from(vec![
+        Span::styled(format!("{DIFF_GUTTER}▌ "), bar),
+        Span::styled(
+            "pending",
+            Style::default()
+                .fg(theme.accent)
+                .add_modifier(Modifier::BOLD),
+        ),
+    ])];
+    for body_line in markdown::render_no_margin(text, text_width) {
+        let mut spans = vec![Span::styled(format!("{DIFF_GUTTER}▌ "), bar)];
+        spans.extend(
+            body_line
+                .spans
+                .into_iter()
+                .map(|s| Span::styled(s.content, body_style)),
+        );
+        block.push(Line::from(spans));
+    }
+
+    let count = block.len();
+    for line in block {
+        lines.push(line.style(row_style));
+    }
+    count
 }
 
 #[allow(clippy::too_many_arguments)]
@@ -351,13 +457,11 @@ fn render_pane_header(
     ];
     if let Some(m) = cursor {
         let (line, removed) = m.anchor();
-        let is_thread = matches!(m.kind, NavKind::Thread { .. });
-        let label = if is_thread {
-            format!("  {} L{line}", icons::COMMENT)
-        } else if removed {
-            format!("  L{line} (old)")
-        } else {
-            format!("  L{line}")
+        let label = match m.kind {
+            NavKind::Thread { .. } => format!("  {} L{line}", icons::COMMENT),
+            NavKind::Pending { .. } => format!("  {} L{line} (pending)", icons::COMMENT),
+            NavKind::Line { .. } if removed => format!("  L{line} (old)"),
+            NavKind::Line { .. } => format!("  L{line}"),
         };
         left.push(Span::styled(label, Style::default().fg(theme.muted)));
     }

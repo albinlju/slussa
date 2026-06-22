@@ -1,8 +1,12 @@
 use crate::app::{
     App,
     action::DetailAction,
-    state::{CommentDraft, CommentTarget, ConfirmKind, DetailTab, DiffFocus, Screen},
+    state::{
+        CommentDraft, CommentTarget, ConfirmKind, DetailTab, DiffFocus, PendingComment,
+        PendingReview, Screen,
+    },
 };
+use crate::domain::review::ReviewVerdict;
 
 impl App {
     pub(super) fn detail_actions(&mut self, action: DetailAction) {
@@ -34,6 +38,16 @@ impl App {
             }
             DetailAction::ReviewSelect => self.select_review(),
             DetailAction::CloseReviewPicker => self.state.ui.review_picker = None,
+            DetailAction::StartReview => {
+                self.state.ui.pending_review = Some(PendingReview::default());
+            }
+            DetailAction::FinishReview => {
+                if self.state.ui.pending_review.is_some() {
+                    self.state.ui.review_picker = Some(0);
+                }
+            }
+            DetailAction::AbandonReview => self.state.ui.pending_review = None,
+            DetailAction::RemovePendingComment => self.remove_pending_comment(),
             DetailAction::OpenComment => self.open_comment(),
             DetailAction::OpenReply => self.open_reply(),
             DetailAction::OverviewSubMove(delta) => self.overview_sub_move(delta),
@@ -156,14 +170,24 @@ impl App {
         let Screen::Detail { pr_id, .. } = self.state.screen else {
             return;
         };
-        self.state.ui.comment_pending = true;
+        // A line comment written during a review queues locally and flushes with
+        // the verdict; it isn't posted now. Everything else posts immediately.
+        if let CommentTarget::Line(anchor) = &draft.target
+            && let Some(review) = self.state.ui.pending_review.as_mut()
+        {
+            review.comments.push(PendingComment {
+                anchor: anchor.clone(),
+                text: draft.text,
+            });
+            return;
+        }
         match draft.target {
-            // A review summary submits the verdict; everything else is a comment.
-            CommentTarget::Review { verdict } => {
-                let user = self.state.current_user.clone();
-                self.spawn_submit_review(pr_id, verdict, draft.text, user);
+            // A review summary submits the verdict (plus any queued comments).
+            CommentTarget::Review { verdict } => self.submit_review_verdict(pr_id, verdict, draft.text),
+            target => {
+                self.state.ui.comment_pending = true;
+                self.spawn_comment(pr_id, target, draft.text);
             }
-            target => self.spawn_comment(pr_id, target, draft.text),
         }
     }
 
@@ -179,9 +203,32 @@ impl App {
         if verdict.needs_body() {
             self.open_draft(Some(CommentTarget::Review { verdict }));
         } else if let Screen::Detail { pr_id, .. } = self.state.screen {
-            self.state.ui.comment_pending = true;
-            let user = self.state.current_user.clone();
-            self.spawn_submit_review(pr_id, verdict, String::new(), user);
+            self.submit_review_verdict(pr_id, verdict, String::new());
+        }
+    }
+
+    /// Remove the queued review comment the diff cursor is on (`d` in the pane).
+    fn remove_pending_comment(&mut self) {
+        let Some(idx) = self.state.ui.active_diff_view().pane_pending else {
+            return;
+        };
+        if let Some(review) = self.state.ui.pending_review.as_mut()
+            && idx < review.comments.len()
+        {
+            review.comments.remove(idx);
+        }
+    }
+
+    /// Submit the chosen verdict. If a review is in progress, its queued line
+    /// comments flush in the same call; otherwise it's a bare verdict (`a`).
+    fn submit_review_verdict(&mut self, pr_id: u64, verdict: ReviewVerdict, body: String) {
+        self.state.ui.comment_pending = true;
+        let user = self.state.current_user.clone();
+        match self.state.ui.pending_review.take() {
+            Some(review) => {
+                self.spawn_submit_full_review(pr_id, verdict, body, user, review.comments);
+            }
+            None => self.spawn_submit_review(pr_id, verdict, body, user),
         }
     }
 

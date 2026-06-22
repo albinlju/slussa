@@ -99,6 +99,9 @@ pub struct UiMemory {
     pub confirm_cursor: usize,
     /// Open review-verdict menu (cursor into `AppState::review_verdicts`).
     pub review_picker: Option<usize>,
+    /// An in-progress review (`v`): line comments queue here instead of posting,
+    /// and flush together when a verdict is submitted. `None` outside review mode.
+    pub pending_review: Option<PendingReview>,
     pub diff: DiffViewState,
     pub commits: CommitsViewState,
     pub description_scroll: u16,
@@ -133,6 +136,19 @@ pub struct CommentAnchor {
 #[derive(Debug, Clone)]
 pub struct CommentDraft {
     pub target: CommentTarget,
+    pub text: String,
+}
+
+/// A review being assembled before submission. Line comments accumulate here
+/// (only locally — nothing is sent) until a verdict flushes them in one go.
+#[derive(Debug, Default, Clone)]
+pub struct PendingReview {
+    pub comments: Vec<PendingComment>,
+}
+
+#[derive(Debug, Clone)]
+pub struct PendingComment {
+    pub anchor: CommentAnchor,
     pub text: String,
 }
 
@@ -260,6 +276,9 @@ pub struct DiffViewState {
     pub pane_anchor: Option<CommentAnchor>,
     pub pane_reply: Option<u64>,
     pub pane_thread: Option<ThreadRef>,
+    /// Index (into `PendingReview::comments`) of the queued review comment the
+    /// pane cursor is on, so `d` can remove it. `None` unless one is focused.
+    pub pane_pending: Option<usize>,
     /// Root-comment ids of resolved threads the user has expanded (otherwise
     /// resolved threads render collapsed in the diff).
     pub expanded_threads: HashSet<u64>,

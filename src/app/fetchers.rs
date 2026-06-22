@@ -4,9 +4,9 @@ use crate::{
     app::{
         App,
         action::{Action, LoadedAction},
-        state::CommentTarget,
+        state::{CommentTarget, PendingComment},
     },
-    domain::review::ReviewVerdict,
+    domain::review::{ReviewComment, ReviewVerdict},
     providers::FetchError,
 };
 
@@ -113,6 +113,33 @@ impl App {
         let provider = self.provider.clone();
         self.spawn_fetch(
             move || provider.submit_review(pr_id, verdict, &body, &user),
+            move |r| Action::Loaded(LoadedAction::Commented(pr_id, r)),
+        );
+    }
+
+    /// Flush a whole review at once: the queued line `comments` plus the
+    /// `verdict` and its summary `body`. GitHub sends one atomic call; Bitbucket
+    /// posts the comments then flips status (see the provider impls).
+    pub(super) fn spawn_submit_full_review(
+        &self,
+        pr_id: u64,
+        verdict: ReviewVerdict,
+        body: String,
+        user: String,
+        comments: Vec<PendingComment>,
+    ) {
+        let provider = self.provider.clone();
+        let review_comments: Vec<ReviewComment> = comments
+            .into_iter()
+            .map(|c| ReviewComment {
+                path: c.anchor.path,
+                line: c.anchor.line,
+                removed: c.anchor.removed,
+                body: c.text,
+            })
+            .collect();
+        self.spawn_fetch(
+            move || provider.submit_full_review(pr_id, verdict, &body, &user, &review_comments),
             move |r| Action::Loaded(LoadedAction::Commented(pr_id, r)),
         );
     }
