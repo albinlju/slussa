@@ -43,17 +43,33 @@ pub fn split_suggestions(body: &str) -> (String, Vec<String>) {
 }
 
 #[derive(Debug, Clone)]
-pub struct ReviewThread {
+pub struct CommentThread {
+    pub comments: Vec<Comment>,
+    /// Id of the comment a reply should hang under (None = can't reply, e.g. no id parsed).
+    pub reply_to: Option<u64>,
+    /// Code-review context: where the thread is anchored and its resolution.
+    /// `None` for a general discussion thread (no code location, not resolvable).
+    pub anchor: Option<ThreadAnchor>,
+}
+
+/// The review-thread specifics — present only when a thread is anchored to code.
+#[derive(Debug, Clone)]
+pub struct ThreadAnchor {
     pub path: String,
     pub line: Option<usize>,
     pub old_line: Option<usize>,
-    pub comments: Vec<Comment>,
     pub resolved: bool,
-    /// Id of the comment a reply should hang under (None = can't reply, e.g. no id parsed).
-    pub reply_to: Option<u64>,
     /// GitHub GraphQL thread node id, needed to resolve/unresolve. None on Bitbucket
     /// (which toggles the root comment's state instead).
     pub node_id: Option<String>,
+}
+
+impl CommentThread {
+    /// A code-review thread that's been resolved. General discussion is never
+    /// resolved.
+    pub fn resolved(&self) -> bool {
+        self.anchor.as_ref().is_some_and(|a| a.resolved)
+    }
 }
 
 #[cfg(test)]

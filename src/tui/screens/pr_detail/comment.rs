@@ -6,14 +6,19 @@ use ratatui::{
 
 use crate::{
     domain::{
-        comment::{Comment, ReviewThread, split_suggestions},
+        comment::{Comment, CommentThread, split_suggestions},
         diff::{Diff, DiffLine},
     },
     tui::{format, markdown, theme, widgets},
 };
 
+/// The diff line a thread is anchored to (new- or old-side), if any.
+fn anchor_pos(thread: &CommentThread) -> Option<usize> {
+    thread.anchor.as_ref().and_then(|a| a.line.or(a.old_line))
+}
+
 pub(in crate::tui) fn render_inline_thread(
-    thread: &ReviewThread,
+    thread: &CommentThread,
     width: u16,
     now: DateTime<Utc>,
     active: bool,
@@ -25,31 +30,31 @@ pub(in crate::tui) fn render_inline_thread(
     let frame = if active { theme.muted } else { theme.divider };
 
     // A resolved thread collapses to a one-line summary until expanded (`space`).
-    if thread.resolved && !expanded {
+    if thread.resolved() && !expanded {
         return vec![collapse_summary(thread, false, active)];
     }
 
-    let anchor = thread.line.or(thread.old_line).zip(anchor_text);
+    let pos = anchor_pos(thread).zip(anchor_text);
     let has_suggestion = thread
         .comments
         .iter()
         .any(|c| !split_suggestions(&c.content).1.is_empty());
 
     let mut out: Vec<Line<'static>> = Vec::new();
-    if thread.resolved {
+    if thread.resolved() {
         out.push(collapse_summary(thread, true, active));
     } else if !has_suggestion {
-        out.push(status_rule(status_label(thread), width, frame));
+        out.push(status_rule(status_label(thread.resolved()), width, frame));
     }
     out.extend(conversation(
-        thread, anchor, width, now, author, frame, None, false,
+        thread, pos, width, now, author, frame, None, false,
     ));
     out
 }
 
 /// `▸ ✓ resolved · @author · N comments` — the collapsed/expanded thread header.
 /// Collapsed has no border to mark focus, so the arrow carries it (accent).
-fn collapse_summary(thread: &ReviewThread, expanded: bool, active: bool) -> Line<'static> {
+fn collapse_summary(thread: &CommentThread, expanded: bool, active: bool) -> Line<'static> {
     let theme = theme::current();
     let author = thread
         .comments
@@ -134,8 +139,8 @@ fn kind_label(comment: &Comment) -> Vec<Span<'static>> {
     }
 }
 
-pub(super) fn review_thread_box(
-    thread: &ReviewThread,
+pub(super) fn comment_thread_box(
+    thread: &CommentThread,
     diff: Option<&Diff>,
     width: u16,
     now: DateTime<Utc>,
@@ -147,11 +152,11 @@ pub(super) fn review_thread_box(
     let first = thread.comments.first()?;
     let frame = if active { theme.muted } else { theme.divider };
 
-    let location = match thread.line.or(thread.old_line) {
-        Some(l) => Some(format!("{}:{l}", thread.path)),
-        None if !thread.path.is_empty() => Some(thread.path.clone()),
+    let location = thread.anchor.as_ref().and_then(|a| match a.line.or(a.old_line) {
+        Some(l) => Some(format!("{}:{l}", a.path)),
+        None if !a.path.is_empty() => Some(a.path.clone()),
         None => None,
-    };
+    });
     let has_suggestion = thread
         .comments
         .iter()
@@ -172,25 +177,28 @@ pub(super) fn review_thread_box(
         Style::default().fg(theme.info).add_modifier(Modifier::BOLD),
     )];
     left.push(Span::styled(phrase, Style::default().fg(theme.muted)));
-    let mut right = status_label(thread);
-    right.push(Span::styled(
-        format!("  ·  {}", format::relative_age(first.created, now)),
-        Style::default().fg(theme.muted),
-    ));
+    let age = format::relative_age(first.created, now);
+    // A general discussion thread (no anchor) has no resolve status — just the
+    // age; review threads keep their resolved/unresolved label.
+    let right: Vec<Span<'static>> = if thread.anchor.is_none() {
+        vec![Span::styled(age, Style::default().fg(theme.muted))]
+    } else {
+        let mut r = status_label(thread.resolved());
+        r.push(Span::styled(
+            format!("  ·  {age}"),
+            Style::default().fg(theme.muted),
+        ));
+        r
+    };
     let mut out: Vec<Line<'static>> = vec![header_line(left, right, width)];
 
-    let (snippet, anchor_text) = diff
-        .map(|d| {
-            diff_snippet(
-                d,
-                &thread.path,
-                thread.line,
-                thread.old_line,
-                width.saturating_sub(2),
-            )
-        })
-        .unwrap_or_default();
-    let anchor = thread.line.or(thread.old_line).zip(anchor_text.as_deref());
+    let (snippet, anchor_text) = match (diff, &thread.anchor) {
+        (Some(d), Some(a)) => {
+            diff_snippet(d, &a.path, a.line, a.old_line, width.saturating_sub(2))
+        }
+        _ => Default::default(),
+    };
+    let pos = anchor_pos(thread).zip(anchor_text.as_deref());
 
     if !has_suggestion && !snippet.is_empty() {
         out.extend(bracket(align_snippet(snippet), width, frame, theme.divider));
@@ -198,7 +206,7 @@ pub(super) fn review_thread_box(
     // The header carries the first comment's author + time, so the conversation
     // skips its meta line to avoid repeating it.
     out.extend(conversation(
-        thread, anchor, width, now, author, frame, selected, true,
+        thread, pos, width, now, author, frame, selected, true,
     ));
     Some(out)
 }
@@ -229,7 +237,7 @@ fn bracket(body: Vec<Line<'static>>, width: u16, left: Color, rule: Color) -> Ve
 
 #[allow(clippy::too_many_arguments)]
 fn conversation(
-    thread: &ReviewThread,
+    thread: &CommentThread,
     anchor: Option<(usize, &str)>,
     width: u16,
     now: DateTime<Utc>,
@@ -262,12 +270,12 @@ fn conversation(
             let label = if suppress {
                 Vec::new()
             } else {
-                status_label(thread)
+                status_label(thread.resolved())
             };
             out.extend(framed(
                 meta,
                 label,
-                comment_body(comment, anchor, width.saturating_sub(2), thread.resolved),
+                comment_body(comment, anchor, width.saturating_sub(2), thread.resolved()),
                 width,
                 frame,
                 theme.divider,
@@ -292,7 +300,7 @@ fn conversation(
         } else {
             out.push(prefix_gutter(Line::from(meta), head, style));
         }
-        for line in comment_body(comment, anchor, width.saturating_sub(2), thread.resolved) {
+        for line in comment_body(comment, anchor, width.saturating_sub(2), thread.resolved()) {
             out.push(prefix_gutter(line, body_gutter, style));
         }
     }
@@ -344,9 +352,9 @@ fn framed(
     out
 }
 
-fn status_label(thread: &ReviewThread) -> Vec<Span<'static>> {
+fn status_label(resolved: bool) -> Vec<Span<'static>> {
     let theme = theme::current();
-    let (text, color) = if thread.resolved {
+    let (text, color) = if resolved {
         ("resolved", theme.success)
     } else {
         ("unresolved", theme.warning)
