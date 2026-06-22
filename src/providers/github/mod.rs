@@ -23,7 +23,7 @@ use serde::Deserialize;
 use serde::de::DeserializeOwned;
 
 use crate::domain::comment::{Comment, Reaction};
-use crate::domain::review::ReviewVerdict;
+use crate::domain::review::{ReviewComment, ReviewVerdict};
 use crate::domain::user::User;
 use crate::providers::error::FetchError;
 
@@ -32,13 +32,20 @@ pub fn current_user() -> Result<String, FetchError> {
     Ok(String::from_utf8_lossy(&out).trim().to_owned())
 }
 
+/// GitHub review event for a verdict, or `None` where it has no GitHub
+/// equivalent (`Unapprove` — reviews are immutable, so there's no "undo").
+fn review_event(verdict: ReviewVerdict) -> Option<&'static str> {
+    match verdict {
+        ReviewVerdict::Approve => Some("APPROVE"),
+        ReviewVerdict::RequestChanges => Some("REQUEST_CHANGES"),
+        ReviewVerdict::Comment => Some("COMMENT"),
+        ReviewVerdict::Unapprove => None,
+    }
+}
+
 pub fn submit_review(pr_number: u64, verdict: ReviewVerdict, body: &str) -> Result<(), FetchError> {
-    let event = match verdict {
-        ReviewVerdict::Approve => "APPROVE",
-        ReviewVerdict::RequestChanges => "REQUEST_CHANGES",
-        ReviewVerdict::Comment => "COMMENT",
-        // GitHub reviews are immutable — there's no "undo"; not offered there.
-        ReviewVerdict::Unapprove => return Ok(()),
+    let Some(event) = review_event(verdict) else {
+        return Ok(());
     };
     let endpoint = format!("repos/{{owner}}/{{repo}}/pulls/{pr_number}/reviews");
     let event_arg = format!("event={event}");
@@ -49,6 +56,45 @@ pub fn submit_review(pr_number: u64, verdict: ReviewVerdict, body: &str) -> Resu
         args.push(&body_arg);
     }
     cli::run_gh(&args)?;
+    Ok(())
+}
+
+/// Submit a verdict with a batch of inline `comments` in one atomic call — the
+/// reviews endpoint takes a `comments` array, fed as JSON on stdin since `-f`
+/// flags can't express it.
+pub fn submit_full_review(
+    pr_number: u64,
+    verdict: ReviewVerdict,
+    body: &str,
+    comments: &[ReviewComment],
+) -> Result<(), FetchError> {
+    if comments.is_empty() {
+        return submit_review(pr_number, verdict, body);
+    }
+    let Some(event) = review_event(verdict) else {
+        return Ok(());
+    };
+    let commit_id = comments::head_sha(pr_number)?;
+    let comment_payload: Vec<serde_json::Value> = comments
+        .iter()
+        .map(|c| {
+            serde_json::json!({
+                "path": c.path,
+                "line": c.line,
+                "side": if c.removed { "LEFT" } else { "RIGHT" },
+                "body": c.body,
+            })
+        })
+        .collect();
+    let payload = serde_json::json!({
+        "commit_id": commit_id,
+        "event": event,
+        "body": body,
+        "comments": comment_payload,
+    });
+    let endpoint = format!("repos/{{owner}}/{{repo}}/pulls/{pr_number}/reviews");
+    let input = serde_json::to_vec(&payload).map_err(|e| FetchError::ParseFailed(e.to_string()))?;
+    cli::run_gh_stdin(&["api", "--method", "POST", &endpoint, "--input", "-"], &input)?;
     Ok(())
 }
 

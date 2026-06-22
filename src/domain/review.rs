@@ -38,3 +38,14 @@ impl ReviewVerdict {
         matches!(self, Self::RequestChanges | Self::Comment)
     }
 }
+
+/// One inline (diff-line) comment published as part of a batched review
+/// submission — see `Provider::submit_full_review`.
+#[derive(Debug, Clone)]
+pub struct ReviewComment {
+    pub path: String,
+    pub line: usize,
+    /// The line sits on the removed (old) side of the diff.
+    pub removed: bool,
+    pub body: String,
+}

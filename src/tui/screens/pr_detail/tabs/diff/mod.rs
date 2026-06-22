@@ -9,7 +9,7 @@ use ratatui::{
 };
 
 use crate::{
-    app::state::{DiffFocus, DiffViewState, LoadState},
+    app::state::{DiffFocus, DiffViewState, LoadState, PendingComment},
     domain::{
         comment::CommentThread,
         diff::{Diff, DiffLine, FileDiff},
@@ -21,6 +21,7 @@ pub fn render(
     frame: &mut Frame,
     diff_state: Option<&LoadState<Diff>>,
     threads: &[CommentThread],
+    pending: &[PendingComment],
     ui_diff: &mut DiffViewState,
     author: &str,
     area: Rect,
@@ -65,6 +66,7 @@ pub fn render(
         ui_diff,
         &file_stats,
         threads,
+        pending,
         pane_focused,
         author,
         pane_area,

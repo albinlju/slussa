@@ -123,7 +123,7 @@ pub fn set_thread_resolved(node_id: &str, resolved: bool) -> Result<(), FetchErr
     Ok(())
 }
 
-fn head_sha(pr_number: u64) -> Result<String, FetchError> {
+pub(super) fn head_sha(pr_number: u64) -> Result<String, FetchError> {
     let out = super::cli::run_gh(&[
         "api",
         &format!("repos/{{owner}}/{{repo}}/pulls/{pr_number}"),

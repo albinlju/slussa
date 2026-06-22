@@ -8,7 +8,7 @@ use ratatui::{
 };
 
 use crate::{
-    app::state::{CommitsViewState, LoadState, PrData},
+    app::state::{CommitsViewState, LoadState, PendingComment, PrData},
     domain::{comment::CommentThread, commit::Commit},
     tui::{format, icons, layout, theme, widgets},
 };
@@ -88,6 +88,7 @@ pub fn render_commit_diff(
     frame: &mut Frame,
     pr_data: Option<&PrData>,
     threads: &[CommentThread],
+    pending: &[PendingComment],
     cv: &mut CommitsViewState,
     author: &str,
     area: Rect,
@@ -104,7 +105,9 @@ pub fn render_commit_diff(
     render_commit_banner(frame, pr_data, &oid, banner_area);
 
     let diff_state = super::super::active_diff(Some(&oid), pr_data);
-    super::diff::render(frame, diff_state, threads, &mut cv.diff, author, diff_area);
+    super::diff::render(
+        frame, diff_state, threads, pending, &mut cv.diff, author, diff_area,
+    );
 }
 
 fn render_commit_banner(frame: &mut Frame, pr_data: Option<&PrData>, oid: &str, area: Rect) {
