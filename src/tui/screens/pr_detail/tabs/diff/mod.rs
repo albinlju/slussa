@@ -11,7 +11,7 @@ use ratatui::{
 use crate::{
     app::state::{DiffFocus, DiffViewState, LoadState},
     domain::{
-        comment::ReviewThread,
+        comment::CommentThread,
         diff::{Diff, DiffLine, FileDiff},
     },
     tui::{layout, widgets},
@@ -20,7 +20,7 @@ use crate::{
 pub fn render(
     frame: &mut Frame,
     diff_state: Option<&LoadState<Diff>>,
-    review_threads: &[ReviewThread],
+    threads: &[CommentThread],
     ui_diff: &mut DiffViewState,
     author: &str,
     area: Rect,
@@ -47,7 +47,7 @@ pub fn render(
     let comment_counts: Vec<usize> = diff
         .files
         .iter()
-        .map(|f| file_comment_count(f, review_threads))
+        .map(|f| file_comment_count(f, threads))
         .collect();
 
     let pane_focused = matches!(ui_diff.focus, DiffFocus::Pane);
@@ -64,15 +64,22 @@ pub fn render(
         diff,
         ui_diff,
         &file_stats,
-        review_threads,
+        threads,
         pane_focused,
         author,
         pane_area,
     );
 }
 
-fn file_comment_count(file: &FileDiff, threads: &[ReviewThread]) -> usize {
-    if !threads.iter().any(|t| t.path == file.path) {
+fn file_comment_count(file: &FileDiff, threads: &[CommentThread]) -> usize {
+    // Only anchored (code) threads count toward a file; general discussion doesn't.
+    let on_file = || {
+        threads
+            .iter()
+            .filter_map(|t| t.anchor.as_ref().map(|a| (t, a)))
+            .filter(|(_, a)| a.path == file.path)
+    };
+    if on_file().next().is_none() {
         return 0;
     }
     let mut new_lines: HashSet<usize> = HashSet::new();
@@ -93,14 +100,12 @@ fn file_comment_count(file: &FileDiff, threads: &[ReviewThread]) -> usize {
             }
         }
     }
-    threads
-        .iter()
-        .filter(|t| t.path == file.path)
-        .filter(|t| match t.line {
+    on_file()
+        .filter(|(_, a)| match a.line {
             Some(l) => new_lines.contains(&l),
-            None => t.old_line.is_some_and(|o| old_lines.contains(&o)),
+            None => a.old_line.is_some_and(|o| old_lines.contains(&o)),
         })
-        .map(|t| t.comments.len())
+        .map(|(t, _)| t.comments.len())
         .sum()
 }
 

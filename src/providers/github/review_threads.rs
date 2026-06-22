@@ -1,6 +1,6 @@
 use serde::Deserialize;
 
-use crate::domain::comment::ReviewThread;
+use crate::domain::comment::{CommentThread, ThreadAnchor};
 use crate::providers::error::FetchError;
 use crate::providers::github::{COMMENT_FIELDS, GqlComment, map_gql_comment, run_pr_graphql};
 
@@ -38,7 +38,7 @@ struct GqlComments {
     nodes: Vec<GqlComment>,
 }
 
-pub fn fetch_review_threads(pr_number: u64) -> Result<Vec<ReviewThread>, FetchError> {
+pub fn fetch_review_threads(pr_number: u64) -> Result<Vec<CommentThread>, FetchError> {
     let query = format!(
         "query($owner: String!, $name: String!, $pr: Int!) {{ \
            repository(owner: $owner, name: $name) {{ pullRequest(number: $pr) {{ \
@@ -56,22 +56,25 @@ pub fn fetch_review_threads(pr_number: u64) -> Result<Vec<ReviewThread>, FetchEr
         .collect())
 }
 
-fn map_thread(t: GqlThread) -> ReviewThread {
-    let anchor = t.line.or(t.original_line);
+fn map_thread(t: GqlThread) -> CommentThread {
+    let pos = t.line.or(t.original_line);
     let (line, old_line) = if t.diff_side == "LEFT" {
-        (None, anchor)
+        (None, pos)
     } else {
-        (anchor, None)
+        (pos, None)
     };
     let reply_to = t.comments.nodes.first().and_then(|c| c.database_id);
-    ReviewThread {
-        path: t.path,
-        line,
-        old_line,
-        resolved: t.is_resolved,
+    // GitHub review threads are always anchored to code.
+    CommentThread {
         comments: t.comments.nodes.into_iter().map(map_gql_comment).collect(),
         reply_to,
-        node_id: (!t.id.is_empty()).then_some(t.id),
+        anchor: Some(ThreadAnchor {
+            path: t.path,
+            line,
+            old_line,
+            resolved: t.is_resolved,
+            node_id: (!t.id.is_empty()).then_some(t.id),
+        }),
     }
 }
 
@@ -103,7 +106,7 @@ mod tests {
     #[test]
     fn maps_threads_with_reactions_and_old_side_anchor() {
         let pr: GqlPullRequest = serde_json::from_str(SAMPLE).unwrap();
-        let threads: Vec<ReviewThread> = pr
+        let threads: Vec<CommentThread> = pr
             .review_threads
             .nodes
             .into_iter()
@@ -111,8 +114,9 @@ mod tests {
             .collect();
 
         let t = &threads[0];
-        assert!(t.resolved);
-        assert_eq!((t.line, t.old_line), (None, Some(7)));
+        let anchor = t.anchor.as_ref().unwrap();
+        assert!(anchor.resolved);
+        assert_eq!((anchor.line, anchor.old_line), (None, Some(7)));
         assert_eq!(t.reply_to, Some(555));
 
         let reactions = &t.comments[0].reactions;

@@ -12,7 +12,7 @@ use ratatui::{
 use crate::{
     app::state::{CommentRef, LoadState, PrData, ThreadRef, UiMemory},
     domain::{
-        comment::{Comment, ReviewThread},
+        comment::{Comment, CommentThread},
         diff::Diff,
         event::{EventKind, TimelineEvent},
         pr::PullRequest,
@@ -312,7 +312,7 @@ fn scroll_to_item(scroll: u16, start: usize, span: usize, total: usize, viewport
 
 enum TimelineItem<'a> {
     Comment(&'a Comment),
-    Review(&'a ReviewThread),
+    Review(&'a CommentThread),
     Event(&'a TimelineEvent),
 }
 
@@ -354,14 +354,14 @@ struct ItemNav {
 
 /// How many items the cursor can land on: comments and non-empty review threads.
 /// Events are shown inline but aren't focus targets.
-fn focusable_count(comments: &[Comment], threads: &[ReviewThread]) -> usize {
+fn focusable_count(comments: &[Comment], threads: &[CommentThread]) -> usize {
     comments.len() + threads.iter().filter(|t| !t.comments.is_empty()).count()
 }
 
 #[allow(clippy::too_many_arguments)]
 fn build_blocks(
     comments: &[Comment],
-    threads: &[ReviewThread],
+    threads: &[CommentThread],
     events: &[TimelineEvent],
     diff: Option<&Diff>,
     width: u16,
@@ -403,7 +403,7 @@ fn build_blocks(
             TimelineItem::Review(t) => {
                 // Mark the sub-selected comment only on the focused thread.
                 let selected = active.then_some(sub);
-                if let Some(lines) = super::super::comment::review_thread_box(
+                if let Some(lines) = super::super::comment::comment_thread_box(
                     t, diff, width, now, active, selected, author,
                 ) {
                     blocks.push(TimelineBlock {
@@ -417,13 +417,17 @@ fn build_blocks(
                             .iter()
                             .map(|c| CommentRef {
                                 id: c.id,
-                                review: true,
+                                // Anchored threads are review comments; a general
+                                // discussion's are PR-level (issue) comments.
+                                review: t.anchor.is_some(),
                             })
                             .collect(),
-                        resolve: Some(ThreadRef {
-                            node_id: t.node_id.clone(),
+                        // Only anchored threads can be resolved — general
+                        // discussion has no resolve target (so `R` no-ops).
+                        resolve: t.anchor.as_ref().map(|a| ThreadRef {
+                            node_id: a.node_id.clone(),
                             comment_id: t.reply_to,
-                            resolved: t.resolved,
+                            resolved: a.resolved,
                         }),
                     });
                     focus_idx += 1;

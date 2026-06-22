@@ -12,7 +12,7 @@ use ratatui::{
 use crate::{
     app::state::{CommentAnchor, DiffViewState, ThreadRef},
     domain::{
-        comment::ReviewThread,
+        comment::CommentThread,
         diff::{Diff, DiffLine, FileDiff},
     },
     tui::{icons, layout, screens::pr_detail::render_inline_thread, theme, widgets},
@@ -27,7 +27,7 @@ pub(super) fn render(
     diff: &Diff,
     ui_diff: &mut DiffViewState,
     file_stats: &[(u32, u32)],
-    threads: &[ReviewThread],
+    threads: &[CommentThread],
     focused: bool,
     author: &str,
     area: Rect,
@@ -178,7 +178,7 @@ struct DiffBody {
 #[allow(clippy::too_many_arguments)]
 fn build_diff_body(
     file: &FileDiff,
-    threads: &[ReviewThread],
+    threads: &[CommentThread],
     width: u16,
     active: Option<usize>,
     query: &str,
@@ -246,8 +246,8 @@ fn build_diff_body(
                         line,
                         removed,
                         reply_to: thread.reply_to,
-                        node_id: thread.node_id.clone(),
-                        resolved: thread.resolved,
+                        node_id: thread.anchor.as_ref().and_then(|a| a.node_id.clone()),
+                        resolved: thread.resolved(),
                     },
                 });
             }
@@ -274,18 +274,24 @@ fn styled_diff_row(diff_line: &DiffLine) -> Line<'static> {
     )
 }
 
-type CommentIndex<'a> = HashMap<usize, Vec<&'a ReviewThread>>;
+type CommentIndex<'a> = HashMap<usize, Vec<&'a CommentThread>>;
 
 fn index_comments<'a>(
-    threads: &'a [ReviewThread],
+    threads: &'a [CommentThread],
     path: &str,
 ) -> (CommentIndex<'a>, CommentIndex<'a>) {
     let mut by_new: CommentIndex = HashMap::new();
     let mut by_old: CommentIndex = HashMap::new();
-    for thread in threads.iter().filter(|t| t.path == path) {
-        if let Some(line) = thread.line {
+    // Only anchored (code-review) threads land in the diff; general discussion
+    // has no path/line and is skipped.
+    for thread in threads {
+        let Some(anchor) = &thread.anchor else { continue };
+        if anchor.path != path {
+            continue;
+        }
+        if let Some(line) = anchor.line {
             by_new.entry(line).or_default().push(thread);
-        } else if let Some(old) = thread.old_line {
+        } else if let Some(old) = anchor.old_line {
             by_old.entry(old).or_default().push(thread);
         }
     }
@@ -295,7 +301,7 @@ fn index_comments<'a>(
 #[allow(clippy::too_many_arguments)]
 fn push_thread_lines(
     lines: &mut Vec<Line<'static>>,
-    thread: &ReviewThread,
+    thread: &CommentThread,
     thread_width: u16,
     now: chrono::DateTime<Utc>,
     active: bool,

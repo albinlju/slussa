@@ -2,7 +2,7 @@ use serde::Deserialize;
 
 use super::{Config, ms_to_utc};
 use crate::domain::activity::Activity;
-use crate::domain::comment::{Comment, Reaction, ReviewThread};
+use crate::domain::comment::{Comment, CommentThread, Reaction, ThreadAnchor};
 use crate::domain::event::{EventKind, PushedCommit, TimelineEvent};
 use crate::domain::user::User;
 use crate::providers::bitbucket_dc::http::get_json;
@@ -115,7 +115,12 @@ fn project(activities: Vec<BbActivity>) -> Activity {
         if activity.action == "COMMENTED" {
             match (activity.comment_anchor, activity.comment) {
                 (Some(anchor), Some(root)) => bundle.threads.push(make_thread(anchor, &root)),
-                (None, Some(root)) => bundle.comments.push(map_comment(&root)),
+                // A general comment with replies is a conversation — keep the
+                // whole thread, not just the root. A lone one stays a flat comment.
+                (None, Some(root)) if root.comments.is_empty() => {
+                    bundle.comments.push(map_comment(&root));
+                }
+                (None, Some(root)) => bundle.threads.push(make_general_thread(&root)),
                 _ => {}
             }
             continue;
@@ -161,7 +166,7 @@ fn event_kind(action: &str) -> Option<EventKind> {
     }
 }
 
-fn make_thread(anchor: Anchor, root: &BbComment) -> ReviewThread {
+fn make_thread(anchor: Anchor, root: &BbComment) -> CommentThread {
     let (line, old_line) = if anchor.line_type.eq_ignore_ascii_case("REMOVED") {
         (None, Some(anchor.line))
     } else {
@@ -169,16 +174,30 @@ fn make_thread(anchor: Anchor, root: &BbComment) -> ReviewThread {
     };
     let mut comments = Vec::new();
     collect_replies(root, &mut comments);
-    ReviewThread {
-        path: anchor.path,
-        line,
-        old_line,
-        // A thread is resolved either by the "Resolve" button (threadResolved)
-        // or, for a task, by closing the task (state == RESOLVED).
-        resolved: root.thread_resolved || root.state.eq_ignore_ascii_case("RESOLVED"),
+    CommentThread {
         comments,
         reply_to: (root.id != 0).then_some(root.id),
-        node_id: None,
+        anchor: Some(ThreadAnchor {
+            path: anchor.path,
+            line,
+            old_line,
+            // Resolved by the "Resolve" button (threadResolved) or, for a task,
+            // by closing the task (state == RESOLVED).
+            resolved: root.thread_resolved || root.state.eq_ignore_ascii_case("RESOLVED"),
+            node_id: None,
+        }),
+    }
+}
+
+/// A general (non-inline) comment that has replies — a path-less conversation
+/// (no anchor) so the whole thread renders in Overview, not just the root.
+fn make_general_thread(root: &BbComment) -> CommentThread {
+    let mut comments = Vec::new();
+    collect_replies(root, &mut comments);
+    CommentThread {
+        comments,
+        reply_to: (root.id != 0).then_some(root.id),
+        anchor: None,
     }
 }
 
@@ -270,11 +289,12 @@ mod tests {
         assert_eq!(bundle.comments[0].content, "general");
 
         assert_eq!(bundle.threads.len(), 1);
-        assert_eq!(bundle.threads[0].path, "src/x.rs");
-        assert_eq!(bundle.threads[0].line, Some(42));
+        let anchor = bundle.threads[0].anchor.as_ref().unwrap();
+        assert_eq!(anchor.path, "src/x.rs");
+        assert_eq!(anchor.line, Some(42));
         assert_eq!(bundle.threads[0].comments.len(), 2);
         assert_eq!(bundle.threads[0].reply_to, Some(2));
-        assert!(!bundle.threads[0].resolved); // state OPEN, no threadResolved
+        assert!(!anchor.resolved); // state OPEN, no threadResolved
 
         assert_eq!(bundle.events.len(), 3);
         assert_eq!(bundle.events[0].kind, EventKind::Opened);
@@ -329,7 +349,33 @@ mod tests {
         let page: Page = serde_json::from_str(json).unwrap();
         let bundle = project(page.values);
         assert_eq!(bundle.threads.len(), 1);
-        assert!(bundle.threads[0].resolved);
+        assert!(bundle.threads[0].resolved());
+    }
+
+    #[test]
+    fn general_comment_with_replies_becomes_a_thread() {
+        // Bitbucket nests replies under the root's `comments`, even for general
+        // (non-anchored) comments — they must surface as a full thread.
+        let json = r#"{ "values": [
+            { "action": "COMMENTED", "createdDate": 1,
+              "comment": { "id": 1, "text": "root", "createdDate": 1, "updatedDate": 1,
+                           "author": { "name": "bo" },
+                           "comments": [
+                             { "id": 2, "text": "reply", "createdDate": 2, "updatedDate": 2,
+                               "author": { "name": "cy" } } ] } },
+            { "action": "COMMENTED", "createdDate": 3,
+              "comment": { "id": 3, "text": "lone", "createdDate": 3, "updatedDate": 3,
+                           "author": { "name": "bo" } } }
+        ]}"#;
+        let page: Page = serde_json::from_str(json).unwrap();
+        let bundle = project(page.values);
+        // Lone comment stays flat; the one with a reply becomes a path-less thread.
+        assert_eq!(bundle.comments.len(), 1);
+        assert_eq!(bundle.comments[0].content, "lone");
+        assert_eq!(bundle.threads.len(), 1);
+        assert!(bundle.threads[0].anchor.is_none());
+        assert_eq!(bundle.threads[0].comments.len(), 2);
+        assert_eq!(bundle.threads[0].comments[1].content, "reply");
     }
 
     #[test]

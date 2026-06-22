@@ -9,7 +9,7 @@ use ratatui::{
 
 use crate::{
     app::state::{CommitsViewState, LoadState, PrData},
-    domain::{comment::ReviewThread, commit::Commit},
+    domain::{comment::CommentThread, commit::Commit},
     tui::{format, icons, layout, theme, widgets},
 };
 
@@ -87,7 +87,7 @@ fn commit_row(commit: &Commit, is_last: bool, now: DateTime<Utc>, width: usize) 
 pub fn render_commit_diff(
     frame: &mut Frame,
     pr_data: Option<&PrData>,
-    threads: &[ReviewThread],
+    threads: &[CommentThread],
     cv: &mut CommitsViewState,
     author: &str,
     area: Rect,

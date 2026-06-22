@@ -22,7 +22,7 @@ use crate::{
         PrData, SearchState, UiMemory,
     },
     domain::{
-        comment::ReviewThread,
+        comment::CommentThread,
         diff::{Diff, FileDiff},
         pr::PullRequest,
     },
@@ -439,7 +439,7 @@ fn render_content(
     }
 }
 
-fn activity_threads(pr_data: Option<&PrData>) -> &[ReviewThread] {
+fn activity_threads(pr_data: Option<&PrData>) -> &[CommentThread] {
     pr_data
         .and_then(|d| match &d.activity {
             LoadState::Loaded(b) => Some(b.threads.as_slice()),
