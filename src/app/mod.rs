@@ -43,6 +43,7 @@ impl App {
         Self {
             state: AppState {
                 current_user,
+                can_unapprove: provider.can_unapprove(),
                 ..AppState::default()
             },
             provider,

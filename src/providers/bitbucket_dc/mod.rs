@@ -12,6 +12,7 @@ pub mod remote;
 
 use chrono::{DateTime, TimeZone, Utc};
 
+use crate::domain::review::ReviewVerdict;
 use crate::providers::error::FetchError;
 
 pub use activities::fetch as fetch_activity;
@@ -30,13 +31,30 @@ pub fn current_user(config: &Config) -> Result<String, FetchError> {
     http::current_user(&config.repo.base_url, APP_PROPERTIES_PATH, &config.pat)
 }
 
-pub fn approve(config: &Config, pr_id: u64, user: &str) -> Result<(), FetchError> {
+pub fn submit_review(
+    config: &Config,
+    pr_id: u64,
+    verdict: ReviewVerdict,
+    body: &str,
+    user: &str,
+) -> Result<(), FetchError> {
+    // Bitbucket has no review body — post any summary as a PR comment first.
+    if !body.is_empty() {
+        comments::post_pr_comment(config, pr_id, body)?;
+    }
+    let status = match verdict {
+        ReviewVerdict::Approve => "APPROVED",
+        ReviewVerdict::RequestChanges => "NEEDS_WORK",
+        ReviewVerdict::Unapprove => "UNAPPROVED",
+        // A plain comment review is just the comment posted above — no status flip.
+        ReviewVerdict::Comment => return Ok(()),
+    };
     let endpoint = format!(
         "/rest/api/1.0/projects/{}/repos/{}/pull-requests/{pr_id}/participants/{user}",
         config.repo.project_key, config.repo.repo_slug,
     );
-    let body = serde_json::json!({ "status": "APPROVED" });
-    http::put_json(&config.repo.base_url, &endpoint, &config.pat, &body)
+    let payload = serde_json::json!({ "status": status });
+    http::put_json(&config.repo.base_url, &endpoint, &config.pat, &payload)
 }
 
 #[derive(Clone, Debug)]

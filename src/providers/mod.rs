@@ -5,7 +5,10 @@ mod unified_diff;
 
 pub use error::FetchError;
 
-use crate::domain::{activity::Activity, ci::Build, commit::Commit, diff::Diff, pr::PullRequest};
+use crate::domain::{
+    activity::Activity, ci::Build, commit::Commit, diff::Diff, pr::PullRequest,
+    review::ReviewVerdict,
+};
 
 #[derive(Clone, Debug)]
 pub enum Provider {
@@ -132,13 +135,26 @@ impl Provider {
         }
     }
 
-    /// `user` is the current user's slug (Bitbucket needs it for the participant
-    /// endpoint; GitHub ignores it).
-    pub fn approve(&self, pr_id: u64, user: &str) -> Result<(), FetchError> {
+    /// Submit a review verdict (+ optional summary `body`). `user` is the current
+    /// user's slug — Bitbucket needs it for the participant endpoint; GitHub
+    /// ignores it.
+    pub fn submit_review(
+        &self,
+        pr_id: u64,
+        verdict: ReviewVerdict,
+        body: &str,
+        user: &str,
+    ) -> Result<(), FetchError> {
         match self {
-            Self::GitHub => github::approve(pr_id),
-            Self::BitbucketDc(c) => bitbucket_dc::approve(c, pr_id, user),
+            Self::GitHub => github::submit_review(pr_id, verdict, body),
+            Self::BitbucketDc(c) => bitbucket_dc::submit_review(c, pr_id, verdict, body, user),
         }
+    }
+
+    /// Whether withdrawing one's own approval is supported. GitHub reviews are
+    /// immutable, so it isn't offered there.
+    pub fn can_unapprove(&self) -> bool {
+        matches!(self, Self::BitbucketDc(_))
     }
 
     pub fn current_user(&self) -> Result<String, FetchError> {

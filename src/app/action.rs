@@ -1,5 +1,5 @@
 use crate::{
-    app::state::{ConfirmKind, DetailTab},
+    app::state::DetailTab,
     domain::{activity::Activity, ci::Build, commit::Commit, diff::Diff, pr::PullRequest},
 };
 
@@ -45,10 +45,13 @@ pub enum DetailAction {
     DescriptionScroll(i16),
     OverviewMove(i16),
     ToggleHelp,
-    OpenConfirm(ConfirmKind),
     CloseConfirm,
     ConfirmMove(i16),
     SubmitConfirm,
+    OpenReviewPicker,
+    ReviewMove(i16),
+    ReviewSelect,
+    CloseReviewPicker,
     OpenComment,
     OpenReply,
     OverviewSubMove(i16),
