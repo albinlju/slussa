@@ -363,15 +363,15 @@ fn render_header(frame: &mut Frame, pr: &PullRequest, area: Rect) {
     ]);
 
     let left_spans: Vec<Span<'static>> = vec![
-        Span::styled("\u{e0b6}", Style::default().fg(status_color)),
+        // Padded background badge — matches the reaction pills and needs no
+        // Nerd Font (no powerline caps).
         Span::styled(
-            pr.status.label().to_string(),
+            format!(" {} ", pr.status.label()),
             Style::default()
                 .fg(theme.bg)
                 .bg(status_color)
                 .add_modifier(Modifier::BOLD),
         ),
-        Span::styled("\u{e0b4}", Style::default().fg(status_color)),
         Span::styled(
             format!(" @{}", pr.author.username),
             Style::default().fg(theme.info),

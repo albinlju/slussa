@@ -1,12 +1,16 @@
-pub const CHECK_CIRCLE: &str = "\u{f058}";
-pub const TIMES_CIRCLE: &str = "\u{f057}";
-pub const QUESTION_CIRCLE: &str = "\u{f059}";
-pub const CIRCLE: &str = "\u{f111}";
-pub const CIRCLE_O: &str = "\u{f10c}";
-pub const BAN: &str = "\u{f05e}";
-pub const CLOCK: &str = "\u{f017}";
-pub const ADJUST: &str = "\u{f042}";
-pub const COMMENT: &str = "\u{f075}";
-pub const GIT_COMMIT: &str = "\u{f417}";
-pub const HEART: &str = "\u{f004}";
-pub const REFRESH: &str = "\u{f021}";
+//! Status glyphs — deliberately plain Unicode (geometric shapes, dingbats,
+//! arrows) so tuipr needs no Nerd Font. All are single-width and render in any
+//! monospace font; meaning is reinforced by colour at each call site.
+
+pub const CHECK_CIRCLE: &str = "✓"; // U+2713  success / approved
+pub const TIMES_CIRCLE: &str = "✗"; // U+2717  failure / changes requested
+pub const QUESTION_CIRCLE: &str = "?"; //        unknown / help
+pub const CIRCLE: &str = "●"; // U+25CF  filled — running / active
+pub const CIRCLE_O: &str = "○"; // U+25CB  hollow — commented
+pub const BAN: &str = "⊘"; // U+2298  cancelled
+pub const CLOCK: &str = "◷"; // U+25F7  pending
+pub const ADJUST: &str = "◐"; // U+25D0  partial / unknown
+pub const COMMENT: &str = "•"; // U+2022  comment marker
+pub const GIT_COMMIT: &str = "●"; // U+25CF  commit node
+pub const HEART: &str = "♥"; // U+2665  donate
+pub const REFRESH: &str = "↻"; // U+21BB  refreshing
