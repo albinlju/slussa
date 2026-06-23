@@ -23,7 +23,7 @@ use serde::Deserialize;
 use serde::de::DeserializeOwned;
 
 use crate::domain::comment::{Comment, Reaction};
-use crate::domain::pr::Mergeability;
+use crate::domain::pr::{Mergeability, MergeStrategy};
 use crate::domain::review::{ReviewComment, ReviewVerdict};
 use crate::domain::user::User;
 use crate::providers::error::FetchError;
@@ -49,6 +49,36 @@ pub fn fetch_mergeability(pr_number: u64) -> Result<Mergeability, FetchError> {
         "CONFLICTING" => Mergeability::Conflicts,
         _ => Mergeability::Unknown,
     })
+}
+
+pub fn merge(pr_number: u64, strategy: MergeStrategy) -> Result<(), FetchError> {
+    let method = match strategy {
+        MergeStrategy::Merge => "merge",
+        MergeStrategy::Squash => "squash",
+        MergeStrategy::Rebase => "rebase",
+    };
+    cli::run_gh(&[
+        "api",
+        "--method",
+        "PUT",
+        &format!("repos/{{owner}}/{{repo}}/pulls/{pr_number}/merge"),
+        "-f",
+        &format!("merge_method={method}"),
+    ])?;
+    Ok(())
+}
+
+pub fn decline(pr_number: u64) -> Result<(), FetchError> {
+    // GitHub has no "decline" — closing the PR is the equivalent.
+    cli::run_gh(&[
+        "api",
+        "--method",
+        "PATCH",
+        &format!("repos/{{owner}}/{{repo}}/pulls/{pr_number}"),
+        "-f",
+        "state=closed",
+    ])?;
+    Ok(())
 }
 
 /// GitHub review event for a verdict, or `None` where it has no GitHub

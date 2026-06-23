@@ -29,6 +29,25 @@ pub enum Mergeability {
     Unknown,
 }
 
+/// How to integrate a PR. Which ones are offered depends on the provider — see
+/// `Provider::merge_strategies` (GitHub allows all three; Bitbucket DC just merges).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum MergeStrategy {
+    Merge,
+    Squash,
+    Rebase,
+}
+
+impl MergeStrategy {
+    pub fn label(self) -> &'static str {
+        match self {
+            Self::Merge => "Merge commit",
+            Self::Squash => "Squash and merge",
+            Self::Rebase => "Rebase and merge",
+        }
+    }
+}
+
 #[derive(Debug, Clone)]
 pub struct PullRequest {
     pub id: u64,

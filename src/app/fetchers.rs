@@ -6,7 +6,10 @@ use crate::{
         action::{Action, LoadedAction},
         state::{CommentTarget, PendingComment},
     },
-    domain::review::{ReviewComment, ReviewVerdict},
+    domain::{
+        pr::MergeStrategy,
+        review::{ReviewComment, ReviewVerdict},
+    },
     providers::FetchError,
 };
 
@@ -73,6 +76,22 @@ impl App {
         self.spawn_fetch(
             move || provider.fetch_activity(pr_id),
             move |r| Action::Loaded(LoadedAction::Activity(pr_id, r)),
+        );
+    }
+
+    pub(super) fn spawn_merge(&self, pr_id: u64, strategy: MergeStrategy) {
+        let provider = self.provider.clone();
+        self.spawn_fetch(
+            move || provider.merge(pr_id, strategy),
+            move |r| Action::Loaded(LoadedAction::Merged(pr_id, r)),
+        );
+    }
+
+    pub(super) fn spawn_decline(&self, pr_id: u64) {
+        let provider = self.provider.clone();
+        self.spawn_fetch(
+            move || provider.decline(pr_id),
+            move |r| Action::Loaded(LoadedAction::Declined(pr_id, r)),
         );
     }
 

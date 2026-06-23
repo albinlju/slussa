@@ -54,6 +54,21 @@ pub(in crate::tui) fn key_to_action(state: &AppState, key: KeyEvent) -> Option<A
         };
     }
 
+    // The merge-strategy menu is modal in the same way.
+    if state.ui.merge_picker.is_some() {
+        return match code {
+            KeyCode::Left | KeyCode::Up | KeyCode::Char('h' | 'k') => {
+                Some(Action::Detail(DetailAction::MergeMove(-1)))
+            }
+            KeyCode::Right | KeyCode::Down | KeyCode::Char('j' | 'l') => {
+                Some(Action::Detail(DetailAction::MergeMove(1)))
+            }
+            KeyCode::Enter => Some(Action::Detail(DetailAction::MergeSelect)),
+            KeyCode::Esc => Some(Action::Detail(DetailAction::CloseMergePicker)),
+            _ => None,
+        };
+    }
+
     if code == KeyCode::Char('?') {
         return Some(Action::Detail(DetailAction::ToggleHelp));
     }
@@ -61,21 +76,15 @@ pub(in crate::tui) fn key_to_action(state: &AppState, key: KeyEvent) -> Option<A
         return (code == KeyCode::Esc).then_some(Action::Detail(DetailAction::ToggleHelp));
     }
 
-    // `a` opens the review-verdict menu — not for your own PR (you can't review it).
-    if plain
-        && code == KeyCode::Char('a')
-        && tab == DetailTab::Overview
-        && !state.viewing_own_pr(pr_id)
-    {
+    // `a` opens the review-verdict menu. Always available — even on your own PR
+    // you can leave a comment review; the picker dims the verdicts you can't use.
+    if plain && code == KeyCode::Char('a') && tab == DetailTab::Overview {
         return Some(Action::Detail(DetailAction::OpenReviewPicker));
     }
     // `v` runs the batched review: it starts a review the first time, then finishes
     // it (opening the verdict menu) once one's in progress. Line comments made
     // while it's open queue into the review instead of posting.
-    if plain
-        && code == KeyCode::Char('v')
-        && (tab == DetailTab::Overview || tab == DetailTab::Diff)
-        && !state.viewing_own_pr(pr_id)
+    if plain && code == KeyCode::Char('v') && (tab == DetailTab::Overview || tab == DetailTab::Diff)
     {
         return Some(Action::Detail(if state.ui.pending_review.is_some() {
             DetailAction::FinishReview
@@ -86,6 +95,23 @@ pub(in crate::tui) fn key_to_action(state: &AppState, key: KeyEvent) -> Option<A
     // Shift+V discards an in-progress review and its queued comments.
     if code == KeyCode::Char('V') && state.ui.pending_review.is_some() {
         return Some(Action::Detail(DetailAction::AbandonReview));
+    }
+    // `m` opens the merge-strategy menu — only when the PR is mergeable. You can
+    // merge your own PR, so (unlike `a`) there's no own-PR gate.
+    if plain
+        && code == KeyCode::Char('m')
+        && tab == DetailTab::Overview
+        && state.can_merge(pr_id)
+    {
+        return Some(Action::Detail(DetailAction::OpenMergePicker));
+    }
+    // `x` declines/closes the PR (with a confirm) while it's still open.
+    if plain
+        && code == KeyCode::Char('x')
+        && tab == DetailTab::Overview
+        && state.pr_is_open(pr_id)
+    {
+        return Some(Action::Detail(DetailAction::OpenDecline));
     }
     if plain && code == KeyCode::Char('c') {
         return Some(Action::Detail(DetailAction::OpenComment));

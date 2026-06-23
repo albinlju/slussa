@@ -5,7 +5,7 @@ use crate::domain::ci::Build;
 use crate::domain::comment::Comment;
 use crate::domain::commit::Commit;
 use crate::domain::diff::Diff;
-use crate::domain::pr::{Mergeability, PrStatus, PullRequest};
+use crate::domain::pr::{Mergeability, MergeStrategy, PrStatus, PullRequest};
 use crate::domain::review::ReviewVerdict;
 
 #[derive(Debug, Default, Clone, Copy, PartialEq, Eq)]
@@ -50,6 +50,8 @@ pub struct AppState {
     /// Whether the provider supports withdrawing an approval (gates the
     /// "Unapprove" review verdict). Set once at startup.
     pub can_unapprove: bool,
+    /// Merge strategies the provider offers, for the `m` picker. Set once at startup.
+    pub merge_strategies: Vec<MergeStrategy>,
 }
 
 #[derive(Debug, Default)]
@@ -99,6 +101,8 @@ pub struct UiMemory {
     pub confirm_cursor: usize,
     /// Open review-verdict menu (cursor into `AppState::review_verdicts`).
     pub review_picker: Option<usize>,
+    /// Open merge-strategy menu (cursor into `AppState::merge_strategies`).
+    pub merge_picker: Option<usize>,
     /// An in-progress review (`v`): line comments queue here instead of posting,
     /// and flush together when a verdict is submitted. `None` outside review mode.
     pub pending_review: Option<PendingReview>,
@@ -191,12 +195,14 @@ pub struct ThreadRef {
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum ConfirmKind {
     DeleteComment { id: u64, review: bool },
+    Decline,
 }
 
 impl ConfirmKind {
     pub fn prompt(self) -> &'static str {
         match self {
             Self::DeleteComment { .. } => "Delete this comment?",
+            Self::Decline => "Decline this PR?",
         }
     }
 }
@@ -392,6 +398,61 @@ impl AppState {
         };
         prs.iter()
             .any(|pr| pr.id == pr_id && pr.author.username == self.current_user)
+    }
+
+    fn pr_status(&self, pr_id: u64) -> Option<PrStatus> {
+        let LoadState::Loaded(prs) = &self.cache.prs else {
+            return None;
+        };
+        prs.iter().find(|pr| pr.id == pr_id).map(|pr| pr.status.clone())
+    }
+
+    /// Whether the PR is still actionable (open/draft, not already merged or
+    /// declined). Gates both `m` (merge) and `x` (decline).
+    pub fn pr_is_open(&self, pr_id: u64) -> bool {
+        matches!(self.pr_status(pr_id), Some(PrStatus::Open | PrStatus::Draft))
+    }
+
+    /// Why merging is unavailable, for the dimmed footer hint — `None` when it's
+    /// offered. Unknown/loading mergeability still allows an attempt (server decides).
+    pub fn merge_blocked_reason(&self, pr_id: u64) -> Option<&'static str> {
+        match self.pr_status(pr_id) {
+            Some(PrStatus::Merged) => return Some("merged"),
+            Some(PrStatus::Declined) => return Some("declined"),
+            Some(PrStatus::Open | PrStatus::Draft) => {}
+            None => return Some("unavailable"),
+        }
+        matches!(
+            self.cache.details.get(&pr_id).map(|d| &d.mergeability),
+            Some(LoadState::Loaded(Mergeability::Conflicts))
+        )
+        .then_some("conflicts")
+    }
+
+    /// Why declining is unavailable, for the dimmed footer hint — `None` when open.
+    pub fn decline_blocked_reason(&self, pr_id: u64) -> Option<&'static str> {
+        match self.pr_status(pr_id) {
+            Some(PrStatus::Open | PrStatus::Draft) => None,
+            Some(PrStatus::Merged) => Some("merged"),
+            Some(PrStatus::Declined) => Some("declined"),
+            None => Some("unavailable"),
+        }
+    }
+
+    /// Whether to offer the `m` merge action.
+    pub fn can_merge(&self, pr_id: u64) -> bool {
+        !self.merge_strategies.is_empty() && self.merge_blocked_reason(pr_id).is_none()
+    }
+
+    /// Why a review verdict can't be submitted on this PR, for dimming it in the
+    /// picker — you can't approve / request changes on your own PR (but you *can*
+    /// leave a plain comment, which GitHub allows).
+    pub fn verdict_disabled_reason(
+        &self,
+        verdict: ReviewVerdict,
+        pr_id: u64,
+    ) -> Option<&'static str> {
+        (verdict != ReviewVerdict::Comment && self.viewing_own_pr(pr_id)).then_some("your PR")
     }
 
     /// The loaded comment with `id` in the current PR's activity, if any.

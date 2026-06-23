@@ -171,7 +171,9 @@ fn render_footer(
     } else {
         widgets::footer(
             area.width,
-            "j/k: navigate  /: search  ^d/^u: page  enter: open  f: filter  F: refresh  q: quit",
+            &widgets::hints_on(
+                "j/k: navigate  /: search  ^d/^u: page  enter: open  f: filter  F: refresh  q: quit",
+            ),
             refreshing,
         )
     };
