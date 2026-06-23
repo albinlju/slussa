@@ -34,6 +34,7 @@ impl App {
                     if tab != DetailTab::Builds {
                         self.refresh_detail_view(pr_id, tab);
                     }
+                    self.refresh_mergeability(pr_id);
                     // The reviewer/approval state in the sidebar comes from the list.
                     self.refresh_prs();
                     self.full_refreshed = now;
@@ -51,6 +52,7 @@ impl App {
             Screen::List => self.refresh_prs(),
             Screen::Detail { pr_id, tab } => {
                 self.refresh_detail_view(pr_id, tab);
+                self.refresh_mergeability(pr_id);
                 self.refresh_prs();
             }
         }
@@ -105,6 +107,16 @@ impl App {
         }
         self.state.ui.refreshing = true;
         self.spawn_load_builds(pr_id);
+    }
+
+    /// The mergeability badge lives in the always-visible header, so it re-checks
+    /// on any detail refresh regardless of the focused tab.
+    fn refresh_mergeability(&mut self, pr_id: u64) {
+        if self.fetch_in_flight(pr_id, |d| d.mergeability.is_loading()) {
+            return;
+        }
+        self.state.ui.refreshing = true;
+        self.spawn_load_mergeability(pr_id);
     }
 
     fn fetch_in_flight(&self, pr_id: u64, f: impl Fn(&crate::app::state::PrData) -> bool) -> bool {

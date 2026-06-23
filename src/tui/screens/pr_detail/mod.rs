@@ -24,9 +24,9 @@ use crate::{
     domain::{
         comment::CommentThread,
         diff::{Diff, FileDiff},
-        pr::PullRequest,
+        pr::{Mergeability, PrStatus, PullRequest},
     },
-    tui::{layout, theme, widgets},
+    tui::{icons, layout, theme, widgets},
 };
 
 impl DetailTab {
@@ -92,9 +92,9 @@ pub(in crate::tui) fn render(
         ],
     );
 
-    render_header(frame, pr, header_area);
-    let own_pr = state.viewing_own_pr(pr_id);
     let pr_data = state.cache.details.get(&pr.id);
+    render_header(frame, pr, pr_data.map(|d| &d.mergeability), header_area);
+    let own_pr = state.viewing_own_pr(pr_id);
     render_tabs_and_content(frame, pr, pr_data, &mut state.ui, tab, content_area);
     render_footer_bar(frame, state, pr_data, tab, own_pr, footer_area);
 
@@ -444,7 +444,35 @@ fn tab_bar(tab: DetailTab) -> Line<'static> {
     Line::from(spans)
 }
 
-fn render_header(frame: &mut Frame, pr: &PullRequest, area: Rect) {
+/// Header badge for a PR's mergeability — glyph + label, colour carrying the
+/// meaning. `None` while the fetch is unresolved so nothing flickers in.
+fn mergeability_badge(state: &LoadState<Mergeability>) -> Option<Span<'static>> {
+    let theme = theme::current();
+    let (glyph, label, color) = match state {
+        LoadState::Loading => (icons::ADJUST, "checking…", theme.muted),
+        LoadState::Loaded(Mergeability::Mergeable) => {
+            (icons::CHECK_CIRCLE, "mergeable", theme.success)
+        }
+        LoadState::Loaded(Mergeability::Conflicts) => {
+            (icons::TIMES_CIRCLE, "conflicts", theme.warning)
+        }
+        LoadState::Loaded(Mergeability::Unknown) => {
+            (icons::QUESTION_CIRCLE, "mergeability unknown", theme.muted)
+        }
+        LoadState::NotRequested | LoadState::Failed(_) => return None,
+    };
+    Some(Span::styled(
+        format!("{glyph} {label}"),
+        Style::default().fg(color),
+    ))
+}
+
+fn render_header(
+    frame: &mut Frame,
+    pr: &PullRequest,
+    mergeability: Option<&LoadState<Mergeability>>,
+    area: Rect,
+) {
     let theme = theme::current();
     let status_color = theme.status_color(&pr.status);
 
@@ -456,7 +484,7 @@ fn render_header(frame: &mut Frame, pr: &PullRequest, area: Rect) {
         ),
     ]);
 
-    let left_spans: Vec<Span<'static>> = vec![
+    let mut left_spans: Vec<Span<'static>> = vec![
         // Padded background badge — matches the reaction pills and needs no
         // Nerd Font (no powerline caps).
         Span::styled(
@@ -475,6 +503,12 @@ fn render_header(frame: &mut Frame, pr: &PullRequest, area: Rect) {
         Span::raw(" → "),
         Span::styled(pr.target_branch.clone(), Style::default().fg(theme.info)),
     ];
+    // Mergeability is only meaningful while the PR is still open.
+    let open = !matches!(pr.status, PrStatus::Merged | PrStatus::Declined);
+    if open && let Some(badge) = mergeability.and_then(mergeability_badge) {
+        left_spans.push(Span::raw("    "));
+        left_spans.push(badge);
+    }
     let meta_line = Line::from(left_spans);
 
     let paragraph = Paragraph::new(vec![title_line, Line::default(), meta_line])

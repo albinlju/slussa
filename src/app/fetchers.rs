@@ -76,6 +76,14 @@ impl App {
         );
     }
 
+    pub(super) fn spawn_load_mergeability(&self, pr_id: u64) {
+        let provider = self.provider.clone();
+        self.spawn_fetch(
+            move || provider.fetch_mergeability(pr_id),
+            move |r| Action::Loaded(LoadedAction::Mergeability(pr_id, r)),
+        );
+    }
+
     pub(super) fn spawn_comment(&self, pr_id: u64, target: CommentTarget, text: String) {
         let provider = self.provider.clone();
         self.spawn_fetch(

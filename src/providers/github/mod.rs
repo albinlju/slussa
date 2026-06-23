@@ -23,6 +23,7 @@ use serde::Deserialize;
 use serde::de::DeserializeOwned;
 
 use crate::domain::comment::{Comment, Reaction};
+use crate::domain::pr::Mergeability;
 use crate::domain::review::{ReviewComment, ReviewVerdict};
 use crate::domain::user::User;
 use crate::providers::error::FetchError;
@@ -30,6 +31,24 @@ use crate::providers::error::FetchError;
 pub fn current_user() -> Result<String, FetchError> {
     let out = cli::run_gh(&["api", "user", "--jq", ".login"])?;
     Ok(String::from_utf8_lossy(&out).trim().to_owned())
+}
+
+pub fn fetch_mergeability(pr_number: u64) -> Result<Mergeability, FetchError> {
+    #[derive(Deserialize)]
+    struct Mergeable {
+        mergeable: String,
+    }
+    let query = "query($owner: String!, $name: String!, $pr: Int!) { \
+        repository(owner: $owner, name: $name) { \
+          pullRequest(number: $pr) { mergeable } } }";
+    let pr: Mergeable = run_pr_graphql(query, pr_number)?;
+    // GitHub computes this asynchronously, so a fresh PR can answer UNKNOWN
+    // until it settles — a later refresh picks up the real verdict.
+    Ok(match pr.mergeable.as_str() {
+        "MERGEABLE" => Mergeability::Mergeable,
+        "CONFLICTING" => Mergeability::Conflicts,
+        _ => Mergeability::Unknown,
+    })
 }
 
 /// GitHub review event for a verdict, or `None` where it has no GitHub
