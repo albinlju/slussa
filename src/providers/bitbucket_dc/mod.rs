@@ -12,6 +12,7 @@ pub mod remote;
 
 use chrono::{DateTime, TimeZone, Utc};
 
+use crate::domain::pr::Mergeability;
 use crate::domain::review::{ReviewComment, ReviewVerdict};
 use crate::providers::error::FetchError;
 
@@ -79,6 +80,29 @@ pub fn submit_full_review(
         }
     }
     submit_review(config, pr_id, verdict, body, user)
+}
+
+pub fn fetch_mergeability(config: &Config, pr_id: u64) -> Result<Mergeability, FetchError> {
+    #[derive(serde::Deserialize)]
+    #[serde(rename_all = "camelCase")]
+    struct MergeStatus {
+        can_merge: bool,
+        conflicted: bool,
+    }
+    let endpoint = format!(
+        "/rest/api/1.0/projects/{}/repos/{}/pull-requests/{pr_id}/merge",
+        config.repo.project_key, config.repo.repo_slug,
+    );
+    let status: MergeStatus = http::get_json(&config.repo.base_url, &endpoint, &config.pat)?;
+    // A veto without a conflict (e.g. missing approvals) is "can't merge yet" but
+    // not a conflict — coarse `Unknown` covers it until we model it explicitly.
+    Ok(if status.conflicted {
+        Mergeability::Conflicts
+    } else if status.can_merge {
+        Mergeability::Mergeable
+    } else {
+        Mergeability::Unknown
+    })
 }
 
 #[derive(Clone, Debug)]

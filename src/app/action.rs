@@ -1,6 +1,12 @@
 use crate::{
     app::state::DetailTab,
-    domain::{activity::Activity, ci::Build, commit::Commit, diff::Diff, pr::PullRequest},
+    domain::{
+        activity::Activity,
+        ci::Build,
+        commit::Commit,
+        diff::Diff,
+        pr::{Mergeability, PullRequest},
+    },
 };
 
 #[derive(Debug)]
@@ -96,6 +102,7 @@ pub enum LoadedAction {
     Diff(u64, Result<Diff, String>),
     Builds(u64, Result<Vec<Build>, String>),
     Activity(u64, Result<Activity, String>),
+    Mergeability(u64, Result<Mergeability, String>),
     CommitDiff(u64, String, Result<Diff, String>),
     Commented(u64, Result<(), String>),
 }

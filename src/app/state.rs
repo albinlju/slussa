@@ -5,7 +5,7 @@ use crate::domain::ci::Build;
 use crate::domain::comment::Comment;
 use crate::domain::commit::Commit;
 use crate::domain::diff::Diff;
-use crate::domain::pr::{PrStatus, PullRequest};
+use crate::domain::pr::{Mergeability, PrStatus, PullRequest};
 use crate::domain::review::ReviewVerdict;
 
 #[derive(Debug, Default, Clone, Copy, PartialEq, Eq)]
@@ -313,6 +313,7 @@ pub struct PrData {
     pub diff: LoadState<Diff>,
     pub builds: LoadState<Vec<Build>>,
     pub activity: LoadState<Activity>,
+    pub mergeability: LoadState<Mergeability>,
     pub commit_diffs: HashMap<String, LoadState<Diff>>,
 }
 

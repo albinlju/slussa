@@ -6,7 +6,11 @@ mod unified_diff;
 pub use error::FetchError;
 
 use crate::domain::{
-    activity::Activity, ci::Build, commit::Commit, diff::Diff, pr::PullRequest,
+    activity::Activity,
+    ci::Build,
+    commit::Commit,
+    diff::Diff,
+    pr::{Mergeability, PullRequest},
     review::{ReviewComment, ReviewVerdict},
 };
 
@@ -56,6 +60,13 @@ impl Provider {
         match self {
             Self::GitHub => github::fetch_activity(pr_id),
             Self::BitbucketDc(c) => bitbucket_dc::fetch_activity(c, pr_id),
+        }
+    }
+
+    pub fn fetch_mergeability(&self, pr_id: u64) -> Result<Mergeability, FetchError> {
+        match self {
+            Self::GitHub => github::fetch_mergeability(pr_id),
+            Self::BitbucketDc(c) => bitbucket_dc::fetch_mergeability(c, pr_id),
         }
     }
 

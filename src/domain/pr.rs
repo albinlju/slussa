@@ -20,6 +20,15 @@ impl PrStatus {
     }
 }
 
+/// Whether a PR can be merged into its target. Coarse on purpose — provider
+/// specifics (behind target, blocked on approvals) collapse to `Unknown` for now.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Mergeability {
+    Mergeable,
+    Conflicts,
+    Unknown,
+}
+
 #[derive(Debug, Clone)]
 pub struct PullRequest {
     pub id: u64,

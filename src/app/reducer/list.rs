@@ -38,6 +38,7 @@ impl App {
         let load_diff = pr_data.diff.start_loading();
         let load_builds = pr_data.builds.start_loading();
         let load_activity = pr_data.activity.start_loading();
+        let load_mergeability = pr_data.mergeability.start_loading();
         if load_commits {
             self.spawn_load_commits(pr_id);
         }
@@ -49,6 +50,9 @@ impl App {
         }
         if load_activity {
             self.spawn_load_activity(pr_id);
+        }
+        if load_mergeability {
+            self.spawn_load_mergeability(pr_id);
         }
     }
 

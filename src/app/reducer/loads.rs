@@ -30,6 +30,10 @@ impl App {
                 self.pr_data_mut(pr_id).activity.reload(r);
                 self.state.ui.comment_pending = false;
             }
+            LoadedAction::Mergeability(pr_id, r) => {
+                log_outcome("mergeability", Some(pr_id), &r);
+                self.pr_data_mut(pr_id).mergeability.reload(r);
+            }
             LoadedAction::CommitDiff(pr_id, oid, r) => {
                 log_outcome("commit-diff", Some(pr_id), &r);
                 self.pr_data_mut(pr_id)
