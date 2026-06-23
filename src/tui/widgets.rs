@@ -132,7 +132,36 @@ pub(super) fn spinner_frame() -> &'static str {
     SPINNER_FRAMES[idx]
 }
 
-pub(super) fn footer(width: u16, hints: &str, refreshing: bool) -> Line<'static> {
+/// A footer action hint. `enabled == false` renders it dimmed (key not accented)
+/// — the "disabled with affordance" pattern: the action stays visible with its
+/// reason instead of being hidden.
+pub(super) struct Hint {
+    text: String,
+    enabled: bool,
+}
+
+impl Hint {
+    pub(super) fn on(text: impl Into<String>) -> Self {
+        Self {
+            text: text.into(),
+            enabled: true,
+        }
+    }
+
+    pub(super) fn off(text: impl Into<String>) -> Self {
+        Self {
+            text: text.into(),
+            enabled: false,
+        }
+    }
+}
+
+/// Build a row of all-enabled hints from a `"a: x  b: y"` string.
+pub(super) fn hints_on(s: &str) -> Vec<Hint> {
+    s.split("  ").map(Hint::on).collect()
+}
+
+pub(super) fn footer(width: u16, hints: &[Hint], refreshing: bool) -> Line<'static> {
     let theme = theme::current();
     let muted = Style::default().fg(theme.muted);
     let key = Style::default()
@@ -140,16 +169,18 @@ pub(super) fn footer(width: u16, hints: &str, refreshing: bool) -> Line<'static>
         .add_modifier(Modifier::BOLD);
 
     let mut left = vec![Span::raw("  ")];
-    for (i, segment) in hints.split("  ").enumerate() {
+    for (i, hint) in hints.iter().enumerate() {
         if i > 0 {
             left.push(Span::styled("  ", muted));
         }
-        match segment.split_once(": ") {
+        // Disabled hints drop the accent so the key reads as inactive.
+        let key_style = if hint.enabled { key } else { muted };
+        match hint.text.split_once(": ") {
             Some((keys, desc)) => {
-                left.push(Span::styled(keys.to_string(), key));
+                left.push(Span::styled(keys.to_string(), key_style));
                 left.push(Span::styled(format!(": {desc}"), muted));
             }
-            None => left.push(Span::styled(segment.to_string(), muted)),
+            None => left.push(Span::styled(hint.text.clone(), muted)),
         }
     }
 

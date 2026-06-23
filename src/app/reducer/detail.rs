@@ -28,7 +28,7 @@ impl App {
             }
             DetailAction::SubmitConfirm => self.submit_confirm(),
             DetailAction::OpenReviewPicker => {
-                self.state.ui.review_picker = Some(0);
+                self.state.ui.review_picker = Some(self.first_enabled_verdict());
             }
             DetailAction::ReviewMove(delta) => {
                 if let Some(cursor) = self.state.ui.review_picker {
@@ -48,6 +48,23 @@ impl App {
             }
             DetailAction::AbandonReview => self.state.ui.pending_review = None,
             DetailAction::RemovePendingComment => self.remove_pending_comment(),
+            DetailAction::OpenMergePicker => {
+                if !self.state.merge_strategies.is_empty() {
+                    self.state.ui.merge_picker = Some(0);
+                }
+            }
+            DetailAction::MergeMove(delta) => {
+                if let Some(cursor) = self.state.ui.merge_picker {
+                    let len = self.state.merge_strategies.len();
+                    self.state.ui.merge_picker = Some(super::step_index(cursor, delta, len));
+                }
+            }
+            DetailAction::MergeSelect => self.select_merge(),
+            DetailAction::CloseMergePicker => self.state.ui.merge_picker = None,
+            DetailAction::OpenDecline => {
+                self.state.ui.confirm = Some(ConfirmKind::Decline);
+                self.state.ui.confirm_cursor = 0;
+            }
             DetailAction::OpenComment => self.open_comment(),
             DetailAction::OpenReply => self.open_reply(),
             DetailAction::OverviewSubMove(delta) => self.overview_sub_move(delta),
@@ -193,16 +210,38 @@ impl App {
 
     /// `a` review menu: bodyless verdicts (approve / unapprove) submit straight
     /// away; request-changes / comment open the draft for their summary.
+    /// First verdict the user can actually submit, so the picker doesn't open
+    /// with the cursor parked on a dimmed (disabled) entry.
+    fn first_enabled_verdict(&self) -> usize {
+        let Screen::Detail { pr_id, .. } = self.state.screen else {
+            return 0;
+        };
+        self.state
+            .review_verdicts()
+            .iter()
+            .position(|v| self.state.verdict_disabled_reason(*v, pr_id).is_none())
+            .unwrap_or(0)
+    }
+
     fn select_review(&mut self) {
-        let Some(cursor) = self.state.ui.review_picker.take() else {
+        let Some(cursor) = self.state.ui.review_picker else {
             return;
         };
         let Some(verdict) = self.state.review_verdicts().get(cursor).copied() else {
             return;
         };
+        let Screen::Detail { pr_id, .. } = self.state.screen else {
+            return;
+        };
+        // A disabled verdict (e.g. approving your own PR) is a no-op — leave the
+        // menu open so the user can pick an allowed one.
+        if self.state.verdict_disabled_reason(verdict, pr_id).is_some() {
+            return;
+        }
+        self.state.ui.review_picker = None;
         if verdict.needs_body() {
             self.open_draft(Some(CommentTarget::Review { verdict }));
-        } else if let Screen::Detail { pr_id, .. } = self.state.screen {
+        } else {
             self.submit_review_verdict(pr_id, verdict, String::new());
         }
     }
@@ -216,6 +255,20 @@ impl App {
             && idx < review.comments.len()
         {
             review.comments.remove(idx);
+        }
+    }
+
+    /// Merge the PR with the picked strategy and refetch so the new status shows.
+    fn select_merge(&mut self) {
+        let Some(cursor) = self.state.ui.merge_picker.take() else {
+            return;
+        };
+        let Some(strategy) = self.state.merge_strategies.get(cursor).copied() else {
+            return;
+        };
+        if let Screen::Detail { pr_id, .. } = self.state.screen {
+            self.state.ui.comment_pending = true;
+            self.spawn_merge(pr_id, strategy);
         }
     }
 
@@ -242,6 +295,12 @@ impl App {
                 if let Screen::Detail { pr_id, .. } = self.state.screen {
                     self.state.ui.comment_pending = true;
                     self.spawn_delete_comment(pr_id, id, review);
+                }
+            }
+            Some(ConfirmKind::Decline) => {
+                if let Screen::Detail { pr_id, .. } = self.state.screen {
+                    self.state.ui.comment_pending = true;
+                    self.spawn_decline(pr_id);
                 }
             }
             None => {}

@@ -44,6 +44,7 @@ impl App {
             state: AppState {
                 current_user,
                 can_unapprove: provider.can_unapprove(),
+                merge_strategies: provider.merge_strategies(),
                 ..AppState::default()
             },
             provider,

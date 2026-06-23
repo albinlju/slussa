@@ -19,14 +19,14 @@ use ratatui::{
 use crate::{
     app::state::{
         AppState, CommentDraft, CommentTarget, ConfirmKind, DetailTab, DiffFocus, LoadState,
-        PendingComment, PendingReview, PrData, SearchState, UiMemory,
+        PendingComment, PendingReview, PrData, Screen, SearchState, UiMemory,
     },
     domain::{
         comment::CommentThread,
         diff::{Diff, FileDiff},
         pr::{Mergeability, PrStatus, PullRequest},
     },
-    tui::{icons, layout, theme, widgets},
+    tui::{icons, layout, theme, widgets, widgets::Hint},
 };
 
 impl DetailTab {
@@ -94,9 +94,8 @@ pub(in crate::tui) fn render(
 
     let pr_data = state.cache.details.get(&pr.id);
     render_header(frame, pr, pr_data.map(|d| &d.mergeability), header_area);
-    let own_pr = state.viewing_own_pr(pr_id);
     render_tabs_and_content(frame, pr, pr_data, &mut state.ui, tab, content_area);
-    render_footer_bar(frame, state, pr_data, tab, own_pr, footer_area);
+    render_footer_bar(frame, state, pr_data, tab, footer_area);
 
     if let Some(help_area) = help_area {
         render_help_panel(frame, help_area);
@@ -106,6 +105,9 @@ pub(in crate::tui) fn render(
     }
     if let Some(cursor) = state.ui.review_picker {
         render_review_picker(frame, state, cursor, area);
+    }
+    if let Some(cursor) = state.ui.merge_picker {
+        render_merge_picker(frame, state, cursor, area);
     }
     if let Some(msg) = &state.ui.error {
         render_error_box(frame, msg, area);
@@ -156,12 +158,26 @@ fn render_review_picker(frame: &mut Frame, state: &AppState, cursor: usize, area
     }
 
     lines.push(Line::default());
+    let Screen::Detail { pr_id, .. } = state.screen else {
+        return;
+    };
     for (i, verdict) in state.review_verdicts().iter().enumerate() {
+        let disabled = state.verdict_disabled_reason(*verdict, pr_id);
         let marker = if i == cursor { "▶ " } else { "  " };
-        let style = if i == cursor { selected } else { normal };
+        // A disabled verdict (e.g. approving your own PR) stays listed but dimmed,
+        // with the reason inline, rather than being hidden.
+        let label = match disabled {
+            Some(reason) => format!(" {} ({reason}) ", verdict.label()),
+            None => format!(" {} ", verdict.label()),
+        };
+        let style = if i == cursor && disabled.is_none() {
+            selected
+        } else {
+            normal
+        };
         lines.push(Line::from(vec![
             Span::styled(marker, Style::default().fg(theme.accent)),
-            Span::styled(format!(" {} ", verdict.label()), style),
+            Span::styled(label, style),
         ]));
     }
 
@@ -180,6 +196,48 @@ fn render_review_picker(frame: &mut Frame, state: &AppState, cursor: usize, area
         .borders(Borders::ALL)
         .border_type(BorderType::Rounded)
         .title(" Review ")
+        .border_style(Style::default().fg(theme.accent))
+        .padding(Padding::horizontal(1));
+    let inner = block.inner(popup);
+    frame.render_widget(block, popup);
+    frame.render_widget(Paragraph::new(lines), inner);
+}
+
+fn render_merge_picker(frame: &mut Frame, state: &AppState, cursor: usize, area: Rect) {
+    let theme = theme::current();
+    let selected = Style::default()
+        .bg(theme.highlight_bg)
+        .add_modifier(Modifier::BOLD);
+    let normal = Style::default().fg(theme.muted);
+
+    let mut lines = vec![
+        Line::from(Span::styled("Merge this PR", Style::default().fg(theme.fg))),
+        Line::default(),
+    ];
+    for (i, strategy) in state.merge_strategies.iter().enumerate() {
+        let marker = if i == cursor { "▶ " } else { "  " };
+        let style = if i == cursor { selected } else { normal };
+        lines.push(Line::from(vec![
+            Span::styled(marker, Style::default().fg(theme.accent)),
+            Span::styled(format!(" {} ", strategy.label()), style),
+        ]));
+    }
+
+    let content_w = lines.iter().map(Line::width).max().unwrap_or(0) as u16;
+    let popup_w = (content_w + 4).min(area.width);
+    let popup_h = (lines.len() as u16 + 2).min(area.height);
+    let popup = Rect {
+        x: area.x + area.width.saturating_sub(popup_w) / 2,
+        y: area.y + area.height.saturating_sub(popup_h) / 2,
+        width: popup_w,
+        height: popup_h,
+    };
+
+    frame.render_widget(Clear, popup);
+    let block = Block::default()
+        .borders(Borders::ALL)
+        .border_type(BorderType::Rounded)
+        .title(" Merge ")
         .border_style(Style::default().fg(theme.accent))
         .padding(Padding::horizontal(1));
     let inner = block.inner(popup);
@@ -229,7 +287,6 @@ fn render_footer_bar(
     state: &AppState,
     pr_data: Option<&PrData>,
     tab: DetailTab,
-    own_pr: bool,
     area: Rect,
 ) {
     let line = if let Some(draft) = &state.ui.comment_draft {
@@ -239,54 +296,60 @@ fn render_footer_bar(
     } else if let Some(search) = active_search(state, pr_data, tab, area.width) {
         search
     } else {
-        widgets::footer(
-            area.width,
-            &footer_actions(state, tab, own_pr),
-            state.ui.refreshing,
-        )
+        widgets::footer(area.width, &footer_actions(state, tab), state.ui.refreshing)
     };
     frame.render_widget(Paragraph::new(line), area);
 }
 
-fn footer_actions(state: &AppState, tab: DetailTab, own_pr: bool) -> String {
+fn footer_actions(state: &AppState, tab: DetailTab) -> Vec<Hint> {
     // While a batched review is open, surface its state and finish/discard keys
     // on every tab — line comments queue into it from the Diff too.
     if let Some(review) = &state.ui.pending_review {
         let mut parts = vec![
-            format!("reviewing ({})", review.comments.len()),
-            "c: comment".to_owned(),
+            Hint::on(format!("reviewing ({})", review.comments.len())),
+            Hint::on("c: comment"),
         ];
         if state.reply_target().is_some() {
-            parts.push("r: reply".to_owned());
+            parts.push(Hint::on("r: reply"));
         }
-        parts.push("v: finish".to_owned());
-        parts.push("V: discard".to_owned());
-        return parts.join("  ");
+        parts.push(Hint::on("v: finish"));
+        parts.push(Hint::on("V: discard"));
+        return parts;
     }
     // Overview is the conversation tab and home of the PR-level actions: `c`
-    // posts a PR comment, `r` replies, `a` submits a quick verdict, `v` starts a
-    // batched review. (merge will join these here once it's wired.)
+    // posts a PR comment, `r` replies, `a`/`v` review, `m` merges, `x` declines.
+    // Lifecycle actions stay visible but dimmed-with-reason when unavailable.
     if tab == DetailTab::Overview {
-        let mut parts = vec!["c: comment"];
+        let mut parts = vec![Hint::on("c: comment")];
         if state.reply_target().is_some() {
-            parts.push("r: reply");
+            parts.push(Hint::on("r: reply"));
         }
         if state.editable_selected().is_some() {
-            parts.push("e: edit");
-            parts.push("d: delete");
+            parts.push(Hint::on("e: edit"));
+            parts.push(Hint::on("d: delete"));
         }
-        if !own_pr {
-            parts.push("a: verdict");
-            parts.push("v: review");
+        // `a`/`v` are always available — at minimum you can leave a comment review,
+        // even on your own PR; the picker dims the verdicts you can't use.
+        parts.push(Hint::on("a: verdict"));
+        parts.push(Hint::on("v: review"));
+        if let Screen::Detail { pr_id, .. } = state.screen {
+            parts.push(match state.merge_blocked_reason(pr_id) {
+                None => Hint::on("m: merge"),
+                Some(reason) => Hint::off(format!("m: merge ({reason})")),
+            });
+            parts.push(match state.decline_blocked_reason(pr_id) {
+                None => Hint::on("x: decline"),
+                Some(reason) => Hint::off(format!("x: decline ({reason})")),
+            });
         }
-        return parts.join("  ");
+        return parts;
     }
     // Other tabs: only the line-comment hint, shown once you're on a row in the
     // diff pane (a thread turns it into a reply).
     match state.comment_target() {
-        Some(CommentTarget::Reply(_)) => "c: reply".to_owned(),
-        Some(_) => "c: comment".to_owned(),
-        None => String::new(),
+        Some(CommentTarget::Reply(_)) => vec![Hint::on("c: reply")],
+        Some(_) => vec![Hint::on("c: comment")],
+        None => Vec::new(),
     }
 }
 
@@ -598,6 +661,8 @@ const HELP_KEYS: &[(&str, &str)] = &[
     ("a", "quick verdict"),
     ("v", "start/finish review"),
     ("V", "discard review"),
+    ("m", "merge"),
+    ("x", "decline"),
     ("c", "comment"),
     ("r", "reply"),
     ("^j/^k", "step comment"),

@@ -10,7 +10,7 @@ use crate::domain::{
     ci::Build,
     commit::Commit,
     diff::Diff,
-    pr::{Mergeability, PullRequest},
+    pr::{Mergeability, MergeStrategy, PullRequest},
     review::{ReviewComment, ReviewVerdict},
 };
 
@@ -67,6 +67,34 @@ impl Provider {
         match self {
             Self::GitHub => github::fetch_mergeability(pr_id),
             Self::BitbucketDc(c) => bitbucket_dc::fetch_mergeability(c, pr_id),
+        }
+    }
+
+    pub fn merge(&self, pr_id: u64, strategy: MergeStrategy) -> Result<(), FetchError> {
+        match self {
+            Self::GitHub => github::merge(pr_id, strategy),
+            Self::BitbucketDc(c) => bitbucket_dc::merge(c, pr_id),
+        }
+    }
+
+    /// Decline (Bitbucket) / close (GitHub) the PR without merging.
+    pub fn decline(&self, pr_id: u64) -> Result<(), FetchError> {
+        match self {
+            Self::GitHub => github::decline(pr_id),
+            Self::BitbucketDc(c) => bitbucket_dc::decline(c, pr_id),
+        }
+    }
+
+    /// Merge strategies to offer in the picker. GitHub supports all three;
+    /// Bitbucket DC merges with the repo's configured strategy, so just one entry.
+    pub fn merge_strategies(&self) -> Vec<MergeStrategy> {
+        match self {
+            Self::GitHub => vec![
+                MergeStrategy::Merge,
+                MergeStrategy::Squash,
+                MergeStrategy::Rebase,
+            ],
+            Self::BitbucketDc(_) => vec![MergeStrategy::Merge],
         }
     }
 

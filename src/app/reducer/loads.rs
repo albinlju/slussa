@@ -34,6 +34,8 @@ impl App {
                 log_outcome("mergeability", Some(pr_id), &r);
                 self.pr_data_mut(pr_id).mergeability.reload(r);
             }
+            LoadedAction::Merged(pr_id, r) => self.pr_state_changed("merge", pr_id, r),
+            LoadedAction::Declined(pr_id, r) => self.pr_state_changed("decline", pr_id, r),
             LoadedAction::CommitDiff(pr_id, oid, r) => {
                 log_outcome("commit-diff", Some(pr_id), &r);
                 self.pr_data_mut(pr_id)
@@ -50,6 +52,21 @@ impl App {
                     }
                 }
             }
+        }
+    }
+
+    /// A merge or decline changed the PR's lifecycle: refetch the list (status),
+    /// activity, and mergeability so the header reflects it. Shared by both.
+    fn pr_state_changed(&mut self, kind: &'static str, pr_id: u64, r: Result<(), String>) {
+        log_outcome(kind, Some(pr_id), &r);
+        self.state.ui.comment_pending = false;
+        match r {
+            Ok(()) => {
+                self.spawn_load_prs();
+                self.spawn_load_activity(pr_id);
+                self.spawn_load_mergeability(pr_id);
+            }
+            Err(msg) => self.state.ui.error = Some(msg),
         }
     }
 

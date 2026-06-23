@@ -105,6 +105,50 @@ pub fn fetch_mergeability(config: &Config, pr_id: u64) -> Result<Mergeability, F
     })
 }
 
+/// Bitbucket's merge/decline endpoints take the PR's current version for
+/// optimistic locking, so read it fresh before either.
+fn pr_version(config: &Config, pr_id: u64) -> Result<u64, FetchError> {
+    #[derive(serde::Deserialize)]
+    struct PrVersion {
+        version: u64,
+    }
+    let endpoint = format!(
+        "/rest/api/1.0/projects/{}/repos/{}/pull-requests/{pr_id}",
+        config.repo.project_key, config.repo.repo_slug,
+    );
+    let pr: PrVersion = http::get_json(&config.repo.base_url, &endpoint, &config.pat)?;
+    Ok(pr.version)
+}
+
+pub fn merge(config: &Config, pr_id: u64) -> Result<(), FetchError> {
+    // Strategy is the repo's configured default.
+    let version = pr_version(config, pr_id)?;
+    let endpoint = format!(
+        "/rest/api/1.0/projects/{}/repos/{}/pull-requests/{pr_id}/merge?version={version}",
+        config.repo.project_key, config.repo.repo_slug,
+    );
+    http::post_json(
+        &config.repo.base_url,
+        &endpoint,
+        &config.pat,
+        &serde_json::json!({}),
+    )
+}
+
+pub fn decline(config: &Config, pr_id: u64) -> Result<(), FetchError> {
+    let version = pr_version(config, pr_id)?;
+    let endpoint = format!(
+        "/rest/api/1.0/projects/{}/repos/{}/pull-requests/{pr_id}/decline?version={version}",
+        config.repo.project_key, config.repo.repo_slug,
+    );
+    http::post_json(
+        &config.repo.base_url,
+        &endpoint,
+        &config.pat,
+        &serde_json::json!({}),
+    )
+}
+
 #[derive(Clone, Debug)]
 pub struct RepoLocation {
     pub base_url: String,
