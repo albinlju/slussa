@@ -73,8 +73,30 @@ review, merge, and decline.
 - [ ] **No-panic audit** — the error popup + `FetchError::user_message()` are done; what
   remains is auditing fetch/parse paths so a bad response never panics (use
   `LoadState::Failed` / the popup everywhere instead of `unwrap`/`unreachable!`).
+- [ ] **React to a comment** — add / remove your own emoji reaction (display is done but
+  read-only). GitHub `addReaction` / `removeReaction`; Bitbucket DC reaction endpoints.
+- [ ] **Request / re-request reviewers** — ask a user or team to review, and re-request
+  after pushing changes. Today "Review requested" exists only as a list view, not an action.
+- [ ] **Re-run CI checks** — re-trigger a failed (or all) check from the Builds tab.
+- [ ] **Update / sync branch** — when the PR is behind base, merge or rebase base into it
+  (pairs with the *behind base* indicator).
+- [ ] **Reopen a closed PR** — the inverse of decline / close.
+- [ ] **Multi-line (range) comments** — comment on a selected line range, not just a
+  single line (the anchor model currently carries one line).
 - [ ] **Implement Bitbucket Cloud client** 
 - [ ] **Implement Gitlab client**
+
+### Scope decision: authoring / management
+
+tuipr is review-and-act focused (read, comment, review, merge, decline). Authoring and
+PR *administration* are deliberately not built — decide whether they belong here at all
+before treating them as gaps:
+
+- [ ] **Edit PR title / description** (the description is shown, not editable).
+- [ ] **Edit labels** — add / remove (only display + filter is planned).
+- [ ] **Create a PR.**
+- [ ] **Delete the source branch after merge** (a merge option).
+- [ ] **Enable auto-merge** (GitHub).
 
 ### Not refined
 
