@@ -116,7 +116,7 @@ pub(super) fn comment_box(
     );
     let mut out = vec![header];
     out.extend(bracket(
-        comment_body(comment, None, width.saturating_sub(2), false),
+        comment_body(comment, None, width.saturating_sub(2)),
         width,
         frame,
         theme.divider,
@@ -275,7 +275,7 @@ fn conversation(
             out.extend(framed(
                 meta,
                 label,
-                comment_body(comment, anchor, width.saturating_sub(2), thread.resolved()),
+                comment_body(comment, anchor, width.saturating_sub(2)),
                 width,
                 frame,
                 theme.divider,
@@ -300,7 +300,7 @@ fn conversation(
         } else {
             out.push(prefix_gutter(Line::from(meta), head, style));
         }
-        for line in comment_body(comment, anchor, width.saturating_sub(2), thread.resolved()) {
+        for line in comment_body(comment, anchor, width.saturating_sub(2)) {
             out.push(prefix_gutter(line, body_gutter, style));
         }
     }
@@ -421,7 +421,6 @@ fn comment_body(
     comment: &Comment,
     anchor: Option<(usize, &str)>,
     text_w: u16,
-    resolved: bool,
 ) -> Vec<Line<'static>> {
     let (prose, suggestions) = split_suggestions(&comment.content);
     let mut lines: Vec<Line<'static>> = Vec::new();
@@ -430,7 +429,7 @@ fn comment_body(
     }
     for suggestion in &suggestions {
         lines.push(Line::raw(""));
-        lines.extend(suggestion_box(anchor, suggestion, text_w, resolved));
+        lines.extend(suggestion_box(anchor, suggestion, text_w));
     }
     if let Some(line) = widgets::reactions_line(&comment.reactions) {
         lines.push(Line::raw(""));
@@ -459,7 +458,6 @@ fn suggestion_box(
     anchor: Option<(usize, &str)>,
     suggestion: &str,
     width: u16,
-    resolved: bool,
 ) -> Vec<Line<'static>> {
     let theme = theme::current();
     let text_w = (width as usize).saturating_sub(2);
@@ -501,42 +499,14 @@ fn suggestion_box(
             .fg(theme::current().fg)
             .add_modifier(Modifier::BOLD),
     )];
-    let mut out = framed(
+    framed(
         title,
         Vec::new(),
         rows,
         width,
         theme.suggestion,
         theme.suggestion,
-    );
-    // A resolved suggestion can't be applied anymore — drop the action hints.
-    if !resolved {
-        out.push(Line::raw(""));
-        out.push(suggestion_actions());
-    }
-    out
-}
-
-fn suggestion_actions() -> Line<'static> {
-    let theme = theme::current();
-    let key = |k: &str| {
-        Span::styled(
-            k.to_string(),
-            Style::default()
-                .fg(theme.accent)
-                .add_modifier(Modifier::BOLD),
-        )
-    };
-    let label = |l: &str| Span::styled(l.to_string(), Style::default().fg(theme.muted));
-    Line::from(vec![
-        key("[a]"),
-        Span::raw(" "),
-        label("apply suggestion"),
-        Span::raw("   "),
-        key("[b]"),
-        Span::raw(" "),
-        label("add to batch"),
-    ])
+    )
 }
 
 const SNIPPET_CONTEXT: usize = 3;
