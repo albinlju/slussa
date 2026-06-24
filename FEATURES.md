@@ -1,7 +1,8 @@
 # Feature backlog for tuipr
 
-**Where it stands today:** a read-only PR client over two providers — GitHub
-(via the `gh` CLI) and Bitbucket Data Center (REST + PAT). 
+**Where it stands today:** a read-write PR client over two providers — GitHub
+(via the `gh` CLI) and Bitbucket Data Center (REST + PAT). You can read, comment,
+review, merge, and decline.
 
 ---
 
@@ -32,21 +33,41 @@
 - [x] **Auto / manual refresh** — the active view re-fetches in the background (Builds
   every 15s, everything else every 60s) and on a manual `F`; a `⟳ refreshing` indicator
   shows in the footer. A failed reload keeps the stale data instead of blanking the view.
+- [x] **Review verdicts** (`a`) — Approve / Request changes (with a summary body) /
+  Comment / Unapprove (where the provider allows withdrawing approval). On your own PR
+  only Comment is offered; the others are dimmed with a reason in the picker.
+- [x] **Batched review** (`v`) — start a review, queue line comments (shown as `pending`
+  in the diff, `d` removes one), then finish with a verdict that flushes them in one
+  submission. GitHub sends one atomic call; Bitbucket posts the comments then flips status.
+- [x] **Merge** (`m`) — strategy picker (Merge / Squash / Rebase on GitHub, the repo
+  default on Bitbucket); gated on the mergeability status.
+- [x] **Decline / close** (`x`) — confirm, then decline (Bitbucket) / close (GitHub).
+- [x] **Mergeability status** — a header badge (mergeable / conflicts / unknown), fetched
+  lazily per PR; gates the merge action.
+- [x] **Disabled-with-affordance** — lifecycle actions stay visible in the footer but
+  dimmed with their reason (e.g. `m: merge (conflicts)`) rather than being hidden.
+- [x] **Help overlay** (`?`) — lists the keybindings.
 ---
 
 ## Backlog
 
 ### Refined
 
-- [ ] **Apply suggestions** — `a` to apply a suggested change, `b` to batch several
-  into one commit (display already done).
-- [ ] **Merge conflict / mergeability status** — can it merge? conflicts? N commits behind base? required checks gating.
+- [ ] **Apply suggestions** — apply a suggested change, and batch several into one
+  commit (display already done). Needs a free key — `a` is now the review menu.
+- [ ] **Mergeability detail** — beyond the basic mergeable/conflicts badge: *N commits
+  behind base* and *required-checks gating* (both currently collapse to `Unknown`).
+- [ ] **Repo-allowed merge strategies** — the picker offers Merge / Squash / Rebase on
+  GitHub regardless of repo settings and lets the server reject; querying the repo would
+  pre-filter the menu.
 - [ ] **Assignees, milestones, projects** (reviewers + labels are already shown).
 - [ ] **Branch ahead / behind base** info.
-- [ ] **Mergeability in the pr list** — conflict / behind-base indicators.
+- [ ] **Mergeability in the pr list** — conflict / behind-base indicators (the detail
+  header badge is done; this extends it to list rows).
 - [ ] **Labels in the list** — colored and filterable (shown in Overview today).
-- [ ] **Errors visible in the UI** — action failures show a dismissible popup with a cleaned-up message (`FetchError::user_message()` pulls the API's `errors[].message` out of the body and drops the CLI/HTTP noise; raw form kept in logs). Remaining: audit fetch/parse paths so a bad response never panics (use `LoadState::Failed` / the popup everywhere instead of `unwrap`).
-- [ ] **Request changes / unapprove** — approve (`a`) and comment are done; request-changes (with a body) and dropping your own approval are what's left.
+- [ ] **No-panic audit** — the error popup + `FetchError::user_message()` are done; what
+  remains is auditing fetch/parse paths so a bad response never panics (use
+  `LoadState::Failed` / the popup everywhere instead of `unwrap`/`unreachable!`).
 - [ ] **Implement Bitbucket Cloud client** 
 - [ ] **Implement Gitlab client**
 
@@ -61,7 +82,9 @@
 - [ ] **Jump to next / prev unresolved thread** (`]c` / `[c`).
 - [ ] **Resolved / unresolved filter** in the Overview.
 - [ ] **Outdated comments** — a thread whose anchored line no longer exists in the current diff is *outdated*: hide it from the diff (like GitHub) and show it only in the Overview timeline. Needs comparing each thread's anchor against the loaded diff.
-- [ ] **Review as a group** — bundle a review's comments + summary + state (approved / changes requested), instead of loose timeline entries.
+- [ ] **Review as a group (display)** — in the timeline, render a review's comments +
+  summary + state (approved / changes requested) as one grouped entry instead of loose
+  entries. (Submitting a batched review is already done — this is the read side.)
 - [ ] **Bitbucket "tasks"** — show the checkable to-do items on a PR.
 - [ ] **Linked issues / cross-references** — "closes #123".
 - [ ] **Compact diff stats** (files / +/−) on PR list rows.
@@ -73,14 +96,12 @@
 - [ ] **Unread / updated** — flag PRs with new activity since you last looked.
 - [ ] **Notifications inbox** — "what needs my attention" (review requested, mentioned, CI failed).
 - [ ] **Viewed-files tracking** — local "mark file reviewed" (GitHub's *Viewed*), saved per PR.
-- [ ] **Help overlay** (`?`) listing all keys.
 - [ ] **Status bar** — provider, repo, match count, loading spinner.
 - [ ] **Config** — repos / providers, default filters, keybindings. *(theme is done: `~/.config/tuipr/config.toml` `theme = "…"`, overridden by `TUIPR_THEME`)*
 - [ ] **Empty / loading / error states** per view (use `LoadState` everywhere).
 - [ ] **Open in browser** (`o`) — the PR / focused file / line. Cheapest big payoff. *(write-adjacent)*
 - [ ] **Copy** (`y`) — SHA / branch / PR URL / permalink to a line.
 - [ ] **Check out PR locally**.
-- [ ] **Merge / Squash / Rebase** — only the strategies the repo allows.
 - [ ] **Draft ↔ Ready**.
 - [ ] **GitLab MR support** via `glab` (mirrors `gh` well).
 - [ ] **Unified cross-provider list** with a provider icon per row.
