@@ -23,9 +23,10 @@ review, merge, and decline.
 - [x] **Reactions** — emoji reactions on comments (read-only), GitHub and
   Bitbucket DC. GitHub via `reactionGroups`; Bitbucket DC reads `properties.reactions`
   from the activities feed (emoji decoded from the twemoji URL codepoint).
-- [x] **Suggestions (display)** — `suggestion` blocks in review comments render as
-  a "◆ Suggested change" box with the anchored line as `−`, the proposed lines as
-  `+`, and a `−1 +N` stat. Applying/batching is a separate backlog item.
+- [x] **Suggestions (display)** — `suggestion` blocks are parsed out of the comment
+  body (there's no dedicated suggestion API — they ride along in the comment markdown)
+  and rendered as a "◆ Suggested change" box: the anchored line as `−`, the proposed
+  lines as `+`, a `−1 +N` stat. Display only — there is no apply action.
 - [x] **Comment actions** — reply (`r`), edit (`e`) / delete (`d`) your own comments
   (Ctrl-j/k sub-cursor to pick one in a thread), and resolve/unresolve (`R`). Resolved
   threads collapse to a one-line summary in the diff (`space` to expand); the Overview
@@ -54,7 +55,11 @@ review, merge, and decline.
 ### Refined
 
 - [ ] **Apply suggestions** — apply a suggested change, and batch several into one
-  commit (display already done). Needs a free key — `a` is now the review menu.
+  commit. No provider exposes a clean "apply" API: it means fetch the file → replace
+  the anchored line(s) → commit on the head branch. Realistically GitHub-only and
+  same-repo to start (forks need the fork's coords + push access), and our `ThreadAnchor`
+  only carries a single line, so multi-line suggestions aren't applicable yet. Needs a
+  free key — `a` is the review menu, `b` is unused.
 - [ ] **Mergeability detail** — beyond the basic mergeable/conflicts badge: *N commits
   behind base* and *required-checks gating* (both currently collapse to `Unknown`).
 - [ ] **Repo-allowed merge strategies** — the picker offers Merge / Squash / Rebase on
