@@ -1,5 +1,4 @@
 use crate::{
-    app::state::DetailTab,
     domain::{
         activity::Activity,
         ci::Build,
@@ -7,17 +6,23 @@ use crate::{
         diff::Diff,
         pr::{Mergeability, PullRequest},
     },
+    tui::screens::pr_detail::tabs::DetailTab,
 };
 
 #[derive(Debug)]
 pub enum Action {
     Quit,
+    Navigate(crate::app::navigation::Screen),
     /// Force a re-fetch of the active view now (`F`).
     Refresh,
     List(ListAction),
     Detail(DetailAction),
     Diff(DiffAction),
     Commits(CommitsAction),
+    LoadCommitDiff {
+        pr_id: u64,
+        oid: String,
+    },
     Search(SearchAction),
     Loaded(LoadedAction),
 }

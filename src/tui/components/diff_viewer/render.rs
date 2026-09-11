@@ -1,28 +1,24 @@
-mod pane;
-mod tree;
-
-use std::collections::HashSet;
-
-use ratatui::{
-    Frame,
-    layout::{Constraint, Direction, Rect},
-};
-
+use super::{DiffFocus, DiffViewer, pane, tree};
 use crate::{
-    app::state::{DiffFocus, DiffViewState, LoadState, PendingComment},
+    app::{reviews::PendingComment, store::LoadState},
     domain::{
         comment::CommentThread,
         diff::{Diff, DiffLine, FileDiff},
     },
     tui::{layout, widgets},
 };
+use ratatui::{
+    Frame,
+    layout::{Constraint, Direction, Rect},
+};
+use std::collections::HashSet;
 
-pub fn render(
+pub(super) fn render(
     frame: &mut Frame,
     diff_state: Option<&LoadState<Diff>>,
     threads: &[CommentThread],
     pending: &[PendingComment],
-    ui_diff: &mut DiffViewState,
+    ui_diff: &mut DiffViewer,
     author: &str,
     area: Rect,
 ) {

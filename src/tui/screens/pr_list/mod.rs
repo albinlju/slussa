@@ -1,18 +1,23 @@
 use crate::{
     app::{
         action::{Action, ListAction},
-        state::{AppState, LoadState, SearchState, StatusFilter},
+        store::LoadState,
     },
     domain::{
         ci::CiSummary,
-        pr::PullRequest,
+        pr::{PrStatus, PullRequest},
         review::{Reviewer, ReviewerState},
     },
     tui::{
+        component::{Component, step_index},
+        components::search_input::SearchInput,
         icons, layout,
         screens::half_page,
-        table::{self, Cell, Column, Width},
-        theme, widgets,
+        theme,
+        widgets::{
+            self,
+            table::{self, Cell, Column, Width},
+        },
     },
 };
 use chrono::{DateTime, Utc};
@@ -66,54 +71,6 @@ const COLS: &[Column] = &[
     },
 ];
 
-pub(in crate::tui) fn render(frame: &mut Frame, state: &mut AppState, area: Rect) {
-    state.ui.list_viewport = area.height.saturating_sub(4);
-
-    let [body_area, footer_area] = layout::split(
-        area,
-        Direction::Vertical,
-        [Constraint::Min(0), Constraint::Length(1)],
-    );
-
-    let filtered = matches!(state.cache.prs, LoadState::Loaded(_)).then(|| state.filtered_prs());
-    let count_label = match (&filtered, &state.cache.prs) {
-        (Some(prs), _) => prs.len().to_string(),
-        (_, LoadState::Failed(_)) => "!".to_string(),
-        _ => "…".to_string(),
-    };
-
-    let container = pr_list_container(state.ui.list_filter, &count_label);
-    let inner = container.inner(body_area);
-    frame.render_widget(container, body_area);
-
-    let [header_area, rows_area] = layout::split(
-        inner,
-        Direction::Vertical,
-        [Constraint::Length(1), Constraint::Min(0)],
-    );
-    let table = table::Table::new(COLS, inner.width.saturating_sub(GUTTER));
-    render_table_header(frame, &table, header_area);
-
-    if let Some(prs) = &filtered {
-        render_table_body(frame, &table, prs, state.ui.list_selected, rows_area);
-    } else {
-        widgets::loaded_or_placeholder(frame, Some(&state.cache.prs), "pull requests", rows_area);
-    }
-
-    let match_count = filtered.as_ref().map_or(0, Vec::len);
-    render_footer(
-        frame,
-        &state.ui.list_search,
-        match_count,
-        state.ui.refreshing,
-        footer_area,
-    );
-
-    if state.ui.filter_picker_open {
-        render_filter_picker(frame, state, area);
-    }
-}
-
 fn pr_list_container(filter: StatusFilter, count_label: &str) -> Block<'static> {
     let theme = theme::current();
     Block::default()
@@ -161,7 +118,7 @@ fn render_table_body(
 
 fn render_footer(
     frame: &mut Frame,
-    search: &SearchState,
+    search: &SearchInput,
     match_count: usize,
     refreshing: bool,
     area: Rect,
@@ -180,7 +137,7 @@ fn render_footer(
     frame.render_widget(Paragraph::new(line), area);
 }
 
-fn render_filter_picker(frame: &mut Frame, state: &AppState, area: Rect) {
+fn render_filter_picker(frame: &mut Frame, state: &PrListScreen, area: Rect) {
     let theme = theme::current();
     let popup_width = 40u16.min(area.width);
     let popup_height = 8u16.min(area.height);
@@ -212,7 +169,7 @@ fn render_filter_picker(frame: &mut Frame, state: &AppState, area: Rect) {
         .map(|f| ListItem::new(Line::raw(f.label())))
         .collect();
     let mut list_state = ListState::default();
-    list_state.select(Some(state.ui.filter_picker_cursor));
+    list_state.select(Some(state.filter_picker_cursor));
     let list = List::new(items)
         .highlight_style(
             Style::default()
@@ -308,31 +265,218 @@ fn review_summary(reviewers: &[Reviewer]) -> (String, Color) {
     (format!("{approved}/{total}"), color)
 }
 
-pub(in crate::tui) fn key_to_action(state: &AppState, key: KeyEvent) -> Option<Action> {
-    if state.ui.filter_picker_open {
-        return match key.code {
-            KeyCode::Char('q') => Some(Action::Quit),
-            KeyCode::Esc | KeyCode::Char('f') => Some(Action::List(ListAction::CloseFilterPicker)),
-            KeyCode::Down | KeyCode::Char('j') => Some(Action::List(ListAction::FilterPickerNext)),
-            KeyCode::Up | KeyCode::Char('k') => Some(Action::List(ListAction::FilterPickerPrev)),
-            KeyCode::Enter => Some(Action::List(ListAction::ApplyFilter)),
-            _ => None,
-        };
+#[derive(Debug, Default)]
+pub struct PrListScreen {
+    pub selected: usize,
+    pub viewport: u16,
+    pub filter: StatusFilter,
+    pub search: SearchInput,
+    pub filter_picker_open: bool,
+    pub filter_picker_cursor: usize,
+}
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+pub enum StatusFilter {
+    #[default]
+    Open,
+    Draft,
+    Merged,
+    Declined,
+    All,
+}
+
+impl StatusFilter {
+    pub const CYCLE: [Self; 5] = [
+        Self::Open,
+        Self::Draft,
+        Self::Merged,
+        Self::Declined,
+        Self::All,
+    ];
+
+    pub fn label(self) -> &'static str {
+        match self {
+            Self::Open => "Open",
+            Self::Draft => "Draft",
+            Self::Merged => "Merged",
+            Self::Declined => "Declined",
+            Self::All => "All",
+        }
     }
 
-    let half = half_page(state.ui.list_viewport);
-    match key.code {
-        KeyCode::Char('q') => Some(Action::Quit),
-        KeyCode::Char('F') => Some(Action::Refresh),
-        KeyCode::Char('f') => Some(Action::List(ListAction::OpenFilterPicker)),
-        KeyCode::Down | KeyCode::Char('j') => Some(Action::List(ListAction::MoveSelection(1))),
-        KeyCode::Up | KeyCode::Char('k') => Some(Action::List(ListAction::MoveSelection(-1))),
-        KeyCode::PageDown => Some(Action::List(ListAction::MoveSelection(half))),
-        KeyCode::PageUp => Some(Action::List(ListAction::MoveSelection(-half))),
-        KeyCode::Enter => state
-            .filtered_prs()
-            .get(state.ui.list_selected)
-            .map(|p| Action::List(ListAction::OpenPr(p.id))),
-        _ => None,
+    pub fn matches(self, status: &PrStatus) -> bool {
+        matches!(
+            (self, status),
+            (Self::All, _)
+                | (Self::Open, PrStatus::Open)
+                | (Self::Draft, PrStatus::Draft)
+                | (Self::Merged, PrStatus::Merged)
+                | (Self::Declined, PrStatus::Declined)
+        )
+    }
+}
+
+pub struct ListContext<'a> {
+    pub prs: &'a LoadState<Vec<PullRequest>>,
+    pub refreshing: bool,
+}
+
+impl Component for PrListScreen {
+    type Context<'a> = ListContext<'a>;
+    type Message = ListAction;
+    fn render(&mut self, frame: &mut Frame, area: Rect, ctx: &ListContext<'_>) {
+        self.viewport = area.height.saturating_sub(4);
+
+        let [body_area, footer_area] = layout::split(
+            area,
+            Direction::Vertical,
+            [Constraint::Min(0), Constraint::Length(1)],
+        );
+
+        let filtered = matches!(ctx.prs, LoadState::Loaded(_)).then(|| self.filtered_prs(ctx.prs));
+        let count_label = match (&filtered, ctx.prs) {
+            (Some(prs), _) => prs.len().to_string(),
+            (_, LoadState::Failed(_)) => "!".to_string(),
+            _ => "…".to_string(),
+        };
+
+        let container = pr_list_container(self.filter, &count_label);
+        let inner = container.inner(body_area);
+        frame.render_widget(container, body_area);
+
+        let [header_area, rows_area] = layout::split(
+            inner,
+            Direction::Vertical,
+            [Constraint::Length(1), Constraint::Min(0)],
+        );
+        let table = table::Table::new(COLS, inner.width.saturating_sub(GUTTER));
+        render_table_header(frame, &table, header_area);
+
+        if let Some(prs) = &filtered {
+            render_table_body(frame, &table, prs, self.selected, rows_area);
+        } else {
+            widgets::loaded_or_placeholder(frame, Some(ctx.prs), "pull requests", rows_area);
+        }
+
+        let match_count = filtered.as_ref().map_or(0, Vec::len);
+        render_footer(
+            frame,
+            &self.search,
+            match_count,
+            ctx.refreshing,
+            footer_area,
+        );
+
+        if self.filter_picker_open {
+            render_filter_picker(frame, self, area);
+        }
+    }
+    fn handle_key(&self, key: KeyEvent, ctx: &ListContext<'_>) -> Option<Action> {
+        if self.filter_picker_open {
+            return match key.code {
+                KeyCode::Char('q') => Some(Action::Quit),
+                KeyCode::Esc | KeyCode::Char('f') => {
+                    Some(Action::List(ListAction::CloseFilterPicker))
+                }
+                KeyCode::Down | KeyCode::Char('j') => {
+                    Some(Action::List(ListAction::FilterPickerNext))
+                }
+                KeyCode::Up | KeyCode::Char('k') => {
+                    Some(Action::List(ListAction::FilterPickerPrev))
+                }
+                KeyCode::Enter => Some(Action::List(ListAction::ApplyFilter)),
+                _ => None,
+            };
+        }
+
+        let half = half_page(self.viewport);
+        match key.code {
+            KeyCode::Char('q') => Some(Action::Quit),
+            KeyCode::Char('F') => Some(Action::Refresh),
+            KeyCode::Char('f') => Some(Action::List(ListAction::OpenFilterPicker)),
+            KeyCode::Down | KeyCode::Char('j') => Some(Action::List(ListAction::MoveSelection(1))),
+            KeyCode::Up | KeyCode::Char('k') => Some(Action::List(ListAction::MoveSelection(-1))),
+            KeyCode::PageDown => Some(Action::List(ListAction::MoveSelection(half))),
+            KeyCode::PageUp => Some(Action::List(ListAction::MoveSelection(-half))),
+            KeyCode::Enter => self
+                .filtered_prs(ctx.prs)
+                .get(self.selected)
+                .map(|p| Action::List(ListAction::OpenPr(p.id))),
+            _ => None,
+        }
+    }
+
+    fn update(&mut self, action: ListAction, ctx: &ListContext<'_>) -> Option<Action> {
+        match action {
+            ListAction::MoveSelection(delta) => {
+                self.selected = step_index(self.selected, delta, self.filtered_prs(ctx.prs).len());
+            }
+            ListAction::OpenPr(id) => return Some(Action::List(ListAction::OpenPr(id))),
+            ListAction::OpenFilterPicker => self.open_filter_picker(),
+            ListAction::CloseFilterPicker => self.close_filter_picker(),
+            ListAction::FilterPickerNext => self.filter_picker_next(),
+            ListAction::FilterPickerPrev => self.filter_picker_prev(),
+            ListAction::ApplyFilter => self.apply_filter(),
+        }
+        None
+    }
+}
+impl PrListScreen {
+    pub fn filtered_prs<'a>(&self, prs: &'a LoadState<Vec<PullRequest>>) -> Vec<&'a PullRequest> {
+        match prs {
+            LoadState::Loaded(prs) => prs
+                .iter()
+                .filter(|p| self.filter.matches(&p.status))
+                .filter(|p| self.search.matches_pr(p))
+                .collect(),
+            _ => Vec::new(),
+        }
+    }
+    fn open_filter_picker(&mut self) {
+        self.filter_picker_cursor = StatusFilter::CYCLE
+            .iter()
+            .position(|&f| f == self.filter)
+            .unwrap_or(0);
+        self.filter_picker_open = true;
+    }
+
+    fn close_filter_picker(&mut self) {
+        self.filter_picker_open = false;
+    }
+
+    fn filter_picker_next(&mut self) {
+        let last = StatusFilter::CYCLE.len().saturating_sub(1);
+        self.filter_picker_cursor = (self.filter_picker_cursor + 1).min(last);
+    }
+
+    fn filter_picker_prev(&mut self) {
+        self.filter_picker_cursor = self.filter_picker_cursor.saturating_sub(1);
+    }
+
+    fn apply_filter(&mut self) {
+        let new_filter = StatusFilter::CYCLE
+            .get(self.filter_picker_cursor)
+            .copied()
+            .unwrap_or(StatusFilter::Open);
+        if new_filter != self.filter {
+            self.filter = new_filter;
+            self.selected = 0;
+        }
+        self.filter_picker_open = false;
+    }
+}
+
+impl PrListScreen {
+    pub fn update_search(&mut self, action: crate::app::action::SearchAction) {
+        use crate::app::action::SearchAction;
+        self.search.update(
+            action,
+            &crate::tui::components::search_input::SearchContext {
+                highlight: false,
+                matches: 0,
+            },
+        );
+        if !matches!(action, SearchAction::Open | SearchAction::Confirm) {
+            self.selected = 0;
+        }
     }
 }

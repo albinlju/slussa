@@ -1,0 +1,357 @@
+use super::*;
+use crate::{
+    app::{
+        action::{CommitsAction, DetailAction, DiffAction, ListAction},
+        navigation::Screen,
+        reviews::CommentTarget,
+        state::*,
+        store::{LoadState, PrData},
+    },
+    domain::{activity::Activity, ci::CiSummary, commit::Commit, diff::*, pr::*, user::User},
+    tui::{
+        components::{comment_editor::CommentDraft, diff_viewer::DiffFocus},
+        screens::pr_detail::{
+            dialogs::{
+                confirm::{ConfirmDialog, ConfirmKind},
+                merge::MergeDialog,
+                review::ReviewDialog,
+            },
+            tabs::DetailTab,
+        },
+    },
+};
+use ratatui::{Terminal, backend::TestBackend};
+use std::fmt::Write;
+
+pub(crate) fn fixture() -> AppState {
+    let now = chrono::Utc::now();
+    let mut state = AppState::default();
+    state.store.cache.prs = LoadState::Loaded(vec![PullRequest {
+        id: 42,
+        title: "Component migration".into(),
+        description: Some("Review **this change**.".into()),
+        author: User {
+            username: "alice".into(),
+        },
+        ci: CiSummary::Success,
+        status: PrStatus::Open,
+        reviewers: vec![],
+        labels: vec!["rust".into()],
+        comment_count: 0,
+        source_branch: "feature".into(),
+        target_branch: "main".into(),
+        additions: 1,
+        deletions: 1,
+        changed_files: 1,
+        created: now,
+        updated: now,
+    }]);
+    state.store.cache.details.insert(
+        42,
+        PrData {
+            diff: LoadState::Loaded(Diff {
+                files: vec![FileDiff {
+                    path: "src/main.rs".into(),
+                    hunks: vec![Hunk {
+                        old_start: 1,
+                        new_start: 1,
+                        lines: vec![
+                            DiffLine::Removed("old".into()),
+                            DiffLine::Added("new".into()),
+                        ],
+                    }],
+                }],
+            }),
+            commits: LoadState::Loaded(vec![Commit {
+                oid: "abcdef123456".into(),
+                headline: "Extract components".into(),
+                author_name: "alice".into(),
+                authored_at: now,
+                additions: 1,
+                deletions: 1,
+            }]),
+            activity: LoadState::Loaded(Activity {
+                comments: vec![],
+                events: vec![],
+                threads: vec![],
+            }),
+            builds: LoadState::Loaded(vec![]),
+            mergeability: LoadState::Loaded(Mergeability::Mergeable),
+            ..PrData::default()
+        },
+    );
+    state.store.merge_strategies = vec![MergeStrategy::Merge, MergeStrategy::Squash];
+    state
+}
+
+#[test]
+fn screens_preserve_rendered_output() {
+    let mut output = String::new();
+    for (width, height) in [(100, 30), (40, 12)] {
+        for screen in std::iter::once(Screen::List)
+            .chain(DetailTab::ALL.map(|tab| Screen::Detail { pr_id: 42, tab }))
+        {
+            let mut state = fixture();
+            state.screen = screen;
+            let mut terminal = Terminal::new(TestBackend::new(width, height)).unwrap();
+            terminal.draw(|frame| render(frame, &mut state)).unwrap();
+            writeln!(output, "{width}x{height} {screen:?}").unwrap();
+            let buffer = terminal.backend().buffer();
+            for y in 0..height {
+                let mut row = String::new();
+                for x in 0..width {
+                    row.push_str(buffer[(x, y)].symbol());
+                }
+                output.push_str(row.trim_end());
+                output.push('\n');
+            }
+        }
+    }
+    let path = concat!(env!("CARGO_MANIFEST_DIR"), "/src/tui/testdata/screens.txt");
+    if std::env::var_os("TUIPR_UPDATE_SNAPSHOTS").is_some() {
+        std::fs::write(path, &output).unwrap();
+    }
+    assert_eq!(output, std::fs::read_to_string(path).unwrap());
+}
+
+fn key(state: &AppState, code: KeyCode) -> Action {
+    key_to_action(state, KeyEvent::new(code, KeyModifiers::NONE)).unwrap()
+}
+
+#[test]
+fn keyboard_routes_list_diff_commit_and_editor() {
+    let mut state = fixture();
+    assert!(matches!(
+        key(&state, KeyCode::Enter),
+        Action::List(ListAction::OpenPr(42))
+    ));
+    state.screen = Screen::Detail {
+        pr_id: 42,
+        tab: DetailTab::Diff,
+    };
+    assert!(matches!(
+        key(&state, KeyCode::Char('j')),
+        Action::Diff(DiffAction::MoveCursor(1))
+    ));
+    state.ui.detail.diff.focus = DiffFocus::Pane;
+    assert!(matches!(
+        key(&state, KeyCode::Esc),
+        Action::Diff(DiffAction::FocusTree)
+    ));
+    state.screen = Screen::Detail {
+        pr_id: 42,
+        tab: DetailTab::Commits,
+    };
+    assert!(matches!(
+        key(&state, KeyCode::Enter),
+        Action::Commits(CommitsAction::Open)
+    ));
+    state.ui.detail.editor.draft = Some(CommentDraft {
+        target: CommentTarget::Pr,
+        text: String::new(),
+    });
+    assert!(matches!(
+        key(&state, KeyCode::Char('q')),
+        Action::Detail(DetailAction::CommentType('q'))
+    ));
+    assert!(matches!(
+        key(&state, KeyCode::Enter),
+        Action::Detail(DetailAction::CommentSubmit)
+    ));
+}
+
+#[test]
+fn filter_and_confirmation_capture_navigation() {
+    let mut state = fixture();
+    state.ui.list.filter_picker_open = true;
+    assert!(matches!(
+        key(&state, KeyCode::Char('j')),
+        Action::List(ListAction::FilterPickerNext)
+    ));
+    state.screen = Screen::Detail {
+        pr_id: 42,
+        tab: DetailTab::Overview,
+    };
+    state.ui.detail.confirm = Some(ConfirmDialog::new(ConfirmKind::Decline));
+    assert!(matches!(
+        key(&state, KeyCode::Enter),
+        Action::Detail(DetailAction::SubmitConfirm)
+    ));
+    assert!(matches!(
+        key(&state, KeyCode::Esc),
+        Action::Detail(DetailAction::CloseConfirm)
+    ));
+}
+
+#[test]
+fn extracted_dialogs_render_and_keep_their_key_bindings() {
+    for dialog in ["confirm", "review", "merge", "error", "help"] {
+        let mut state = fixture();
+        state.screen = Screen::Detail {
+            pr_id: 42,
+            tab: DetailTab::Overview,
+        };
+        let (label, close) = match dialog {
+            "confirm" => {
+                state.ui.detail.confirm = Some(ConfirmDialog::new(ConfirmKind::Decline));
+                ("Decline this PR?", DetailAction::CloseConfirm)
+            }
+            "review" => {
+                state.ui.detail.review_picker = Some(ReviewDialog::default());
+                ("Submit review", DetailAction::CloseReviewPicker)
+            }
+            "merge" => {
+                state.ui.detail.merge_picker = Some(MergeDialog::default());
+                ("Merge this PR", DetailAction::CloseMergePicker)
+            }
+            "error" => {
+                state.ui.detail.error = Some("Request failed".into());
+                ("Request failed", DetailAction::DismissError)
+            }
+            "help" => {
+                state.ui.detail.help_open = true;
+                ("Help", DetailAction::ToggleHelp)
+            }
+            _ => unreachable!(),
+        };
+        let mut terminal = Terminal::new(TestBackend::new(100, 30)).unwrap();
+        terminal.draw(|frame| render(frame, &mut state)).unwrap();
+        let text: String = terminal
+            .backend()
+            .buffer()
+            .content
+            .iter()
+            .map(ratatui::buffer::Cell::symbol)
+            .collect();
+        assert!(text.contains(label), "{dialog} content missing");
+        let actual = key(&state, KeyCode::Esc);
+        // DetailAction deliberately has no equality requirement in the app API.
+        assert_eq!(
+            format!("{actual:?}"),
+            format!("{:?}", Action::Detail(close))
+        );
+        if dialog == "review" {
+            assert!(matches!(
+                key(&state, KeyCode::Enter),
+                Action::Detail(DetailAction::ReviewSelect)
+            ));
+        }
+        if dialog == "merge" {
+            assert!(matches!(
+                key(&state, KeyCode::Enter),
+                Action::Detail(DetailAction::MergeSelect)
+            ));
+        }
+    }
+}
+
+#[test]
+fn dialog_instances_own_selection_and_respect_available_choices() {
+    use crate::{
+        domain::{pr::MergeStrategy, review::ReviewVerdict},
+        tui::{component::Component, screens::pr_detail::dialogs::review::ReviewContext},
+    };
+    let mut confirm = ConfirmDialog::new(ConfirmKind::Decline);
+    let other = ConfirmDialog::new(ConfirmKind::Decline);
+    confirm.update(DetailAction::ConfirmMove(1), &());
+    assert_eq!(confirm.accepted(), None);
+    assert_eq!(other.accepted(), Some(ConfirmKind::Decline));
+
+    let ctx = ReviewContext {
+        options: vec![
+            (ReviewVerdict::Approve, Some("your PR")),
+            (ReviewVerdict::Comment, None),
+        ],
+        pending: None,
+    };
+    let mut review = ReviewDialog::new(&ctx);
+    assert_eq!(review.selected(&ctx), Some(ReviewVerdict::Comment));
+    review.update(DetailAction::ReviewMove(-1), &ctx);
+    assert_eq!(review.selected(&ctx), None);
+
+    let strategies = [MergeStrategy::Merge, MergeStrategy::Rebase];
+    let mut merge = MergeDialog::default();
+    merge.update(DetailAction::MergeMove(99), &strategies.as_slice());
+    assert_eq!(merge.selected(&strategies), Some(MergeStrategy::Rebase));
+}
+
+#[test]
+fn timeline_keeps_thread_selection_and_sidebar_is_responsive() {
+    use crate::domain::comment::{Comment, CommentThread, ThreadAnchor};
+    let mut state = fixture();
+    state.store.current_user = "alice".into();
+    state.screen = Screen::Detail {
+        pr_id: 42,
+        tab: DetailTab::Overview,
+    };
+    let comments = (10..12)
+        .map(|id| Comment {
+            id: Some(id),
+            author: User {
+                username: "alice".into(),
+            },
+            content: format!("Comment {id}"),
+            created: chrono::Utc::now(),
+            reactions: vec![],
+            reply_to: Some(10),
+        })
+        .collect();
+    state.store.cache.details.get_mut(&42).unwrap().activity = LoadState::Loaded(Activity {
+        comments: vec![],
+        events: vec![],
+        threads: vec![CommentThread {
+            comments,
+            reply_to: Some(10),
+            anchor: Some(ThreadAnchor {
+                path: "src/main.rs".into(),
+                line: Some(1),
+                old_line: None,
+                resolved: false,
+                node_id: Some("thread-1".into()),
+            }),
+        }],
+    });
+    for width in [100, 40] {
+        let mut terminal = Terminal::new(TestBackend::new(width, 30)).unwrap();
+        terminal.draw(|frame| render(frame, &mut state)).unwrap();
+        let text: String = terminal
+            .backend()
+            .buffer()
+            .content
+            .iter()
+            .map(ratatui::buffer::Cell::symbol)
+            .collect();
+        assert_eq!(text.contains("Reviewers"), width == 100);
+        assert_eq!(state.ui.detail.overview.timeline.reply, Some(10));
+        assert_eq!(
+            state
+                .detail_view()
+                .focused_thread()
+                .unwrap()
+                .node_id
+                .as_deref(),
+            Some("thread-1")
+        );
+    }
+    assert_eq!(
+        state.detail_view().editable_selected().unwrap().id,
+        Some(10)
+    );
+    let action = key_to_action(
+        &state,
+        KeyEvent::new(KeyCode::Char('j'), KeyModifiers::CONTROL),
+    )
+    .unwrap();
+    assert!(
+        state
+            .ui
+            .update(action, &state.store, state.screen)
+            .is_none()
+    );
+    let mut terminal = Terminal::new(TestBackend::new(100, 30)).unwrap();
+    terminal.draw(|frame| render(frame, &mut state)).unwrap();
+    assert_eq!(
+        state.detail_view().editable_selected().unwrap().id,
+        Some(11)
+    );
+}
