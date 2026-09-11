@@ -1,754 +1,245 @@
 mod build_status;
-pub mod comment;
+pub mod dialogs;
+mod footer;
+mod header;
 pub mod keys;
-mod tabs;
-
-use tabs::{builds, commits, description, diff, overview};
-
-pub(super) use comment::render_inline_thread;
-pub(in crate::tui) use keys::key_to_action;
-
-use ratatui::{
-    Frame,
-    layout::{Constraint, Direction, Rect},
-    style::{Modifier, Style},
-    text::{Line, Span},
-    widgets::{Block, BorderType, Borders, Clear, Padding, Paragraph, Wrap},
-};
-
+mod render;
+pub mod tabs;
+pub mod view;
 use crate::{
-    app::state::{
-        AppState, CommentDraft, CommentTarget, ConfirmKind, DetailTab, DiffFocus, LoadState,
-        PendingComment, PendingReview, PrData, Screen, SearchState, UiMemory,
+    app::{navigation::Screen, store::LoadState},
+    tui::{
+        component::Component,
+        components::diff_viewer::DiffViewer,
+        screens::pr_detail::{dialogs::confirm::ConfirmKind, tabs::commits::CommitList},
     },
-    domain::{
-        comment::CommentThread,
-        diff::{Diff, FileDiff},
-        pr::{Mergeability, PrStatus, PullRequest},
-    },
-    tui::{icons, layout, theme, widgets, widgets::Hint},
 };
+use ratatui::{Frame, layout::Rect};
 
-impl DetailTab {
-    pub fn label(self) -> &'static str {
-        match self {
-            Self::Description => "Description",
-            Self::Overview => "Overview",
-            Self::Diff => "Diff",
-            Self::Commits => "Commits",
-            Self::Builds => "Builds",
-        }
-    }
+pub use view::{DetailContext, DetailView};
+#[derive(Debug, Default)]
+#[allow(clippy::struct_excessive_bools)] // a UI-state bag, not a state machine
+pub struct PrDetailScreen {
+    pub overview: tabs::overview::Overview,
+    pub description: tabs::description::Description,
+    pub confirm: Option<dialogs::confirm::ConfirmDialog>,
+    pub review_picker: Option<dialogs::review::ReviewDialog>,
+    pub merge_picker: Option<dialogs::merge::MergeDialog>,
+    pub diff: DiffViewer,
+    pub commits: CommitList,
+    pub help_open: bool,
+    pub editor: crate::tui::components::comment_editor::CommentEditor,
+    pub comment_pending: bool,
+    /// A failed action's message, shown as a dismissible popup.
+    pub error: Option<String>,
 }
 
-pub(in crate::tui) fn render(
-    frame: &mut Frame,
-    state: &mut AppState,
-    pr_id: u64,
-    tab: DetailTab,
-    area: Rect,
-) {
-    let LoadState::Loaded(prs) = &state.cache.prs else {
-        return;
-    };
-    let Some(pr) = prs.iter().find(|p| p.id == pr_id) else {
-        return;
-    };
-
-    let theme = theme::current();
-    let (main_area, footer_area, help_area) = if state.ui.help_open {
-        let [main, footer, help] = layout::split(
-            area,
-            Direction::Vertical,
-            [
-                Constraint::Min(0),
-                Constraint::Length(1),
-                Constraint::Percentage(30),
-            ],
-        );
-        (main, footer, Some(help))
-    } else {
-        let [main, footer] = layout::split(
-            area,
-            Direction::Vertical,
-            [Constraint::Min(0), Constraint::Length(1)],
-        );
-        (main, footer, None)
-    };
-
-    let outer = Block::default()
-        .borders(Borders::ALL)
-        .border_style(Style::default().fg(theme.border));
-    let inner = outer.inner(main_area);
-    frame.render_widget(outer, main_area);
-
-    let [header_area, _gap, content_area] = layout::split(
-        inner,
-        Direction::Vertical,
-        [
-            Constraint::Length(3),
-            Constraint::Length(1),
-            Constraint::Min(0),
-        ],
-    );
-
-    let pr_data = state.cache.details.get(&pr.id);
-    render_header(frame, pr, pr_data.map(|d| &d.mergeability), header_area);
-    render_tabs_and_content(frame, pr, pr_data, &mut state.ui, tab, content_area);
-    render_footer_bar(frame, state, pr_data, tab, footer_area);
-
-    if let Some(help_area) = help_area {
-        render_help_panel(frame, help_area);
-    }
-    if let Some(kind) = state.ui.confirm {
-        render_confirm_box(frame, kind, state.ui.confirm_cursor, area);
-    }
-    if let Some(cursor) = state.ui.review_picker {
-        render_review_picker(frame, state, cursor, area);
-    }
-    if let Some(cursor) = state.ui.merge_picker {
-        render_merge_picker(frame, state, cursor, area);
-    }
-    if let Some(msg) = &state.ui.error {
-        render_error_box(frame, msg, area);
-    }
-}
-
-/// Cap a single-line string to `max` columns, adding an ellipsis when cut, to
-/// keep the review popup from stretching to a long comment's width.
-fn truncate_cols(s: &str, max: usize) -> String {
-    if s.chars().count() <= max {
-        return s.to_owned();
-    }
-    let head: String = s.chars().take(max.saturating_sub(1)).collect();
-    format!("{head}…")
-}
-
-fn render_review_picker(frame: &mut Frame, state: &AppState, cursor: usize, area: Rect) {
-    let theme = theme::current();
-    let selected = Style::default()
-        .bg(theme.highlight_bg)
-        .add_modifier(Modifier::BOLD);
-    let normal = Style::default().fg(theme.muted);
-
-    let mut lines = vec![Line::from(Span::styled(
-        "Submit review",
-        Style::default().fg(theme.fg),
-    ))];
-
-    // Show what the review will carry, so finishing isn't a blind submit.
-    if let Some(review) = &state.ui.pending_review
-        && !review.comments.is_empty()
-    {
-        let n = review.comments.len();
-        let noun = if n == 1 { "comment" } else { "comments" };
-        lines.push(Line::default());
-        lines.push(Line::from(Span::styled(
-            format!("Including {n} {noun}:"),
-            Style::default().fg(theme.muted),
-        )));
-        for pc in &review.comments {
-            let first = pc.text.lines().next().unwrap_or("");
-            let summary = format!("  {}:{}  {first}", pc.anchor.path, pc.anchor.line);
-            lines.push(Line::from(Span::styled(
-                truncate_cols(&summary, 50),
-                Style::default().fg(theme.muted),
-            )));
-        }
+impl PrDetailScreen {
+    pub fn modal_open(&self) -> bool {
+        self.confirm.is_some()
+            || self.review_picker.is_some()
+            || self.merge_picker.is_some()
+            || self.error.is_some()
+            || self.help_open
+            || self.editor.draft.is_some()
     }
 
-    lines.push(Line::default());
-    let Screen::Detail { pr_id, .. } = state.screen else {
-        return;
-    };
-    for (i, verdict) in state.review_verdicts().iter().enumerate() {
-        let disabled = state.verdict_disabled_reason(*verdict, pr_id);
-        let marker = if i == cursor { "▶ " } else { "  " };
-        // A disabled verdict (e.g. approving your own PR) stays listed but dimmed,
-        // with the reason inline, rather than being hidden.
-        let label = match disabled {
-            Some(reason) => format!(" {} ({reason}) ", verdict.label()),
-            None => format!(" {} ", verdict.label()),
-        };
-        let style = if i == cursor && disabled.is_none() {
-            selected
+    pub fn active_diff_view(&self) -> &DiffViewer {
+        if self.commits.open_commit.is_some() {
+            &self.commits.diff
         } else {
-            normal
-        };
-        lines.push(Line::from(vec![
-            Span::styled(marker, Style::default().fg(theme.accent)),
-            Span::styled(label, style),
-        ]));
-    }
-
-    let content_w = lines.iter().map(Line::width).max().unwrap_or(0) as u16;
-    let popup_w = (content_w + 4).min(area.width);
-    let popup_h = (lines.len() as u16 + 2).min(area.height);
-    let popup = Rect {
-        x: area.x + area.width.saturating_sub(popup_w) / 2,
-        y: area.y + area.height.saturating_sub(popup_h) / 2,
-        width: popup_w,
-        height: popup_h,
-    };
-
-    frame.render_widget(Clear, popup);
-    let block = Block::default()
-        .borders(Borders::ALL)
-        .border_type(BorderType::Rounded)
-        .title(" Review ")
-        .border_style(Style::default().fg(theme.accent))
-        .padding(Padding::horizontal(1));
-    let inner = block.inner(popup);
-    frame.render_widget(block, popup);
-    frame.render_widget(Paragraph::new(lines), inner);
-}
-
-fn render_merge_picker(frame: &mut Frame, state: &AppState, cursor: usize, area: Rect) {
-    let theme = theme::current();
-    let selected = Style::default()
-        .bg(theme.highlight_bg)
-        .add_modifier(Modifier::BOLD);
-    let normal = Style::default().fg(theme.muted);
-
-    let mut lines = vec![
-        Line::from(Span::styled("Merge this PR", Style::default().fg(theme.fg))),
-        Line::default(),
-    ];
-    for (i, strategy) in state.merge_strategies.iter().enumerate() {
-        let marker = if i == cursor { "▶ " } else { "  " };
-        let style = if i == cursor { selected } else { normal };
-        lines.push(Line::from(vec![
-            Span::styled(marker, Style::default().fg(theme.accent)),
-            Span::styled(format!(" {} ", strategy.label()), style),
-        ]));
-    }
-
-    let content_w = lines.iter().map(Line::width).max().unwrap_or(0) as u16;
-    let popup_w = (content_w + 4).min(area.width);
-    let popup_h = (lines.len() as u16 + 2).min(area.height);
-    let popup = Rect {
-        x: area.x + area.width.saturating_sub(popup_w) / 2,
-        y: area.y + area.height.saturating_sub(popup_h) / 2,
-        width: popup_w,
-        height: popup_h,
-    };
-
-    frame.render_widget(Clear, popup);
-    let block = Block::default()
-        .borders(Borders::ALL)
-        .border_type(BorderType::Rounded)
-        .title(" Merge ")
-        .border_style(Style::default().fg(theme.accent))
-        .padding(Padding::horizontal(1));
-    let inner = block.inner(popup);
-    frame.render_widget(block, popup);
-    frame.render_widget(Paragraph::new(lines), inner);
-}
-
-fn render_error_box(frame: &mut Frame, message: &str, area: Rect) {
-    let theme = theme::current();
-    let popup_w = 60.min(area.width.saturating_sub(4)).max(20);
-    let text_w = popup_w.saturating_sub(4).max(1);
-    let wrapped = (message.chars().count() as u16).div_ceil(text_w);
-    let popup_h = (wrapped + 4).min(area.height);
-    let popup = Rect {
-        x: area.x + area.width.saturating_sub(popup_w) / 2,
-        y: area.y + area.height.saturating_sub(popup_h) / 2,
-        width: popup_w,
-        height: popup_h,
-    };
-
-    let lines = vec![
-        Line::from(Span::styled(
-            message.to_string(),
-            Style::default().fg(theme.fg),
-        )),
-        Line::default(),
-        Line::from(Span::styled(
-            "any key to dismiss",
-            Style::default().fg(theme.muted),
-        )),
-    ];
-
-    frame.render_widget(Clear, popup);
-    let block = Block::default()
-        .borders(Borders::ALL)
-        .border_type(BorderType::Rounded)
-        .title(" Error ")
-        .border_style(Style::default().fg(theme.error))
-        .padding(Padding::horizontal(1));
-    let inner = block.inner(popup);
-    frame.render_widget(block, popup);
-    frame.render_widget(Paragraph::new(lines).wrap(Wrap { trim: false }), inner);
-}
-
-fn render_footer_bar(
-    frame: &mut Frame,
-    state: &AppState,
-    pr_data: Option<&PrData>,
-    tab: DetailTab,
-    area: Rect,
-) {
-    let line = if let Some(draft) = &state.ui.comment_draft {
-        comment_prompt(draft)
-    } else if state.ui.comment_pending {
-        widgets::loading("posting comment…")
-    } else if let Some(search) = active_search(state, pr_data, tab, area.width) {
-        search
-    } else {
-        widgets::footer(area.width, &footer_actions(state, tab), state.ui.refreshing)
-    };
-    frame.render_widget(Paragraph::new(line), area);
-}
-
-fn footer_actions(state: &AppState, tab: DetailTab) -> Vec<Hint> {
-    // While a batched review is open, surface its state and finish/discard keys
-    // on every tab — line comments queue into it from the Diff too.
-    if let Some(review) = &state.ui.pending_review {
-        let mut parts = vec![
-            Hint::on(format!("reviewing ({})", review.comments.len())),
-            Hint::on("c: comment"),
-        ];
-        if state.reply_target().is_some() {
-            parts.push(Hint::on("r: reply"));
+            &self.diff
         }
-        parts.push(Hint::on("v: finish"));
-        parts.push(Hint::on("V: discard"));
-        return parts;
     }
-    // Overview is the conversation tab and home of the PR-level actions: `c`
-    // posts a PR comment, `r` replies, `a`/`v` review, `m` merges, `x` declines.
-    // Lifecycle actions stay visible but dimmed-with-reason when unavailable.
-    if tab == DetailTab::Overview {
-        let mut parts = vec![Hint::on("c: comment")];
-        if state.reply_target().is_some() {
-            parts.push(Hint::on("r: reply"));
+
+    pub fn active_diff_view_mut(&mut self) -> &mut DiffViewer {
+        if self.commits.open_commit.is_some() {
+            &mut self.commits.diff
+        } else {
+            &mut self.diff
         }
-        if state.editable_selected().is_some() {
-            parts.push(Hint::on("e: edit"));
-            parts.push(Hint::on("d: delete"));
-        }
-        // `a`/`v` are always available — at minimum you can leave a comment review,
-        // even on your own PR; the picker dims the verdicts you can't use.
-        parts.push(Hint::on("a: verdict"));
-        parts.push(Hint::on("v: review"));
-        if let Screen::Detail { pr_id, .. } = state.screen {
-            parts.push(match state.merge_blocked_reason(pr_id) {
-                None => Hint::on("m: merge"),
-                Some(reason) => Hint::off(format!("m: merge ({reason})")),
-            });
-            parts.push(match state.decline_blocked_reason(pr_id) {
-                None => Hint::on("x: decline"),
-                Some(reason) => Hint::off(format!("x: decline ({reason})")),
-            });
-        }
-        return parts;
-    }
-    // Other tabs: only the line-comment hint, shown once you're on a row in the
-    // diff pane (a thread turns it into a reply).
-    match state.comment_target() {
-        Some(CommentTarget::Reply(_)) => vec![Hint::on("c: reply")],
-        Some(_) => vec![Hint::on("c: comment")],
-        None => Vec::new(),
     }
 }
 
-fn comment_prompt(draft: &CommentDraft) -> Line<'static> {
-    let theme = theme::current();
-    let label = match &draft.target {
-        CommentTarget::Line(a) => format!("  comment {}:{} ▏ ", a.path, a.line),
-        CommentTarget::Pr => "  comment ▏ ".to_owned(),
-        CommentTarget::Reply(_) => "  reply ▏ ".to_owned(),
-        CommentTarget::Edit { .. } => "  edit ▏ ".to_owned(),
-        CommentTarget::Review { verdict } => format!("  {} ▏ ", verdict.label().to_lowercase()),
-    };
-    Line::from(vec![
-        Span::styled(label, Style::default().fg(theme.muted)),
-        Span::styled(draft.text.clone(), Style::default().fg(theme.fg)),
-        Span::styled("█", Style::default().fg(theme.accent)),
-    ])
-}
-
-fn active_search(
-    state: &AppState,
-    pr_data: Option<&PrData>,
-    tab: DetailTab,
-    width: u16,
-) -> Option<Line<'static>> {
-    let viewing_commit = state.ui.commits.open_commit.is_some();
-    if tab == DetailTab::Commits && !viewing_commit {
-        return commits_search_prompt(&state.ui.commits.search, pr_data, width);
+impl Component for PrDetailScreen {
+    type Context<'a> = DetailContext<'a>;
+    type Message = crate::app::action::DetailAction;
+    fn handle_key(
+        &self,
+        key: ratatui::crossterm::event::KeyEvent,
+        ctx: &DetailContext<'_>,
+    ) -> Option<crate::app::action::Action> {
+        keys::key_to_action(
+            &DetailView {
+                detail: self,
+                store: ctx.store,
+                screen: ctx.screen,
+                refreshing: ctx.refreshing,
+            },
+            key,
+        )
     }
-    if tab != DetailTab::Diff && !(tab == DetailTab::Commits && viewing_commit) {
-        return None;
+    fn render(&mut self, frame: &mut Frame, area: Rect, ctx: &DetailContext<'_>) {
+        render::render(self, frame, area, ctx);
     }
-    let view = state.ui.active_diff_view();
-    match view.focus {
-        DiffFocus::Tree => tree_search_prompt(&view.tree_search, tree_files(state, pr_data), width),
-        DiffFocus::Pane => pane_search_prompt(&view.pane_search, view.pane_matches.len(), width),
-    }
-}
-
-fn commits_search_prompt(
-    search: &SearchState,
-    pr_data: Option<&PrData>,
-    width: u16,
-) -> Option<Line<'static>> {
-    search.open.then(|| {
-        let count = match pr_data.map(|d| &d.commits) {
-            Some(LoadState::Loaded(commits)) => search.filter_commits(commits).len(),
-            _ => 0,
-        };
-        widgets::search_prompt(&search.query, count, width)
-    })
-}
-
-fn tree_search_prompt(
-    search: &SearchState,
-    files: &[FileDiff],
-    width: u16,
-) -> Option<Line<'static>> {
-    search.open.then(|| {
-        let count = files.iter().filter(|f| search.matches(&f.path)).count();
-        widgets::search_prompt(&search.query, count, width)
-    })
-}
-
-fn pane_search_prompt(
-    search: &SearchState,
-    match_count: usize,
-    width: u16,
-) -> Option<Line<'static>> {
-    if search.open {
-        return Some(Line::from(widgets::search_input_spans(&search.query)));
-    }
-    if search.query.is_empty() {
-        return None;
-    }
-    let theme = theme::current();
-    let label = if match_count == 1 {
-        "1 match".to_string()
-    } else {
-        format!("{match_count} matches")
-    };
-    let left = vec![Span::styled(
-        format!("  /{}", search.query),
-        Style::default().fg(theme.muted),
-    )];
-    let right = vec![Span::styled(
-        format!("{label}   n/N: navigate   esc: clear  "),
-        Style::default().fg(theme.muted),
-    )];
-    Some(Line::from(widgets::justify_between(
-        left,
-        right,
-        width as usize,
-    )))
-}
-
-pub(super) fn active_diff<'a>(
-    open_commit: Option<&str>,
-    pr_data: Option<&'a PrData>,
-) -> Option<&'a LoadState<Diff>> {
-    match open_commit {
-        Some(oid) => pr_data.and_then(|d| d.commit_diffs.get(oid)),
-        None => pr_data.map(|d| &d.diff),
-    }
-}
-
-fn tree_files<'a>(state: &AppState, pr_data: Option<&'a PrData>) -> &'a [FileDiff] {
-    match active_diff(state.ui.commits.open_commit.as_deref(), pr_data) {
-        Some(LoadState::Loaded(diff)) => &diff.files,
-        _ => &[],
-    }
-}
-
-fn render_tabs_and_content(
-    frame: &mut Frame,
-    pr: &PullRequest,
-    pr_data: Option<&PrData>,
-    ui: &mut UiMemory,
-    tab: DetailTab,
-    area: Rect,
-) {
-    let theme = theme::current();
-    let [tabs_area, content_area] = layout::split(
-        area,
-        Direction::Vertical,
-        [Constraint::Length(3), Constraint::Min(0)],
-    );
-
-    let tabs_block = Block::default()
-        .borders(Borders::TOP | Borders::BOTTOM)
-        .border_style(Style::default().fg(theme.divider));
-    let tabs_inner = tabs_block.inner(tabs_area);
-    frame.render_widget(tabs_block, tabs_area);
-    frame.render_widget(Paragraph::new(tab_bar(tab)), tabs_inner);
-
-    render_content(frame, pr, pr_data, ui, tab, content_area);
-}
-
-fn tab_bar(tab: DetailTab) -> Line<'static> {
-    let theme = theme::current();
-    let active = Style::default()
-        .fg(theme.accent)
-        .add_modifier(Modifier::BOLD);
-    let inactive = Style::default().fg(theme.muted);
-    let sep = Style::default().fg(theme.muted);
-
-    let mut spans = vec![Span::raw("  ")];
-    for (i, t) in DetailTab::ALL.iter().enumerate() {
-        if i > 0 {
-            spans.push(Span::styled(" · ", sep));
-        }
-        let style = if i == tab.index() { active } else { inactive };
-        spans.push(Span::styled(t.label(), style));
-    }
-    Line::from(spans)
-}
-
-/// Header badge for a PR's mergeability — glyph + label, colour carrying the
-/// meaning. `None` while the fetch is unresolved so nothing flickers in.
-fn mergeability_badge(state: &LoadState<Mergeability>) -> Option<Span<'static>> {
-    let theme = theme::current();
-    let (glyph, label, color) = match state {
-        LoadState::Loading => (icons::ADJUST, "checking…", theme.muted),
-        LoadState::Loaded(Mergeability::Mergeable) => {
-            (icons::CHECK_CIRCLE, "mergeable", theme.success)
-        }
-        LoadState::Loaded(Mergeability::Conflicts) => {
-            (icons::TIMES_CIRCLE, "conflicts", theme.warning)
-        }
-        LoadState::Loaded(Mergeability::Unknown) => {
-            (icons::QUESTION_CIRCLE, "mergeability unknown", theme.muted)
-        }
-        LoadState::NotRequested | LoadState::Failed(_) => return None,
-    };
-    Some(Span::styled(
-        format!("{glyph} {label}"),
-        Style::default().fg(color),
-    ))
-}
-
-fn render_header(
-    frame: &mut Frame,
-    pr: &PullRequest,
-    mergeability: Option<&LoadState<Mergeability>>,
-    area: Rect,
-) {
-    let theme = theme::current();
-    let status_color = theme.status_color(&pr.status);
-
-    let title_line = Line::from(vec![
-        Span::styled(format!("#{} ", pr.id), Style::default().fg(theme.muted)),
-        Span::styled(
-            pr.title.clone(),
-            Style::default().fg(theme.fg).add_modifier(Modifier::BOLD),
-        ),
-    ]);
-
-    let mut left_spans: Vec<Span<'static>> = vec![
-        // Padded background badge — matches the reaction pills and needs no
-        // Nerd Font (no powerline caps).
-        Span::styled(
-            format!(" {} ", pr.status.label()),
-            Style::default()
-                .fg(theme.bg)
-                .bg(status_color)
-                .add_modifier(Modifier::BOLD),
-        ),
-        Span::styled(
-            format!(" @{}", pr.author.username),
-            Style::default().fg(theme.info),
-        ),
-        Span::styled("  wants to merge  ", Style::default().fg(theme.muted)),
-        Span::styled(pr.source_branch.clone(), Style::default().fg(theme.orange)),
-        Span::raw(" → "),
-        Span::styled(pr.target_branch.clone(), Style::default().fg(theme.info)),
-    ];
-    // Mergeability is only meaningful while the PR is still open.
-    let open = !matches!(pr.status, PrStatus::Merged | PrStatus::Declined);
-    if open && let Some(badge) = mergeability.and_then(mergeability_badge) {
-        left_spans.push(Span::raw("    "));
-        left_spans.push(badge);
-    }
-    let meta_line = Line::from(left_spans);
-
-    let paragraph = Paragraph::new(vec![title_line, Line::default(), meta_line])
-        .block(Block::default().padding(Padding::horizontal(2)));
-    frame.render_widget(paragraph, area);
-}
-
-fn render_content(
-    frame: &mut Frame,
-    pr: &PullRequest,
-    pr_data: Option<&PrData>,
-    ui: &mut UiMemory,
-    tab: DetailTab,
-    area: Rect,
-) {
-    let inset = match tab {
-        DetailTab::Description => area,
-        _ => Rect {
-            x: area.x + 2,
-            y: area.y,
-            width: area.width.saturating_sub(4),
-            height: area.height,
-        },
-    };
-    match tab {
-        DetailTab::Description => description::render(frame, pr, ui, inset),
-        DetailTab::Overview => overview::render(frame, pr, pr_data, ui, inset),
-        DetailTab::Diff => {
-            let threads = activity_threads(pr_data);
-            let diff = active_diff(ui.commits.open_commit.as_deref(), pr_data);
-            let pending = pending_comments(ui.pending_review.as_ref());
-            diff::render(
-                frame,
-                diff,
-                threads,
-                pending,
-                &mut ui.diff,
-                &pr.author.username,
-                inset,
-            );
-        }
-        DetailTab::Commits => {
-            if ui.commits.open_commit.is_some() {
-                let threads = activity_threads(pr_data);
-                let pending = pending_comments(ui.pending_review.as_ref());
-                commits::render_commit_diff(
-                    frame,
-                    pr_data,
-                    threads,
-                    pending,
-                    &mut ui.commits,
-                    &pr.author.username,
-                    inset,
-                );
-            } else {
-                commits::render(frame, pr_data, &mut ui.commits, inset);
+    fn update(
+        &mut self,
+        action: Self::Message,
+        ctx: &DetailContext<'_>,
+    ) -> Option<crate::app::action::Action> {
+        use crate::app::action::{Action, DetailAction};
+        match action {
+            DetailAction::Back => {
+                self.help_open = false;
+                return Some(Action::Navigate(Screen::List));
             }
-        }
-        DetailTab::Builds => builds::render(frame, pr_data, inset),
-    }
-}
-
-fn pending_comments(pending: Option<&PendingReview>) -> &[PendingComment] {
-    pending.map_or(&[], |r| r.comments.as_slice())
-}
-
-fn activity_threads(pr_data: Option<&PrData>) -> &[CommentThread] {
-    pr_data
-        .and_then(|d| match &d.activity {
-            LoadState::Loaded(b) => Some(b.threads.as_slice()),
-            _ => None,
-        })
-        .unwrap_or(&[])
-}
-
-const HELP_KEYS: &[(&str, &str)] = &[
-    ("j/k", "move up/down"),
-    ("^d/^u", "half-page"),
-    ("h/l", "tab / pane / fold"),
-    ("1-5", "select tab"),
-    ("enter", "open / view"),
-    ("space", "toggle fold"),
-    ("/", "search"),
-    ("n/N", "next/prev match"),
-    ("[ ]", "prev/next tab/commit"),
-    ("esc", "back"),
-    ("a", "quick verdict"),
-    ("v", "start/finish review"),
-    ("V", "discard review"),
-    ("m", "merge"),
-    ("x", "decline"),
-    ("c", "comment"),
-    ("r", "reply"),
-    ("^j/^k", "step comment"),
-    ("e", "edit own"),
-    ("d", "delete own"),
-    ("R", "resolve thread"),
-    ("F", "refresh"),
-    ("?", "toggle help"),
-    ("q", "quit"),
-];
-
-fn render_help_panel(frame: &mut Frame, area: Rect) {
-    let theme = theme::current();
-    let block = Block::default()
-        .borders(Borders::ALL)
-        .border_type(BorderType::Rounded)
-        .title(" Help ")
-        .border_style(Style::default().fg(theme.accent))
-        .padding(Padding::symmetric(1, 1));
-    let inner = block.inner(area);
-    frame.render_widget(block, area);
-
-    let key_style = Style::default()
-        .fg(theme.accent)
-        .add_modifier(Modifier::BOLD);
-    let desc_style = Style::default().fg(theme.muted);
-    let key_w = HELP_KEYS.iter().map(|(k, _)| k.len()).max().unwrap_or(0);
-    let desc_w = HELP_KEYS.iter().map(|(_, d)| d.len()).max().unwrap_or(0);
-    let rows = (inner.height as usize).clamp(1, HELP_KEYS.len());
-    let cols = HELP_KEYS.len().div_ceil(rows);
-
-    let lines: Vec<Line<'static>> = (0..rows)
-        .map(|r| {
-            let mut spans: Vec<Span<'static>> = Vec::new();
-            for c in 0..cols {
-                if let Some((k, d)) = HELP_KEYS.get(c * rows + r) {
-                    spans.push(Span::styled(format!("{k:<key_w$}  "), key_style));
-                    spans.push(Span::styled(format!("{d:<w$}", w = desc_w + 3), desc_style));
+            DetailAction::NextTab | DetailAction::PrevTab | DetailAction::SelectTab(_) => {
+                let Screen::Detail { pr_id, tab } = ctx.screen else {
+                    return None;
+                };
+                let tab = match action {
+                    DetailAction::NextTab => tab.next(),
+                    DetailAction::PrevTab => tab.prev(),
+                    DetailAction::SelectTab(tab) => tab,
+                    _ => unreachable!(),
+                };
+                self.diff.focus = crate::tui::components::diff_viewer::DiffFocus::Tree;
+                self.commits.open_commit = None;
+                return Some(Action::Navigate(Screen::Detail { pr_id, tab }));
+            }
+            DetailAction::DescriptionScroll(_)
+            | DetailAction::OverviewMove(_)
+            | DetailAction::OverviewSubMove(_) => {
+                let Screen::Detail { pr_id, .. } = ctx.screen else {
+                    return None;
+                };
+                if let LoadState::Loaded(prs) = &ctx.store.cache.prs
+                    && let Some(pr) = prs.iter().find(|p| p.id == pr_id)
+                {
+                    match action {
+                        DetailAction::DescriptionScroll(_) => {
+                            self.description.update(action, &pr);
+                        }
+                        _ => {
+                            self.overview
+                                .update(action, &(pr, ctx.store.cache.details.get(&pr_id)));
+                        }
+                    }
                 }
             }
-            Line::from(spans)
-        })
-        .collect();
-    frame.render_widget(Paragraph::new(lines), inner);
+            DetailAction::ToggleHelp => self.help_open = !self.help_open,
+            DetailAction::CloseConfirm => self.confirm = None,
+            DetailAction::ConfirmMove(_) => {
+                if let Some(dialog) = &mut self.confirm {
+                    return dialog.update(action, &());
+                }
+            }
+            DetailAction::ReviewMove(_) => {
+                let options = DetailView {
+                    detail: self,
+                    store: ctx.store,
+                    screen: ctx.screen,
+                    refreshing: ctx.refreshing,
+                }
+                .review_context()
+                .options;
+                let review_ctx = dialogs::review::ReviewContext {
+                    options,
+                    pending: None,
+                };
+                if let Some(dialog) = &mut self.review_picker {
+                    return dialog.update(action, &review_ctx);
+                }
+            }
+            DetailAction::CloseReviewPicker => self.review_picker = None,
+            DetailAction::OpenMergePicker => {
+                if !ctx.store.merge_strategies.is_empty() {
+                    self.merge_picker = Some(dialogs::merge::MergeDialog::default());
+                }
+            }
+            DetailAction::MergeMove(_) => {
+                if let Some(dialog) = &mut self.merge_picker {
+                    return dialog.update(action, &ctx.store.merge_strategies.as_slice());
+                }
+            }
+            DetailAction::CloseMergePicker => self.merge_picker = None,
+            DetailAction::OpenDecline => {
+                self.confirm = Some(dialogs::confirm::ConfirmDialog::new(ConfirmKind::Decline));
+            }
+            DetailAction::DismissError => self.error = None,
+            DetailAction::CommentType(_)
+            | DetailAction::CommentBackspace
+            | DetailAction::CommentCancel => {
+                self.editor.update(action, &());
+            }
+            other => return Some(Action::Detail(other)),
+        }
+        None
+    }
 }
 
-const CONFIRM_OPTIONS: [&str; 2] = ["Yes", "No"];
-
-fn render_confirm_box(frame: &mut Frame, kind: ConfirmKind, cursor: usize, area: Rect) {
-    let theme = theme::current();
-    let selected = Style::default()
-        .bg(theme.highlight_bg)
-        .add_modifier(Modifier::BOLD);
-    let normal = Style::default().fg(theme.muted);
-
-    let mut lines = vec![
-        Line::from(Span::styled(kind.prompt(), Style::default().fg(theme.fg))),
-        Line::default(),
-    ];
-    for (i, label) in CONFIRM_OPTIONS.iter().enumerate() {
-        let marker = if i == cursor { "▶ " } else { "  " };
-        let style = if i == cursor { selected } else { normal };
-        lines.push(Line::from(vec![
-            Span::styled(marker, Style::default().fg(theme.accent)),
-            Span::styled(format!(" {label} "), style),
-        ]));
+impl PrDetailScreen {
+    pub fn active_search(
+        &self,
+        tab: tabs::DetailTab,
+    ) -> Option<(&crate::tui::components::search_input::SearchInput, bool)> {
+        use tabs::DetailTab;
+        match tab {
+            DetailTab::Commits if self.commits.open_commit.is_none() => {
+                Some((&self.commits.search, false))
+            }
+            DetailTab::Diff | DetailTab::Commits => Some(self.active_diff_view().active_search()),
+            _ => None,
+        }
     }
 
-    let content_w = lines.iter().map(Line::width).max().unwrap_or(0) as u16;
-    let popup_w = (content_w + 4).min(area.width);
-    let popup_h = (lines.len() as u16 + 2).min(area.height);
-    let popup = Rect {
-        x: area.x + area.width.saturating_sub(popup_w) / 2,
-        y: area.y + area.height.saturating_sub(popup_h) / 2,
-        width: popup_w,
-        height: popup_h,
-    };
-
-    frame.render_widget(Clear, popup);
-    let block = Block::default()
-        .borders(Borders::ALL)
-        .border_type(BorderType::Rounded)
-        .title(" Confirm ")
-        .border_style(Style::default().fg(theme.accent))
-        .padding(Padding::horizontal(1));
-    let inner = block.inner(popup);
-    frame.render_widget(block, popup);
-    frame.render_widget(Paragraph::new(lines), inner);
+    pub fn update_action(
+        &mut self,
+        action: crate::app::action::Action,
+        ctx: &DetailContext<'_>,
+    ) -> Option<crate::app::action::Action> {
+        use crate::{app::action::Action, tui::components::diff_viewer::DiffContext};
+        let Screen::Detail { pr_id, tab } = ctx.screen else {
+            return None;
+        };
+        let data = ctx.store.cache.details.get(&pr_id);
+        match action {
+            Action::Detail(action) => self.update(action, ctx),
+            Action::Commits(action) => self.commits.update(
+                action,
+                &tabs::commits::CommitContext {
+                    pr_id,
+                    data,
+                    pending: &[],
+                    author: "",
+                },
+            ),
+            Action::Search(action)
+                if tab == tabs::DetailTab::Commits && self.commits.open_commit.is_none() =>
+            {
+                self.commits.update_search(action);
+                None
+            }
+            Action::Diff(_) | Action::Search(_) => {
+                let diff = data.and_then(|d| d.diff_for(self.commits.open_commit.as_deref()));
+                let diff_ctx = DiffContext {
+                    diff,
+                    threads: &[],
+                    pending: &[],
+                    author: "",
+                };
+                match action {
+                    Action::Diff(action) => self.active_diff_view_mut().update(action, &diff_ctx),
+                    Action::Search(action) => {
+                        if self.active_search(tab).is_some() {
+                            self.active_diff_view_mut().update_search(action, &diff_ctx);
+                        }
+                        None
+                    }
+                    _ => unreachable!(),
+                }
+            }
+            effect => Some(effect),
+        }
+    }
 }

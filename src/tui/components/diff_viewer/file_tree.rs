@@ -1,7 +1,5 @@
-use std::cmp::Ordering;
-use std::collections::HashSet;
-
 use crate::domain::diff::FileDiff;
+use std::{cmp::Ordering, collections::HashSet};
 
 #[derive(Debug, Clone)]
 pub enum TreeRow {

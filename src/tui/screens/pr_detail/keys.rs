@@ -1,16 +1,22 @@
-use ratatui::crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
-
 use crate::{
     app::{
         action::{Action, CommitsAction, DetailAction, DiffAction, SearchAction},
-        state::{AppState, DetailTab, DiffFocus, DiffViewState, Screen},
+        navigation::Screen,
     },
-    tui::screens::half_page,
+    tui::{
+        component::Component,
+        components::diff_viewer::{DiffContext, DiffFocus},
+        screens::pr_detail::tabs::DetailTab,
+    },
 };
+use ratatui::crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
 
-pub(in crate::tui) fn key_to_action(state: &AppState, key: KeyEvent) -> Option<Action> {
+pub(in crate::tui) fn key_to_action(
+    state: &super::DetailView<'_>,
+    key: KeyEvent,
+) -> Option<Action> {
     // An error popup is modal: any key dismisses it.
-    if state.ui.error.is_some() {
+    if state.detail.error.is_some() {
         return Some(Action::Detail(DetailAction::DismissError));
     }
     if key.code == KeyCode::Char('q') {
@@ -19,60 +25,28 @@ pub(in crate::tui) fn key_to_action(state: &AppState, key: KeyEvent) -> Option<A
     let Screen::Detail { tab, pr_id } = state.screen else {
         return None;
     };
-    let viewing_commit = state.ui.commits.open_commit.is_some();
+    let viewing_commit = state.detail.commits.open_commit.is_some();
     let code = key.code;
     // Single-letter actions fire only unmodified, so Ctrl-d/Ctrl-e/etc. (scroll,
     // muscle memory) don't accidentally trigger comment/approve actions.
     let plain = key.modifiers.is_empty();
 
-    if state.ui.confirm.is_some() {
-        return match code {
-            KeyCode::Left | KeyCode::Up | KeyCode::Char('h' | 'k') => {
-                Some(Action::Detail(DetailAction::ConfirmMove(-1)))
-            }
-            KeyCode::Right | KeyCode::Down | KeyCode::Char('j' | 'l') => {
-                Some(Action::Detail(DetailAction::ConfirmMove(1)))
-            }
-            KeyCode::Enter => Some(Action::Detail(DetailAction::SubmitConfirm)),
-            KeyCode::Esc => Some(Action::Detail(DetailAction::CloseConfirm)),
-            _ => None,
-        };
+    if let Some(dialog) = &state.detail.confirm {
+        return dialog.handle_key(key, &());
     }
 
-    // The review-verdict menu is modal: arrows/hjkl move, enter picks, esc closes.
-    if state.ui.review_picker.is_some() {
-        return match code {
-            KeyCode::Left | KeyCode::Up | KeyCode::Char('h' | 'k') => {
-                Some(Action::Detail(DetailAction::ReviewMove(-1)))
-            }
-            KeyCode::Right | KeyCode::Down | KeyCode::Char('j' | 'l') => {
-                Some(Action::Detail(DetailAction::ReviewMove(1)))
-            }
-            KeyCode::Enter => Some(Action::Detail(DetailAction::ReviewSelect)),
-            KeyCode::Esc => Some(Action::Detail(DetailAction::CloseReviewPicker)),
-            _ => None,
-        };
+    if let Some(dialog) = &state.detail.review_picker {
+        return dialog.handle_key(key, &state.review_context());
     }
 
-    // The merge-strategy menu is modal in the same way.
-    if state.ui.merge_picker.is_some() {
-        return match code {
-            KeyCode::Left | KeyCode::Up | KeyCode::Char('h' | 'k') => {
-                Some(Action::Detail(DetailAction::MergeMove(-1)))
-            }
-            KeyCode::Right | KeyCode::Down | KeyCode::Char('j' | 'l') => {
-                Some(Action::Detail(DetailAction::MergeMove(1)))
-            }
-            KeyCode::Enter => Some(Action::Detail(DetailAction::MergeSelect)),
-            KeyCode::Esc => Some(Action::Detail(DetailAction::CloseMergePicker)),
-            _ => None,
-        };
+    if let Some(dialog) = &state.detail.merge_picker {
+        return dialog.handle_key(key, &state.store.merge_strategies.as_slice());
     }
 
     if code == KeyCode::Char('?') {
         return Some(Action::Detail(DetailAction::ToggleHelp));
     }
-    if state.ui.help_open {
+    if state.detail.help_open {
         return (code == KeyCode::Esc).then_some(Action::Detail(DetailAction::ToggleHelp));
     }
 
@@ -86,30 +60,23 @@ pub(in crate::tui) fn key_to_action(state: &AppState, key: KeyEvent) -> Option<A
     // while it's open queue into the review instead of posting.
     if plain && code == KeyCode::Char('v') && (tab == DetailTab::Overview || tab == DetailTab::Diff)
     {
-        return Some(Action::Detail(if state.ui.pending_review.is_some() {
+        return Some(Action::Detail(if state.pending_review().is_some() {
             DetailAction::FinishReview
         } else {
             DetailAction::StartReview
         }));
     }
     // Shift+V discards an in-progress review and its queued comments.
-    if code == KeyCode::Char('V') && state.ui.pending_review.is_some() {
+    if code == KeyCode::Char('V') && state.pending_review().is_some() {
         return Some(Action::Detail(DetailAction::AbandonReview));
     }
     // `m` opens the merge-strategy menu — only when the PR is mergeable. You can
     // merge your own PR, so (unlike `a`) there's no own-PR gate.
-    if plain
-        && code == KeyCode::Char('m')
-        && tab == DetailTab::Overview
-        && state.can_merge(pr_id)
-    {
+    if plain && code == KeyCode::Char('m') && tab == DetailTab::Overview && state.can_merge(pr_id) {
         return Some(Action::Detail(DetailAction::OpenMergePicker));
     }
     // `x` declines/closes the PR (with a confirm) while it's still open.
-    if plain
-        && code == KeyCode::Char('x')
-        && tab == DetailTab::Overview
-        && state.pr_is_open(pr_id)
+    if plain && code == KeyCode::Char('x') && tab == DetailTab::Overview && state.pr_is_open(pr_id)
     {
         return Some(Action::Detail(DetailAction::OpenDecline));
     }
@@ -119,7 +86,7 @@ pub(in crate::tui) fn key_to_action(state: &AppState, key: KeyEvent) -> Option<A
     if plain && code == KeyCode::Char('r') {
         return Some(Action::Detail(DetailAction::OpenReply));
     }
-    // Shift+R toggles resolve on the focused thread (reducer no-ops off-thread).
+    // Shift+R toggles resolve on the focused thread (application no-ops off-thread).
     if code == KeyCode::Char('R') {
         return Some(Action::Detail(DetailAction::ResolveThread));
     }
@@ -127,17 +94,19 @@ pub(in crate::tui) fn key_to_action(state: &AppState, key: KeyEvent) -> Option<A
         return Some(Action::Refresh);
     }
     // Overview-only: step individual comments within the focused block (Ctrl-j/k),
-    // then edit/delete the one you land on (the reducer gates on authorship).
+    // then edit/delete the one you land on (the application gates on authorship).
     if tab == DetailTab::Overview {
         if key.modifiers.contains(KeyModifiers::CONTROL) {
-            match code {
-                KeyCode::Char('j') => {
-                    return Some(Action::Detail(DetailAction::OverviewSubMove(1)));
-                }
-                KeyCode::Char('k') => {
-                    return Some(Action::Detail(DetailAction::OverviewSubMove(-1)));
-                }
-                _ => {}
+            let crate::app::store::LoadState::Loaded(prs) = &state.store.cache.prs else {
+                return None;
+            };
+            if let Some(pr) = prs.iter().find(|p| p.id == pr_id)
+                && let Some(action) = state
+                    .detail
+                    .overview
+                    .handle_key(key, &(pr, state.store.cache.details.get(&pr_id)))
+            {
+                return Some(action);
             }
         }
         if plain && code == KeyCode::Char('e') {
@@ -152,7 +121,7 @@ pub(in crate::tui) fn key_to_action(state: &AppState, key: KeyEvent) -> Option<A
     if plain
         && code == KeyCode::Char('d')
         && (tab == DetailTab::Diff || (tab == DetailTab::Commits && viewing_commit))
-        && state.ui.active_diff_view().pane_pending.is_some()
+        && state.detail.active_diff_view().pane_pending.is_some()
     {
         return Some(Action::Detail(DetailAction::RemovePendingComment));
     }
@@ -166,7 +135,7 @@ pub(in crate::tui) fn key_to_action(state: &AppState, key: KeyEvent) -> Option<A
 }
 
 fn escape_action(
-    state: &AppState,
+    state: &super::DetailView<'_>,
     tab: DetailTab,
     viewing_commit: bool,
     code: KeyCode,
@@ -174,7 +143,7 @@ fn escape_action(
     if code != KeyCode::Esc {
         return None;
     }
-    let view = state.ui.active_diff_view();
+    let view = state.detail.active_diff_view();
     let in_diff_pane = view.focus == DiffFocus::Pane
         && (tab == DetailTab::Diff || (tab == DetailTab::Commits && viewing_commit));
     if in_diff_pane {
@@ -210,41 +179,74 @@ fn tab_bracket_key(code: KeyCode) -> Option<Action> {
 }
 
 fn tab_key(
-    state: &AppState,
+    state: &super::DetailView<'_>,
     tab: DetailTab,
     viewing_commit: bool,
     code: KeyCode,
 ) -> Option<Action> {
     match tab {
-        DetailTab::Diff => diff_nav_action(code, state.ui.active_diff_view()).map(Action::Diff),
+        DetailTab::Diff => state.detail.active_diff_view().handle_key(
+            KeyEvent::new(code, KeyModifiers::NONE),
+            &DiffContext {
+                diff: None,
+                threads: &[],
+                pending: &[],
+                author: "",
+            },
+        ),
         DetailTab::Commits if viewing_commit => match code {
             KeyCode::Char('[') => Some(Action::Commits(CommitsAction::StepCommit(-1))),
             KeyCode::Char(']') => Some(Action::Commits(CommitsAction::StepCommit(1))),
-            _ => diff_nav_action(code, state.ui.active_diff_view()).map(Action::Diff),
+            _ => state.detail.active_diff_view().handle_key(
+                KeyEvent::new(code, KeyModifiers::NONE),
+                &DiffContext {
+                    diff: None,
+                    threads: &[],
+                    pending: &[],
+                    author: "",
+                },
+            ),
         },
-        DetailTab::Commits => scroll_delta(code, state.ui.commits.viewport)
-            .map(|d| Action::Commits(CommitsAction::MoveSelection(d)))
-            .or_else(|| match code {
-                KeyCode::Enter => Some(Action::Commits(CommitsAction::Open)),
-                _ => tab_nav(code),
-            }),
-        DetailTab::Overview => scroll_delta(code, state.ui.overview_viewport)
-            .map(|d| Action::Detail(DetailAction::OverviewMove(d)))
-            .or_else(|| tab_nav(code)),
-        DetailTab::Description => scroll_delta(code, state.ui.description_viewport)
-            .map(|d| Action::Detail(DetailAction::DescriptionScroll(d)))
-            .or_else(|| tab_nav(code)),
+        DetailTab::Commits => {
+            let Screen::Detail { pr_id, .. } = state.screen else {
+                return None;
+            };
+            state
+                .detail
+                .commits
+                .handle_key(
+                    KeyEvent::new(code, KeyModifiers::NONE),
+                    &super::tabs::commits::CommitContext {
+                        pr_id,
+                        data: state.store.cache.details.get(&pr_id),
+                        pending: &[],
+                        author: "",
+                    },
+                )
+                .or_else(|| tab_nav(code))
+        }
+        DetailTab::Overview | DetailTab::Description => {
+            let Screen::Detail { pr_id, .. } = state.screen else {
+                return None;
+            };
+            let crate::app::store::LoadState::Loaded(prs) = &state.store.cache.prs else {
+                return tab_nav(code);
+            };
+            let Some(pr) = prs.iter().find(|pr| pr.id == pr_id) else {
+                return tab_nav(code);
+            };
+            let key = KeyEvent::new(code, KeyModifiers::NONE);
+            let action = if tab == DetailTab::Overview {
+                state
+                    .detail
+                    .overview
+                    .handle_key(key, &(pr, state.store.cache.details.get(&pr_id)))
+            } else {
+                state.detail.description.handle_key(key, &pr)
+            };
+            action.or_else(|| tab_nav(code))
+        }
         DetailTab::Builds => tab_nav(code),
-    }
-}
-
-fn scroll_delta(code: KeyCode, viewport: u16) -> Option<i16> {
-    match code {
-        KeyCode::Down | KeyCode::Char('j') => Some(1),
-        KeyCode::Up | KeyCode::Char('k') => Some(-1),
-        KeyCode::PageDown => Some(half_page(viewport)),
-        KeyCode::PageUp => Some(-half_page(viewport)),
-        _ => None,
     }
 }
 
@@ -252,41 +254,6 @@ fn tab_nav(code: KeyCode) -> Option<Action> {
     match code {
         KeyCode::Right | KeyCode::Char('l') => Some(Action::Detail(DetailAction::NextTab)),
         KeyCode::Left | KeyCode::Char('h') => Some(Action::Detail(DetailAction::PrevTab)),
-        _ => None,
-    }
-}
-
-fn diff_nav_action(code: KeyCode, view: &DiffViewState) -> Option<DiffAction> {
-    match view.focus {
-        DiffFocus::Tree => tree_key(code, view),
-        DiffFocus::Pane => pane_key(code, view),
-    }
-}
-
-fn tree_key(code: KeyCode, view: &DiffViewState) -> Option<DiffAction> {
-    if let Some(delta) = scroll_delta(code, view.tree_viewport) {
-        return Some(DiffAction::MoveCursor(delta));
-    }
-    match code {
-        // `l`/Enter steps right into the pane (a file) or drills into a folder.
-        KeyCode::Enter | KeyCode::Right | KeyCode::Char('l') => Some(DiffAction::EnterPane),
-        KeyCode::Char(' ') => Some(DiffAction::ToggleAtCursor),
-        KeyCode::Left | KeyCode::Char('h') => Some(DiffAction::CollapseAtCursor),
-        _ => None,
-    }
-}
-
-fn pane_key(code: KeyCode, view: &DiffViewState) -> Option<DiffAction> {
-    if let Some(delta) = scroll_delta(code, view.pane_viewport) {
-        return Some(DiffAction::MovePaneCursor(delta));
-    }
-    let searching = !view.pane_search.query.is_empty();
-    match code {
-        KeyCode::Char('n') if searching => Some(DiffAction::JumpMatch(1)),
-        KeyCode::Char('N') if searching => Some(DiffAction::JumpMatch(-1)),
-        // Expand/collapse the focused resolved thread.
-        KeyCode::Char(' ') if view.pane_thread.is_some() => Some(DiffAction::ToggleThreadExpand),
-        KeyCode::Enter | KeyCode::Left | KeyCode::Char('h') => Some(DiffAction::FocusTree),
         _ => None,
     }
 }

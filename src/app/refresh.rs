@@ -1,9 +1,8 @@
-use std::time::{Duration, Instant};
-
-use crate::app::{
-    App,
-    state::{DetailTab, Screen},
+use crate::{
+    app::{App, navigation::Screen},
+    tui::screens::pr_detail::tabs::DetailTab,
 };
+use std::time::{Duration, Instant};
 
 /// CI moves fast, so the Builds tab re-fetches more often than everything else.
 pub const BUILDS_INTERVAL: Duration = Duration::from_secs(15);
@@ -71,7 +70,7 @@ impl App {
     }
 
     fn refresh_prs(&mut self) {
-        if !self.state.cache.prs.is_loading() {
+        if !self.state.store.cache.prs.is_loading() {
             self.state.ui.refreshing = true;
             self.spawn_load_prs();
         }
@@ -119,16 +118,16 @@ impl App {
         self.spawn_load_mergeability(pr_id);
     }
 
-    fn fetch_in_flight(&self, pr_id: u64, f: impl Fn(&crate::app::state::PrData) -> bool) -> bool {
-        self.state.cache.details.get(&pr_id).is_some_and(f)
+    fn fetch_in_flight(&self, pr_id: u64, f: impl Fn(&crate::app::store::PrData) -> bool) -> bool {
+        self.state.store.cache.details.get(&pr_id).is_some_and(f)
     }
 
     fn modal_open(&self) -> bool {
         let ui = &self.state.ui;
-        ui.comment_draft.is_some()
-            || ui.confirm.is_some()
-            || ui.error.is_some()
-            || ui.help_open
-            || ui.filter_picker_open
+        ui.detail.editor.draft.is_some()
+            || ui.detail.confirm.is_some()
+            || ui.detail.error.is_some()
+            || ui.detail.help_open
+            || ui.list.filter_picker_open
     }
 }

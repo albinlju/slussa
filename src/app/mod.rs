@@ -1,31 +1,30 @@
-use std::time::{Duration, Instant};
-
+use crate::{
+    app::{action::Action, state::AppState, store::LoadState},
+    providers::Provider,
+    tui::{key_to_action, render},
+};
 use ratatui::{
     DefaultTerminal,
     crossterm::event::{Event, EventStream, KeyEventKind},
 };
+use std::time::{Duration, Instant};
 use tokio::{
     sync::mpsc::{self, UnboundedReceiver, UnboundedSender},
     time,
 };
 use tokio_stream::StreamExt;
 
-use crate::{
-    app::{
-        action::Action,
-        state::{AppState, LoadState},
-    },
-    providers::Provider,
-    tui::{key_to_action, render},
-};
-
 pub mod action;
+mod commands;
 pub mod fetchers;
-pub mod file_tree;
+mod loads;
+pub mod navigation;
 pub mod preflight;
-pub mod reducer;
+pub mod refresh;
 pub mod remote;
+pub mod reviews;
 pub mod state;
+pub mod store;
 
 const SPINNER_INTERVAL: Duration = Duration::from_millis(100);
 
@@ -42,9 +41,12 @@ impl App {
         let (action_tx, action_rx) = mpsc::unbounded_channel();
         Self {
             state: AppState {
-                current_user,
-                can_unapprove: provider.can_unapprove(),
-                merge_strategies: provider.merge_strategies(),
+                store: store::Store {
+                    current_user,
+                    can_unapprove: provider.can_unapprove(),
+                    merge_strategies: provider.merge_strategies(),
+                    ..store::Store::default()
+                },
                 ..AppState::default()
             },
             provider,
@@ -55,12 +57,12 @@ impl App {
     }
 
     pub async fn run(mut self, terminal: &mut DefaultTerminal) -> std::io::Result<()> {
-        self.state.cache.prs = LoadState::Loading;
+        self.state.store.cache.prs = LoadState::Loading;
         self.spawn_load_prs();
 
         let mut events = EventStream::new();
-        let start = time::Instant::now() + reducer::refresh::BUILDS_INTERVAL;
-        let mut refresh = time::interval_at(start, reducer::refresh::BUILDS_INTERVAL);
+        let start = time::Instant::now() + refresh::BUILDS_INTERVAL;
+        let mut refresh = time::interval_at(start, refresh::BUILDS_INTERVAL);
         self.draw(terminal)?;
 
         loop {
@@ -94,5 +96,32 @@ impl App {
     fn draw(&mut self, terminal: &mut DefaultTerminal) -> std::io::Result<()> {
         terminal.draw(|f| render(f, &mut self.state))?;
         Ok(())
+    }
+}
+
+#[cfg(test)]
+mod tests;
+
+impl App {
+    pub(super) fn apply(&mut self, action: Action) {
+        let Some(action) = self
+            .state
+            .ui
+            .update(action, &self.state.store, self.state.screen)
+        else {
+            return;
+        };
+        match action {
+            Action::Quit => unreachable!("handled in run()"),
+            Action::Navigate(screen) => self.state.screen = screen,
+            Action::Refresh => self.refresh_actions(),
+            Action::List(crate::app::action::ListAction::OpenPr(id)) => self.open_pr(id),
+            Action::Detail(a) => self.detail_actions(a),
+            Action::LoadCommitDiff { pr_id, oid } => self.ensure_commit_diff(pr_id, oid),
+            Action::Loaded(a) => self.loaded_actions(a),
+            Action::List(_) | Action::Diff(_) | Action::Commits(_) | Action::Search(_) => {
+                unreachable!("local action consumed by component")
+            }
+        }
     }
 }

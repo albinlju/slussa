@@ -1,3 +1,9 @@
+use super::super::build_status::{OverallState, build_stats, progress_bar, state_color};
+use crate::{
+    app::store::PrData,
+    domain::ci::{Build, BuildState},
+    tui::{format, icons, theme, widgets},
+};
 use ratatui::{
     Frame,
     layout::Rect,
@@ -5,14 +11,6 @@ use ratatui::{
     text::{Line, Span},
     widgets::Paragraph,
 };
-
-use crate::{
-    app::state::PrData,
-    domain::ci::{Build, BuildState},
-    tui::{format, icons, theme, widgets},
-};
-
-use super::super::build_status::{OverallState, build_stats, progress_bar, state_color};
 
 pub fn render(frame: &mut Frame, pr_data: Option<&PrData>, area: Rect) {
     let Some(builds) =

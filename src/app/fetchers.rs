@@ -1,10 +1,8 @@
-use tokio::task;
-
 use crate::{
     app::{
         App,
         action::{Action, LoadedAction},
-        state::{CommentTarget, PendingComment},
+        reviews::{CommentTarget, PendingComment},
     },
     domain::{
         pr::MergeStrategy,
@@ -12,6 +10,7 @@ use crate::{
     },
     providers::FetchError,
 };
+use tokio::task;
 
 impl App {
     fn spawn_fetch<T, F, A>(&self, fetch: F, make_action: A)

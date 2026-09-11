@@ -8,6 +8,10 @@ review, merge, and decline.
 
 ## Done
 
+- [x] **Component architecture** — local UI state and behavior live with their
+  components; a shared Store holds provider data and review drafts keyed by PR.
+  Rendering snapshots and interaction regression tests protect existing flows.
+
 - [x] **PR list** with status filter (open / draft / merged / declined / all).
 - [x] **Reviewers / approvals in the list** — a state icon per reviewer.
 - [x] **Description tab**, rendered above the tab row.

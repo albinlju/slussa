@@ -1,218 +1,43 @@
-use std::cmp::Reverse;
-
-use chrono::{DateTime, Utc};
-use ratatui::{
-    Frame,
-    layout::{Constraint, Direction, Rect},
-    style::{Color, Modifier, Style},
-    text::{Line, Span},
-    widgets::{Block, Borders, Padding, Paragraph, Wrap},
-};
-
 use crate::{
-    app::state::{CommentRef, LoadState, PrData, ThreadRef, UiMemory},
+    app::{
+        action::{Action, DetailAction},
+        store::{LoadState, PrData},
+    },
     domain::{
         comment::{Comment, CommentThread},
         diff::Diff,
         event::{EventKind, TimelineEvent},
-        pr::PullRequest,
-        review::ReviewerState,
     },
-    tui::{format, icons, layout, theme, widgets},
+    tui::{
+        component::{Component, scroll, step_index},
+        screens::pr_detail::view::{CommentRef, ThreadRef},
+        theme, widgets,
+    },
 };
+use chrono::{DateTime, Utc};
+use ratatui::{
+    Frame,
+    crossterm::event::{KeyCode, KeyEvent},
+    layout::Rect,
+    style::{Color, Modifier, Style},
+    text::{Line, Span},
+    widgets::Paragraph,
+};
+use std::cmp::Reverse;
 
 const TIMELINE_RIGHT_PAD: u16 = 3;
-/// The `● ─`/`|  ` gutter drawn down the left of the activity timeline.
 const RAIL_WIDTH: u16 = 3;
 
-const SIDEBAR_WIDTH: u16 = 30;
-const SIDEBAR_BREAKPOINT: u16 = 64;
-
-pub fn render(
-    frame: &mut Frame,
-    pr: &PullRequest,
-    pr_data: Option<&PrData>,
-    ui: &mut UiMemory,
-    area: Rect,
-) {
-    let (body_area, sidebar_area, scrollbar_area) = if area.width >= SIDEBAR_BREAKPOINT {
-        let [body, sidebar, scrollbar] = layout::split(
-            area,
-            Direction::Horizontal,
-            [
-                Constraint::Min(0),
-                Constraint::Length(SIDEBAR_WIDTH),
-                Constraint::Length(1),
-            ],
-        );
-        (body, Some(sidebar), scrollbar)
-    } else {
-        let [body, scrollbar] = layout::split(
-            area,
-            Direction::Horizontal,
-            [Constraint::Min(0), Constraint::Length(1)],
-        );
-        (body, None, scrollbar)
-    };
-
-    if let Some(sidebar) = sidebar_area {
-        render_sidebar(frame, pr, pr_data, sidebar);
-    }
-    render_timeline(
-        frame,
-        pr_data,
-        ui,
-        &pr.author.username,
-        body_area,
-        scrollbar_area,
-    );
-}
-
-fn render_sidebar(frame: &mut Frame, pr: &PullRequest, pr_data: Option<&PrData>, area: Rect) {
-    let theme = theme::current();
-    let block = Block::default()
-        .borders(Borders::LEFT)
-        .border_style(Style::default().fg(theme.divider))
-        .padding(Padding::horizontal(1));
-    let inner = block.inner(area);
-    frame.render_widget(block, area);
-
-    let now = Utc::now();
-    let mut lines: Vec<Line<'static>> = Vec::new();
-
-    section_heading(&mut lines, "Reviewers");
-    lines.extend(reviewers(pr));
-    lines.push(Line::default());
-
-    section_heading(&mut lines, "Builds");
-    lines.extend(builds_summary(pr_data));
-    lines.push(Line::default());
-
-    if !pr.labels.is_empty() {
-        section_heading(&mut lines, "Labels");
-        lines.extend(labels(pr));
-        lines.push(Line::default());
-    }
-
-    section_heading(&mut lines, "Details");
-    lines.extend(details(pr, now));
-
-    frame.render_widget(Paragraph::new(lines).wrap(Wrap { trim: false }), inner);
-}
-
-fn section_heading(lines: &mut Vec<Line<'static>>, title: &str) {
-    let theme = theme::current();
-    lines.push(Line::from(Span::styled(
-        title.to_string(),
-        Style::default().fg(theme.fg).add_modifier(Modifier::BOLD),
-    )));
-}
-
-fn reviewers(pr: &PullRequest) -> Vec<Line<'static>> {
-    let theme = theme::current();
-    if pr.reviewers.is_empty() {
-        return vec![muted_line("—")];
-    }
-    pr.reviewers
-        .iter()
-        .map(|r| {
-            let (icon, color) = match r.state {
-                ReviewerState::Approved => (icons::CHECK_CIRCLE, theme.success),
-                ReviewerState::ChangesRequested => (icons::TIMES_CIRCLE, theme.error),
-                ReviewerState::Commented => (icons::CIRCLE_O, theme.muted),
-            };
-            Line::from(vec![
-                Span::styled(icon, Style::default().fg(color)),
-                Span::raw(" "),
-                Span::styled(
-                    format!("@{}", r.author.username),
-                    Style::default().fg(theme.info),
-                ),
-            ])
-        })
-        .collect()
-}
-
-fn builds_summary(pr_data: Option<&PrData>) -> Vec<Line<'static>> {
-    match pr_data.map(|d| &d.builds) {
-        Some(LoadState::Loaded(builds)) if !builds.is_empty() => {
-            let stats = super::super::build_status::build_stats(builds);
-            vec![
-                Line::from(Span::styled(
-                    format!("{}/{} passing", stats.passing, stats.total),
-                    Style::default()
-                        .fg(stats.accent())
-                        .add_modifier(Modifier::BOLD),
-                )),
-                Line::from(super::super::build_status::progress_bar(builds)),
-            ]
-        }
-        Some(LoadState::Loaded(_)) => vec![muted_line("no builds")],
-        Some(LoadState::Failed(_)) => vec![muted_line("unavailable")],
-        _ => vec![widgets::loading("loading…")],
-    }
-}
-
-fn labels(pr: &PullRequest) -> Vec<Line<'static>> {
-    let accent = Style::default().fg(theme::current().accent);
-    pr.labels
-        .iter()
-        .map(|label| Line::from(Span::styled(label.clone(), accent)))
-        .collect()
-}
-
-fn details(pr: &PullRequest, now: DateTime<Utc>) -> Vec<Line<'static>> {
-    let theme = theme::current();
-    let fg = Style::default().fg(theme.fg);
-    let detail = |key: &str, value: Vec<Span<'static>>| -> Line<'static> {
-        let mut spans = vec![Span::styled(
-            format!("{key:<8}"),
-            Style::default().fg(theme.muted),
-        )];
-        spans.extend(value);
-        Line::from(spans)
-    };
-    vec![
-        detail(
-            "opened",
-            vec![Span::styled(format::relative_age(pr.created, now), fg)],
-        ),
-        detail(
-            "updated",
-            vec![Span::styled(format::relative_age(pr.updated, now), fg)],
-        ),
-        detail(
-            "diff",
-            vec![
-                Span::styled(
-                    format!("+{}", pr.additions),
-                    Style::default().fg(theme.diff_added),
-                ),
-                Span::raw(" "),
-                Span::styled(
-                    format!("-{}", pr.deletions),
-                    Style::default().fg(theme.diff_removed),
-                ),
-            ],
-        ),
-        detail(
-            "files",
-            vec![Span::styled(pr.changed_files.to_string(), fg)],
-        ),
-    ]
-}
-
-fn muted_line(text: &str) -> Line<'static> {
-    Line::from(Span::styled(
-        text.to_string(),
-        Style::default().fg(theme::current().muted),
-    ))
+pub struct TimelineContext<'a> {
+    pub data: Option<&'a PrData>,
+    pub author: &'a str,
+    pub scrollbar: Rect,
 }
 
 fn render_timeline(
     frame: &mut Frame,
     pr_data: Option<&PrData>,
-    ui: &mut UiMemory,
+    ui: &mut Timeline,
     author: &str,
     area: Rect,
     scrollbar_area: Rect,
@@ -234,9 +59,9 @@ fn render_timeline(
     });
 
     let count = focusable_count(&activity.comments, &activity.threads);
-    let cursor = ui.overview_cursor.min(count.saturating_sub(1));
-    ui.overview_item_count = count;
-    ui.overview_cursor = cursor;
+    let cursor = ui.cursor.min(count.saturating_sub(1));
+    ui.item_count = count;
+    ui.cursor = cursor;
 
     let blocks = build_blocks(
         &activity.comments,
@@ -245,7 +70,7 @@ fn render_timeline(
         diff,
         area.width.saturating_sub(TIMELINE_RIGHT_PAD + RAIL_WIDTH),
         cursor,
-        ui.overview_sub,
+        ui.sub,
         author,
     );
 
@@ -254,20 +79,20 @@ fn render_timeline(
     // The cursor walks only the focusable items; resolve it to the matching nav
     // for highlight-scroll, reply target, and the per-comment sub-cursor.
     let focused = navs.iter().filter(|n| n.focusable).nth(cursor);
-    ui.overview_reply = focused.and_then(|n| n.reply_to);
-    ui.overview_thread = focused.and_then(|n| n.resolve.clone());
+    ui.reply = focused.and_then(|n| n.reply_to);
+    ui.thread = focused.and_then(|n| n.resolve.clone());
     let block_len = focused.map_or(0, |n| n.comments.len());
-    let sub = ui.overview_sub.min(block_len.saturating_sub(1));
-    ui.overview_block_len = block_len;
-    ui.overview_sub = sub;
-    ui.overview_selected = focused.and_then(|n| n.comments.get(sub).copied());
+    let sub = ui.sub.min(block_len.saturating_sub(1));
+    ui.block_len = block_len;
+    ui.sub = sub;
+    ui.selected = focused.and_then(|n| n.comments.get(sub).copied());
 
     let viewport = area.height as usize;
     let max_scroll = content.len().saturating_sub(viewport) as u16;
     let scroll = if count <= 1 {
         // 0 or 1 comments: nothing to jump between — the timeline scrolls freely
-        // (driven by the reducer) so events above/below stay reachable.
-        ui.overview_scroll
+        // (driven by the component) so events above/below stay reachable.
+        ui.scroll
     } else if cursor == 0 {
         // On the first comment, pin to the top so newer events above it show.
         0
@@ -275,24 +100,21 @@ fn render_timeline(
         // On the last comment, pin to the bottom so trailing events show.
         max_scroll
     } else {
-        focused.map_or(ui.overview_scroll, |n| {
-            scroll_to_item(ui.overview_scroll, n.start, n.span, content.len(), viewport)
+        focused.map_or(ui.scroll, |n| {
+            scroll_to_item(ui.scroll, n.start, n.span, content.len(), viewport)
         })
     };
-    ui.overview_scroll = scroll.min(max_scroll);
-    ui.overview_viewport = area.height;
+    ui.scroll = scroll.min(max_scroll);
+    ui.viewport = area.height;
 
     let content_area = Rect {
         width: area.width.saturating_sub(TIMELINE_RIGHT_PAD),
         ..area
     };
-    frame.render_widget(
-        Paragraph::new(content).scroll((ui.overview_scroll, 0)),
-        content_area,
-    );
+    frame.render_widget(Paragraph::new(content).scroll((ui.scroll, 0)), content_area);
 
     if max_scroll > 0 {
-        let bar = widgets::scrollbar(ui.overview_scroll, max_scroll, scrollbar_area.height);
+        let bar = widgets::scrollbar(ui.scroll, max_scroll, scrollbar_area.height);
         frame.render_widget(Paragraph::new(bar), scrollbar_area);
     }
 }
@@ -387,7 +209,7 @@ fn build_blocks(
         match item {
             TimelineItem::Comment(c) => {
                 blocks.push(TimelineBlock {
-                    lines: super::super::comment::comment_box(c, width, now, active, author),
+                    lines: crate::tui::widgets::comment::comment_box(c, width, now, active, author),
                     node: theme.link,
                     border: if active { theme.muted } else { theme.divider },
                     reply_to: c.reply_to,
@@ -403,7 +225,7 @@ fn build_blocks(
             TimelineItem::Review(t) => {
                 // Mark the sub-selected comment only on the focused thread.
                 let selected = active.then_some(sub);
-                if let Some(lines) = super::super::comment::comment_thread_box(
+                if let Some(lines) = crate::tui::widgets::comment::comment_thread_box(
                     t, diff, width, now, active, selected, author,
                 ) {
                     blocks.push(TimelineBlock {
@@ -540,4 +362,70 @@ fn event_block(event: &TimelineEvent, now: DateTime<Utc>) -> (Color, Vec<Line<'s
         EventKind::Pushed(_) => unreachable!("handled above"),
     };
     (color, vec![header(verb.to_string(), color)])
+}
+
+#[derive(Debug, Default)]
+pub struct Timeline {
+    pub scroll: u16,
+    pub cursor: usize,
+    pub item_count: usize,
+    pub reply: Option<u64>,
+    pub thread: Option<ThreadRef>,
+    pub sub: usize,
+    pub block_len: usize,
+    pub selected: Option<CommentRef>,
+    pub viewport: u16,
+}
+
+impl Component for Timeline {
+    type Context<'a> = TimelineContext<'a>;
+    type Message = DetailAction;
+    fn handle_key(&self, key: KeyEvent, _: &Self::Context<'_>) -> Option<Action> {
+        if key
+            .modifiers
+            .contains(ratatui::crossterm::event::KeyModifiers::CONTROL)
+        {
+            match key.code {
+                KeyCode::Char('j') => {
+                    return Some(Action::Detail(DetailAction::OverviewSubMove(1)));
+                }
+                KeyCode::Char('k') => {
+                    return Some(Action::Detail(DetailAction::OverviewSubMove(-1)));
+                }
+                _ => {}
+            }
+        }
+
+        let delta = match key.code {
+            KeyCode::Char('j') | KeyCode::Down => 1,
+            KeyCode::Char('k') | KeyCode::Up => -1,
+            KeyCode::PageDown => crate::tui::screens::half_page(self.viewport),
+            KeyCode::PageUp => -crate::tui::screens::half_page(self.viewport),
+            _ => return None,
+        };
+        Some(Action::Detail(DetailAction::OverviewMove(delta)))
+    }
+    fn update(&mut self, action: DetailAction, _: &Self::Context<'_>) -> Option<Action> {
+        match action {
+            DetailAction::OverviewMove(delta) => {
+                if self.item_count <= 1 {
+                    self.scroll = scroll(self.scroll, delta);
+                } else {
+                    let next = step_index(self.cursor, delta, self.item_count);
+                    if next != self.cursor {
+                        self.cursor = next;
+                        self.sub = 0;
+                    }
+                }
+            }
+            DetailAction::OverviewSubMove(delta) => {
+                self.sub = step_index(self.sub, delta, self.block_len);
+            }
+            _ => {}
+        }
+        None
+    }
+    fn render(&mut self, frame: &mut Frame, area: Rect, ctx: &Self::Context<'_>) {
+        render_timeline(frame, ctx.data, self, ctx.author, area, ctx.scrollbar);
+    }
 }

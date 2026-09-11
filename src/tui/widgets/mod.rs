@@ -1,3 +1,11 @@
+pub mod comment;
+pub mod markdown;
+pub mod table;
+use crate::{
+    app::store::LoadState,
+    domain::comment::Reaction,
+    tui::{format, icons, layout, theme},
+};
 use chrono::{DateTime, Utc};
 use ratatui::{
     Frame,
@@ -6,10 +14,6 @@ use ratatui::{
     text::{Line, Span},
     widgets::{Block, BorderType, Borders, Paragraph},
 };
-
-use crate::app::state::LoadState;
-use crate::domain::comment::Reaction;
-use crate::tui::{format, icons, layout, theme};
 
 pub(super) fn author_line(
     mut lead: Vec<Span<'static>>,
@@ -114,7 +118,11 @@ pub(super) fn reactions_line(reactions: &[Reaction]) -> Option<Line<'static>> {
         if !spans.is_empty() {
             spans.push(Span::raw(" "));
         }
-        let fg = if r.mine { theme.reaction_mine } else { theme.fg };
+        let fg = if r.mine {
+            theme.reaction_mine
+        } else {
+            theme.fg
+        };
         spans.push(Span::styled(
             format!(" {} {} ", r.emoji, r.count),
             Style::default().fg(fg).bg(theme.highlight_bg),

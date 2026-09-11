@@ -2,11 +2,11 @@ use ratatui::text::Line;
 
 const GLAMOUR_MARGIN: usize = 2;
 
-pub(super) fn render(body: &str, width: u16) -> Vec<Line<'static>> {
+pub(in crate::tui) fn render(body: &str, width: u16) -> Vec<Line<'static>> {
     trim_blank_lines(render_glamour(body, width))
 }
 
-pub(super) fn render_no_margin(body: &str, width: u16) -> Vec<Line<'static>> {
+pub(in crate::tui) fn render_no_margin(body: &str, width: u16) -> Vec<Line<'static>> {
     let lines = render_glamour(body, width.saturating_add(GLAMOUR_MARGIN as u16));
     trim_blank_lines(strip_margin(lines, GLAMOUR_MARGIN))
 }

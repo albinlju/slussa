@@ -1,9 +1,8 @@
+use crate::tui::theme;
 use ratatui::{
     style::{Modifier, Style},
     text::{Line, Span},
 };
-
-use crate::tui::theme;
 
 #[derive(Clone, Copy)]
 pub(crate) enum Width {
@@ -75,7 +74,7 @@ impl<'a> Table<'a> {
 }
 
 fn fit_cell(cell: &[Span<'static>], width: usize) -> Vec<Span<'static>> {
-    let mut out = super::widgets::truncate_to_width(cell.to_vec(), width);
+    let mut out = super::truncate_to_width(cell.to_vec(), width);
     let used: usize = out.iter().map(Span::width).sum();
     let pad = width.saturating_sub(used);
     if pad > 0 {

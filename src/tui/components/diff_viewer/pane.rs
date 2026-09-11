@@ -1,5 +1,17 @@
-use std::collections::{HashMap, HashSet};
-
+use crate::{
+    app::reviews::{CommentAnchor, PendingComment},
+    domain::{
+        comment::CommentThread,
+        diff::{Diff, DiffLine, FileDiff},
+    },
+    tui::{
+        components::diff_viewer::DiffViewer,
+        icons, layout,
+        screens::pr_detail::view::ThreadRef,
+        theme,
+        widgets::{self, comment::render_inline_thread, markdown},
+    },
+};
 use chrono::Utc;
 use ratatui::{
     Frame,
@@ -8,15 +20,7 @@ use ratatui::{
     text::{Line, Span},
     widgets::Paragraph,
 };
-
-use crate::{
-    app::state::{CommentAnchor, DiffViewState, PendingComment, ThreadRef},
-    domain::{
-        comment::CommentThread,
-        diff::{Diff, DiffLine, FileDiff},
-    },
-    tui::{icons, layout, markdown, screens::pr_detail::render_inline_thread, theme, widgets},
-};
+use std::collections::{HashMap, HashSet};
 
 const DIFF_GUTTER: &str = "  ";
 const DIFF_GUTTER_COLS: u16 = 2;
@@ -25,7 +29,7 @@ const DIFF_GUTTER_COLS: u16 = 2;
 pub(super) fn render(
     frame: &mut Frame,
     diff: &Diff,
-    ui_diff: &mut DiffViewState,
+    ui_diff: &mut DiffViewer,
     file_stats: &[(u32, u32)],
     threads: &[CommentThread],
     pending: &[PendingComment],
@@ -325,7 +329,9 @@ fn index_comments<'a>(
     // Only anchored (code-review) threads land in the diff; general discussion
     // has no path/line and is skipped.
     for thread in threads {
-        let Some(anchor) = &thread.anchor else { continue };
+        let Some(anchor) = &thread.anchor else {
+            continue;
+        };
         if anchor.path != path {
             continue;
         }
@@ -342,7 +348,10 @@ type PendingIndex<'a> = HashMap<usize, Vec<(usize, &'a PendingComment)>>;
 
 /// Bucket the queued review comments for `path` by their anchor line, carrying
 /// each one's index in the original `pending` slice (so `d` can remove it).
-fn index_pending<'a>(pending: &'a [PendingComment], path: &str) -> (PendingIndex<'a>, PendingIndex<'a>) {
+fn index_pending<'a>(
+    pending: &'a [PendingComment],
+    path: &str,
+) -> (PendingIndex<'a>, PendingIndex<'a>) {
     let mut by_new: PendingIndex = HashMap::new();
     let mut by_old: PendingIndex = HashMap::new();
     for (i, pc) in pending.iter().enumerate() {

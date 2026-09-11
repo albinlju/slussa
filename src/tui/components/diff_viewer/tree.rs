@@ -1,3 +1,13 @@
+use crate::{
+    domain::diff::Diff,
+    tui::{
+        components::diff_viewer::{
+            DiffViewer,
+            file_tree::{TreeRow, build_visible_rows},
+        },
+        icons, theme, widgets,
+    },
+};
 use ratatui::{
     Frame,
     layout::Rect,
@@ -6,17 +16,10 @@ use ratatui::{
     widgets::{List, ListItem, ListState, Paragraph},
 };
 
-use crate::app::{
-    file_tree::{TreeRow, build_visible_rows},
-    state::DiffViewState,
-};
-use crate::domain::diff::Diff;
-use crate::tui::{icons, theme, widgets};
-
 pub(super) fn render(
     frame: &mut Frame,
     diff: &Diff,
-    ui_diff: &mut DiffViewState,
+    ui_diff: &mut DiffViewer,
     file_stats: &[(u32, u32)],
     comment_counts: &[usize],
     area: Rect,

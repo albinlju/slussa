@@ -1,19 +1,30 @@
+use crate::{
+    app::{
+        action::{Action, CommitsAction},
+        reviews::PendingComment,
+        store::{LoadState, PrData},
+    },
+    domain::{comment::CommentThread, commit::Commit},
+    tui::{
+        component::{Component, step_index},
+        components::{
+            diff_viewer::{DiffContext, DiffViewer},
+            search_input::SearchInput,
+        },
+        format, icons, layout, theme, widgets,
+    },
+};
 use chrono::{DateTime, Utc};
 use ratatui::{
     Frame,
+    crossterm::event::{KeyCode, KeyEvent},
     layout::{Constraint, Direction, Rect},
     style::{Modifier, Style},
     text::{Line, Span},
     widgets::{Block, Borders, List, ListItem, ListState, Paragraph},
 };
 
-use crate::{
-    app::state::{CommitsViewState, LoadState, PendingComment, PrData},
-    domain::{comment::CommentThread, commit::Commit},
-    tui::{format, icons, layout, theme, widgets},
-};
-
-pub fn render(frame: &mut Frame, pr_data: Option<&PrData>, cv: &mut CommitsViewState, area: Rect) {
+pub fn render(frame: &mut Frame, pr_data: Option<&PrData>, cv: &mut CommitList, area: Rect) {
     let theme = theme::current();
     let Some(commits) =
         widgets::loaded_or_placeholder(frame, pr_data.map(|d| &d.commits), "commits", area)
@@ -89,7 +100,7 @@ pub fn render_commit_diff(
     pr_data: Option<&PrData>,
     threads: &[CommentThread],
     pending: &[PendingComment],
-    cv: &mut CommitsViewState,
+    cv: &mut CommitList,
     author: &str,
     area: Rect,
 ) {
@@ -104,9 +115,16 @@ pub fn render_commit_diff(
 
     render_commit_banner(frame, pr_data, &oid, banner_area);
 
-    let diff_state = super::super::active_diff(Some(&oid), pr_data);
-    super::diff::render(
-        frame, diff_state, threads, pending, &mut cv.diff, author, diff_area,
+    let diff_state = pr_data.and_then(|d| d.diff_for(Some(&oid)));
+    cv.diff.render(
+        frame,
+        diff_area,
+        &DiffContext {
+            diff: diff_state,
+            threads,
+            pending,
+            author,
+        },
     );
 }
 
@@ -158,4 +176,106 @@ fn render_commit_banner(frame: &mut Frame, pr_data: Option<&PrData>, oid: &str, 
 
 fn short_oid(oid: &str) -> String {
     oid.chars().take(7).collect()
+}
+
+#[derive(Debug, Default)]
+pub struct CommitList {
+    pub selected: usize,
+    pub viewport: u16,
+    pub search: SearchInput,
+    pub open_commit: Option<String>,
+    pub diff: DiffViewer,
+}
+
+pub struct CommitContext<'a> {
+    pub pr_id: u64,
+    pub data: Option<&'a PrData>,
+    pub pending: &'a [PendingComment],
+    pub author: &'a str,
+}
+impl Component for CommitList {
+    type Context<'a> = CommitContext<'a>;
+    type Message = CommitsAction;
+    fn handle_key(&self, key: KeyEvent, _: &CommitContext<'_>) -> Option<Action> {
+        let action = match key.code {
+            KeyCode::Char('j') | KeyCode::Down => CommitsAction::MoveSelection(1),
+            KeyCode::Char('k') | KeyCode::Up => CommitsAction::MoveSelection(-1),
+            KeyCode::PageDown => {
+                CommitsAction::MoveSelection(crate::tui::screens::half_page(self.viewport))
+            }
+            KeyCode::PageUp => {
+                CommitsAction::MoveSelection(-crate::tui::screens::half_page(self.viewport))
+            }
+            KeyCode::Enter => CommitsAction::Open,
+            _ => return None,
+        };
+        Some(Action::Commits(action))
+    }
+    fn update(&mut self, action: CommitsAction, ctx: &CommitContext<'_>) -> Option<Action> {
+        let commits = match ctx.data.map(|d| &d.commits) {
+            Some(LoadState::Loaded(c)) => c.as_slice(),
+            _ => &[],
+        };
+        let filtered = self.search.filter_commits(commits);
+        match action {
+            CommitsAction::Back => {
+                self.open_commit = None;
+                return None;
+            }
+            CommitsAction::MoveSelection(delta) => {
+                self.selected = step_index(self.selected, delta, filtered.len());
+                return None;
+            }
+            CommitsAction::StepCommit(delta) => {
+                let next = step_index(self.selected, delta, filtered.len());
+                if next == self.selected {
+                    return None;
+                }
+                self.selected = next;
+            }
+            CommitsAction::Open => {}
+        }
+        let oid = filtered.get(self.selected)?.oid.clone();
+        self.open_commit = Some(oid.clone());
+        self.diff = DiffViewer::default();
+        Some(Action::LoadCommitDiff {
+            pr_id: ctx.pr_id,
+            oid,
+        })
+    }
+    fn render(&mut self, frame: &mut Frame, area: Rect, ctx: &CommitContext<'_>) {
+        if self.open_commit.is_some() {
+            let threads = match ctx.data.map(|d| &d.activity) {
+                Some(LoadState::Loaded(a)) => a.threads.as_slice(),
+                _ => &[],
+            };
+            render_commit_diff(
+                frame,
+                ctx.data,
+                threads,
+                ctx.pending,
+                self,
+                ctx.author,
+                area,
+            );
+        } else {
+            render(frame, ctx.data, self, area);
+        }
+    }
+}
+
+impl CommitList {
+    pub fn update_search(&mut self, action: crate::app::action::SearchAction) {
+        use crate::app::action::SearchAction;
+        self.search.update(
+            action,
+            &crate::tui::components::search_input::SearchContext {
+                highlight: false,
+                matches: 0,
+            },
+        );
+        if !matches!(action, SearchAction::Open | SearchAction::Confirm) {
+            self.selected = 0;
+        }
+    }
 }

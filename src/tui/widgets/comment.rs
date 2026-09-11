@@ -1,15 +1,17 @@
-use chrono::{DateTime, Utc};
-use ratatui::{
-    style::{Color, Modifier, Style},
-    text::{Line, Span},
-};
-
 use crate::{
     domain::{
         comment::{Comment, CommentThread, split_suggestions},
         diff::{Diff, DiffLine},
     },
-    tui::{format, markdown, theme, widgets},
+    tui::{
+        format, theme,
+        widgets::{self, markdown},
+    },
+};
+use chrono::{DateTime, Utc};
+use ratatui::{
+    style::{Color, Modifier, Style},
+    text::{Line, Span},
 };
 
 /// The diff line a thread is anchored to (new- or old-side), if any.
@@ -95,7 +97,7 @@ fn status_rule(label: Vec<Span<'static>>, width: u16, color: Color) -> Line<'sta
     Line::from(spans)
 }
 
-pub(super) fn comment_box(
+pub(in crate::tui) fn comment_box(
     comment: &Comment,
     width: u16,
     now: DateTime<Utc>,
@@ -139,7 +141,7 @@ fn kind_label(comment: &Comment) -> Vec<Span<'static>> {
     }
 }
 
-pub(super) fn comment_thread_box(
+pub(in crate::tui) fn comment_thread_box(
     thread: &CommentThread,
     diff: Option<&Diff>,
     width: u16,
@@ -152,11 +154,14 @@ pub(super) fn comment_thread_box(
     let first = thread.comments.first()?;
     let frame = if active { theme.muted } else { theme.divider };
 
-    let location = thread.anchor.as_ref().and_then(|a| match a.line.or(a.old_line) {
-        Some(l) => Some(format!("{}:{l}", a.path)),
-        None if !a.path.is_empty() => Some(a.path.clone()),
-        None => None,
-    });
+    let location = thread
+        .anchor
+        .as_ref()
+        .and_then(|a| match a.line.or(a.old_line) {
+            Some(l) => Some(format!("{}:{l}", a.path)),
+            None if !a.path.is_empty() => Some(a.path.clone()),
+            None => None,
+        });
     let has_suggestion = thread
         .comments
         .iter()
@@ -193,9 +198,7 @@ pub(super) fn comment_thread_box(
     let mut out: Vec<Line<'static>> = vec![header_line(left, right, width)];
 
     let (snippet, anchor_text) = match (diff, &thread.anchor) {
-        (Some(d), Some(a)) => {
-            diff_snippet(d, &a.path, a.line, a.old_line, width.saturating_sub(2))
-        }
+        (Some(d), Some(a)) => diff_snippet(d, &a.path, a.line, a.old_line, width.saturating_sub(2)),
         _ => Default::default(),
     };
     let pos = anchor_pos(thread).zip(anchor_text.as_deref());

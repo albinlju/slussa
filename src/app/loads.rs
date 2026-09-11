@@ -1,7 +1,7 @@
 use crate::app::{
     App,
     action::LoadedAction,
-    state::{LoadState, PrData},
+    store::{LoadState, PrData},
 };
 
 impl App {
@@ -11,7 +11,7 @@ impl App {
         match action {
             LoadedAction::Prs(r) => {
                 log_outcome("prs", None, &r);
-                self.state.cache.prs.reload(r);
+                self.state.store.cache.prs.reload(r);
             }
             LoadedAction::Commits(pr_id, r) => {
                 log_outcome("commits", Some(pr_id), &r);
@@ -28,7 +28,7 @@ impl App {
             LoadedAction::Activity(pr_id, r) => {
                 log_outcome("activity", Some(pr_id), &r);
                 self.pr_data_mut(pr_id).activity.reload(r);
-                self.state.ui.comment_pending = false;
+                self.state.ui.detail.comment_pending = false;
             }
             LoadedAction::Mergeability(pr_id, r) => {
                 log_outcome("mergeability", Some(pr_id), &r);
@@ -47,8 +47,8 @@ impl App {
                 match r {
                     Ok(()) => self.spawn_load_activity(pr_id),
                     Err(msg) => {
-                        self.state.ui.comment_pending = false;
-                        self.state.ui.error = Some(msg);
+                        self.state.ui.detail.comment_pending = false;
+                        self.state.ui.detail.error = Some(msg);
                     }
                 }
             }
@@ -59,19 +59,19 @@ impl App {
     /// activity, and mergeability so the header reflects it. Shared by both.
     fn pr_state_changed(&mut self, kind: &'static str, pr_id: u64, r: Result<(), String>) {
         log_outcome(kind, Some(pr_id), &r);
-        self.state.ui.comment_pending = false;
+        self.state.ui.detail.comment_pending = false;
         match r {
             Ok(()) => {
                 self.spawn_load_prs();
                 self.spawn_load_activity(pr_id);
                 self.spawn_load_mergeability(pr_id);
             }
-            Err(msg) => self.state.ui.error = Some(msg),
+            Err(msg) => self.state.ui.detail.error = Some(msg),
         }
     }
 
     fn pr_data_mut(&mut self, pr_id: u64) -> &mut PrData {
-        self.state.cache.details.entry(pr_id).or_default()
+        self.state.store.cache.details.entry(pr_id).or_default()
     }
 }
 
@@ -79,5 +79,19 @@ fn log_outcome<T>(kind: &'static str, pr_id: Option<u64>, result: &Result<T, Str
     match result {
         Ok(_) => tracing::debug!("fetch loaded: {kind} pr={pr_id:?}"),
         Err(e) => tracing::warn!("fetch failed: {kind} pr={pr_id:?}: {e}"),
+    }
+}
+
+impl App {
+    pub(super) fn ensure_commit_diff(&mut self, pr_id: u64, oid: String) {
+        let data = self.state.store.cache.details.entry(pr_id).or_default();
+        if data
+            .commit_diffs
+            .entry(oid.clone())
+            .or_insert(LoadState::NotRequested)
+            .start_loading()
+        {
+            self.spawn_load_commit_diff(pr_id, oid);
+        }
     }
 }
