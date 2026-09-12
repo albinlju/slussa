@@ -4,6 +4,11 @@
 (via the `gh` CLI) and Bitbucket Data Center (REST + PAT). You can read, comment,
 review, merge, and decline.
 
+All upcoming features follow the [product and interaction principles](ARCHITECTURE.md#product-and-interaction-principles):
+a calm default view, discoverable contextual actions, focused dialogs, consistent
+keyboard behavior and optional features based on provider capabilities. Feature
+scope includes how users find and leave the interaction, not only the API action.
+
 ---
 
 ## Done
@@ -137,4 +142,3 @@ before treating them as gaps:
 - [ ] **GitLab MR support** via `glab` (mirrors `gh` well).
 - [ ] **Unified cross-provider list** with a provider icon per row.
 - [ ] **Normalized "requirements to merge"** — GitLab approvals, Bitbucket default reviewers / merge checks, GitHub branch protection → one shared model.
-

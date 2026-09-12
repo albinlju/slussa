@@ -57,7 +57,11 @@ pub(in crate::tui) fn key_to_action(
         return Some(Action::Detail(DetailAction::ToggleHelp));
     }
     if state.detail.help_open {
-        return (code == KeyCode::Esc).then_some(Action::Detail(DetailAction::ToggleHelp));
+        return if code == KeyCode::Esc {
+            Some(Action::Detail(DetailAction::ToggleHelp))
+        } else {
+            state.detail.help.handle_key(key, &&[][..])
+        };
     }
 
     // `a` opens the review-verdict menu. Always available — even on your own PR
@@ -68,7 +72,11 @@ pub(in crate::tui) fn key_to_action(
     // `v` runs the batched review: it starts a review the first time, then finishes
     // it (opening the verdict menu) once one's in progress. Line comments made
     // while it's open queue into the review instead of posting.
-    if plain && code == KeyCode::Char('v') && (tab == DetailTab::Overview || tab == DetailTab::Diff)
+    if plain
+        && code == KeyCode::Char('v')
+        && (state.pending_review().is_some()
+            || tab == DetailTab::Overview
+            || tab == DetailTab::Diff)
     {
         return Some(Action::Detail(if state.pending_review().is_some() {
             DetailAction::FinishReview

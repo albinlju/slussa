@@ -730,3 +730,41 @@ fn review_options_follow_capabilities_and_keep_own_pr_restrictions() {
     assert!(app.state.store.operations.is_empty());
     assert!(app.state.store.errors[&42].contains("unavailable"));
 }
+
+#[test]
+fn help_in_both_screens_captures_keys_and_restores_navigation() {
+    for tab in [None, Some(DetailTab::Overview)] {
+        let mut app = app();
+        if let Some(tab) = tab {
+            detail(&mut app, tab);
+        }
+        let screen = app.state.screen;
+        press(&mut app, KeyCode::Char('?'));
+        assert!(app.state.ui.modal_open(&app.state.store, screen));
+        let mut terminal =
+            ratatui::Terminal::new(ratatui::backend::TestBackend::new(40, 12)).unwrap();
+        terminal.draw(|f| tui::render(f, &mut app.state)).unwrap();
+        let selected = app.state.ui.list.selected;
+        for ch in ['/', 'c', 'm', 'j'] {
+            press(&mut app, KeyCode::Char(ch));
+        }
+        assert!(!app.state.ui.list.search.open);
+        assert!(app.state.ui.detail.editor.draft.is_none());
+        assert!(app.state.ui.detail.merge_picker.is_none());
+        assert_eq!(app.state.ui.list.selected, selected);
+        press(&mut app, KeyCode::Esc);
+        assert!(!app.state.ui.modal_open(&app.state.store, screen));
+        assert_eq!(app.state.screen, screen);
+    }
+}
+
+#[test]
+fn pending_review_can_be_finished_from_every_tab_that_shows_the_hint() {
+    for tab in DetailTab::ALL {
+        let mut app = app();
+        detail(&mut app, tab);
+        app.state.store.reviews.entry(42).or_default();
+        press(&mut app, KeyCode::Char('v'));
+        assert!(app.state.ui.detail.review_picker.is_some(), "{tab:?}");
+    }
+}

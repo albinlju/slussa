@@ -1,7 +1,7 @@
 100x30 List
 ┌ Open (1) ────────────────────────────────────────────────────────────────────────────────────────┐
-│  #      Status    Author            Title             CI  Diff        Comments  Reviews  Age     │
-│▶ #42    Open      alice             Component migrati…✓   +1 -1       0         —        today   │
+│  #      Title                                             Author            CI  Reviews  Age     │
+│▶ #42    Component migration                               alice             ✓   —        today   │
 │                                                                                                  │
 │                                                                                                  │
 │                                                                                                  │
@@ -28,7 +28,7 @@
 │                                                                                                  │
 │                                                                                                  │
 └──────────────────────────────────────────────────────────────────────────────────────────────────┘
-  j/k: navigate  /: search  ^d/^u: page  enter: open  f: filter  F: refresh  q: quit ♥ donate    ? h
+  enter: open  /: search  f: filter                                                         ?: help
 100x30 Detail { pr_id: 42, tab: Description }
 ┌──────────────────────────────────────────────────────────────────────────────────────────────────┐
 │  #42 Component migration                                                                         │
@@ -59,7 +59,7 @@
 │                                                                                                  │
 │                                                                                                  │
 └──────────────────────────────────────────────────────────────────────────────────────────────────┘
-                                                                      ♥ donate    ? help    v0.1.0
+  h/l: tabs  j/k: scroll                                                                    ?: help
 100x30 Detail { pr_id: 42, tab: Overview }
 ┌──────────────────────────────────────────────────────────────────────────────────────────────────┐
 │  #42 Component migration                                                                         │
@@ -90,7 +90,7 @@
 │                                                                 │                                │
 │                                                                 │                                │
 └──────────────────────────────────────────────────────────────────────────────────────────────────┘
-  c: comment  a: verdict  v: review  m: merge  x: decline             ♥ donate    ? help    v0.1.0
+  c: comment  a: verdict  v: review  m: merge  x: decline                                   ?: help
 100x30 Detail { pr_id: 42, tab: Diff }
 ┌──────────────────────────────────────────────────────────────────────────────────────────────────┐
 │  #42 Component migration                                                                         │
@@ -121,7 +121,7 @@
 │  │                        │ │                                                                 │  │
 │  ╰────────────────────────╯ ╰─────────────────────────────────────────────────────────────────╯  │
 └──────────────────────────────────────────────────────────────────────────────────────────────────┘
-                                                                      ♥ donate    ? help    v0.1.0
+  enter: code  /: files                                                                     ?: help
 100x30 Detail { pr_id: 42, tab: Commits }
 ┌──────────────────────────────────────────────────────────────────────────────────────────────────┐
 │  #42 Component migration                                                                         │
@@ -152,7 +152,7 @@
 │                                                                                                  │
 │                                                                                                  │
 └──────────────────────────────────────────────────────────────────────────────────────────────────┘
-                                                                      ♥ donate    ? help    v0.1.0
+  enter: open  /: search                                                                    ?: help
 100x30 Detail { pr_id: 42, tab: Builds }
 ┌──────────────────────────────────────────────────────────────────────────────────────────────────┐
 │  #42 Component migration                                                                         │
@@ -183,11 +183,11 @@
 │                                                                                                  │
 │                                                                                                  │
 └──────────────────────────────────────────────────────────────────────────────────────────────────┘
-                                                                      ♥ donate    ? help    v0.1.0
+  h/l: tabs                                                                                 ?: help
 40x12 List
 ┌ Open (1) ────────────────────────────┐
-│  #      Status    Author            …│
-│▶ #42    Open      alice             …│
+│  #      Title                        │
+│▶ #42    Component migration          │
 │                                      │
 │                                      │
 │                                      │
@@ -196,7 +196,7 @@
 │                                      │
 │                                      │
 └──────────────────────────────────────┘
-  j/k: navigate  /: search  ^d/^u: page
+  enter: open  /: search        ?: help
 40x12 Detail { pr_id: 42, tab: Description }
 ┌──────────────────────────────────────┐
 │  #42 Component migration             │
@@ -204,12 +204,12 @@
 │   Open  @alice  wants to merge  fea  │
 │                                      │
 │──────────────────────────────────────│
-│  Description · Overview · Diff · Comm│
+│  1 Description   h/l: tabs           │
 │──────────────────────────────────────│
 │  Review this change.                 │
 │                                      │
 └──────────────────────────────────────┘
-          ♥ donate    ? help    v0.1.0
+  h/l: tabs  j/k: scroll        ?: help
 40x12 Detail { pr_id: 42, tab: Overview }
 ┌──────────────────────────────────────┐
 │  #42 Component migration             │
@@ -217,12 +217,12 @@
 │   Open  @alice  wants to merge  fea  │
 │                                      │
 │──────────────────────────────────────│
-│  Description · Overview · Diff · Comm│
+│  2 Overview   h/l: tabs              │
 │──────────────────────────────────────│
 │  (no activity)                       │
 │                                      │
 └──────────────────────────────────────┘
-  c: comment  a: verdict  v: review  m:
+  c: comment  a: verdict        ?: help
 40x12 Detail { pr_id: 42, tab: Diff }
 ┌──────────────────────────────────────┐
 │  #42 Component migration             │
@@ -230,12 +230,12 @@
 │   Open  @alice  wants to merge  fea  │
 │                                      │
 │──────────────────────────────────────│
-│  Description · Overview · Diff · Comm│
+│  3 Diff   h/l: tabs                  │
 │──────────────────────────────────────│
 │  ╭────────╮ ╭─────────────────────╮  │
 │  ╰────────╯ ╰─────────────────────╯  │
 └──────────────────────────────────────┘
-          ♥ donate    ? help    v0.1.0
+  enter: code  /: files         ?: help
 40x12 Detail { pr_id: 42, tab: Commits }
 ┌──────────────────────────────────────┐
 │  #42 Component migration             │
@@ -243,12 +243,12 @@
 │   Open  @alice  wants to merge  fea  │
 │                                      │
 │──────────────────────────────────────│
-│  Description · Overview · Diff · Comm│
+│  4 Commits   h/l: tabs               │
 │──────────────────────────────────────│
 │  └─ abcdef1  Extract c… alice  +1 -  │
 │                                      │
 └──────────────────────────────────────┘
-          ♥ donate    ? help    v0.1.0
+  enter: open  /: search        ?: help
 40x12 Detail { pr_id: 42, tab: Builds }
 ┌──────────────────────────────────────┐
 │  #42 Component migration             │
@@ -256,9 +256,9 @@
 │   Open  @alice  wants to merge  fea  │
 │                                      │
 │──────────────────────────────────────│
-│  Description · Overview · Diff · Comm│
+│  5 Builds   h/l: tabs                │
 │──────────────────────────────────────│
 │  (no builds reported for this commi  │
 │                                      │
 └──────────────────────────────────────┘
-          ♥ donate    ? help    v0.1.0
+  h/l: tabs                     ?: help

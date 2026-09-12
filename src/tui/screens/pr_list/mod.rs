@@ -31,6 +31,27 @@ use ratatui::{
 };
 
 const GUTTER: u16 = 2;
+const HELP_KEYS: &[(&str, &str)] = &[
+    ("j/k / ↑↓", "move up/down"),
+    ("enter", "open PR"),
+    ("/", "search title / author"),
+    ("esc", "clear search"),
+    ("f", "filter status"),
+    ("^d/^u", "half-page"),
+    ("F", "refresh"),
+    ("? / esc", "close help"),
+    ("q", "quit"),
+];
+
+// Reserve space for the title first; secondary details remain in the PR view.
+fn visible_columns(width: u16) -> &'static [usize] {
+    match width {
+        0..=59 => &[0, 3],
+        60..=89 => &[0, 3, 2, 4],
+        90..=119 => &[0, 3, 2, 4, 7, 8],
+        _ => &[0, 3, 2, 1, 4, 5, 6, 7, 8],
+    }
+}
 
 const COLS: &[Column] = &[
     Column {
@@ -98,11 +119,22 @@ fn render_table_body(
     prs: &[&PullRequest],
     selected: usize,
     area: Rect,
+    columns: &[usize],
 ) {
     let theme = theme::current();
     let items: Vec<ListItem> = prs
         .iter()
-        .map(|pr| ListItem::new(table.row(&row_cells(pr))))
+        .map(|pr| {
+            let cells = row_cells(pr);
+            ListItem::new(
+                table.row(
+                    &columns
+                        .iter()
+                        .map(|&i| cells[i].clone())
+                        .collect::<Vec<_>>(),
+                ),
+            )
+        })
         .collect();
     let mut list_state = ListState::default();
     list_state.select(Some(selected));
@@ -128,9 +160,7 @@ fn render_footer(
     } else {
         widgets::footer(
             area.width,
-            &widgets::hints_on(
-                "j/k: navigate  /: search  ^d/^u: page  enter: open  f: filter  F: refresh  q: quit",
-            ),
+            &widgets::hints_on("enter: open  /: search  f: filter"),
             refreshing,
         )
     };
@@ -267,6 +297,8 @@ fn review_summary(reviewers: &[Reviewer]) -> (String, Color) {
 
 #[derive(Debug, Default)]
 pub struct PrListScreen {
+    pub help_open: bool,
+    pub help: crate::tui::components::help_dialog::HelpDialog,
     pub selected: usize,
     pub viewport: u16,
     pub filter: StatusFilter,
@@ -348,11 +380,20 @@ impl Component for PrListScreen {
             Direction::Vertical,
             [Constraint::Length(1), Constraint::Min(0)],
         );
-        let table = table::Table::new(COLS, inner.width.saturating_sub(GUTTER));
+        let width = inner.width.saturating_sub(GUTTER);
+        let columns = visible_columns(width);
+        let definitions: Vec<_> = columns
+            .iter()
+            .map(|&i| Column {
+                title: COLS[i].title,
+                width: COLS[i].width,
+            })
+            .collect();
+        let table = table::Table::new(&definitions, width);
         render_table_header(frame, &table, header_area);
 
         if let Some(prs) = &filtered {
-            render_table_body(frame, &table, prs, self.selected, rows_area);
+            render_table_body(frame, &table, prs, self.selected, rows_area, columns);
         } else {
             widgets::loaded_or_placeholder(frame, Some(ctx.prs), "pull requests", rows_area);
         }
@@ -366,6 +407,9 @@ impl Component for PrListScreen {
             footer_area,
         );
 
+        if self.help_open {
+            self.help.render(frame, area, &HELP_KEYS);
+        }
         if self.filter_picker_open {
             render_filter_picker(frame, self, area);
         }
@@ -388,9 +432,17 @@ impl Component for PrListScreen {
             };
         }
 
+        if self.help_open {
+            return match key.code {
+                KeyCode::Esc | KeyCode::Char('?') => Some(Action::List(ListAction::ToggleHelp)),
+                KeyCode::Char('q') => Some(Action::Quit),
+                _ => self.help.handle_key(key, &HELP_KEYS),
+            };
+        }
         let half = half_page(self.viewport);
         match key.code {
             KeyCode::Char('q') => Some(Action::Quit),
+            KeyCode::Char('?') => Some(Action::List(ListAction::ToggleHelp)),
             KeyCode::Char('F') => Some(Action::Refresh),
             KeyCode::Char('f') => Some(Action::List(ListAction::OpenFilterPicker)),
             KeyCode::Down | KeyCode::Char('j') => Some(Action::List(ListAction::MoveSelection(1))),
@@ -407,6 +459,10 @@ impl Component for PrListScreen {
 
     fn update(&mut self, action: ListAction, ctx: &ListContext<'_>) -> Option<Action> {
         match action {
+            ListAction::ToggleHelp => {
+                self.help_open = !self.help_open;
+                self.help = crate::tui::components::help_dialog::HelpDialog::default();
+            }
             ListAction::MoveSelection(delta) => {
                 self.selected = step_index(self.selected, delta, self.filtered_prs(ctx.prs).len());
             }

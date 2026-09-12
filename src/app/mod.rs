@@ -130,7 +130,8 @@ impl App {
             Action::Command { pr_id, command } => self.execute(pr_id, command),
             Action::LoadCommitDiff { pr_id, oid } => self.ensure_commit_diff(pr_id, oid),
             Action::Loaded(a) => self.loaded_actions(a),
-            Action::Detail(_)
+            Action::HelpScroll(_)
+            | Action::Detail(_)
             | Action::List(_)
             | Action::Diff(_)
             | Action::Commits(_)
