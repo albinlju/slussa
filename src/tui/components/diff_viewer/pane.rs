@@ -461,7 +461,18 @@ fn render_pane_header(
     let theme = theme::current();
     let inner_w = (area.width as usize).saturating_sub(4);
     let stats_w = format!("+{adds} -{dels}").chars().count();
-    let displayed_path = elide_path_start(path, inner_w.saturating_sub(stats_w + 2));
+    let position = cursor.map(|m| {
+        let (line, removed) = m.anchor();
+        match m.kind {
+            NavKind::Thread { .. } => format!("  {} L{line}", icons::COMMENT),
+            NavKind::Pending { .. } => format!("  {} L{line} (pending)", icons::COMMENT),
+            NavKind::Line { .. } if removed => format!("  L{line} (old)"),
+            NavKind::Line { .. } => format!("  L{line}"),
+        }
+    });
+    let position_width = position.as_ref().map_or(0, |p| Span::raw(p).width());
+    let displayed_path =
+        elide_path_start(path, inner_w.saturating_sub(stats_w + position_width + 2));
 
     let mut left = vec![
         Span::raw("  "),
@@ -470,14 +481,7 @@ fn render_pane_header(
             Style::default().fg(theme.fg).add_modifier(Modifier::BOLD),
         ),
     ];
-    if let Some(m) = cursor {
-        let (line, removed) = m.anchor();
-        let label = match m.kind {
-            NavKind::Thread { .. } => format!("  {} L{line}", icons::COMMENT),
-            NavKind::Pending { .. } => format!("  {} L{line} (pending)", icons::COMMENT),
-            NavKind::Line { .. } if removed => format!("  L{line} (old)"),
-            NavKind::Line { .. } => format!("  L{line}"),
-        };
+    if let Some(label) = position {
         left.push(Span::styled(label, Style::default().fg(theme.muted)));
     }
     let right = vec![
@@ -485,19 +489,28 @@ fn render_pane_header(
         Span::raw(" "),
         Span::styled(format!("-{dels}"), Style::default().fg(theme.diff_removed)),
     ];
-    let line = Line::from(widgets::justify_between(left, right, inner_w + 2));
+    let line = widgets::fitted_row(left, right, area.width.saturating_sub(2) as usize);
     frame.render_widget(Paragraph::new(line), area);
 }
 
 fn elide_path_start(path: &str, max: usize) -> String {
-    let total = path.chars().count();
-    if total <= max || max < 2 {
-        return path.to_string();
+    if max == 0 {
+        return String::new();
     }
-    let keep = max.saturating_sub(1);
-    let skip = total.saturating_sub(keep);
-    let tail: String = path.chars().skip(skip).collect();
-    format!("…{tail}")
+    if Span::raw(path).width() <= max {
+        return path.to_owned();
+    }
+    let mut used = 1;
+    let mut tail = Vec::new();
+    for ch in path.chars().rev() {
+        let width = Span::raw(ch.to_string()).width();
+        if used + width > max {
+            break;
+        }
+        used += width;
+        tail.push(ch);
+    }
+    format!("…{}", tail.into_iter().rev().collect::<String>())
 }
 
 fn highlight_row(line: Line<'static>, row_w: usize) -> Line<'static> {
@@ -528,4 +541,41 @@ fn scroll_to_cursor(current: u16, cursor: Option<&NavItem>, total: usize, visibl
         }
     }
     (scroll as u16).min(max_scroll)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use ratatui::{Terminal, backend::TestBackend};
+
+    #[test]
+    fn long_diff_paths_leave_room_for_position_and_stats() {
+        let path = "src/非常に長いディレクトリ/nested/component.rs";
+        let cursor = NavItem {
+            rendered_row: 0,
+            row_span: 1,
+            kind: NavKind::Line {
+                line: 1234,
+                removed: true,
+            },
+        };
+        for width in [40, 80] {
+            let mut terminal = Terminal::new(TestBackend::new(width, 1)).unwrap();
+            terminal
+                .draw(|frame| render_pane_header(frame, path, 123, 45, Some(&cursor), frame.area()))
+                .unwrap();
+            let text: String = terminal
+                .backend()
+                .buffer()
+                .content
+                .iter()
+                .map(ratatui::buffer::Cell::symbol)
+                .collect();
+            assert!(text.contains("L1234 (old)"));
+            assert!(text.contains("+123 -45"));
+        }
+        for width in 0..60 {
+            assert!(Span::raw(elide_path_start(path, width)).width() <= width);
+        }
+    }
 }

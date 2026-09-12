@@ -33,7 +33,7 @@ pub(in crate::tui) fn render_inline_thread(
 
     // A resolved thread collapses to a one-line summary until expanded (`space`).
     if thread.resolved() && !expanded {
-        return vec![collapse_summary(thread, false, active)];
+        return vec![collapse_summary(thread, false, active, width)];
     }
 
     let pos = anchor_pos(thread).zip(anchor_text);
@@ -44,45 +44,46 @@ pub(in crate::tui) fn render_inline_thread(
 
     let mut out: Vec<Line<'static>> = Vec::new();
     if thread.resolved() {
-        out.push(collapse_summary(thread, true, active));
+        out.push(collapse_summary(thread, true, active, width));
     } else if !has_suggestion {
         out.push(status_rule(status_label(thread.resolved()), width, frame));
     }
-    out.extend(conversation(
-        thread, pos, width, now, author, frame, None, false,
-    ));
+    out.extend(conversation(thread, pos, width, now, author, frame, None, false).0);
     out
 }
 
-/// `▸ ✓ resolved · @author · N comments` — the collapsed/expanded thread header.
-/// Collapsed has no border to mark focus, so the arrow carries it (accent).
-fn collapse_summary(thread: &CommentThread, expanded: bool, active: bool) -> Line<'static> {
+/// Keep disclosure/count stable between states; secondary metadata yields first
+/// in a narrow pane. No additional rows or background are needed for focus.
+fn collapse_summary(
+    thread: &CommentThread,
+    expanded: bool,
+    active: bool,
+    width: u16,
+) -> Line<'static> {
+    if width == 0 {
+        return Line::default();
+    }
     let theme = theme::current();
-    let author = thread
-        .comments
-        .first()
-        .map(|c| c.author.username.clone())
-        .unwrap_or_default();
-    let n = thread.comments.len();
-    let count = if n == 1 {
-        "1 comment".to_string()
+    let count = thread.comments.len();
+    let label = if count == 1 {
+        "1 comment".to_owned()
     } else {
-        format!("{n} comments")
+        format!("{count} comments")
     };
-    // Accent identifies focus; resolved status stays green in either state.
-    let focus_color = if active { theme.accent } else { theme.muted };
-    let resolved_color = theme.success;
-    Line::from(vec![
-        Span::styled(
-            if expanded { "▾ " } else { "▸ " },
-            Style::default().fg(focus_color),
-        ),
-        Span::styled("✓ resolved", Style::default().fg(resolved_color)),
-        Span::styled(
-            format!(" · {author} · {count}"),
-            Style::default().fg(focus_color),
-        ),
-    ])
+    let focus = Style::default().fg(if active { theme.accent } else { theme.fg });
+    let mut spans = vec![
+        Span::styled(if expanded { "⌄ " } else { "› " }, focus),
+        Span::styled(label, focus.add_modifier(Modifier::BOLD)),
+        Span::styled(" · ", Style::default().fg(theme.divider)),
+        Span::styled("✓ resolved", Style::default().fg(theme.success)),
+    ];
+    if let Some(comment) = thread.comments.first() {
+        spans.push(Span::styled(
+            format!(" · @{}", comment.author.username),
+            Style::default().fg(theme.muted),
+        ));
+    }
+    Line::from(widgets::truncate_to_width(spans, width as usize))
 }
 
 fn status_rule(label: Vec<Span<'static>>, width: u16, color: Color) -> Line<'static> {
@@ -147,7 +148,7 @@ pub(in crate::tui) fn comment_thread_box(
     active: bool,
     selected: Option<usize>,
     author: &str,
-) -> Option<Vec<Line<'static>>> {
+) -> Option<(Vec<Line<'static>>, Option<std::ops::Range<usize>>)> {
     let diff = diff.filter(|d| thread.matches_revision(d.revision.as_ref()));
     let theme = theme::current();
     let first = thread.comments.first()?;
@@ -211,14 +212,43 @@ pub(in crate::tui) fn comment_thread_box(
     }
     // The header carries the first comment's author + time, so the conversation
     // skips its meta line to avoid repeating it.
-    out.extend(conversation(
-        thread, pos, width, now, author, frame, selected, true,
-    ));
-    Some(out)
+    let offset = out.len();
+    let (lines, selected_range) =
+        conversation(thread, pos, width, now, author, frame, selected, true);
+    out.extend(lines);
+    let selected_range = selected_range.map(|range| {
+        if selected == Some(0) {
+            0..offset + range.end
+        } else {
+            offset + range.start..offset + range.end
+        }
+    });
+    Some((out, selected_range))
 }
 
 fn header_line(left: Vec<Span<'static>>, right: Vec<Span<'static>>, width: u16) -> Line<'static> {
-    Line::from(widgets::justify_between(left, right, width as usize))
+    let width = width as usize;
+    if width == 0 {
+        return Line::default();
+    }
+    if right.is_empty() {
+        return Line::from(widgets::truncate_to_width(left, width));
+    }
+    // Reserve room for status/time without letting metadata hide the author
+    // entirely in very narrow panes. Measure terminal columns, not bytes.
+    let left_min = 12.min(width / 2);
+    let right = widgets::truncate_to_width(right, width.saturating_sub(left_min).max(1));
+    let right_width: usize = right.iter().map(Span::width).sum();
+    let left_width = width.saturating_sub(right_width + 1);
+    let left = if left_width == 0 {
+        Vec::new()
+    } else {
+        widgets::truncate_to_width(left, left_width)
+    };
+    if left.is_empty() {
+        return Line::from(right);
+    }
+    Line::from(widgets::justify_between(left, right, width))
 }
 
 /// `left` colours the vertical edge (accent marks focus); `rule` colours the
@@ -251,17 +281,19 @@ fn conversation(
     frame: Color,
     selected: Option<usize>,
     skip_first_meta: bool,
-) -> Vec<Line<'static>> {
+) -> (Vec<Line<'static>>, Option<std::ops::Range<usize>>) {
     let theme = theme::current();
     let style = Style::default().fg(frame);
     let last = thread.comments.len().saturating_sub(1);
     let mut out: Vec<Line<'static>> = Vec::new();
+    let mut selected_range = None;
     for (i, comment) in thread.comments.iter().enumerate() {
         // The first comment's author/time live in the box header when requested.
         let suppress = skip_first_meta && i == 0;
         if i > 0 {
             out.push(prefix_gutter(Line::raw(""), "┊ ", style));
         }
+        let start = out.len();
         let meta = if suppress {
             Vec::new()
         } else {
@@ -286,6 +318,9 @@ fn conversation(
                 frame,
                 theme.divider,
             ));
+            if selected == Some(i) {
+                selected_range = Some(start..out.len());
+            }
             continue;
         }
         let (head, body_gutter) = match i {
@@ -309,8 +344,11 @@ fn conversation(
         for line in comment_body(comment, anchor, width.saturating_sub(2)) {
             out.push(prefix_gutter(line, body_gutter, style));
         }
+        if selected == Some(i) {
+            selected_range = Some(start..out.len());
+        }
     }
-    out
+    (out, selected_range)
 }
 
 fn prefix_gutter(line: Line<'static>, gutter: &'static str, style: Style) -> Line<'static> {
@@ -609,4 +647,37 @@ fn diff_snippet(
         })
         .collect();
     (lines, Some(anchor_text))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn long_headers_keep_status_and_time_visible_without_overflow() {
+        let left = vec![Span::styled(
+            "@reviewer commented on src/非常に長いパス/component.rs:123",
+            Style::default().fg(theme::current().link),
+        )];
+        let right = vec![
+            Span::styled("unresolved", Style::default().fg(theme::current().warning)),
+            Span::raw(" · 5 min"),
+        ];
+        for width in [0, 1, 8, 20, 40, 80, 120] {
+            let line = header_line(left.clone(), right.clone(), width);
+            assert!(line.width() <= width as usize);
+            if width >= 40 {
+                assert!(line.to_string().ends_with("unresolved · 5 min"));
+                assert_eq!(
+                    line.spans[line.spans.len() - 2].style.fg,
+                    Some(theme::current().warning)
+                );
+            }
+            if width == 40 {
+                assert!(line.to_string().starts_with("@reviewer"));
+                assert!(line.to_string().contains('…'));
+            }
+            assert!(header_line(left.clone(), vec![], width).width() <= width as usize);
+        }
+    }
 }

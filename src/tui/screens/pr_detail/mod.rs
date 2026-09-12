@@ -115,6 +115,7 @@ impl Component for PrDetailScreen {
                     | DetailAction::ToggleHelp
                     | DetailAction::BuildsScroll(_)
                     | DetailAction::DescriptionScroll(_)
+                    | DetailAction::OverviewScroll(_)
                     | DetailAction::OverviewMove(_)
                     | DetailAction::OverviewSubMove(_)
             )
@@ -144,6 +145,7 @@ impl Component for PrDetailScreen {
                 self.builds.update(action, &None);
             }
             DetailAction::DescriptionScroll(_)
+            | DetailAction::OverviewScroll(_)
             | DetailAction::OverviewMove(_)
             | DetailAction::OverviewSubMove(_) => {
                 let Screen::Detail { pr_id, .. } = ctx.screen else {

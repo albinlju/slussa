@@ -28,9 +28,9 @@ fn render(frame: &mut Frame, pr_data: Option<&PrData>, ui: &mut Builds, area: Re
 }
 
 fn render_builds(frame: &mut Frame, builds: &[Build], ui: &mut Builds, area: Rect) {
-    let width = area.width as usize;
+    let width = area.width.saturating_sub(1) as usize;
     let mut lines: Vec<Line<'static>> = Vec::with_capacity(builds.len() + 2);
-    lines.push(status_summary(builds));
+    lines.push(status_summary(builds, width));
     lines.push(Line::default());
 
     let name_col = builds
@@ -47,7 +47,7 @@ fn render_builds(frame: &mut Frame, builds: &[Build], ui: &mut Builds, area: Rec
     widgets::scrolled_paragraph(frame, lines, &mut ui.scroll, &mut ui.viewport, area);
 }
 
-fn status_summary(builds: &[Build]) -> Line<'static> {
+fn status_summary(builds: &[Build], width: usize) -> Line<'static> {
     let theme = theme::current();
     let stats = build_stats(builds);
     let overall = OverallState::of(&stats);
@@ -70,8 +70,14 @@ fn status_summary(builds: &[Build]) -> Line<'static> {
             Style::default().fg(theme.muted),
         ),
     ];
-    spans.extend(progress_bar(builds));
-    Line::from(spans)
+    if width >= 60 {
+        spans.extend(progress_bar(builds));
+    }
+    if width == 0 {
+        Line::default()
+    } else {
+        Line::from(widgets::truncate_to_width(spans, width))
+    }
 }
 
 fn build_row(build: &Build, name_col: usize, width: usize) -> Line<'static> {
@@ -89,14 +95,16 @@ fn build_row(build: &Build, name_col: usize, width: usize) -> Line<'static> {
             name,
             Style::default().fg(theme.fg).add_modifier(Modifier::BOLD),
         ),
-        Span::raw(" ".repeat(name_pad + 2)),
-        Span::styled(label, Style::default().fg(color)),
+        Span::raw(" ".repeat(name_pad)),
     ];
-    let right = vec![Span::styled(
-        format_duration(build.duration_ms),
-        Style::default().fg(theme.muted),
-    )];
-    Line::from(widgets::justify_between(left, right, width))
+    let mut right = vec![Span::styled(label, Style::default().fg(color))];
+    if width >= 40 {
+        right.push(Span::styled(
+            format!("  {}", format_duration(build.duration_ms)),
+            Style::default().fg(theme.muted),
+        ));
+    }
+    widgets::fitted_row(left, right, width)
 }
 
 fn state_glyph(state: BuildState) -> (&'static str, &'static str) {
@@ -156,5 +164,38 @@ impl crate::tui::component::Component for Builds {
     }
     fn render(&mut self, frame: &mut Frame, area: Rect, data: &Self::Context<'_>) {
         render(frame, *data, self, area);
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn build_rows_preserve_status_before_duration_and_fit_the_view() {
+        for state in [
+            BuildState::Successful,
+            BuildState::Failed,
+            BuildState::InProgress,
+            BuildState::Cancelled,
+            BuildState::Unknown,
+        ] {
+            let build = Build {
+                name: "Integration 非常に長い test suite".into(),
+                state,
+                duration_ms: Some(65000),
+            };
+            for width in [0, 1, 20, 40, 80] {
+                let line = build_row(&build, 30, width);
+                assert!(line.width() <= width);
+                if width >= 20 {
+                    assert!(line.to_string().contains(state_glyph(state).1));
+                }
+                if width >= 40 {
+                    assert!(line.to_string().ends_with("1m05s"));
+                }
+                assert!(status_summary(std::slice::from_ref(&build), width).width() <= width);
+            }
+        }
     }
 }

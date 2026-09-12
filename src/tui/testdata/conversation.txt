@@ -38,7 +38,7 @@
 │──────────────────────────────────────────────────────────────────────────────│
 │  Description · Overview · Diff · Commits · Builds                            │
 │──────────────────────────────────────────────────────────────────────────────│
-│  *─ @alice commented on src/main.rs:1 unr   │ Reviewers                      │
+│  *─ @alice comme… unresolved  ·  just now   │ Reviewers                      │
 │  |  ┌────────────────────────────────────   │ —                              │
 │  |  |   - old                               │                                │
 │  |  | 1 + new                               │ Builds                         │
@@ -67,7 +67,7 @@
 │──────────────────────────────────────│
 │  2 Overview   1-5: tabs              │
 │──────────────────────────────────────│
-│*─ @alice commented on src/main.rs    │
+│*─ @alice com… unresolved  ·  jus…    │
 │|  ┌──────────────────────────────    │
 │|  |   - old                          │
 │|  | 1 + new                          │

@@ -104,21 +104,18 @@ fn render_timeline(
 
     let viewport = area.height as usize;
     let max_scroll = content.len().saturating_sub(viewport) as u16;
-    let scroll = if count <= 1 {
-        // 0 or 1 comments: nothing to jump between — the timeline scrolls freely
-        // (driven by the component) so events above/below stay reachable.
-        ui.scroll
-    } else if cursor == 0 {
-        // On the first comment, pin to the top so newer events above it show.
-        0
-    } else if cursor + 1 == count {
-        // On the last comment, pin to the bottom so trailing events show.
-        max_scroll
-    } else {
+    let scroll = if ui.reveal_selection {
         focused.map_or(ui.scroll, |n| {
-            scroll_to_item(ui.scroll, n.start, n.span, content.len(), viewport)
+            let range = n
+                .selected_range
+                .clone()
+                .unwrap_or(n.start..n.start + n.span);
+            scroll_to_item(ui.scroll, range.start, range.len(), content.len(), viewport)
         })
+    } else {
+        ui.scroll
     };
+    ui.reveal_selection = false;
     ui.scroll = scroll.min(max_scroll);
     ui.viewport = area.height;
 
@@ -137,7 +134,7 @@ fn render_timeline(
 fn scroll_to_item(scroll: u16, start: usize, span: usize, total: usize, viewport: usize) -> u16 {
     let max_scroll = total.saturating_sub(viewport) as u16;
     let start = start as u16;
-    let end = start + (span.max(1) as u16) - 1;
+    let end = start + (span.max(1).min(viewport.max(1)) as u16) - 1;
     let mut s = scroll.min(max_scroll);
     if start < s {
         s = start;
@@ -165,6 +162,7 @@ impl TimelineItem<'_> {
 
 struct TimelineBlock {
     lines: Vec<Line<'static>>,
+    selected_range: Option<std::ops::Range<usize>>,
     /// Colour of the rail node (`*`) for this activity.
     node: Color,
     /// Colour of the dash after the node — tracks the box's left border
@@ -183,6 +181,7 @@ struct TimelineBlock {
 struct ItemNav {
     start: usize,
     span: usize,
+    selected_range: Option<std::ops::Range<usize>>,
     reply_to: Option<u64>,
     focusable: bool,
     comments: Vec<CommentRef>,
@@ -225,6 +224,7 @@ fn build_blocks(
             TimelineItem::Comment(c) => {
                 blocks.push(TimelineBlock {
                     lines: crate::tui::widgets::comment::comment_box(c, width, now, active, author),
+                    selected_range: None,
                     node: theme.link,
                     border: if active { theme.accent } else { theme.divider },
                     reply_to: c.reply_to,
@@ -240,11 +240,14 @@ fn build_blocks(
             TimelineItem::Review(t) => {
                 // Mark the sub-selected comment only on the focused thread.
                 let selected = active.then_some(sub);
-                if let Some(lines) = crate::tui::widgets::comment::comment_thread_box(
-                    t, diff, width, now, active, selected, author,
-                ) {
+                if let Some((lines, selected_range)) =
+                    crate::tui::widgets::comment::comment_thread_box(
+                        t, diff, width, now, active, selected, author,
+                    )
+                {
                     blocks.push(TimelineBlock {
                         lines,
+                        selected_range,
                         node: theme.link,
                         border: if active { theme.accent } else { theme.divider },
                         reply_to: t.reply_to,
@@ -274,6 +277,7 @@ fn build_blocks(
                 let (color, lines) = event_block(e, now);
                 blocks.push(TimelineBlock {
                     lines,
+                    selected_range: None,
                     node: color,
                     border: theme.divider,
                     reply_to: None,
@@ -321,6 +325,7 @@ fn timeline_rail(blocks: Vec<TimelineBlock>) -> (Vec<Line<'static>>, Vec<ItemNav
         navs.push(ItemNav {
             start,
             span,
+            selected_range: block.selected_range.map(|r| start + r.start..start + r.end),
             reply_to: block.reply_to,
             focusable: block.focusable,
             comments: block.comments,
@@ -390,6 +395,7 @@ pub struct Timeline {
     pub block_len: usize,
     pub selected: Option<CommentRef>,
     pub viewport: u16,
+    reveal_selection: bool,
 }
 
 impl Component for Timeline {
@@ -414,14 +420,21 @@ impl Component for Timeline {
         let delta = match key.code {
             KeyCode::Char('j') | KeyCode::Down => 1,
             KeyCode::Char('k') | KeyCode::Up => -1,
-            KeyCode::PageDown => crate::tui::screens::half_page(self.viewport),
-            KeyCode::PageUp => -crate::tui::screens::half_page(self.viewport),
+            KeyCode::PageDown | KeyCode::PageUp => {
+                let delta = crate::tui::screens::half_page(self.viewport)
+                    * if key.code == KeyCode::PageUp { -1 } else { 1 };
+                return Some(Action::Detail(DetailAction::OverviewScroll(delta)));
+            }
             _ => return None,
         };
         Some(Action::Detail(DetailAction::OverviewMove(delta)))
     }
     fn update(&mut self, action: DetailAction, _: &Self::Context<'_>) -> Option<Action> {
         match action {
+            DetailAction::OverviewScroll(delta) => {
+                self.scroll = scroll(self.scroll, delta);
+                self.reveal_selection = false;
+            }
             DetailAction::OverviewMove(delta) => {
                 if self.item_count <= 1 {
                     self.scroll = scroll(self.scroll, delta);
@@ -430,11 +443,14 @@ impl Component for Timeline {
                     if next != self.cursor {
                         self.cursor = next;
                         self.sub = 0;
+                        self.reveal_selection = true;
                     }
                 }
             }
             DetailAction::OverviewSubMove(delta) => {
-                self.sub = step_index(self.sub, delta, self.block_len);
+                let next = step_index(self.sub, delta, self.block_len);
+                self.reveal_selection = next != self.sub;
+                self.sub = next;
             }
             _ => {}
         }

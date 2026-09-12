@@ -60,15 +60,12 @@ pub fn render(frame: &mut Frame, pr_data: Option<&PrData>, cv: &mut CommitList, 
     frame.render_stateful_widget(list, area, &mut list_state);
 }
 
-const COL_GAP: usize = 2;
-const MIN_HEADLINE: usize = 10;
-
 fn commit_row(commit: &Commit, is_last: bool, now: DateTime<Utc>, width: usize) -> Line<'static> {
     let theme = theme::current();
     let graph = if is_last { "└─ " } else { "├─ " };
     let age = format::relative_age(commit.authored_at, now);
 
-    let right = vec![
+    let mut right = vec![
         Span::styled(commit.author_name.clone(), Style::default().fg(theme.info)),
         Span::raw("  "),
         Span::styled(
@@ -81,25 +78,23 @@ fn commit_row(commit: &Commit, is_last: bool, now: DateTime<Utc>, width: usize) 
             Style::default().fg(theme.diff_removed),
         ),
         Span::styled("  · ", Style::default().fg(theme.muted)),
-        Span::styled(age, Style::default().fg(theme.muted)),
+        Span::styled(age.clone(), Style::default().fg(theme.muted)),
     ];
-    let right_w: usize = right.iter().map(Span::width).sum();
-
+    if width < 80 {
+        right = vec![Span::styled(age, Style::default().fg(theme.muted))];
+    }
+    if width < 45 {
+        right.clear();
+    }
     let oid_cell = format!("{}  ", short_oid(&commit.oid));
-    let prefix_w = graph.chars().count() + oid_cell.chars().count();
-    let headline = format::truncate_ellipsis(
-        &commit.headline,
-        width
-            .saturating_sub(prefix_w + right_w + COL_GAP)
-            .max(MIN_HEADLINE),
-    );
+    let headline = commit.headline.clone();
 
     let left = vec![
         Span::styled(graph, Style::default().fg(theme.muted)),
         Span::styled(oid_cell, Style::default().fg(theme.accent)),
         Span::raw(headline),
     ];
-    Line::from(widgets::justify_between(left, right, width))
+    widgets::fitted_row(left, right, width)
 }
 
 pub fn render_commit_diff(
@@ -177,7 +172,12 @@ fn render_commit_banner(frame: &mut Frame, pr_data: Option<&PrData>, oid: &str, 
         Style::default().fg(theme.muted),
     )];
 
-    let line = Line::from(widgets::justify_between(left, right, inner.width as usize));
+    let right = if inner.width < 60 {
+        vec![Span::styled("esc: list", Style::default().fg(theme.muted))]
+    } else {
+        right
+    };
+    let line = widgets::fitted_row(left, right, inner.width as usize);
     frame.render_widget(Paragraph::new(line), inner);
 }
 
@@ -283,6 +283,38 @@ impl CommitList {
         );
         if !matches!(action, SearchAction::Open | SearchAction::Confirm) {
             self.selected = 0;
+        }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn commit_rows_prioritize_title_in_narrow_views() {
+        let now = Utc::now();
+        let commit = Commit {
+            oid: "abcdef123456".into(),
+            headline: "Fix 非常に長い headline with more details".into(),
+            author_name: "a-very-long-author-name".into(),
+            authored_at: now,
+            additions: 1234,
+            deletions: 5678,
+        };
+        for width in [0, 1, 20, 40, 60, 100] {
+            let line = commit_row(&commit, true, now, width);
+            assert!(line.width() <= width);
+            if width >= 20 {
+                assert!(line.to_string().contains("abcdef1"));
+            }
+            if width == 40 {
+                assert!(line.to_string().contains("Fix"));
+                assert!(!line.to_string().contains("author"));
+            }
+            if width >= 80 {
+                assert!(line.to_string().contains("+1234 -5678"));
+            }
         }
     }
 }

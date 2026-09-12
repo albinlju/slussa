@@ -68,6 +68,7 @@ pub enum DetailAction {
     DescriptionScroll(i16),
     BuildsScroll(i16),
     OverviewMove(i16),
+    OverviewScroll(i16),
     ToggleHelp,
     CloseConfirm,
     ConfirmMove(i16),
