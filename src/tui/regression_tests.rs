@@ -158,7 +158,7 @@ fn keyboard_routes_list_diff_commit_and_editor() {
     ));
     assert!(matches!(
         key(&state, KeyCode::Enter),
-        Action::Detail(DetailAction::CommentSubmit)
+        Action::Detail(DetailAction::CommentType('\n'))
     ));
 }
 
@@ -493,5 +493,35 @@ fn compact_detail_tabs_always_show_the_active_tab() {
             text.contains(&format!("{}   h/l: tabs", tab.label())),
             "{tab:?}"
         );
+    }
+}
+
+#[test]
+fn multiline_editor_scrolls_to_cursor_and_keeps_controls_visible() {
+    for (width, height) in [(100, 30), (40, 12)] {
+        let mut state = fixture();
+        state.screen = Screen::Detail {
+            pr_id: 42,
+            tab: DetailTab::Overview,
+        };
+        state.ui.detail.editor.draft = Some(CommentDraft {
+            target: CommentTarget::Pr,
+            text: format!("{}last line 🦀", "earlier line\n".repeat(30)),
+        });
+        let mut terminal = Terminal::new(TestBackend::new(width, height)).unwrap();
+        terminal.draw(|f| render(f, &mut state)).unwrap();
+        let text: String = terminal
+            .backend()
+            .buffer()
+            .content
+            .iter()
+            .map(ratatui::buffer::Cell::symbol)
+            .collect();
+        assert!(text.contains("PR comment"));
+        assert!(text.contains("last line"));
+        assert!(text.contains("newline"));
+        assert!(text.contains("discard"));
+        let cursor = terminal.get_cursor_position().unwrap();
+        assert!(cursor.x < width - 2 && cursor.y < height - 3);
     }
 }

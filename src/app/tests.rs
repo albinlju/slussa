@@ -188,7 +188,7 @@ fn queued_review_survives_navigation_without_crossing_prs() {
     for c in "Please explain".chars() {
         press(&mut app, KeyCode::Char(c));
     }
-    press(&mut app, KeyCode::Enter);
+    send_comment(&mut app);
     assert_eq!(
         app.state.store.reviews[&42].comments[0].text,
         "Please explain"
@@ -218,7 +218,11 @@ fn editor_captures_shortcuts_and_unicode_backspace() {
         "qå"
     );
     press(&mut app, KeyCode::Esc);
-    assert!(app.state.ui.detail.editor.draft.is_none());
+    assert!(!app.state.ui.detail.editor.is_open());
+    assert_eq!(
+        app.state.ui.detail.editor.draft.as_ref().unwrap().text,
+        "qå"
+    );
 }
 
 #[test]
@@ -306,11 +310,11 @@ async fn failed_submission_preserves_draft_and_blocks_duplicate_input() {
     for c in "Keep this draft".chars() {
         press(&mut app, KeyCode::Char(c));
     }
-    press(&mut app, KeyCode::Enter);
+    send_comment(&mut app);
     assert!(app.state.store.operations.contains_key(&42));
     press(&mut app, KeyCode::Char('x'));
     press(&mut app, KeyCode::Backspace);
-    press(&mut app, KeyCode::Enter);
+    send_comment(&mut app);
     assert_eq!(app.state.store.operations.len(), 1);
     assert_eq!(
         app.state.ui.detail.editor.draft.as_ref().unwrap().text,
@@ -331,14 +335,14 @@ async fn failed_submission_preserves_draft_and_blocks_duplicate_input() {
         app.state.store.errors.get(&42).map(String::as_str),
         Some("offline")
     );
-    press(&mut app, KeyCode::Enter); // dismiss error, do not resubmit
+    send_comment(&mut app); // dismiss error, do not resubmit
     assert!(!app.state.store.operations.contains_key(&42));
     assert!(app.state.store.errors.is_empty());
     assert_eq!(
         app.state.ui.detail.editor.draft.as_ref().unwrap().text,
         "Keep this draft"
     );
-    press(&mut app, KeyCode::Enter);
+    send_comment(&mut app);
     app.apply(Action::Loaded(LoadedAction::Commented(42, Ok(()))));
     assert!(app.state.ui.detail.editor.draft.is_none());
 }
@@ -354,7 +358,7 @@ async fn late_completion_only_clears_the_submitting_pr_editor() {
     detail(&mut app, DetailTab::Overview);
     press(&mut app, KeyCode::Char('c'));
     press(&mut app, KeyCode::Char('A'));
-    press(&mut app, KeyCode::Enter);
+    send_comment(&mut app);
     app.open_pr(43);
     app.apply(Action::Detail(DetailAction::SelectTab(DetailTab::Overview)));
     app.apply(Action::Detail(DetailAction::OpenComment));
@@ -529,7 +533,7 @@ async fn escape_during_submission_keeps_request_and_draft_scoped() {
     detail(&mut app, DetailTab::Overview);
     press(&mut app, KeyCode::Char('c'));
     press(&mut app, KeyCode::Char('A'));
-    press(&mut app, KeyCode::Enter);
+    send_comment(&mut app);
     press(&mut app, KeyCode::Esc);
     assert_eq!(app.state.screen, Screen::List);
     assert!(app.state.store.operations.contains_key(&42));
@@ -767,4 +771,120 @@ fn pending_review_can_be_finished_from_every_tab_that_shows_the_hint() {
         press(&mut app, KeyCode::Char('v'));
         assert!(app.state.ui.detail.review_picker.is_some(), "{tab:?}");
     }
+}
+
+fn send_comment(app: &mut App) {
+    app.handle_key(KeyEvent::new(KeyCode::Char('s'), KeyModifiers::CONTROL));
+}
+
+fn recovery_root(name: &str) -> std::path::PathBuf {
+    std::env::temp_dir().join(format!(
+        "tuipr-recovery-{name}-{}-{}",
+        std::process::id(),
+        std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .unwrap()
+            .as_nanos()
+    ))
+}
+fn attach_recovery(app: &mut App, root: &std::path::Path) {
+    let (storage, snapshot) =
+        super::drafts::DraftStorage::open(root, "test-repo/reviewer".into()).unwrap();
+    app.restore_drafts(storage, snapshot);
+}
+
+#[test]
+fn restart_restores_closed_editor_and_discard_removes_it_from_disk() {
+    let root = recovery_root("editor");
+    let mut first = app();
+    attach_recovery(&mut first, &root);
+    detail(&mut first, DetailTab::Overview);
+    press(&mut first, KeyCode::Char('c'));
+    first.apply(Action::Paste("first\r\nsecond 🦀".into()));
+    press(&mut first, KeyCode::Enter);
+    assert!(first.state.store.operations.is_empty());
+    press(&mut first, KeyCode::Esc);
+    drop(first);
+    let mut second = app();
+    attach_recovery(&mut second, &root);
+    detail(&mut second, DetailTab::Description);
+    assert!(!second.state.ui.detail.editor.is_open());
+    press(&mut second, KeyCode::Char('c'));
+    assert!(second.state.ui.detail.editor.is_open());
+    assert_eq!(
+        second.state.ui.detail.editor.draft.as_ref().unwrap().text,
+        "first\nsecond 🦀\n"
+    );
+    second.handle_key(KeyEvent::new(KeyCode::Char('x'), KeyModifiers::CONTROL));
+    press(&mut second, KeyCode::Enter);
+    drop(second);
+    let mut third = app();
+    attach_recovery(&mut third, &root);
+    detail(&mut third, DetailTab::Description);
+    assert!(third.state.ui.detail.editor.draft.is_none());
+    drop(third);
+    std::fs::remove_dir_all(root).unwrap();
+}
+
+#[tokio::test(flavor = "current_thread")]
+async fn interrupted_send_is_journaled_and_success_clears_recovery_data() {
+    let root = recovery_root("send");
+    let mut first = app();
+    attach_recovery(&mut first, &root);
+    detail(&mut first, DetailTab::Overview);
+    press(&mut first, KeyCode::Char('c'));
+    first.apply(Action::Paste("send me".into()));
+    send_comment(&mut first);
+    assert!(first.state.store.operations.contains_key(&42));
+    drop(first);
+    let mut second = app();
+    attach_recovery(&mut second, &root);
+    assert!(second.state.store.operations.is_empty());
+    assert!(second.state.store.errors[&42].contains("may have reached"));
+    detail(&mut second, DetailTab::Overview);
+    press(&mut second, KeyCode::Esc); // acknowledge interrupted request notice
+    press(&mut second, KeyCode::Char('c'));
+    send_comment(&mut second);
+    second.apply(Action::Loaded(LoadedAction::Commented(42, Ok(()))));
+    drop(second);
+    let mut third = app();
+    attach_recovery(&mut third, &root);
+    detail(&mut third, DetailTab::Overview);
+    assert!(third.state.ui.detail.editor.draft.is_none());
+    assert!(third.state.store.uncertain_submissions.is_empty());
+    assert!(third.state.store.errors.is_empty());
+    drop(third);
+    std::fs::remove_dir_all(root).unwrap();
+}
+
+#[test]
+fn journal_failure_prevents_remote_submission_and_keeps_editor() {
+    let root = recovery_root("failure");
+    let mut app = app();
+    attach_recovery(&mut app, &root);
+    detail(&mut app, DetailTab::Overview);
+    press(&mut app, KeyCode::Char('c'));
+    app.apply(Action::Paste("keep me".into()));
+    let file = std::fs::read_dir(&root)
+        .unwrap()
+        .map(|e| e.unwrap().path())
+        .find(|p| p.extension().is_some_and(|e| e == "json"))
+        .unwrap();
+    std::fs::create_dir(file.with_extension("tmp")).unwrap();
+    // No runtime: a remote spawn here would panic, so this verifies the boundary.
+    send_comment(&mut app);
+    assert!(app.state.store.operations.is_empty());
+    assert_eq!(
+        app.state.ui.detail.editor.draft.as_ref().unwrap().text,
+        "keep me"
+    );
+    assert!(app.state.store.errors[&42].starts_with("Not sent:"));
+    assert!(
+        std::fs::read(&file)
+            .unwrap()
+            .windows(7)
+            .any(|s| s == b"keep me")
+    );
+    drop(app);
+    std::fs::remove_dir_all(root).unwrap();
 }

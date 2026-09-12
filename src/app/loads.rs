@@ -87,6 +87,7 @@ impl App {
         }
         match r {
             Ok(()) => {
+                self.state.store.uncertain_submissions.remove(&pr_id);
                 self.state.store.errors.remove(&pr_id);
                 if matches!(operation, Operation::Review) {
                     self.state.store.reviews.remove(&pr_id);
@@ -94,6 +95,7 @@ impl App {
                 self.reload_after_mutation(pr_id);
             }
             Err(msg) => {
+                self.state.store.uncertain_submissions.insert(pr_id);
                 self.state.store.errors.insert(pr_id, msg);
             }
         }

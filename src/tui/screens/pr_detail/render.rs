@@ -223,6 +223,10 @@ pub(super) fn render(
         options: state.review_context().options,
         pending: ctx.store.reviews.get(&pr_id),
     };
+    if ui.editor.is_open() {
+        ui.editor
+            .render(frame, area, &ctx.store.operations.contains_key(&pr_id));
+    }
     if ui.help_open {
         ui.help.render(
             frame,

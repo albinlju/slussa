@@ -41,7 +41,7 @@ impl PrDetailScreen {
             || self.review_picker.is_some()
             || self.merge_picker.is_some()
             || self.help_open
-            || self.editor.draft.is_some()
+            || self.editor.is_open()
     }
 
     pub fn active_diff_view(&self) -> &DiffViewer {
@@ -206,9 +206,17 @@ impl Component for PrDetailScreen {
                 self.confirm = Some(dialogs::confirm::ConfirmDialog::new(ConfirmKind::Decline));
             }
             DetailAction::CommentType(_)
+            | DetailAction::CommentDelete
+            | DetailAction::CommentMove(_)
+            | DetailAction::CommentVertical(_)
+            | DetailAction::CommentHome
+            | DetailAction::CommentEnd
+            | DetailAction::CommentDiscard
+            | DetailAction::CommentDiscardConfirm
+            | DetailAction::CommentKeep
             | DetailAction::CommentBackspace
             | DetailAction::CommentCancel => {
-                self.editor.update(action, &());
+                self.editor.update(action, &false);
             }
             other => return self.interaction(other, ctx),
         }

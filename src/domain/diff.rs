@@ -67,7 +67,7 @@ impl DiffLine {
 }
 
 /// Revision of the diff actually displayed, retained with every comment draft.
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
 pub struct DiffRevision {
     pub head: String,
     pub base: Option<String>,

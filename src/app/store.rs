@@ -9,6 +9,8 @@ use std::collections::{HashMap, HashSet};
 
 #[derive(Debug, Default)]
 pub struct Store {
+    pub draft_error: Option<String>,
+    pub uncertain_submissions: std::collections::BTreeSet<u64>,
     pub operations: HashMap<u64, Operation>,
     pub errors: HashMap<u64, String>,
     pub fetches: HashSet<FetchKey>,

@@ -296,7 +296,7 @@ impl DetailView<'_> {
             | A::RemovePendingComment => caps.reviews(),
             A::OpenMergePicker | A::MergeSelect => !caps.merge_strategies.is_empty(),
             A::OpenDecline => caps.supports(F::ClosePr),
-            A::OpenComment => self.comment_target().is_some(),
+            A::OpenComment => self.detail.editor.draft.is_some() || self.comment_target().is_some(),
             A::OpenReply => self.reply_target().is_some(),
             A::EditComment => caps.supports(F::EditComments),
             A::DeleteComment => caps.supports(F::DeleteComments),

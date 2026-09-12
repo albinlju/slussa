@@ -2,7 +2,7 @@ use crate::domain::review::ReviewVerdict;
 
 pub use crate::domain::review::CommentAnchor;
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
 pub enum CommentTarget {
     Line(CommentAnchor),
     Pr,
@@ -21,14 +21,20 @@ pub enum CommentTarget {
 
 /// A review being assembled before submission. Line comments accumulate here
 /// (only locally — nothing is sent) until a verdict flushes them in one go.
-#[derive(Debug, Default, Clone)]
+#[derive(Debug, Default, Clone, serde::Serialize, serde::Deserialize)]
 pub struct PendingReview {
     pub submitted_summary: Option<String>,
     pub comments: Vec<PendingComment>,
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
 pub struct PendingComment {
     pub anchor: CommentAnchor,
+    pub text: String,
+}
+
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+pub struct CommentDraft {
+    pub target: CommentTarget,
     pub text: String,
 }

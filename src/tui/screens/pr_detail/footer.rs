@@ -6,9 +6,7 @@ use crate::{
     },
     domain::{capabilities::Feature, diff::FileDiff},
     tui::{
-        components::{
-            comment_editor::comment_prompt, diff_viewer::DiffFocus, search_input::SearchInput,
-        },
+        components::{diff_viewer::DiffFocus, search_input::SearchInput},
         screens::pr_detail::{DetailView, tabs::DetailTab},
         theme,
         widgets::{self, Hint},
@@ -29,10 +27,10 @@ pub(super) fn render(
     tab: DetailTab,
     area: Rect,
 ) {
-    let line = if state.operation_pending() {
+    let line = if state.detail.editor.is_open() {
+        Line::default()
+    } else if state.operation_pending() {
         widgets::loading("sending…  Esc: back · q: quit")
-    } else if let Some(draft) = &state.detail.editor.draft {
-        comment_prompt(draft)
     } else if let Some(search) = active_search(state, pr_data, tab, area.width) {
         search
     } else {
@@ -42,6 +40,9 @@ pub(super) fn render(
 }
 
 fn footer_actions(state: &DetailView<'_>, tab: DetailTab) -> Vec<Hint> {
+    if state.detail.editor.draft.is_some() {
+        return widgets::hints_on("c: resume draft");
+    }
     // While a batched review is open, surface its state and finish/discard keys
     // on every tab — line comments queue into it from the Diff too.
     if state.store.capabilities.reviews()

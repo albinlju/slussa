@@ -15,7 +15,7 @@ pub struct Reviewer {
 
 /// A review submission's verdict. `Unapprove` (withdraw approval) is only offered
 /// where a provider supports it — see `Provider::can_unapprove`.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
 pub enum ReviewVerdict {
     Approve,
     RequestChanges,
@@ -51,7 +51,7 @@ pub struct ReviewComment {
     pub body: String,
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
 pub struct CommentAnchor {
     pub revision: Option<crate::domain::diff::DiffRevision>,
     pub path: String,
