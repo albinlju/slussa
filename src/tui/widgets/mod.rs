@@ -288,6 +288,28 @@ pub(super) fn highlight_query(
     Line::from(out)
 }
 
+/// A bounded row: reserve secondary text, then ellipsize the primary text.
+pub(super) fn fitted_row(
+    left: Vec<Span<'static>>,
+    right: Vec<Span<'static>>,
+    width: usize,
+) -> Line<'static> {
+    if width == 0 {
+        return Line::default();
+    }
+    if right.is_empty() {
+        return Line::from(truncate_to_width(left, width));
+    }
+    let right = truncate_to_width(right, width.saturating_sub(12.min(width / 2)).max(1));
+    let right_w: usize = right.iter().map(Span::width).sum();
+    let budget = width.saturating_sub(right_w + 1);
+    if budget == 0 {
+        return Line::from(right);
+    }
+    let left = truncate_to_width(left, budget);
+    Line::from(justify_between(left, right, width))
+}
+
 pub(super) fn justify_between(
     mut left: Vec<Span<'static>>,
     right: Vec<Span<'static>>,

@@ -242,7 +242,7 @@
 │  Open  @alice    ✓ mergeable         │
 │  4 Commits   1-5: tabs               │
 │──────────────────────────────────────│
-│└─ abcdef1  Extract c… alice  +1 -1  ·│
+│└─ abcdef1  Extract components        │
 │                                      │
 │                                      │
 │                                      │

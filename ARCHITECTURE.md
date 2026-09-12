@@ -432,3 +432,21 @@ Variant A is preserved in `docs/ui-examples/reference/variant-a.patch`, relative
 to `6edd115`, with its tests and populated snapshot. The accompanying preview is
 available for layout comparison. The earlier experiment is preserved separately.
 Restore presentation changes selectively when comparing against later work.
+
+### PR detail polish across tabs
+
+Commit rows prioritize the hash and title at compact widths, retain age at medium
+widths and show full metadata when there is room. The open-commit banner reserves
+space for navigation. Build rows reserve status before duration; the summary drops
+its progress bar in narrow views. Diff headers budget for the focused line as well
+as stats before shortening the file path, using terminal column widths.
+
+Overview comment rendering reports the selected comment's row range. Navigation
+reveals that range once, rather than repeatedly scrolling to the end of a whole
+thread. PageUp/PageDown (also Ctrl-u/Ctrl-d) scroll text independently; Ctrl-j/k
+select individual comments. Tall comments are revealed from their start.
+
+Description derives heading, link, quote and code colors from the app theme and
+keeps the terminal background. This is scoped to Description; conversation
+Markdown retains its existing presentation. Regression coverage includes narrow
+rows, Unicode paths, long conversations and Description in all three themes.

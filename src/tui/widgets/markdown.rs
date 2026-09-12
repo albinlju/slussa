@@ -3,21 +3,29 @@ use ratatui::text::Line;
 const GLAMOUR_MARGIN: usize = 2;
 
 pub(in crate::tui) fn render(body: &str, width: u16) -> Vec<Line<'static>> {
-    trim_blank_lines(render_glamour(body, width))
+    trim_blank_lines(render_glamour(
+        body,
+        width,
+        description_style(crate::tui::theme::current()),
+    ))
 }
 
 pub(in crate::tui) fn render_no_margin(body: &str, width: u16) -> Vec<Line<'static>> {
-    let lines = render_glamour(body, width.saturating_add(GLAMOUR_MARGIN as u16));
+    let lines = render_glamour(
+        body,
+        width.saturating_add(GLAMOUR_MARGIN as u16),
+        glamour::Style::Dark.config(),
+    );
     trim_blank_lines(strip_margin(lines, GLAMOUR_MARGIN))
 }
 
-fn render_glamour(body: &str, width: u16) -> Vec<Line<'static>> {
+fn render_glamour(body: &str, width: u16, style: glamour::StyleConfig) -> Vec<Line<'static>> {
     if width == 0 {
         return vec![Line::default()];
     }
     let rendered = std::panic::catch_unwind(|| {
         let ansi = glamour::Renderer::new()
-            .with_style(glamour::Style::Dark)
+            .with_style_config(style)
             .with_word_wrap(width as usize)
             .render(body);
         ansi_to_tui::IntoText::into_text(&ansi).map(|text| text.lines)
@@ -58,4 +66,95 @@ fn trim_blank_lines(mut lines: Vec<Line<'static>>) -> Vec<Line<'static>> {
 
 fn is_blank_line(line: &Line<'static>) -> bool {
     line.spans.is_empty() || line.spans.iter().all(|s| s.content.trim().is_empty())
+}
+
+fn description_style(theme: &crate::tui::theme::Theme) -> glamour::StyleConfig {
+    let mut style = glamour::Style::Dark.config();
+    for block in [
+        &mut style.document,
+        &mut style.paragraph,
+        &mut style.code_block.block,
+    ] {
+        block.style.color = ansi_color(theme.fg);
+        block.style.background_color = None;
+    }
+    for block in [
+        &mut style.heading,
+        &mut style.h1,
+        &mut style.h2,
+        &mut style.h3,
+        &mut style.h4,
+        &mut style.h5,
+        &mut style.h6,
+    ] {
+        block.style.color = ansi_color(theme.accent);
+        block.style.background_color = None;
+        block.style.bold = Some(true);
+    }
+    style.code.style.color = ansi_color(theme.info);
+    style.code.style.background_color = None;
+    style.block_quote.style.color = ansi_color(theme.muted);
+    style.horizontal_rule.color = ansi_color(theme.divider);
+    for primitive in [&mut style.link, &mut style.link_text, &mut style.image] {
+        primitive.color = ansi_color(theme.link);
+    }
+    style.image_text.color = ansi_color(theme.muted);
+    style
+}
+
+fn ansi_color(color: ratatui::style::Color) -> Option<String> {
+    use ratatui::style::Color;
+    Some(match color {
+        Color::Reset => return None,
+        Color::Rgb(r, g, b) => format!("#{r:02x}{g:02x}{b:02x}"),
+        Color::Indexed(index) => index.to_string(),
+        Color::Black => "0".into(),
+        Color::Red => "1".into(),
+        Color::Green => "2".into(),
+        Color::Yellow => "3".into(),
+        Color::Blue => "4".into(),
+        Color::Magenta => "5".into(),
+        Color::Cyan => "6".into(),
+        Color::Gray => "7".into(),
+        Color::DarkGray => "8".into(),
+        Color::LightRed => "9".into(),
+        Color::LightGreen => "10".into(),
+        Color::LightYellow => "11".into(),
+        Color::LightBlue => "12".into(),
+        Color::LightMagenta => "13".into(),
+        Color::LightCyan => "14".into(),
+        Color::White => "15".into(),
+    })
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::tui::theme::{CATPPUCCIN, GRUVBOX, TERMINAL};
+    use ratatui::style::Color;
+
+    #[test]
+    fn description_uses_each_theme_without_colored_backgrounds() {
+        let text = "# Review title\n\nRead [the docs](https://example.com) and `code`.\n\n> Context\n\n```\nlet value = 1;\n```";
+        for theme in [&TERMINAL, &GRUVBOX, &CATPPUCCIN] {
+            for width in [40, 100] {
+                let lines = render_glamour(text, width, description_style(theme));
+                let rendered = lines
+                    .iter()
+                    .map(ToString::to_string)
+                    .collect::<Vec<_>>()
+                    .join("\n");
+                assert!(rendered.contains("Review title"));
+                assert!(rendered.contains("let value = 1;"));
+                for line in &lines {
+                    assert!(line.style.bg.is_none_or(|bg| bg == Color::Reset));
+                    assert!(
+                        line.spans
+                            .iter()
+                            .all(|span| span.style.bg.is_none_or(|bg| bg == Color::Reset))
+                    );
+                }
+            }
+        }
+    }
 }

@@ -901,3 +901,126 @@ fn builds_scroll_to_last_check_in_a_short_terminal() {
     terminal.draw(|f| render(f, &mut state)).unwrap();
     assert!(rendered_text(&terminal).contains("check-29"));
 }
+
+#[test]
+fn diff_fold_keeps_target_and_shows_the_next_action() {
+    use crate::domain::comment::{Comment, CommentThread, ThreadAnchor};
+    for width in [40, 100] {
+        let mut state = fixture();
+        state.screen = Screen::Detail {
+            pr_id: 42,
+            tab: DetailTab::Diff,
+        };
+        state.store.cache.details.get_mut(&42).unwrap().activity = LoadState::Loaded(Activity {
+            comments: vec![],
+            events: vec![],
+            threads: vec![CommentThread {
+                comments: vec![Comment {
+                    id: Some(10),
+                    author: User {
+                        username: "alice".into(),
+                    },
+                    content: "Keep the error context.".into(),
+                    created: chrono::Utc::now(),
+                    reactions: vec![],
+                    reply_to: Some(10),
+                }],
+                reply_to: Some(10),
+                anchor: Some(ThreadAnchor {
+                    revision: None,
+                    path: "src/main.rs".into(),
+                    line: Some(1),
+                    old_line: None,
+                    resolved: true,
+                    node_id: Some("thread-10".into()),
+                }),
+            }],
+        });
+        let mut terminal = Terminal::new(TestBackend::new(width, 30)).unwrap();
+        terminal.draw(|frame| render(frame, &mut state)).unwrap();
+        local_key(&mut state, KeyCode::Char('j'));
+        terminal.draw(|frame| render(frame, &mut state)).unwrap();
+        local_key(&mut state, KeyCode::Enter);
+        terminal.draw(|frame| render(frame, &mut state)).unwrap();
+        for _ in 0..2 {
+            local_key(&mut state, KeyCode::Char('j'));
+            terminal.draw(|frame| render(frame, &mut state)).unwrap();
+        }
+        let folded = rendered_text(&terminal);
+        assert!(
+            folded.contains("› 1 comment · ✓ resolved"),
+            "{width}: {folded}"
+        );
+        assert!(folded.contains("space: expand thread"));
+        assert!(!folded.contains("Keep the error context."));
+        assert_eq!(state.ui.detail.diff.pane_reply, Some(10));
+        local_key(&mut state, KeyCode::Char(' '));
+        terminal.draw(|frame| render(frame, &mut state)).unwrap();
+        let expanded = rendered_text(&terminal);
+        assert!(expanded.contains("⌄ 1 comment · ✓ resolved"));
+        assert!(expanded.contains("space: collapse thread"));
+        assert!(expanded.contains("Keep the error context."));
+        assert_eq!(state.ui.detail.diff.pane_reply, Some(10));
+        local_key(&mut state, KeyCode::Char(' '));
+        terminal.draw(|frame| render(frame, &mut state)).unwrap();
+        assert_eq!(rendered_text(&terminal), folded);
+    }
+}
+
+#[test]
+fn overview_reveals_selected_reply_and_allows_scrolling_long_text() {
+    use crate::domain::comment::{Comment, CommentThread};
+    let mut state = fixture();
+    state.screen = Screen::Detail {
+        pr_id: 42,
+        tab: DetailTab::Overview,
+    };
+    let now = chrono::Utc::now();
+    let comment = |id, text: String| Comment {
+        id: Some(id),
+        author: User {
+            username: "alice".into(),
+        },
+        content: text,
+        created: now,
+        reactions: vec![],
+        reply_to: Some(10),
+    };
+    state.store.cache.details.get_mut(&42).unwrap().activity = LoadState::Loaded(Activity {
+        comments: vec![comment(20, "Another discussion".into())],
+        events: vec![],
+        threads: vec![CommentThread {
+            comments: vec![
+                comment(10, "Long comment paragraph.\n\n".repeat(35)),
+                comment(11, "Selected reply is visible".into()),
+            ],
+            reply_to: Some(10),
+            anchor: None,
+        }],
+    });
+    let mut terminal = Terminal::new(TestBackend::new(60, 16)).unwrap();
+    terminal.draw(|frame| render(frame, &mut state)).unwrap();
+    // The standalone comment sorts first; move to the long thread.
+    local_key(&mut state, KeyCode::Char('j'));
+    terminal.draw(|frame| render(frame, &mut state)).unwrap();
+    assert!(rendered_text(&terminal).contains("Long comment paragraph."));
+    let scroll = state.ui.detail.overview.timeline.scroll;
+    local_key(&mut state, KeyCode::PageDown);
+    terminal.draw(|frame| render(frame, &mut state)).unwrap();
+    assert!(state.ui.detail.overview.timeline.scroll > scroll);
+    let action = key_to_action(
+        &state,
+        KeyEvent::new(KeyCode::Char('j'), KeyModifiers::CONTROL),
+    )
+    .unwrap();
+    state.ui.update(action, &state.store, state.screen);
+    terminal.draw(|frame| render(frame, &mut state)).unwrap();
+    assert!(rendered_text(&terminal).contains("Selected reply is visible"));
+    assert_eq!(
+        state.ui.detail.overview.timeline.selected.unwrap().id,
+        Some(11)
+    );
+    let stable = state.ui.detail.overview.timeline.scroll;
+    terminal.draw(|frame| render(frame, &mut state)).unwrap();
+    assert_eq!(state.ui.detail.overview.timeline.scroll, stable);
+}

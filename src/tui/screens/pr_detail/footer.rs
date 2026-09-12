@@ -151,6 +151,19 @@ fn footer_actions(state: &DetailView<'_>, tab: DetailTab) -> Vec<Hint> {
             return hints;
         }
         let mut hints = vec![Hint::on("h: files")];
+        if let Some(thread) = view.pane_thread.as_ref().filter(|thread| thread.resolved)
+            && let Some(id) = thread.comment_id
+        {
+            hints.insert(
+                0,
+                Hint::on(if view.expanded_threads.contains(&id) {
+                    "space: collapse thread"
+                } else {
+                    "space: expand thread"
+                }),
+            );
+        }
+
         match state.comment_target() {
             Some(CommentTarget::Reply(_)) => hints.push(Hint::on("r: reply")),
             Some(_) => hints.push(Hint::on("c: comment")),
@@ -166,13 +179,6 @@ fn footer_actions(state: &DetailView<'_>, tab: DetailTab) -> Vec<Hint> {
             } else {
                 "R: resolve thread"
             }));
-        }
-        if view
-            .pane_thread
-            .as_ref()
-            .is_some_and(|thread| thread.resolved)
-        {
-            hints.push(Hint::on("space: fold thread"));
         }
         hints.push(Hint::on("/: search"));
         return hints;
