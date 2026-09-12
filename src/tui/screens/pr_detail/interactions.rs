@@ -145,7 +145,7 @@ impl PrDetailScreen {
             DetailAction::MergeSelect => Command::Merge(
                 self.merge_picker
                     .take()?
-                    .selected(&ctx.store.merge_strategies)?,
+                    .selected(&ctx.store.capabilities.merge_strategies)?,
             ),
             DetailAction::SubmitConfirm => match self.confirm.take()?.accepted()? {
                 ConfirmKind::Decline => Command::Decline,

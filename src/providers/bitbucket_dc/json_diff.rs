@@ -7,6 +7,12 @@ use crate::providers::error::FetchError;
 
 #[derive(Debug, Deserialize)]
 struct BbDiffResponse {
+    #[serde(rename = "fromHash", default)]
+    from_hash: Option<String>,
+    #[serde(rename = "toHash", default)]
+    to_hash: Option<String>,
+    #[serde(default)]
+    truncated: bool,
     #[serde(default)]
     diffs: Vec<BbFileDiff>,
 }
@@ -65,11 +71,21 @@ pub(super) fn fetch_commit(config: &Config, oid: &str) -> Result<Diff, FetchErro
         "/rest/api/1.0/projects/{}/repos/{}/commits/{oid}/diff",
         config.repo.project_key, config.repo.repo_slug
     );
-    fetch_path(config, &path)
+    let mut diff = fetch_path(config, &path)?;
+    if let Some(revision) = &mut diff.revision {
+        revision.commit = true;
+    }
+    Ok(diff)
 }
 
 fn fetch_path(config: &Config, path: &str) -> Result<Diff, FetchError> {
     let response: BbDiffResponse = get_json(&config.repo.base_url, path, &config.pat)?;
+    if response.truncated {
+        return Err(FetchError::InvalidInput(
+            "The server truncated this diff. Open it in Bitbucket to review the full change."
+                .into(),
+        ));
+    }
     Ok(project(response))
 }
 
@@ -114,7 +130,16 @@ fn project(response: BbDiffResponse) -> Diff {
         files.push(FileDiff { path, hunks });
     }
 
-    Diff { files }
+    Diff {
+        files,
+        revision: response
+            .to_hash
+            .map(|head| crate::domain::diff::DiffRevision {
+                head,
+                base: response.from_hash,
+                commit: false,
+            }),
+    }
 }
 
 #[cfg(test)]

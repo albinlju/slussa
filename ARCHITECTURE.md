@@ -119,19 +119,24 @@ Ratatui `Widget` and borrows its data without owning navigation state.
 Review and editor drafts are in-memory session data, not persisted to disk.
 Submission retains the draft and queued review comments until success. While a
 mutation is pending, another mutation or editor change for that PR is blocked.
+`Esc` leaves the detail screen with the draft retained; `q` exits. Neither action
+claims to cancel a server write. Runtime shutdown does not wait for provider
+workers, and `gh` processes and their I/O have a 60-second deadline.
 An error leaves the payload available for an explicit retry and is shown only
 on its own PR. Errors capture input before the retained editor.
 
 Provider writes still cannot guarantee exactly-once delivery: an ambiguous
 network failure may follow a successful server write. Bitbucket full reviews
-also submit multiple requests; a failed batch can have already posted some
-comments. Retaining the payload prevents data loss but does not deduplicate
-those posts on retry. There is no automatic retry.
+also submit multiple requests. Partial failures report acknowledged line comments
+and summary posts; the app removes those lines from the remaining queue and
+remembers a sent summary so an explicit retry skips it. A post whose response
+was lost still needs server-side checking before retry. There is no automatic
+retry.
 
 ## Input, updates and effects
 
 ```text
-terminal key
+terminal key (applied synchronously before the next key)
   → editor / modal / search / active screen / focused child
   → Action
   → Ui.update
@@ -152,7 +157,9 @@ to screens. List and commit search resets live in their respective components. T
 on that explicit modal/focus priority: an ignored key in a modal does not fall
 through to content behind it.
 
-The action channel and provider tasks remain centralized. Components never
+The action channel carries asynchronous results; local key actions are applied
+immediately so rapid input cannot use stale selection or dialog state.
+Provider tasks remain centralized. Components never
 start requests during rendering. Opening a commit emits a
 `LoadCommitDiff { pr_id, oid }` request; the app checks the cache before spawning
 work. Opening a PR similarly starts only missing initial loads.
@@ -166,8 +173,17 @@ from the OS keyring and blocking HTTP calls. `fetchers.rs` runs both providers
 through `spawn_blocking` and returns results through the action channel.
 
 Each provider keeps its DTOs and mapping private. `domain/` models what the UI
-needs without provider-specific serialization details. Provider requests and
-wire formats are unchanged by the component migration.
+needs without provider-specific serialization details. `DiffRevision` records the
+source/base of the displayed diff and travels with `CommentAnchor` (owned by
+`domain/review`) into each queued/submitted comment. GitHub checks both PR refs
+before and after loading a PR diff and sends the captured commit id. A GitHub
+batch spanning multiple diff revisions fails explicitly instead of rebasing
+comments onto the latest HEAD. Bitbucket uses the diff response hashes and its
+COMMIT/EFFECTIVE anchor type. Unknown revisions cannot be posted.
+Queued comments from another diff revision are not drawn on the current one.
+Fetched threads also retain their revision. Diff placement and Overview code
+excerpts require a matching revision; outdated comments remain visible without
+a misleading excerpt.
 
 ## Refresh and loading
 
@@ -186,8 +202,13 @@ is not missed. Successful mutations refresh activity, PR metadata and
 mergeability. Read completions never acknowledge pending mutations.
 
 UI modal detection is shared by keyboard routing and periodic/manual refresh,
-including review and merge pickers. Complete provider pagination remains
-separate follow-up work.
+including review and merge pickers. Bitbucket collections follow `nextPageStart`
+until `isLastPage`; GitHub connections follow GraphQL cursors, including nested
+thread comments, labels and latest reviews. Nonadvancing/missing continuation
+cursors fail the load rather than silently returning a partial collection.
+GitHub build details load check runs and legacy statuses with REST pagination.
+Bitbucket diffs explicitly marked truncated fail with an explanatory message.
+Provider-side limits and server/version compatibility still require live checks.
 
 ## Verification and adding behavior
 
@@ -215,3 +236,35 @@ from `app/reviews`, tab identities from `pr_detail/tabs`, and editor drafts from
 application effects do not query UI state.
 
 Run `cargo clippy --all-targets --locked -- -D warnings` alongside the tests.
+
+## Provider flow verification
+
+Local regression coverage is supplemented by a GitHub live run against
+`albinlju/prtest`. See [PR_FLOW_VERIFICATION.md](PR_FLOW_VERIFICATION.md) for
+passed flows, defects fixed during the run, evidence and remaining checks.
+Bitbucket live verification is pending.
+The payload changes follow the [GitHub review-comment API](https://docs.github.com/en/rest/pulls/comments),
+[GitHub review API](https://docs.github.com/en/rest/pulls/reviews) and
+[Bitbucket Data Center API](https://developer.atlassian.com/server/bitbucket/rest/v900/api-group-pull-requests/).
+
+## Optional provider features
+
+`domain/capabilities.rs` describes adapter support independently of provider
+names. `Provider::capabilities()` supplies the profile stored in `Store`.
+The default profile exposes only the core reading flows: PRs, descriptions,
+activity, diffs and commits. Optional features include comment operations,
+thread resolution, build details, mergeability, closing, review verdicts and
+merge strategies. Unsupported features are hidden in tabs, footer hints and
+help, blocked in keyboard/action handling, and checked again before commands
+execute. Optional builds/mergeability fetches are skipped too.
+
+Review submission semantics are explicit: GitHub requires a single revision
+for an atomic review; Bitbucket submits sequentially with partial-progress
+recovery. Unapprove is offered by the Bitbucket adapter only. Components use
+capabilities rather than branching on the provider enum. New adapters can
+expose their supported subset without adopting GitHub's complete feature set.
+
+Support is distinct from permission or PR state: a supported action can remain
+visible but disabled with a reason (for example approving your own PR or
+merging a closed PR). Profiles currently describe implemented adapter support;
+repository permissions and server-version feature discovery are not probed.

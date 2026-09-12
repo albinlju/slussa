@@ -28,9 +28,7 @@ fn app() -> App {
 }
 
 fn press(app: &mut App, code: KeyCode) {
-    if let Some(action) = tui::key_to_action(&app.state, KeyEvent::new(code, KeyModifiers::NONE)) {
-        app.apply(action);
-    }
+    app.handle_key(KeyEvent::new(code, KeyModifiers::NONE));
 }
 
 fn detail(app: &mut App, tab: DetailTab) {
@@ -181,6 +179,7 @@ fn queued_review_survives_navigation_without_crossing_prs() {
     press(&mut app, KeyCode::Char('v'));
     app.state.ui.detail.diff.focus = DiffFocus::Pane;
     app.state.ui.detail.diff.pane_anchor = Some(CommentAnchor {
+        revision: None,
         path: "src/main.rs".into(),
         line: 1,
         removed: false,
@@ -311,7 +310,6 @@ async fn failed_submission_preserves_draft_and_blocks_duplicate_input() {
     assert!(app.state.store.operations.contains_key(&42));
     press(&mut app, KeyCode::Char('x'));
     press(&mut app, KeyCode::Backspace);
-    press(&mut app, KeyCode::Esc);
     press(&mut app, KeyCode::Enter);
     assert_eq!(app.state.store.operations.len(), 1);
     assert_eq!(
@@ -383,8 +381,10 @@ async fn failed_review_and_error_stay_with_their_pr_until_success() {
     app.state.store.reviews.insert(
         42,
         PendingReview {
+            submitted_summary: None,
             comments: vec![PendingComment {
                 anchor: CommentAnchor {
+                    revision: None,
                     path: "file.rs".into(),
                     line: 1,
                     removed: false,
@@ -521,4 +521,212 @@ fn detail_emits_resolved_commands_and_retains_submission_payload() {
         })
     ));
     assert!(app.state.ui.detail.confirm.is_none());
+}
+
+#[tokio::test(flavor = "current_thread")]
+async fn escape_during_submission_keeps_request_and_draft_scoped() {
+    let mut app = app();
+    detail(&mut app, DetailTab::Overview);
+    press(&mut app, KeyCode::Char('c'));
+    press(&mut app, KeyCode::Char('A'));
+    press(&mut app, KeyCode::Enter);
+    press(&mut app, KeyCode::Esc);
+    assert_eq!(app.state.screen, Screen::List);
+    assert!(app.state.store.operations.contains_key(&42));
+    app.apply(Action::Loaded(LoadedAction::Commented(
+        42,
+        Err("timeout".into()),
+    )));
+    press(&mut app, KeyCode::Enter);
+    assert_eq!(app.state.ui.detail.editor.draft.as_ref().unwrap().text, "A");
+    assert_eq!(app.state.detail_view().error(), Some("timeout"));
+}
+
+#[tokio::test(flavor = "current_thread")]
+async fn partial_review_removes_confirmed_posts_and_remembers_sent_summary() {
+    use crate::app::{
+        reviews::{PendingComment, PendingReview},
+        store::Operation,
+    };
+    let mut app = app();
+    detail(&mut app, DetailTab::Overview);
+    let comment = |text: &str| PendingComment {
+        anchor: CommentAnchor {
+            revision: None,
+            path: "f".into(),
+            line: 1,
+            removed: false,
+        },
+        text: text.into(),
+    };
+    app.state.store.reviews.insert(
+        42,
+        PendingReview {
+            submitted_summary: None,
+            comments: vec![comment("sent"), comment("remaining")],
+        },
+    );
+    app.state.store.operations.insert(42, Operation::Review);
+    app.apply(Action::Loaded(LoadedAction::ReviewFailed {
+        pr_id: 42,
+        posted_comments: 1,
+        submitted_summary: Some("summary".into()),
+        message: "offline".into(),
+    }));
+    let review = &app.state.store.reviews[&42];
+    assert_eq!(review.comments.len(), 1);
+    assert_eq!(review.comments[0].text, "remaining");
+    assert_eq!(review.submitted_summary.as_deref(), Some("summary"));
+    assert!(!app.state.store.operations.contains_key(&42));
+}
+
+#[tokio::test(flavor = "current_thread")]
+async fn rapid_keys_open_the_latest_selection_and_capture_editor_text() {
+    let mut app = app();
+    if let LoadState::Loaded(prs) = &mut app.state.store.cache.prs {
+        let mut second = prs[0].clone();
+        second.id = 43;
+        let mut third = prs[0].clone();
+        third.id = 44;
+        prs.extend([second, third]);
+    }
+    for key in [
+        KeyCode::Char('j'),
+        KeyCode::Char('j'),
+        KeyCode::Enter,
+        KeyCode::Char('2'),
+        KeyCode::Char('c'),
+        KeyCode::Char('q'),
+    ] {
+        assert!(!app.handle_key(KeyEvent::new(key, KeyModifiers::NONE)));
+    }
+    assert!(matches!(app.state.screen, Screen::Detail { pr_id: 44, .. }));
+    assert_eq!(app.state.ui.detail.editor.draft.as_ref().unwrap().text, "q");
+}
+
+#[test]
+fn reply_shortcut_in_diff_opens_editor_for_the_focused_thread() {
+    let mut app = app();
+    detail(&mut app, DetailTab::Diff);
+    app.state.ui.detail.diff.focus = DiffFocus::Pane;
+    app.state.ui.detail.diff.pane_reply = Some(987);
+    press(&mut app, KeyCode::Char('r'));
+    assert!(matches!(
+        app.state.ui.detail.editor.draft.as_ref().unwrap().target,
+        CommentTarget::Reply(987)
+    ));
+}
+
+#[test]
+fn read_only_capabilities_block_shortcuts_commands_and_optional_loads() {
+    use crate::domain::{capabilities::Capabilities, pr::MergeStrategy, review::ReviewVerdict};
+    let mut app = app();
+    app.state.store.capabilities = Capabilities::default();
+    let data = app.state.store.cache.details.get_mut(&42).unwrap();
+    data.builds = LoadState::NotRequested;
+    data.mergeability = LoadState::NotRequested;
+    detail(&mut app, DetailTab::Overview);
+    for ch in ['c', 'r', 'a', 'v', 'm', 'x', 'e', 'd', 'R', '5'] {
+        press(&mut app, KeyCode::Char(ch));
+    }
+    assert!(app.state.ui.detail.editor.draft.is_none());
+    assert!(app.state.ui.detail.review_picker.is_none());
+    assert!(app.state.ui.detail.merge_picker.is_none());
+    assert!(app.state.ui.detail.confirm.is_none());
+    assert_eq!(
+        app.state.screen,
+        Screen::Detail {
+            pr_id: 42,
+            tab: DetailTab::Overview
+        }
+    );
+    let data = &app.state.store.cache.details[&42];
+    assert!(matches!(data.builds, LoadState::NotRequested));
+    assert!(matches!(data.mergeability, LoadState::NotRequested));
+    detail(&mut app, DetailTab::Commits);
+    app.apply(Action::Detail(DetailAction::NextTab));
+    assert_eq!(
+        app.state.screen,
+        Screen::Detail {
+            pr_id: 42,
+            tab: DetailTab::Description
+        }
+    );
+    app.apply(Action::Detail(DetailAction::PrevTab));
+    assert_eq!(
+        app.state.screen,
+        Screen::Detail {
+            pr_id: 42,
+            tab: DetailTab::Commits
+        }
+    );
+    for command in [
+        Command::StartReview,
+        Command::SubmitReview {
+            verdict: ReviewVerdict::Comment,
+            body: "summary".into(),
+        },
+        Command::SubmitComment {
+            target: CommentTarget::Pr,
+            text: "comment".into(),
+        },
+        Command::Merge(MergeStrategy::Merge),
+        Command::Decline,
+        Command::DeleteComment {
+            id: 1,
+            review: false,
+        },
+        Command::ResolveThread {
+            node_id: Some("thread".into()),
+            comment_id: Some(1),
+            resolved: true,
+        },
+    ] {
+        app.state.store.errors.clear();
+        app.execute(42, command);
+        assert!(app.state.store.errors[&42].contains("not supported"));
+        assert!(app.state.store.operations.is_empty());
+        assert!(app.state.store.reviews.is_empty());
+    }
+}
+
+#[test]
+fn review_options_follow_capabilities_and_keep_own_pr_restrictions() {
+    use crate::domain::review::ReviewVerdict;
+    let mut app = app();
+    detail(&mut app, DetailTab::Overview);
+    assert!(
+        !app.state
+            .detail_view()
+            .review_verdicts()
+            .contains(&ReviewVerdict::Unapprove)
+    );
+    app.state
+        .store
+        .capabilities
+        .review_verdicts
+        .push(ReviewVerdict::Unapprove);
+    assert!(
+        app.state
+            .detail_view()
+            .review_verdicts()
+            .contains(&ReviewVerdict::Unapprove)
+    );
+    app.state.store.current_user = "alice".into();
+    let options = app.state.detail_view().review_context().options;
+    assert!(options.contains(&(ReviewVerdict::Comment, None)));
+    assert!(
+        options
+            .iter()
+            .any(|(v, reason)| *v == ReviewVerdict::Approve && reason.is_some())
+    );
+    app.execute(
+        42,
+        Command::SubmitReview {
+            verdict: ReviewVerdict::Approve,
+            body: String::new(),
+        },
+    );
+    assert!(app.state.store.operations.is_empty());
+    assert!(app.state.store.errors[&42].contains("unavailable"));
 }

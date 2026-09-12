@@ -68,16 +68,18 @@ impl Component for PrDetailScreen {
         key: ratatui::crossterm::event::KeyEvent,
         ctx: &DetailContext<'_>,
     ) -> Option<crate::app::action::Action> {
-        keys::key_to_action(
-            &DetailView {
-                detail: self,
-                store: ctx.store,
-                screen: ctx.screen,
-                refreshing: ctx.refreshing,
-            },
-            key,
-        )
+        let view = DetailView {
+            detail: self,
+            store: ctx.store,
+            screen: ctx.screen,
+            refreshing: ctx.refreshing,
+        };
+        keys::key_to_action(&view, key).filter(|action| match action {
+            crate::app::action::Action::Detail(action) => view.supports_action(*action),
+            _ => true,
+        })
     }
+
     fn render(&mut self, frame: &mut Frame, area: Rect, ctx: &DetailContext<'_>) {
         render::render(self, frame, area, ctx);
     }
@@ -87,6 +89,16 @@ impl Component for PrDetailScreen {
         ctx: &DetailContext<'_>,
     ) -> Option<crate::app::action::Action> {
         use crate::app::action::{Action, DetailAction};
+        if !(DetailView {
+            detail: self,
+            store: ctx.store,
+            screen: ctx.screen,
+            refreshing: ctx.refreshing,
+        })
+        .supports_action(action)
+        {
+            return None;
+        }
         if let Screen::Detail { pr_id, .. } = ctx.screen
             && ctx.store.operations.contains_key(&pr_id)
             && !matches!(
@@ -114,8 +126,8 @@ impl Component for PrDetailScreen {
                     return None;
                 };
                 let tab = match action {
-                    DetailAction::NextTab => tab.next(),
-                    DetailAction::PrevTab => tab.prev(),
+                    DetailAction::NextTab => tab.step(1, &ctx.store.capabilities),
+                    DetailAction::PrevTab => tab.step(-1, &ctx.store.capabilities),
                     DetailAction::SelectTab(tab) => tab,
                     _ => unreachable!(),
                 };
@@ -137,8 +149,14 @@ impl Component for PrDetailScreen {
                             self.description.update(action, &pr);
                         }
                         _ => {
-                            self.overview
-                                .update(action, &(pr, ctx.store.cache.details.get(&pr_id)));
+                            self.overview.update(
+                                action,
+                                &crate::tui::screens::pr_detail::tabs::overview::OverviewContext {
+                                    pr,
+                                    data: ctx.store.cache.details.get(&pr_id),
+                                    capabilities: &ctx.store.capabilities,
+                                },
+                            );
                         }
                     }
                 }
@@ -169,13 +187,14 @@ impl Component for PrDetailScreen {
             }
             DetailAction::CloseReviewPicker => self.review_picker = None,
             DetailAction::OpenMergePicker => {
-                if !ctx.store.merge_strategies.is_empty() {
+                if !ctx.store.capabilities.merge_strategies.is_empty() {
                     self.merge_picker = Some(dialogs::merge::MergeDialog::default());
                 }
             }
             DetailAction::MergeMove(_) => {
                 if let Some(dialog) = &mut self.merge_picker {
-                    return dialog.update(action, &ctx.store.merge_strategies.as_slice());
+                    return dialog
+                        .update(action, &ctx.store.capabilities.merge_strategies.as_slice());
                 }
             }
             DetailAction::CloseMergePicker => self.merge_picker = None,

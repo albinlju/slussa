@@ -2,7 +2,7 @@ use serde::Deserialize;
 
 use super::Config;
 use crate::domain::ci::{Build, BuildState};
-use crate::providers::bitbucket_dc::http::get_json;
+use crate::providers::bitbucket_dc::http::{get_all, get_json};
 use crate::providers::error::FetchError;
 
 #[derive(Debug, Deserialize)]
@@ -18,6 +18,7 @@ struct BbFromRef {
     latest_commit: String,
 }
 
+#[cfg(test)]
 #[derive(Debug, Deserialize)]
 struct PagedBuilds {
     #[serde(default)]
@@ -43,8 +44,8 @@ pub fn fetch_builds(config: &Config, pr_id: u64) -> Result<Vec<Build>, FetchErro
     }
 
     let path = format!("/rest/build-status/1.0/commits/{commit}?limit=100");
-    let page: PagedBuilds = get_json(&config.repo.base_url, &path, &config.pat)?;
-    Ok(page.values.into_iter().map(map_build).collect())
+    let values: Vec<BbBuild> = get_all(&config.repo.base_url, &path, &config.pat)?;
+    Ok(values.into_iter().map(map_build).collect())
 }
 
 fn latest_source_commit(config: &Config, pr_id: u64) -> Result<String, FetchError> {

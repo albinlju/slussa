@@ -10,7 +10,7 @@ use crate::domain::{
     ci::Build,
     commit::Commit,
     diff::Diff,
-    pr::{Mergeability, MergeStrategy, PullRequest},
+    pr::{MergeStrategy, Mergeability, PullRequest},
     review::{ReviewComment, ReviewVerdict},
 };
 
@@ -71,6 +71,11 @@ impl Provider {
     }
 
     pub fn merge(&self, pr_id: u64, strategy: MergeStrategy) -> Result<(), FetchError> {
+        if !self.capabilities().merge_strategies.contains(&strategy) {
+            return Err(FetchError::InvalidInput(
+                "This merge strategy is not supported by the connected provider.".into(),
+            ));
+        }
         match self {
             Self::GitHub => github::merge(pr_id, strategy),
             Self::BitbucketDc(c) => bitbucket_dc::merge(c, pr_id),
@@ -85,30 +90,81 @@ impl Provider {
         }
     }
 
-    /// Merge strategies to offer in the picker. GitHub supports all three;
-    /// Bitbucket DC merges with the repo's configured strategy, so just one entry.
-    pub fn merge_strategies(&self) -> Vec<MergeStrategy> {
+    pub fn capabilities(&self) -> crate::domain::capabilities::Capabilities {
+        use crate::domain::capabilities::{Capabilities, Feature, ReviewSubmission};
+        let features = [
+            Feature::PrComments,
+            Feature::InlineComments,
+            Feature::Replies,
+            Feature::EditComments,
+            Feature::DeleteComments,
+            Feature::ResolveThreads,
+            Feature::Builds,
+            Feature::Mergeability,
+            Feature::ClosePr,
+        ]
+        .into_iter()
+        .collect();
         match self {
-            Self::GitHub => vec![
-                MergeStrategy::Merge,
-                MergeStrategy::Squash,
-                MergeStrategy::Rebase,
-            ],
-            Self::BitbucketDc(_) => vec![MergeStrategy::Merge],
+            Self::GitHub => Capabilities {
+                features,
+                review_verdicts: vec![
+                    ReviewVerdict::Approve,
+                    ReviewVerdict::RequestChanges,
+                    ReviewVerdict::Comment,
+                ],
+                own_pr_verdicts: vec![ReviewVerdict::Comment],
+                review_submission: ReviewSubmission::AtomicSingleRevision,
+                merge_strategies: vec![
+                    MergeStrategy::Merge,
+                    MergeStrategy::Squash,
+                    MergeStrategy::Rebase,
+                ],
+            },
+            Self::BitbucketDc(_) => Capabilities {
+                features,
+                review_verdicts: vec![
+                    ReviewVerdict::Approve,
+                    ReviewVerdict::RequestChanges,
+                    ReviewVerdict::Comment,
+                    ReviewVerdict::Unapprove,
+                ],
+                own_pr_verdicts: vec![ReviewVerdict::Comment],
+                review_submission: ReviewSubmission::Sequential,
+                merge_strategies: vec![MergeStrategy::Merge],
+            },
         }
     }
 
     pub fn post_comment(
         &self,
         pr_id: u64,
-        path: &str,
-        line: usize,
-        removed: bool,
+        anchor: &crate::domain::review::CommentAnchor,
         body: &str,
     ) -> Result<(), FetchError> {
+        let revision = anchor.revision.as_ref().ok_or_else(|| {
+            FetchError::InvalidInput(
+                "Reload the diff before commenting: its revision is unknown.".into(),
+            )
+        })?;
         match self {
-            Self::GitHub => github::post_comment(pr_id, path, line, removed, body),
-            Self::BitbucketDc(c) => bitbucket_dc::post_comment(c, pr_id, path, line, removed, body),
+            Self::GitHub => github::post_comment(
+                pr_id,
+                &anchor.path,
+                anchor.line,
+                anchor.removed,
+                body,
+                revision,
+            ),
+            Self::BitbucketDc(c) => bitbucket_dc::post_comment(
+                c,
+                pr_id,
+                &anchor.path,
+                anchor.line,
+                anchor.removed,
+                body,
+                revision,
+            ),
         }
     }
 
@@ -165,28 +221,16 @@ impl Provider {
         match self {
             Self::GitHub => match node_id {
                 Some(id) => github::set_thread_resolved(id, resolved),
-                None => Ok(()),
+                None => Err(FetchError::InvalidInput(
+                    "This thread cannot be resolved by this provider.".into(),
+                )),
             },
             Self::BitbucketDc(c) => match comment_id {
                 Some(id) => bitbucket_dc::set_thread_resolved(c, pr_id, id, resolved),
-                None => Ok(()),
+                None => Err(FetchError::InvalidInput(
+                    "This thread cannot be resolved by this provider.".into(),
+                )),
             },
-        }
-    }
-
-    /// Submit a review verdict (+ optional summary `body`). `user` is the current
-    /// user's slug — Bitbucket needs it for the participant endpoint; GitHub
-    /// ignores it.
-    pub fn submit_review(
-        &self,
-        pr_id: u64,
-        verdict: ReviewVerdict,
-        body: &str,
-        user: &str,
-    ) -> Result<(), FetchError> {
-        match self {
-            Self::GitHub => github::submit_review(pr_id, verdict, body),
-            Self::BitbucketDc(c) => bitbucket_dc::submit_review(c, pr_id, verdict, body, user),
         }
     }
 
@@ -208,16 +252,42 @@ impl Provider {
         }
     }
 
-    /// Whether withdrawing one's own approval is supported. GitHub reviews are
-    /// immutable, so it isn't offered there.
-    pub fn can_unapprove(&self) -> bool {
-        matches!(self, Self::BitbucketDc(_))
-    }
-
     pub fn current_user(&self) -> Result<String, FetchError> {
         match self {
             Self::GitHub => github::current_user(),
             Self::BitbucketDc(c) => bitbucket_dc::current_user(c),
         }
+    }
+}
+
+#[cfg(test)]
+mod capability_tests {
+    use super::*;
+    use crate::domain::capabilities::ReviewSubmission;
+
+    #[test]
+    fn adapters_declare_different_reviews_and_reject_unsupported_operations() {
+        let github = Provider::GitHub.capabilities();
+        let bitbucket = Provider::BitbucketDc(bitbucket_dc::Config {
+            repo: bitbucket_dc::RepoLocation {
+                base_url: "https://example.invalid".into(),
+                project_key: "TEST".into(),
+                repo_slug: "test".into(),
+            },
+            pat: String::new(),
+        });
+        let bb = bitbucket.capabilities();
+        assert!(!github.can_submit_verdict(ReviewVerdict::Unapprove, false));
+        assert!(bb.can_submit_verdict(ReviewVerdict::Unapprove, false));
+        assert_eq!(
+            github.review_submission,
+            ReviewSubmission::AtomicSingleRevision
+        );
+        assert_eq!(bb.review_submission, ReviewSubmission::Sequential);
+        assert!(github.merge_strategies.contains(&MergeStrategy::Squash));
+        assert_eq!(bb.merge_strategies, vec![MergeStrategy::Merge]);
+        // These must reject locally, before trying authentication or the network.
+        assert!(bitbucket.merge(1, MergeStrategy::Squash).is_err());
+        assert!(github::submit_review(1, ReviewVerdict::Unapprove, "").is_err());
     }
 }

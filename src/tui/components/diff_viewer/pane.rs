@@ -69,6 +69,7 @@ pub(super) fn render(
         matches,
     } = build_diff_body(
         file,
+        diff.revision.as_ref(),
         threads,
         pending,
         body_area.width,
@@ -111,6 +112,7 @@ pub(super) fn render(
     ui_diff.pane_anchor = cursor.map(|m| {
         let (line, removed) = m.anchor();
         CommentAnchor {
+            revision: diff.revision.clone(),
             path: file.path.clone(),
             line,
             removed,
@@ -199,6 +201,7 @@ struct DiffBody {
 #[allow(clippy::too_many_arguments)]
 fn build_diff_body(
     file: &FileDiff,
+    revision: Option<&crate::domain::diff::DiffRevision>,
     threads: &[CommentThread],
     pending: &[PendingComment],
     width: u16,
@@ -213,8 +216,8 @@ fn build_diff_body(
     let mut matches: Vec<usize> = Vec::new();
     let query_lower = query.to_lowercase();
 
-    let (comments_at, comments_at_old) = index_comments(threads, &file.path);
-    let (pending_at, pending_at_old) = index_pending(pending, &file.path);
+    let (comments_at, comments_at_old) = index_comments(threads, &file.path, revision);
+    let (pending_at, pending_at_old) = index_pending(pending, &file.path, revision);
     let now = Utc::now();
     let thread_width = width.saturating_sub(2 * DIFF_GUTTER_COLS);
 
@@ -323,6 +326,7 @@ type CommentIndex<'a> = HashMap<usize, Vec<&'a CommentThread>>;
 fn index_comments<'a>(
     threads: &'a [CommentThread],
     path: &str,
+    revision: Option<&crate::domain::diff::DiffRevision>,
 ) -> (CommentIndex<'a>, CommentIndex<'a>) {
     let mut by_new: CommentIndex = HashMap::new();
     let mut by_old: CommentIndex = HashMap::new();
@@ -332,7 +336,7 @@ fn index_comments<'a>(
         let Some(anchor) = &thread.anchor else {
             continue;
         };
-        if anchor.path != path {
+        if anchor.path != path || !thread.matches_revision(revision) {
             continue;
         }
         if let Some(line) = anchor.line {
@@ -351,11 +355,12 @@ type PendingIndex<'a> = HashMap<usize, Vec<(usize, &'a PendingComment)>>;
 fn index_pending<'a>(
     pending: &'a [PendingComment],
     path: &str,
+    revision: Option<&crate::domain::diff::DiffRevision>,
 ) -> (PendingIndex<'a>, PendingIndex<'a>) {
     let mut by_new: PendingIndex = HashMap::new();
     let mut by_old: PendingIndex = HashMap::new();
     for (i, pc) in pending.iter().enumerate() {
-        if pc.anchor.path != path {
+        if pc.anchor.path != path || pc.anchor.revision.as_ref() != revision {
             continue;
         }
         let bucket = if pc.anchor.removed {

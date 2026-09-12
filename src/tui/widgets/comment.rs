@@ -150,6 +150,7 @@ pub(in crate::tui) fn comment_thread_box(
     selected: Option<usize>,
     author: &str,
 ) -> Option<Vec<Line<'static>>> {
+    let diff = diff.filter(|d| thread.matches_revision(d.revision.as_ref()));
     let theme = theme::current();
     let first = thread.comments.first()?;
     let frame = if active { theme.muted } else { theme.divider };

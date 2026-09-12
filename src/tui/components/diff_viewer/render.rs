@@ -44,7 +44,7 @@ pub(super) fn render(
     let comment_counts: Vec<usize> = diff
         .files
         .iter()
-        .map(|f| file_comment_count(f, threads))
+        .map(|f| file_comment_count(f, threads, diff.revision.as_ref()))
         .collect();
 
     let pane_focused = matches!(ui_diff.focus, DiffFocus::Pane);
@@ -69,11 +69,16 @@ pub(super) fn render(
     );
 }
 
-fn file_comment_count(file: &FileDiff, threads: &[CommentThread]) -> usize {
+fn file_comment_count(
+    file: &FileDiff,
+    threads: &[CommentThread],
+    revision: Option<&crate::domain::diff::DiffRevision>,
+) -> usize {
     // Only anchored (code) threads count toward a file; general discussion doesn't.
     let on_file = || {
         threads
             .iter()
+            .filter(|t| t.matches_revision(revision))
             .filter_map(|t| t.anchor.as_ref().map(|a| (t, a)))
             .filter(|(_, a)| a.path == file.path)
     };

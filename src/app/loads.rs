@@ -20,6 +20,22 @@ impl App {
             self.state.store.fetches.remove(key);
         }
         match action {
+            LoadedAction::ReviewFailed {
+                pr_id,
+                posted_comments,
+                submitted_summary,
+                message,
+            } => {
+                if let Some(review) = self.state.store.reviews.get_mut(&pr_id) {
+                    let count = posted_comments.min(review.comments.len());
+                    review.comments.drain(..count);
+                    if submitted_summary.is_some() {
+                        review.submitted_summary = submitted_summary;
+                    }
+                }
+                self.pr_state_changed("review", pr_id, Err(message));
+                self.reload_after_mutation(pr_id);
+            }
             LoadedAction::Prs(r) => {
                 log_outcome("prs", None, &r);
                 self.state.store.cache.prs.reload(r);

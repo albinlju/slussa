@@ -3,7 +3,7 @@ use crate::domain::{
     ci::Build,
     commit::Commit,
     diff::Diff,
-    pr::{MergeStrategy, Mergeability, PullRequest},
+    pr::{Mergeability, PullRequest},
 };
 use std::collections::{HashMap, HashSet};
 
@@ -16,8 +16,7 @@ pub struct Store {
     pub reviews: HashMap<u64, crate::app::reviews::PendingReview>,
     pub cache: Cache,
     pub current_user: String,
-    pub can_unapprove: bool,
-    pub merge_strategies: Vec<MergeStrategy>,
+    pub capabilities: crate::domain::capabilities::Capabilities,
 }
 
 #[derive(Debug, Default)]

@@ -1,11 +1,6 @@
 use crate::domain::review::ReviewVerdict;
 
-#[derive(Debug, Clone)]
-pub struct CommentAnchor {
-    pub path: String,
-    pub line: usize,
-    pub removed: bool,
-}
+pub use crate::domain::review::CommentAnchor;
 
 #[derive(Debug, Clone)]
 pub enum CommentTarget {
@@ -28,6 +23,7 @@ pub enum CommentTarget {
 /// (only locally — nothing is sent) until a verdict flushes them in one go.
 #[derive(Debug, Default, Clone)]
 pub struct PendingReview {
+    pub submitted_summary: Option<String>,
     pub comments: Vec<PendingComment>,
 }
 

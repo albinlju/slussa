@@ -50,6 +50,7 @@ pub(crate) fn fixture() -> AppState {
         42,
         PrData {
             diff: LoadState::Loaded(Diff {
+                revision: None,
                 files: vec![FileDiff {
                     path: "src/main.rs".into(),
                     hunks: vec![Hunk {
@@ -80,7 +81,8 @@ pub(crate) fn fixture() -> AppState {
             ..PrData::default()
         },
     );
-    state.store.merge_strategies = vec![MergeStrategy::Merge, MergeStrategy::Squash];
+    state.store.capabilities = crate::providers::Provider::GitHub.capabilities();
+    state.store.capabilities.merge_strategies = vec![MergeStrategy::Merge, MergeStrategy::Squash];
     state
 }
 
@@ -303,6 +305,7 @@ fn timeline_keeps_thread_selection_and_sidebar_is_responsive() {
             comments,
             reply_to: Some(10),
             anchor: Some(ThreadAnchor {
+                revision: None,
                 path: "src/main.rs".into(),
                 line: Some(1),
                 old_line: None,
@@ -354,4 +357,65 @@ fn timeline_keeps_thread_selection_and_sidebar_is_responsive() {
         state.detail_view().editable_selected().unwrap().id,
         Some(11)
     );
+}
+
+#[test]
+fn unsupported_features_are_hidden_from_content_footer_and_help() {
+    use crate::domain::capabilities::{Capabilities, Feature};
+    let mut state = fixture();
+    state.screen = Screen::Detail {
+        pr_id: 42,
+        tab: DetailTab::Overview,
+    };
+    state.store.capabilities = Capabilities::default();
+    for help_open in [false, true] {
+        state.ui.detail.help_open = help_open;
+        let mut terminal = Terminal::new(TestBackend::new(150, 50)).unwrap();
+        terminal.draw(|frame| render(frame, &mut state)).unwrap();
+        let text: String = terminal
+            .backend()
+            .buffer()
+            .content
+            .iter()
+            .map(ratatui::buffer::Cell::symbol)
+            .collect();
+        for hidden in [
+            "Builds",
+            "mergeable",
+            "c: comment",
+            "a: verdict",
+            "v: review",
+            "m: merge",
+            "x: decline",
+            "quick verdict",
+            "start/finish review",
+            "resolve thread",
+            "edit own",
+            "delete own",
+            "1-5",
+        ] {
+            assert!(
+                !text.contains(hidden),
+                "unexpected {hidden} with help={help_open}"
+            );
+        }
+        assert!(text.contains("Overview"));
+        assert!(text.contains("Reviewers"));
+        if help_open {
+            assert!(text.contains("1-4"));
+        }
+    }
+    state.ui.detail.help_open = false;
+    state.store.capabilities.features.insert(Feature::Builds);
+    let mut terminal = Terminal::new(TestBackend::new(150, 50)).unwrap();
+    terminal.draw(|frame| render(frame, &mut state)).unwrap();
+    let text: String = terminal
+        .backend()
+        .buffer()
+        .content
+        .iter()
+        .map(ratatui::buffer::Cell::symbol)
+        .collect();
+    assert!(text.contains("Builds"));
+    assert!(!text.contains("a: verdict"));
 }

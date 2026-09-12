@@ -43,9 +43,18 @@ impl ReviewVerdict {
 /// submission — see `Provider::submit_full_review`.
 #[derive(Debug, Clone)]
 pub struct ReviewComment {
+    pub revision: Option<super::diff::DiffRevision>,
     pub path: String,
     pub line: usize,
     /// The line sits on the removed (old) side of the diff.
     pub removed: bool,
     pub body: String,
+}
+
+#[derive(Debug, Clone)]
+pub struct CommentAnchor {
+    pub revision: Option<crate::domain::diff::DiffRevision>,
+    pub path: String,
+    pub line: usize,
+    pub removed: bool,
 }

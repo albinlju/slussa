@@ -11,9 +11,19 @@ impl App {
         let pr_data = self.state.store.cache.details.entry(pr_id).or_default();
         let load_commits = pr_data.commits.start_loading();
         let load_diff = pr_data.diff.start_loading();
-        let load_builds = pr_data.builds.start_loading();
+        let load_builds = self
+            .state
+            .store
+            .capabilities
+            .supports(crate::domain::capabilities::Feature::Builds)
+            && pr_data.builds.start_loading();
         let load_activity = pr_data.activity.start_loading();
-        let load_mergeability = pr_data.mergeability.start_loading();
+        let load_mergeability = self
+            .state
+            .store
+            .capabilities
+            .supports(crate::domain::capabilities::Feature::Mergeability)
+            && pr_data.mergeability.start_loading();
         if load_commits {
             self.spawn_load_commits(pr_id);
         }

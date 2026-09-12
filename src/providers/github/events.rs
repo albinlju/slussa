@@ -41,13 +41,16 @@ struct GhPrTimeline {
 
 pub fn fetch_events(pr_number: u64) -> Result<Vec<TimelineEvent>, FetchError> {
     let pr_arg = pr_number.to_string();
-    let pr: GhPrTimeline = run_gh_json(&[
+    let mut pr: GhPrTimeline = run_gh_json(&[
         "pr",
         "view",
         &pr_arg,
         "--json",
-        "author,createdAt,mergedAt,closedAt,state,reviews",
+        "author,createdAt,mergedAt,closedAt,state",
     ])?;
+
+    pr.reviews =
+        super::pagination::pr_nodes(pr_number, "reviews", "author { login } state submittedAt")?;
 
     let mut out: Vec<TimelineEvent> = Vec::new();
 

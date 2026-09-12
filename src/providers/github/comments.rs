@@ -1,30 +1,11 @@
-use serde::Deserialize;
-
 use crate::domain::comment::Comment;
 use crate::providers::error::FetchError;
-use crate::providers::github::{COMMENT_FIELDS, GqlComment, map_gql_comment, run_pr_graphql};
-
-#[derive(Debug, Deserialize)]
-struct GqlPullRequest {
-    comments: GqlComments,
-}
-
-#[derive(Debug, Deserialize)]
-struct GqlComments {
-    nodes: Vec<GqlComment>,
-}
+use crate::providers::github::{COMMENT_FIELDS, GqlComment, map_gql_comment};
 
 pub fn fetch_comments(pr_number: u64) -> Result<Vec<Comment>, FetchError> {
-    let query = format!(
-        "query($owner: String!, $name: String!, $pr: Int!) {{ \
-           repository(owner: $owner, name: $name) {{ pullRequest(number: $pr) {{ \
-             comments(first: 100) {{ nodes {{ {COMMENT_FIELDS} }} }} }} }} }}"
-    );
-    let pr: GqlPullRequest = run_pr_graphql(&query, pr_number)?;
-    // Issue comments are flat: a reply is just another top-level PR comment.
-    Ok(pr
-        .comments
-        .nodes
+    let nodes: Vec<GqlComment> =
+        super::pagination::pr_nodes(pr_number, "comments", COMMENT_FIELDS)?;
+    Ok(nodes
         .into_iter()
         .map(|c| Comment {
             reply_to: None,
@@ -39,8 +20,9 @@ pub fn post_comment(
     line: usize,
     removed: bool,
     body: &str,
+    revision: &crate::domain::diff::DiffRevision,
 ) -> Result<(), FetchError> {
-    let commit_id = head_sha(pr_number)?;
+    let commit_id = &revision.head;
     let side = if removed { "LEFT" } else { "RIGHT" };
     super::cli::run_gh(&[
         "api",
@@ -131,4 +113,27 @@ pub(super) fn head_sha(pr_number: u64) -> Result<String, FetchError> {
         ".head.sha",
     ])?;
     Ok(String::from_utf8_lossy(&out).trim().to_string())
+}
+
+pub(super) fn diff_revision(
+    pr_number: u64,
+) -> Result<crate::domain::diff::DiffRevision, FetchError> {
+    #[derive(serde::Deserialize)]
+    struct Ref {
+        sha: String,
+    }
+    #[derive(serde::Deserialize)]
+    struct Pr {
+        head: Ref,
+        base: Ref,
+    }
+    let pr: Pr = super::cli::run_gh_json(&[
+        "api",
+        &format!("repos/{{owner}}/{{repo}}/pulls/{pr_number}"),
+    ])?;
+    Ok(crate::domain::diff::DiffRevision {
+        head: pr.head.sha,
+        base: Some(pr.base.sha),
+        commit: false,
+    })
 }

@@ -15,6 +15,7 @@ use ratatui::{
 pub struct Sidebar<'a> {
     pub pr: &'a PullRequest,
     pub data: Option<&'a PrData>,
+    pub show_builds: bool,
 }
 impl Widget for Sidebar<'_> {
     fn render(self, area: Rect, buf: &mut Buffer) {
@@ -35,9 +36,11 @@ impl Widget for Sidebar<'_> {
         lines.extend(reviewers(pr));
         lines.push(Line::default());
 
-        section_heading(&mut lines, "Builds");
-        lines.extend(builds_summary(pr_data));
-        lines.push(Line::default());
+        if self.show_builds {
+            section_heading(&mut lines, "Builds");
+            lines.extend(builds_summary(pr_data));
+            lines.push(Line::default());
+        }
 
         if !pr.labels.is_empty() {
             section_heading(&mut lines, "Labels");

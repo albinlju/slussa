@@ -19,6 +19,13 @@ pub(in crate::tui) fn key_to_action(
     if state.error().is_some() {
         return Some(Action::Detail(DetailAction::DismissError));
     }
+    if state.operation_pending() && state.detail.editor.draft.is_some() {
+        return match key.code {
+            KeyCode::Esc => Some(Action::Detail(DetailAction::Back)),
+            KeyCode::Char('q') => Some(Action::Quit),
+            _ => None,
+        };
+    }
     if state.detail.editor.draft.is_some() {
         return state.detail.editor.handle_key(key, &());
     }
@@ -43,7 +50,7 @@ pub(in crate::tui) fn key_to_action(
     }
 
     if let Some(dialog) = &state.detail.merge_picker {
-        return dialog.handle_key(key, &state.store.merge_strategies.as_slice());
+        return dialog.handle_key(key, &state.store.capabilities.merge_strategies.as_slice());
     }
 
     if code == KeyCode::Char('?') {
@@ -104,10 +111,14 @@ pub(in crate::tui) fn key_to_action(
                 return None;
             };
             if let Some(pr) = prs.iter().find(|p| p.id == pr_id)
-                && let Some(action) = state
-                    .detail
-                    .overview
-                    .handle_key(key, &(pr, state.store.cache.details.get(&pr_id)))
+                && let Some(action) = state.detail.overview.handle_key(
+                    key,
+                    &crate::tui::screens::pr_detail::tabs::overview::OverviewContext {
+                        pr,
+                        data: state.store.cache.details.get(&pr_id),
+                        capabilities: &state.store.capabilities,
+                    },
+                )
             {
                 return Some(action);
             }
@@ -240,10 +251,14 @@ fn tab_key(
             };
             let key = KeyEvent::new(code, KeyModifiers::NONE);
             let action = if tab == DetailTab::Overview {
-                state
-                    .detail
-                    .overview
-                    .handle_key(key, &(pr, state.store.cache.details.get(&pr_id)))
+                state.detail.overview.handle_key(
+                    key,
+                    &crate::tui::screens::pr_detail::tabs::overview::OverviewContext {
+                        pr,
+                        data: state.store.cache.details.get(&pr_id),
+                        capabilities: &state.store.capabilities,
+                    },
+                )
             } else {
                 state.detail.description.handle_key(key, &pr)
             };

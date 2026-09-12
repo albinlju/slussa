@@ -7,6 +7,13 @@ use crate::app::{
 
 impl App {
     pub(super) fn execute(&mut self, pr_id: u64, command: Command) {
+        if !command.supported_by(&self.state.store.capabilities) {
+            self.state.store.errors.insert(
+                pr_id,
+                "This action is not supported by the connected provider.".into(),
+            );
+            return;
+        }
         if matches!(command, Command::DismissError) {
             self.state.store.errors.remove(&pr_id);
             return;
@@ -95,13 +102,45 @@ impl App {
         verdict: crate::domain::review::ReviewVerdict,
         body: String,
     ) {
+        let own_pr = match &self.state.store.cache.prs {
+            crate::app::store::LoadState::Loaded(prs) => prs
+                .iter()
+                .any(|pr| pr.id == pr_id && pr.author.username == self.state.store.current_user),
+            _ => false,
+        };
+        if !self
+            .state
+            .store
+            .capabilities
+            .can_submit_verdict(verdict, own_pr)
+        {
+            self.state.store.errors.insert(
+                pr_id,
+                "This review verdict is unavailable for this PR.".into(),
+            );
+            return;
+        }
+        if self.state.store.capabilities.review_submission
+            == crate::domain::capabilities::ReviewSubmission::AtomicSingleRevision
+            && let Some(review) = self.state.store.reviews.get(&pr_id)
+            && let Some(first) = review.comments.first()
+            && review
+                .comments
+                .iter()
+                .any(|c| c.anchor.revision != first.anchor.revision)
+        {
+            self.state.store.errors.insert(pr_id, "This provider requires one diff revision per review. Submit different revisions separately.".into());
+            return;
+        }
         self.state.store.operations.insert(pr_id, Operation::Review);
         let user = self.state.store.current_user.clone();
-        match self.state.store.reviews.get(&pr_id) {
-            Some(review) => {
-                self.spawn_submit_full_review(pr_id, verdict, body, user, review.comments.clone());
-            }
-            None => self.spawn_submit_review(pr_id, verdict, body, user),
-        }
+        let review = self.state.store.reviews.entry(pr_id).or_default();
+        let body = if review.submitted_summary.as_ref() == Some(&body) {
+            String::new()
+        } else {
+            body
+        };
+        let comments = review.comments.clone();
+        self.spawn_submit_full_review(pr_id, verdict, body, user, comments);
     }
 }

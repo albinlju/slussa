@@ -1,4 +1,7 @@
-use crate::tui::theme;
+use crate::{
+    domain::capabilities::{Capabilities, Feature},
+    tui::theme,
+};
 use ratatui::{
     Frame,
     layout::Rect,
@@ -34,7 +37,40 @@ const HELP_KEYS: &[(&str, &str)] = &[
     ("q", "quit"),
 ];
 
-pub(in crate::tui::screens::pr_detail) fn render(frame: &mut Frame, area: Rect) {
+pub(in crate::tui::screens::pr_detail) fn render(
+    frame: &mut Frame,
+    area: Rect,
+    caps: &Capabilities,
+) {
+    let keys: Vec<_> = HELP_KEYS
+        .iter()
+        .copied()
+        .filter(|(key, _)| match *key {
+            "a" | "v" | "V" => caps.reviews(),
+            "m" => !caps.merge_strategies.is_empty(),
+            "x" => caps.supports(Feature::ClosePr),
+            "c" => {
+                caps.supports(Feature::PrComments)
+                    || caps.supports(Feature::InlineComments)
+                    || caps.supports(Feature::Replies)
+            }
+            "r" => caps.supports(Feature::Replies),
+            "e" => caps.supports(Feature::EditComments),
+            "d" => caps.supports(Feature::DeleteComments),
+            "R" => caps.supports(Feature::ResolveThreads),
+            _ => true,
+        })
+        .map(|(key, desc)| {
+            (
+                if key == "1-5" && !caps.supports(Feature::Builds) {
+                    "1-4"
+                } else {
+                    key
+                },
+                desc,
+            )
+        })
+        .collect();
     let theme = theme::current();
     let block = Block::default()
         .borders(Borders::ALL)
@@ -49,16 +85,16 @@ pub(in crate::tui::screens::pr_detail) fn render(frame: &mut Frame, area: Rect) 
         .fg(theme.accent)
         .add_modifier(Modifier::BOLD);
     let desc_style = Style::default().fg(theme.muted);
-    let key_w = HELP_KEYS.iter().map(|(k, _)| k.len()).max().unwrap_or(0);
-    let desc_w = HELP_KEYS.iter().map(|(_, d)| d.len()).max().unwrap_or(0);
-    let rows = (inner.height as usize).clamp(1, HELP_KEYS.len());
-    let cols = HELP_KEYS.len().div_ceil(rows);
+    let key_w = keys.iter().map(|(k, _)| k.len()).max().unwrap_or(0);
+    let desc_w = keys.iter().map(|(_, d)| d.len()).max().unwrap_or(0);
+    let rows = (inner.height as usize).clamp(1, keys.len());
+    let cols = keys.len().div_ceil(rows);
 
     let lines: Vec<Line<'static>> = (0..rows)
         .map(|r| {
             let mut spans: Vec<Span<'static>> = Vec::new();
             for c in 0..cols {
-                if let Some((k, d)) = HELP_KEYS.get(c * rows + r) {
+                if let Some((k, d)) = keys.get(c * rows + r) {
                     spans.push(Span::styled(format!("{k:<key_w$}  "), key_style));
                     spans.push(Span::styled(format!("{d:<w$}", w = desc_w + 3), desc_style));
                 }

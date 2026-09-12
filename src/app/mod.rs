@@ -43,8 +43,7 @@ impl App {
             state: AppState {
                 store: store::Store {
                     current_user,
-                    can_unapprove: provider.can_unapprove(),
-                    merge_strategies: provider.merge_strategies(),
+                    capabilities: provider.capabilities(),
                     ..store::Store::default()
                 },
                 ..AppState::default()
@@ -75,9 +74,8 @@ impl App {
                 }
                 Some(Ok(event)) = events.next() => match event {
                     Event::Key(key) if key.kind == KeyEventKind::Press => {
-                        if let Some(action) = key_to_action(&self.state, key) {
-                            self.action_tx.send(action).ok();
-                        }
+                        if self.handle_key(key) { return Ok(()); }
+                        self.draw(terminal)?;
                     }
                     Event::Resize(_, _) => self.draw(terminal)?,
                     _ => {}
@@ -90,6 +88,19 @@ impl App {
                     }
                 },
             }
+        }
+    }
+
+    /// Apply input before translating the next key; commands must target the
+    /// selection/dialog state produced by all preceding input.
+    fn handle_key(&mut self, key: ratatui::crossterm::event::KeyEvent) -> bool {
+        match key_to_action(&self.state, key) {
+            Some(Action::Quit) => true,
+            Some(action) => {
+                self.apply(action);
+                false
+            }
+            None => false,
         }
     }
 

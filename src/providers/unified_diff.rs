@@ -56,7 +56,10 @@ pub fn parse(text: &str) -> Diff {
         files.push(f);
     }
 
-    Diff { files }
+    Diff {
+        files,
+        revision: None,
+    }
 }
 
 fn parse_hunk_header(line: &str) -> (usize, usize) {

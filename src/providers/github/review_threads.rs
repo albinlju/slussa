@@ -2,14 +2,16 @@ use serde::Deserialize;
 
 use crate::domain::comment::{CommentThread, ThreadAnchor};
 use crate::providers::error::FetchError;
-use crate::providers::github::{COMMENT_FIELDS, GqlComment, map_gql_comment, run_pr_graphql};
+use crate::providers::github::{COMMENT_FIELDS, GqlComment, map_gql_comment};
 
+#[cfg(test)]
 #[derive(Debug, Deserialize)]
 #[serde(rename_all = "camelCase")]
 struct GqlPullRequest {
     review_threads: GqlThreads,
 }
 
+#[cfg(test)]
 #[derive(Debug, Deserialize)]
 struct GqlThreads {
     nodes: Vec<GqlThread>,
@@ -23,6 +25,8 @@ struct GqlThread {
     #[serde(default)]
     is_resolved: bool,
     #[serde(default)]
+    is_outdated: bool,
+    #[serde(default)]
     path: String,
     #[serde(default)]
     line: Option<usize>,
@@ -30,30 +34,30 @@ struct GqlThread {
     original_line: Option<usize>,
     #[serde(default)]
     diff_side: String,
+    #[serde(default)]
     comments: GqlComments,
 }
 
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Default, Deserialize)]
 struct GqlComments {
     nodes: Vec<GqlComment>,
 }
 
 pub fn fetch_review_threads(pr_number: u64) -> Result<Vec<CommentThread>, FetchError> {
-    let query = format!(
-        "query($owner: String!, $name: String!, $pr: Int!) {{ \
-           repository(owner: $owner, name: $name) {{ pullRequest(number: $pr) {{ \
-             reviewThreads(first: 100) {{ nodes {{ \
-               id isResolved path line originalLine diffSide \
-               comments(first: 100) {{ nodes {{ {COMMENT_FIELDS} }} }} \
-             }} }} }} }} }}"
-    );
-    let pr: GqlPullRequest = run_pr_graphql(&query, pr_number)?;
-    Ok(pr
-        .review_threads
-        .nodes
-        .into_iter()
-        .map(map_thread)
-        .collect())
+    let mut nodes: Vec<GqlThread> = super::pagination::pr_nodes(
+        pr_number,
+        "reviewThreads",
+        "id isResolved isOutdated path line originalLine diffSide",
+    )?;
+    for thread in &mut nodes {
+        thread.comments.nodes = super::pagination::node_nodes(
+            &thread.id,
+            "PullRequestReviewThread",
+            "comments",
+            &format!("{COMMENT_FIELDS} commit {{ oid }} originalCommit {{ oid }}"),
+        )?;
+    }
+    Ok(nodes.into_iter().map(map_thread).collect())
 }
 
 fn map_thread(t: GqlThread) -> CommentThread {
@@ -64,11 +68,24 @@ fn map_thread(t: GqlThread) -> CommentThread {
         (pos, None)
     };
     let reply_to = t.comments.nodes.first().and_then(|c| c.database_id);
+    let revision = t
+        .comments
+        .nodes
+        .first()
+        .and_then(|c| {
+            if t.is_outdated {
+                c.original_commit.as_ref()
+            } else {
+                c.commit.as_ref()
+            }
+        })
+        .map(|c| c.oid.clone());
     // GitHub review threads are always anchored to code.
     CommentThread {
         comments: t.comments.nodes.into_iter().map(map_gql_comment).collect(),
         reply_to,
         anchor: Some(ThreadAnchor {
+            revision,
             path: t.path,
             line,
             old_line,
@@ -102,6 +119,25 @@ mod tests {
             }] }
         }]
     } }"#;
+
+    #[test]
+    fn outdated_thread_keeps_its_original_revision() {
+        let mut value: serde_json::Value = serde_json::from_str(SAMPLE).unwrap();
+        let thread = &mut value["reviewThreads"]["nodes"][0];
+        thread["isOutdated"] = true.into();
+        thread["comments"]["nodes"][0]["originalCommit"] = serde_json::json!({"oid": "old-sha"});
+        thread["comments"]["nodes"][0]["commit"] = serde_json::json!({"oid": "new-sha"});
+        let pr: GqlPullRequest = serde_json::from_value(value).unwrap();
+        let thread = map_thread(pr.review_threads.nodes.into_iter().next().unwrap());
+        let mut revision = crate::domain::diff::DiffRevision {
+            head: "old-sha".into(),
+            base: None,
+            commit: true,
+        };
+        assert!(thread.matches_revision(Some(&revision)));
+        revision.head = "new-sha".into();
+        assert!(!thread.matches_revision(Some(&revision)));
+    }
 
     #[test]
     fn maps_threads_with_reactions_and_old_side_anchor() {
