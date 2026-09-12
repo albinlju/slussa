@@ -2,6 +2,7 @@ mod build_status;
 pub mod dialogs;
 mod footer;
 mod header;
+mod interactions;
 pub mod keys;
 mod render;
 pub mod tabs;
@@ -29,9 +30,8 @@ pub struct PrDetailScreen {
     pub commits: CommitList,
     pub help_open: bool,
     pub editor: crate::tui::components::comment_editor::CommentEditor,
-    pub comment_pending: bool,
-    /// A failed action's message, shown as a dismissible popup.
-    pub error: Option<String>,
+    pr_id: Option<u64>,
+    editors: std::collections::HashMap<u64, crate::tui::components::comment_editor::CommentEditor>,
 }
 
 impl PrDetailScreen {
@@ -39,7 +39,6 @@ impl PrDetailScreen {
         self.confirm.is_some()
             || self.review_picker.is_some()
             || self.merge_picker.is_some()
-            || self.error.is_some()
             || self.help_open
             || self.editor.draft.is_some()
     }
@@ -88,6 +87,23 @@ impl Component for PrDetailScreen {
         ctx: &DetailContext<'_>,
     ) -> Option<crate::app::action::Action> {
         use crate::app::action::{Action, DetailAction};
+        if let Screen::Detail { pr_id, .. } = ctx.screen
+            && ctx.store.operations.contains_key(&pr_id)
+            && !matches!(
+                action,
+                DetailAction::Back
+                    | DetailAction::NextTab
+                    | DetailAction::PrevTab
+                    | DetailAction::SelectTab(_)
+                    | DetailAction::DismissError
+                    | DetailAction::ToggleHelp
+                    | DetailAction::DescriptionScroll(_)
+                    | DetailAction::OverviewMove(_)
+                    | DetailAction::OverviewSubMove(_)
+            )
+        {
+            return None;
+        }
         match action {
             DetailAction::Back => {
                 self.help_open = false;
@@ -166,13 +182,12 @@ impl Component for PrDetailScreen {
             DetailAction::OpenDecline => {
                 self.confirm = Some(dialogs::confirm::ConfirmDialog::new(ConfirmKind::Decline));
             }
-            DetailAction::DismissError => self.error = None,
             DetailAction::CommentType(_)
             | DetailAction::CommentBackspace
             | DetailAction::CommentCancel => {
                 self.editor.update(action, &());
             }
-            other => return Some(Action::Detail(other)),
+            other => return self.interaction(other, ctx),
         }
         None
     }

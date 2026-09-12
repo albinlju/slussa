@@ -205,7 +205,7 @@ fn extracted_dialogs_render_and_keep_their_key_bindings() {
                 ("Merge this PR", DetailAction::CloseMergePicker)
             }
             "error" => {
-                state.ui.detail.error = Some("Request failed".into());
+                state.store.errors.insert(42, "Request failed".into());
                 ("Request failed", DetailAction::DismissError)
             }
             "help" => {

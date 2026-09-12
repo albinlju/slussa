@@ -1,13 +1,24 @@
 use crate::app::{
     App,
     action::LoadedAction,
-    store::{LoadState, PrData},
+    store::{FetchKey, LoadState, Operation, PrData},
 };
 
 impl App {
     pub(super) fn loaded_actions(&mut self, action: LoadedAction) {
-        // Any settled fetch clears the footer's refresh indicator.
-        self.state.ui.refreshing = false;
+        let key = match &action {
+            LoadedAction::Prs(_) => Some(FetchKey::Prs),
+            LoadedAction::Commits(id, _) => Some(FetchKey::Commits(*id)),
+            LoadedAction::Diff(id, _) => Some(FetchKey::Diff(*id)),
+            LoadedAction::Builds(id, _) => Some(FetchKey::Builds(*id)),
+            LoadedAction::Activity(id, _) => Some(FetchKey::Activity(*id)),
+            LoadedAction::Mergeability(id, _) => Some(FetchKey::Mergeability(*id)),
+            LoadedAction::CommitDiff(id, oid, _) => Some(FetchKey::CommitDiff(*id, oid.clone())),
+            _ => None,
+        };
+        if let Some(key) = &key {
+            self.state.store.fetches.remove(key);
+        }
         match action {
             LoadedAction::Prs(r) => {
                 log_outcome("prs", None, &r);
@@ -28,7 +39,6 @@ impl App {
             LoadedAction::Activity(pr_id, r) => {
                 log_outcome("activity", Some(pr_id), &r);
                 self.pr_data_mut(pr_id).activity.reload(r);
-                self.state.ui.detail.comment_pending = false;
             }
             LoadedAction::Mergeability(pr_id, r) => {
                 log_outcome("mergeability", Some(pr_id), &r);
@@ -42,31 +52,34 @@ impl App {
                     .commit_diffs
                     .insert(oid, LoadState::from_result(r));
             }
-            LoadedAction::Commented(pr_id, r) => {
-                log_outcome("comment", Some(pr_id), &r);
-                match r {
-                    Ok(()) => self.spawn_load_activity(pr_id),
-                    Err(msg) => {
-                        self.state.ui.detail.comment_pending = false;
-                        self.state.ui.detail.error = Some(msg);
-                    }
-                }
-            }
+            LoadedAction::Commented(pr_id, r) => self.pr_state_changed("comment", pr_id, r),
+        }
+        if let Some(key) = key
+            && self.state.store.reload_after_fetch.remove(&key)
+        {
+            self.load_resource(key);
         }
     }
 
-    /// A merge or decline changed the PR's lifecycle: refetch the list (status),
-    /// activity, and mergeability so the header reflects it. Shared by both.
     fn pr_state_changed(&mut self, kind: &'static str, pr_id: u64, r: Result<(), String>) {
         log_outcome(kind, Some(pr_id), &r);
-        self.state.ui.detail.comment_pending = false;
+        let Some(operation) = self.state.store.operations.remove(&pr_id) else {
+            return;
+        };
+        if matches!(operation, Operation::Comment | Operation::Review) {
+            self.state.ui.detail.submission_finished(pr_id, r.is_ok());
+        }
         match r {
             Ok(()) => {
-                self.spawn_load_prs();
-                self.spawn_load_activity(pr_id);
-                self.spawn_load_mergeability(pr_id);
+                self.state.store.errors.remove(&pr_id);
+                if matches!(operation, Operation::Review) {
+                    self.state.store.reviews.remove(&pr_id);
+                }
+                self.reload_after_mutation(pr_id);
             }
-            Err(msg) => self.state.ui.detail.error = Some(msg),
+            Err(msg) => {
+                self.state.store.errors.insert(pr_id, msg);
+            }
         }
     }
 

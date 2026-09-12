@@ -1,10 +1,4 @@
-use crate::{
-    app::App,
-    tui::{
-        components::{diff_viewer::DiffViewer, search_input::SearchInput},
-        screens::pr_detail::tabs::{DetailTab, commits::CommitList},
-    },
-};
+use crate::{app::App, tui::screens::pr_detail::tabs::DetailTab};
 
 impl App {
     pub(super) fn open_pr(&mut self, pr_id: u64) {
@@ -12,11 +6,7 @@ impl App {
             pr_id,
             tab: DetailTab::default(),
         };
-        self.state.ui.list.search = SearchInput::default();
-        self.state.ui.detail.diff = DiffViewer::default();
-        self.state.ui.detail.commits = CommitList::default();
-        self.state.ui.detail.description.scroll = 0;
-        self.state.ui.detail.overview.timeline.scroll = 0;
+        self.state.ui.open_pr(pr_id);
 
         let pr_data = self.state.store.cache.details.entry(pr_id).or_default();
         let load_commits = pr_data.commits.start_loading();

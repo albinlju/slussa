@@ -5,10 +5,14 @@ use crate::domain::{
     diff::Diff,
     pr::{MergeStrategy, Mergeability, PullRequest},
 };
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 
 #[derive(Debug, Default)]
 pub struct Store {
+    pub operations: HashMap<u64, Operation>,
+    pub errors: HashMap<u64, String>,
+    pub fetches: HashSet<FetchKey>,
+    pub reload_after_fetch: HashSet<FetchKey>,
     pub reviews: HashMap<u64, crate::app::reviews::PendingReview>,
     pub cache: Cache,
     pub current_user: String,
@@ -83,6 +87,7 @@ impl PrData {
             || self.diff.is_loading()
             || self.builds.is_loading()
             || self.activity.is_loading()
+            || self.mergeability.is_loading()
             || self.commit_diffs.values().any(LoadState::is_loading)
     }
 }
@@ -93,5 +98,44 @@ impl PrData {
             Some(oid) => self.commit_diffs.get(oid),
             None => Some(&self.diff),
         }
+    }
+}
+
+#[derive(Debug, Clone, Copy)]
+pub enum Operation {
+    Comment,
+    Moderation,
+    Review,
+    Merge,
+    Decline,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+pub enum FetchKey {
+    Prs,
+    Commits(u64),
+    Diff(u64),
+    Builds(u64),
+    Activity(u64),
+    Mergeability(u64),
+    CommitDiff(u64, String),
+}
+
+impl Store {
+    pub fn refreshing(&self, screen: crate::app::navigation::Screen) -> bool {
+        use crate::app::navigation::Screen;
+        self.fetches.iter().any(|key| match (screen, key) {
+            (_, FetchKey::Prs) => true,
+            (
+                Screen::Detail { pr_id, .. },
+                FetchKey::Commits(id)
+                | FetchKey::Diff(id)
+                | FetchKey::Builds(id)
+                | FetchKey::Activity(id)
+                | FetchKey::Mergeability(id)
+                | FetchKey::CommitDiff(id, _),
+            ) => pr_id == *id,
+            _ => false,
+        })
     }
 }

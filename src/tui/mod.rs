@@ -25,7 +25,7 @@ pub fn render(frame: &mut Frame, state: &mut AppState) {
             frame.area(),
             &pr_list::ListContext {
                 prs: &state.store.cache.prs,
-                refreshing: state.ui.refreshing,
+                refreshing: state.store.refreshing(state.screen),
             },
         ),
         Screen::Detail { .. } => state.ui.detail.render(
@@ -34,7 +34,7 @@ pub fn render(frame: &mut Frame, state: &mut AppState) {
             &pr_detail::DetailContext {
                 store: &state.store,
                 screen: state.screen,
-                refreshing: state.ui.refreshing,
+                refreshing: state.store.refreshing(state.screen),
             },
         ),
     }
@@ -43,17 +43,15 @@ pub fn render(frame: &mut Frame, state: &mut AppState) {
 pub fn key_to_action(state: &AppState, key: KeyEvent) -> Option<Action> {
     let key = normalize_key(key);
 
-    if state.ui.detail.editor.draft.is_some() {
-        return state.ui.detail.editor.handle_key(key, &());
-    }
-
-    if matches!(state.screen, Screen::Detail { .. }) && state.ui.detail.modal_open() {
+    if matches!(state.screen, Screen::Detail { .. })
+        && state.ui.modal_open(&state.store, state.screen)
+    {
         return state.ui.detail.handle_key(
             key,
             &pr_detail::DetailContext {
                 store: &state.store,
                 screen: state.screen,
-                refreshing: state.ui.refreshing,
+                refreshing: state.store.refreshing(state.screen),
             },
         );
     }
@@ -75,7 +73,7 @@ pub fn key_to_action(state: &AppState, key: KeyEvent) -> Option<Action> {
             key,
             &pr_list::ListContext {
                 prs: &state.store.cache.prs,
-                refreshing: state.ui.refreshing,
+                refreshing: state.store.refreshing(state.screen),
             },
         ),
         Screen::Detail { .. } => state.ui.detail.handle_key(
@@ -83,7 +81,7 @@ pub fn key_to_action(state: &AppState, key: KeyEvent) -> Option<Action> {
             &pr_detail::DetailContext {
                 store: &state.store,
                 screen: state.screen,
-                refreshing: state.ui.refreshing,
+                refreshing: state.store.refreshing(state.screen),
             },
         ),
     }
@@ -116,10 +114,23 @@ pub(crate) mod regression_tests;
 pub struct Ui {
     pub list: crate::tui::screens::pr_list::PrListScreen,
     pub detail: crate::tui::screens::pr_detail::PrDetailScreen,
-    pub refreshing: bool,
 }
 
 impl Ui {
+    pub fn open_pr(&mut self, pr_id: u64) {
+        self.list.search = SearchInput::default();
+        self.detail.open(pr_id);
+    }
+
+    pub fn modal_open(&self, store: &crate::app::store::Store, screen: Screen) -> bool {
+        match screen {
+            Screen::List => self.list.filter_picker_open,
+            Screen::Detail { pr_id, .. } => {
+                self.detail.modal_open() || store.errors.contains_key(&pr_id)
+            }
+        }
+    }
+
     pub fn update(
         &mut self,
         action: Action,
@@ -131,7 +142,7 @@ impl Ui {
                 action,
                 &pr_list::ListContext {
                     prs: &store.cache.prs,
-                    refreshing: self.refreshing,
+                    refreshing: store.refreshing(screen),
                 },
             ),
             Action::Search(action) if screen == Screen::List => {
@@ -146,7 +157,7 @@ impl Ui {
                     &pr_detail::DetailContext {
                         store,
                         screen,
-                        refreshing: self.refreshing,
+                        refreshing: store.refreshing(screen),
                     },
                 )
             }

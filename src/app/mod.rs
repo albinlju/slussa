@@ -116,10 +116,14 @@ impl App {
             Action::Navigate(screen) => self.state.screen = screen,
             Action::Refresh => self.refresh_actions(),
             Action::List(crate::app::action::ListAction::OpenPr(id)) => self.open_pr(id),
-            Action::Detail(a) => self.detail_actions(a),
+            Action::Command { pr_id, command } => self.execute(pr_id, command),
             Action::LoadCommitDiff { pr_id, oid } => self.ensure_commit_diff(pr_id, oid),
             Action::Loaded(a) => self.loaded_actions(a),
-            Action::List(_) | Action::Diff(_) | Action::Commits(_) | Action::Search(_) => {
+            Action::Detail(_)
+            | Action::List(_)
+            | Action::Diff(_)
+            | Action::Commits(_)
+            | Action::Search(_) => {
                 unreachable!("local action consumed by component")
             }
         }

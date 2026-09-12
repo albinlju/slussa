@@ -16,8 +16,11 @@ pub(in crate::tui) fn key_to_action(
     key: KeyEvent,
 ) -> Option<Action> {
     // An error popup is modal: any key dismisses it.
-    if state.detail.error.is_some() {
+    if state.error().is_some() {
         return Some(Action::Detail(DetailAction::DismissError));
+    }
+    if state.detail.editor.draft.is_some() {
+        return state.detail.editor.handle_key(key, &());
     }
     if key.code == KeyCode::Char('q') {
         return Some(Action::Quit);
