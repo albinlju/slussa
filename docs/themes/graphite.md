@@ -1,9 +1,9 @@
 # Graphite
 
-Ett mer neutralt alternativ till Slate för mörka terminaler.
+Standardtemat i tuipr, med en neutral palett för mörka terminaler.
 
 ```bash
-TUIPR_THEME=graphite cargo run --release
+cargo run --release
 ```
 
 Text, författare, filplatser, rubriker, labels och commit-ID:n använder gråtoner.
@@ -27,5 +27,6 @@ Terminalens vanliga bakgrund behålls. Temat är avsett för mörka bakgrunder.
 | Ram | `#686B70` |
 | Markerad rad | `#343638` |
 
-Slate finns kvar för direkt jämförelse. Standardtemat har inte bytts.
+Övriga teman finns kvar via `theme = "…"` i konfigurationen eller `TUIPR_THEME`.
+Exempelvis väljer `TUIPR_THEME=terminal` terminalens egen palett.
 Skillnaden ligger framför allt i att passivt innehåll inte använder fokusfärgen.

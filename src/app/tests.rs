@@ -512,6 +512,7 @@ fn detail_emits_resolved_commands_and_retains_submission_payload() {
     assert_eq!(app.state.ui.detail.editor.draft.as_ref().unwrap().text, "å");
     press(&mut app, KeyCode::Esc);
     app.apply(Action::Detail(DetailAction::OpenDecline));
+    app.apply(Action::Detail(DetailAction::ConfirmMove(-1)));
     let command = app.state.ui.update(
         Action::Detail(DetailAction::SubmitConfirm),
         &app.state.store,
@@ -990,4 +991,164 @@ fn discarding_a_populated_review_requires_explicit_confirmation() {
     press(&mut app, KeyCode::Char('k'));
     press(&mut app, KeyCode::Enter);
     assert!(!app.state.store.reviews.contains_key(&42));
+}
+
+#[test]
+fn comment_lookup_keeps_review_and_pr_ids_separate() {
+    use crate::domain::{
+        activity::Activity,
+        comment::{Comment, CommentThread, ThreadAnchor},
+        user::User,
+    };
+    let mut app = app();
+    app.state.store.current_user = "reviewer".into();
+    detail(&mut app, DetailTab::Overview);
+    let comment = |author: &str, text: &str| Comment {
+        id: Some(7),
+        author: User {
+            username: author.into(),
+        },
+        content: text.into(),
+        created: chrono::Utc::now(),
+        reactions: vec![],
+        reply_to: None,
+    };
+    app.state.store.cache.details.get_mut(&42).unwrap().activity = LoadState::Loaded(Activity {
+        comments: vec![comment("other", "PR comment")],
+        events: vec![],
+        threads: vec![CommentThread {
+            comments: vec![comment("reviewer", "My review comment")],
+            reply_to: Some(7),
+            anchor: Some(ThreadAnchor {
+                revision: None,
+                path: "src/main.rs".into(),
+                line: Some(1),
+                old_line: None,
+                resolved: false,
+                node_id: Some("thread".into()),
+            }),
+        }],
+    });
+    app.state.ui.detail.overview.timeline.selected =
+        Some(crate::tui::screens::pr_detail::view::CommentRef {
+            id: Some(7),
+            review: true,
+        });
+    press(&mut app, KeyCode::Char('e'));
+    let draft = app.state.ui.detail.editor.draft.as_ref().unwrap();
+    assert_eq!(draft.text, "My review comment");
+    assert!(matches!(
+        draft.target,
+        CommentTarget::Edit {
+            id: 7,
+            review: true
+        }
+    ));
+    app.state.ui.detail.editor = crate::tui::components::comment_editor::CommentEditor::default();
+    press(&mut app, KeyCode::Char('d'));
+    assert_eq!(
+        app.state.ui.detail.confirm.as_ref().unwrap().kind(),
+        ConfirmKind::DeleteComment {
+            id: 7,
+            review: true
+        }
+    );
+    press(&mut app, KeyCode::Esc);
+    app.state
+        .ui
+        .detail
+        .overview
+        .timeline
+        .selected
+        .as_mut()
+        .unwrap()
+        .review = false;
+    press(&mut app, KeyCode::Char('e'));
+    assert!(app.state.ui.detail.editor.draft.is_none());
+}
+
+#[test]
+fn refreshed_lists_keep_pr_and_commit_identity() {
+    let mut app = app();
+    let LoadState::Loaded(mut prs) = std::mem::take(&mut app.state.store.cache.prs) else {
+        panic!()
+    };
+    let mut second = prs[0].clone();
+    second.id = 43;
+    prs.push(second);
+    app.state.store.cache.prs = LoadState::Loaded(prs.clone());
+    app.state.ui.list.selected = 1;
+    let mut new = prs[0].clone();
+    new.id = 44;
+    prs.insert(0, new);
+    app.apply(Action::Loaded(LoadedAction::Prs(Ok(prs))));
+    assert_eq!(app.state.ui.list.selected, 2);
+    detail(&mut app, DetailTab::Commits);
+    let data = app.state.store.cache.details.get_mut(&42).unwrap();
+    let LoadState::Loaded(mut commits) = std::mem::take(&mut data.commits) else {
+        panic!()
+    };
+    let mut second = commits[0].clone();
+    second.oid = "second".into();
+    commits.push(second);
+    data.commits = LoadState::Loaded(commits.clone());
+    app.state.ui.detail.commits.selected = 1;
+    let mut new = commits[0].clone();
+    new.oid = "new".into();
+    commits.insert(0, new);
+    app.apply(Action::Loaded(LoadedAction::Commits(42, Ok(commits))));
+    assert_eq!(app.state.ui.detail.commits.selected, 2);
+}
+
+#[test]
+fn returning_to_a_pr_restores_its_tab_focus_and_search() {
+    let mut app = app();
+    detail(&mut app, DetailTab::Diff);
+    app.state.ui.detail.diff.focus = DiffFocus::Pane;
+    app.state.ui.detail.diff.pane_search.query = "needle".into();
+    app.state.ui.detail.diff.pane_scroll = 12;
+    app.state.ui.detail.diff.pane_cursor = 5;
+    app.state.ui.detail.overview.timeline.scroll = 7;
+    let mut other = crate::tui::regression_tests::fixture();
+    app.state
+        .store
+        .cache
+        .details
+        .insert(43, other.store.cache.details.remove(&42).unwrap());
+    app.apply(Action::Navigate(Screen::List));
+    app.apply(Action::List(ListAction::OpenPr(43)));
+    assert_eq!(
+        app.state.screen,
+        Screen::Detail {
+            pr_id: 43,
+            tab: DetailTab::Description
+        }
+    );
+    app.apply(Action::List(ListAction::OpenPr(42)));
+    assert_eq!(
+        app.state.screen,
+        Screen::Detail {
+            pr_id: 42,
+            tab: DetailTab::Diff
+        }
+    );
+    assert_eq!(app.state.ui.detail.diff.focus, DiffFocus::Pane);
+    assert_eq!(app.state.ui.detail.diff.pane_search.query, "needle");
+    assert_eq!(app.state.ui.detail.diff.pane_scroll, 12);
+    assert_eq!(app.state.ui.detail.overview.timeline.scroll, 7);
+}
+
+#[tokio::test(flavor = "current_thread")]
+async fn successful_mutation_reports_which_pr_changed() {
+    let mut app = app();
+    detail(&mut app, DetailTab::Overview);
+    app.state
+        .store
+        .operations
+        .insert(42, super::store::Operation::Merge);
+    app.apply(Action::Loaded(LoadedAction::Merged(42, Ok(()))));
+    let notice = app.state.store.notice.as_ref().unwrap();
+    assert!(!notice.error);
+    assert!(notice.message.contains("42"));
+    assert!(notice.message.contains("merged"));
 }

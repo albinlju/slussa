@@ -24,7 +24,7 @@ impl ConfirmKind {
     pub fn prompt(self) -> &'static str {
         match self {
             Self::DeleteComment { .. } => "Delete this comment?",
-            Self::Decline => "Decline this PR?",
+            Self::Decline => "Close / decline this PR?",
             Self::DiscardReview => "Discard this review draft?",
         }
     }
@@ -32,7 +32,14 @@ impl ConfirmKind {
 
 const CONFIRM_OPTIONS: [&str; 2] = ["Yes", "No"];
 
-fn render(frame: &mut Frame, kind: ConfirmKind, cursor: usize, area: Rect) {
+fn render(
+    frame: &mut Frame,
+    kind: ConfirmKind,
+    cursor: usize,
+    context: &str,
+    target_branch: Option<&str>,
+    area: Rect,
+) {
     let theme = theme::current();
     let selected = Style::default()
         .bg(theme.highlight_bg)
@@ -43,6 +50,30 @@ fn render(frame: &mut Frame, kind: ConfirmKind, cursor: usize, area: Rect) {
         Line::from(Span::styled(kind.prompt(), Style::default().fg(theme.fg))),
         Line::default(),
     ];
+    if !context.is_empty() {
+        for (index, line) in context.lines().take(3).enumerate() {
+            lines.insert(
+                1 + index,
+                Line::styled(line.to_owned(), Style::default().fg(theme.muted)),
+            );
+        }
+    }
+    if let Some(branch) = target_branch {
+        let index = lines.len() - 1;
+        lines.insert(
+            index,
+            Line::from(vec![
+                Span::styled("Target: ", normal),
+                Span::styled(
+                    branch.to_owned(),
+                    Style::default()
+                        .fg(theme.accent)
+                        .add_modifier(Modifier::BOLD),
+                ),
+            ]),
+        );
+        lines.insert(index + 1, Line::styled("Closes without merging", normal));
+    }
     let options = if kind == ConfirmKind::DiscardReview {
         ["Discard review", "Keep reviewing"]
     } else {
@@ -57,7 +88,7 @@ fn render(frame: &mut Frame, kind: ConfirmKind, cursor: usize, area: Rect) {
         ]));
     }
 
-    let selected_line = 2 + cursor;
+    let selected_line = lines.len() - 2 + cursor;
     crate::tui::widgets::dialog::choices(frame, area, "Confirm", lines, selected_line);
 }
 
@@ -79,12 +110,29 @@ fn key_to_action(code: KeyCode) -> Option<Action> {
 pub struct ConfirmDialog {
     kind: ConfirmKind,
     cursor: usize,
+    context: String,
+    target_branch: Option<String>,
 }
 impl ConfirmDialog {
     pub fn new(kind: ConfirmKind) -> Self {
         Self {
             kind,
-            cursor: usize::from(kind == ConfirmKind::DiscardReview),
+            cursor: usize::from(matches!(
+                kind,
+                ConfirmKind::DiscardReview | ConfirmKind::Decline
+            )),
+            context: String::new(),
+            target_branch: None,
+        }
+    }
+    pub fn with_context(mut self, context: String) -> Self {
+        self.context = context;
+        self
+    }
+    pub fn set_pr_context(&mut self, context: String, target_branch: &str) {
+        if self.kind == ConfirmKind::Decline {
+            self.context = context;
+            self.target_branch = Some(target_branch.to_owned());
         }
     }
     pub fn accepted(&self) -> Option<ConfirmKind> {
@@ -112,6 +160,13 @@ impl Component for ConfirmDialog {
         }
     }
     fn render(&mut self, frame: &mut Frame, area: Rect, (): &()) {
-        render(frame, self.kind, self.cursor, area);
+        render(
+            frame,
+            self.kind,
+            self.cursor,
+            &self.context,
+            self.target_branch.as_deref(),
+            area,
+        );
     }
 }

@@ -76,7 +76,7 @@ fn tree_header(file_stats: &[(u32, u32)], width: usize) -> Line<'static> {
 
     let left = vec![Span::styled(
         format!(
-            "{file_count} {}",
+            " {file_count} {}",
             if file_count == 1 { "file" } else { "files" }
         ),
         Style::default().fg(theme.fg).add_modifier(Modifier::BOLD),

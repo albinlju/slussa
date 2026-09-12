@@ -9,7 +9,7 @@ use ratatui::{
     layout::Rect,
     style::{Modifier, Style},
     text::{Line, Span},
-    widgets::{Block, Borders, Padding, Paragraph, Widget, Wrap},
+    widgets::{Block, Borders, Padding, Paragraph, Widget},
 };
 
 pub struct Sidebar<'a> {
@@ -49,11 +49,13 @@ impl Widget for Sidebar<'_> {
         }
 
         section_heading(&mut lines, "Details");
-        lines.extend(details(pr, now));
+        lines.extend(details(pr, now, inner.width as usize));
 
-        Paragraph::new(lines)
-            .wrap(Wrap { trim: false })
-            .render(inner, buf);
+        let lines: Vec<_> = lines
+            .into_iter()
+            .map(|line| Line::from(widgets::truncate_to_width(line.spans, inner.width as usize)))
+            .collect();
+        Paragraph::new(lines).render(inner, buf);
     }
 }
 
@@ -61,14 +63,14 @@ fn section_heading(lines: &mut Vec<Line<'static>>, title: &str) {
     let theme = theme::current();
     lines.push(Line::from(Span::styled(
         title.to_string(),
-        Style::default().fg(theme.fg).add_modifier(Modifier::BOLD),
+        Style::default().fg(theme.muted),
     )));
 }
 
 fn reviewers(pr: &PullRequest) -> Vec<Line<'static>> {
     let theme = theme::current();
     if pr.reviewers.is_empty() {
-        return vec![muted_line("—")];
+        return vec![muted_line("No reviewers")];
     }
     pr.reviewers
         .iter()
@@ -91,28 +93,25 @@ fn reviewers(pr: &PullRequest) -> Vec<Line<'static>> {
 }
 
 fn builds_summary(pr_data: Option<&PrData>) -> Vec<Line<'static>> {
-    let mut lines = match pr_data.map(|d| &d.builds) {
+    match pr_data.map(|d| &d.builds) {
         Some(LoadState::Loaded(builds)) if !builds.is_empty() => {
-            let stats = crate::tui::screens::pr_detail::build_status::build_stats(builds);
-            vec![
-                Line::from(Span::styled(
+            use crate::tui::screens::pr_detail::build_status::{OverallState, build_stats};
+            let stats = build_stats(builds);
+            let (icon, _) = OverallState::of(&stats).glyph();
+            vec![Line::from(vec![
+                Span::styled(format!("{icon} "), Style::default().fg(stats.accent())),
+                Span::styled(
                     format!("{}/{} passing", stats.passing, stats.total),
                     Style::default()
-                        .fg(stats.accent())
+                        .fg(theme::current().fg)
                         .add_modifier(Modifier::BOLD),
-                )),
-                Line::from(crate::tui::screens::pr_detail::build_status::progress_bar(
-                    builds,
-                )),
-            ]
+                ),
+            ])]
         }
-        Some(LoadState::Loaded(_)) => vec![muted_line("no builds")],
-        Some(LoadState::Failed(_)) => vec![muted_line("unavailable")],
-        _ => vec![widgets::loading("loading…")],
-    };
-    // Keep Labels and Details stationary when the progress bar arrives.
-    lines.resize(2, Line::default());
-    lines
+        Some(LoadState::Loaded(_)) => vec![muted_line("No builds")],
+        Some(LoadState::Failed(_)) => vec![muted_line("Unavailable")],
+        _ => vec![widgets::loading("Loading…")],
+    }
 }
 
 fn labels(pr: &PullRequest) -> Vec<Line<'static>> {
@@ -123,28 +122,30 @@ fn labels(pr: &PullRequest) -> Vec<Line<'static>> {
         .collect()
 }
 
-fn details(pr: &PullRequest, now: DateTime<Utc>) -> Vec<Line<'static>> {
+fn details(pr: &PullRequest, now: DateTime<Utc>, width: usize) -> Vec<Line<'static>> {
     let theme = theme::current();
     let fg = Style::default().fg(theme.fg);
     let detail = |key: &str, value: Vec<Span<'static>>| -> Line<'static> {
-        let mut spans = vec![Span::styled(
-            format!("{key:<8}"),
-            Style::default().fg(theme.muted),
-        )];
-        spans.extend(value);
-        Line::from(spans)
+        widgets::fitted_row(
+            vec![Span::styled(
+                key.to_owned(),
+                Style::default().fg(theme.muted),
+            )],
+            value,
+            width,
+        )
     };
     vec![
         detail(
-            "opened",
+            "Opened",
             vec![Span::styled(format::relative_age(pr.created, now), fg)],
         ),
         detail(
-            "updated",
+            "Updated",
             vec![Span::styled(format::relative_age(pr.updated, now), fg)],
         ),
         detail(
-            "diff",
+            "Diff",
             vec![
                 Span::styled(
                     format!("+{}", pr.additions),
@@ -158,7 +159,7 @@ fn details(pr: &PullRequest, now: DateTime<Utc>) -> Vec<Line<'static>> {
             ],
         ),
         detail(
-            "files",
+            "Files",
             vec![Span::styled(pr.changed_files.to_string(), fg)],
         ),
     ]
@@ -176,16 +177,21 @@ mod tests {
     use super::*;
 
     #[test]
-    fn build_summary_reserves_progress_row_in_all_loading_states() {
-        assert_eq!(builds_summary(None).len(), 2);
+    fn build_summary_keeps_one_row_in_all_loading_states() {
+        assert_eq!(builds_summary(None).len(), 1);
         let mut data = PrData::default();
         for builds in [
             LoadState::Loading,
             LoadState::Failed("offline".into()),
             LoadState::Loaded(vec![]),
+            LoadState::Loaded(vec![crate::domain::ci::Build {
+                name: "Tests".into(),
+                state: crate::domain::ci::BuildState::Successful,
+                duration_ms: None,
+            }]),
         ] {
             data.builds = builds;
-            assert_eq!(builds_summary(Some(&data)).len(), 2);
+            assert_eq!(builds_summary(Some(&data)).len(), 1);
         }
     }
 }

@@ -116,7 +116,12 @@ fn render_content(
     };
     match tab {
         DetailTab::Description => ui.description.render(frame, inset, &pr),
-        DetailTab::Overview => ui.overview.render(frame, inset, overview),
+        DetailTab::Overview => ui.overview.render_with_scrollbar(
+            frame,
+            inset,
+            overview,
+            Rect::new(area.right(), area.y, 1, area.height),
+        ),
         DetailTab::Diff => {
             let threads = activity_threads(pr_data);
             let diff = pr_data.and_then(|d| d.diff_for(ui.commits.open_commit.as_deref()));
@@ -234,6 +239,29 @@ pub(super) fn render(
         options: state.review_context().options,
         pending: ctx.store.reviews.get(&pr_id),
     };
+    ui.editor.target_context = ui.editor.draft.as_ref().and_then(|draft| {
+        let comment = match &draft.target {
+            crate::app::reviews::CommentTarget::Reply(id) => {
+                pr_data.and_then(|data| match &data.activity {
+                    LoadState::Loaded(activity) => activity
+                        .threads
+                        .iter()
+                        .find(|thread| thread.reply_to == Some(*id))
+                        .and_then(|thread| thread.comments.first()),
+                    _ => None,
+                })
+            }
+            crate::app::reviews::CommentTarget::Edit { id, review } => {
+                state.find_comment(*id, *review)
+            }
+            _ => None,
+        }?;
+        Some(format!(
+            "@{}: {}",
+            comment.author.username,
+            comment.content.lines().next().unwrap_or("")
+        ))
+    });
     if ui.editor.is_open() {
         ui.editor.render_with_review(
             frame,
@@ -250,12 +278,16 @@ pub(super) fn render(
         );
     }
     if let Some(dialog) = &mut ui.confirm {
+        dialog.set_pr_context(format!("PR #{} · {}", pr.id, pr.title), &pr.target_branch);
         dialog.render(frame, area, &());
     }
     if let Some(dialog) = &mut ui.review_picker {
         dialog.render(frame, area, &review_ctx);
     }
     if let Some(dialog) = &mut ui.merge_picker {
+        dialog.pr_label = format!("PR #{} · {}", pr.id, pr.title);
+        dialog.target_branch.clone_from(&pr.target_branch);
+        dialog.source_branch.clone_from(&pr.source_branch);
         dialog.render(
             frame,
             area,

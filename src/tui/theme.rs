@@ -183,11 +183,11 @@ pub fn current() -> &'static Theme {
             .ok()
             .or_else(|| crate::config::load().theme);
         match name.as_deref() {
-            Some("graphite") => &GRAPHITE,
             Some("slate") => &SLATE,
             Some("gruvbox") => &GRUVBOX,
             Some("catppuccin") => &CATPPUCCIN,
-            _ => &TERMINAL,
+            Some("terminal") => &TERMINAL,
+            _ => &GRAPHITE,
         }
     })
 }

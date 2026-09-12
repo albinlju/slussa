@@ -19,6 +19,8 @@ use ratatui::{
 pub struct CommentEditor {
     pub draft: Option<CommentDraft>,
     pub suspended: bool,
+    pub resuming: bool,
+    pub target_context: Option<String>,
     pub cursor: Option<usize>,
     pub scroll: usize,
     pub discard_confirm: bool,
@@ -208,10 +210,15 @@ impl CommentEditor {
         );
         let title = match &draft.target {
             CommentTarget::Line(a) => format!(" Comment {}:{} ", a.path, a.line),
-            CommentTarget::Reply(_) => " Reply ".into(),
-            CommentTarget::Edit { .. } => " Edit comment ".into(),
+            CommentTarget::Reply(id) => format!(" Reply to comment #{id} "),
+            CommentTarget::Edit { id, .. } => format!(" Edit comment #{id} "),
             CommentTarget::Review { verdict } => format!(" {} review ", verdict.label()),
             CommentTarget::Pr => " PR comment ".into(),
+        };
+        let title = if self.resuming {
+            format!(" Resuming draft · {}", title.trim())
+        } else {
+            title
         };
         let theme = theme::current();
         let block = Block::default()
@@ -235,10 +242,28 @@ impl CommentEditor {
             },
         );
         let footer_height = hints.len() as u16 + 1;
-        let body = Rect {
+        let mut body = Rect {
             height: inner.height.saturating_sub(footer_height),
             ..inner
         };
+        if !self.discard_confirm
+            && body.height > 2
+            && let Some(context) = &self.target_context
+        {
+            let spans = crate::tui::widgets::truncate_to_width(
+                vec![ratatui::text::Span::styled(
+                    context.clone(),
+                    Style::default().fg(theme.muted),
+                )],
+                body.width as usize,
+            );
+            frame.render_widget(
+                Paragraph::new(Line::from(spans)),
+                Rect::new(body.x, body.y, body.width, 1),
+            );
+            body.y += 2;
+            body.height -= 2;
+        }
         if body.width == 0 || body.height == 0 {
             return;
         }
@@ -268,7 +293,7 @@ impl CommentEditor {
                 ));
             }
         }
-        let footer = Rect::new(inner.x, inner.y + body.height, inner.width, footer_height);
+        let footer = Rect::new(inner.x, body.y + body.height, inner.width, footer_height);
         let separator = Block::default()
             .borders(Borders::TOP)
             .border_style(Style::default().fg(theme.divider))

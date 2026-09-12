@@ -273,6 +273,17 @@ impl Component for CommitList {
 }
 
 impl CommitList {
+    pub fn reconcile(&mut self, old: &[Commit], new: &[Commit]) {
+        let id = self
+            .search
+            .filter_commits(old)
+            .get(self.selected)
+            .map(|commit| commit.oid.clone());
+        let filtered = self.search.filter_commits(new);
+        self.selected = id
+            .and_then(|id| filtered.iter().position(|commit| commit.oid == id))
+            .unwrap_or(self.selected.min(filtered.len().saturating_sub(1)));
+    }
     pub fn update_search(&mut self, action: crate::app::action::SearchAction) {
         use crate::app::action::SearchAction;
         self.search.update(

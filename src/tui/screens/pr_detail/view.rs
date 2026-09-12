@@ -129,7 +129,7 @@ impl<'a> DetailView<'a> {
     }
 
     /// The loaded comment with `id` in the current PR's activity, if any.
-    pub fn find_comment(&self, id: u64) -> Option<&'a Comment> {
+    pub fn find_comment(&self, id: u64, review: bool) -> Option<&'a Comment> {
         let Screen::Detail { pr_id, .. } = self.screen else {
             return None;
         };
@@ -139,7 +139,14 @@ impl<'a> DetailView<'a> {
         activity
             .comments
             .iter()
-            .chain(activity.threads.iter().flat_map(|t| t.comments.iter()))
+            .filter(|_| !review)
+            .chain(
+                activity
+                    .threads
+                    .iter()
+                    .filter(|thread| thread.anchor.is_some() == review)
+                    .flat_map(|t| t.comments.iter()),
+            )
             .find(|c| c.id == Some(id))
     }
 
@@ -163,7 +170,7 @@ impl<'a> DetailView<'a> {
     pub fn editable_selected(&self) -> Option<CommentRef> {
         let sel = self.detail.overview.timeline.selected?;
         let id = sel.id?;
-        let comment = self.find_comment(id)?;
+        let comment = self.find_comment(id, sel.review)?;
         (!self.store.current_user.is_empty() && comment.author.username == self.store.current_user)
             .then_some(sel)
     }

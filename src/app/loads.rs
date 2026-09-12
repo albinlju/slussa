@@ -52,10 +52,41 @@ impl App {
             }
             LoadedAction::Prs(r) => {
                 log_outcome("prs", None, &r);
+                let selected_id = self
+                    .state
+                    .ui
+                    .list
+                    .filtered_prs(&self.state.store.cache.prs)
+                    .get(self.state.ui.list.selected)
+                    .map(|pr| pr.id);
                 self.state.store.cache.prs.reload(r);
+                let filtered = self.state.ui.list.filtered_prs(&self.state.store.cache.prs);
+                self.state.ui.list.selected = selected_id
+                    .and_then(|id| filtered.iter().position(|pr| pr.id == id))
+                    .unwrap_or(
+                        self.state
+                            .ui
+                            .list
+                            .selected
+                            .min(filtered.len().saturating_sub(1)),
+                    );
             }
             LoadedAction::Commits(pr_id, r) => {
                 log_outcome("commits", Some(pr_id), &r);
+                if let Ok(new) = &r {
+                    let old = self
+                        .state
+                        .store
+                        .cache
+                        .details
+                        .get(&pr_id)
+                        .and_then(|data| match &data.commits {
+                            LoadState::Loaded(commits) => Some(commits.as_slice()),
+                            _ => None,
+                        })
+                        .unwrap_or(&[]);
+                    self.state.ui.detail.reconcile_commits(pr_id, old, new);
+                }
                 self.pr_data_mut(pr_id).commits.reload(r);
             }
             LoadedAction::Diff(pr_id, r) => {
@@ -101,6 +132,17 @@ impl App {
         }
         match r {
             Ok(()) => {
+                let label = match operation {
+                    Operation::Merge => "merged",
+                    Operation::Decline => "closed / declined",
+                    Operation::Review => "review submitted",
+                    Operation::Comment => "comment saved",
+                    Operation::Moderation => "comment / thread updated",
+                };
+                self.state.store.notice = Some(crate::app::store::Notice::new(
+                    format!("PR #{pr_id} · {label}"),
+                    false,
+                ));
                 self.state.store.uncertain_submissions.remove(&pr_id);
                 self.state.store.errors.remove(&pr_id);
                 if matches!(operation, Operation::Review) {

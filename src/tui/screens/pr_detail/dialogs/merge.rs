@@ -16,7 +16,7 @@ use ratatui::{
 fn render(
     frame: &mut Frame,
     strategies: &[crate::domain::pr::MergeStrategy],
-    cursor: usize,
+    dialog: &MergeDialog,
     area: Rect,
 ) {
     let theme = theme::current();
@@ -29,17 +29,49 @@ fn render(
         Line::from(Span::styled("Merge this PR", Style::default().fg(theme.fg))),
         Line::default(),
     ];
+    if !dialog.pr_label.is_empty() {
+        lines.insert(1, Line::styled(dialog.pr_label.clone(), normal));
+        lines.insert(
+            2,
+            Line::from(vec![
+                Span::styled("Into: ", normal),
+                Span::styled(
+                    dialog.target_branch.clone(),
+                    Style::default()
+                        .fg(theme.accent)
+                        .add_modifier(Modifier::BOLD),
+                ),
+            ]),
+        );
+        lines.insert(
+            3,
+            Line::from(vec![
+                Span::styled("From: ", normal),
+                Span::styled(
+                    dialog.source_branch.clone(),
+                    Style::default().fg(theme.orange),
+                ),
+            ]),
+        );
+    }
     for (i, strategy) in strategies.iter().enumerate() {
-        let marker = if i == cursor { "▶ " } else { "  " };
-        let style = if i == cursor { selected } else { normal };
+        let marker = if i == dialog.cursor { "▶ " } else { "  " };
+        let style = if i == dialog.cursor { selected } else { normal };
         lines.push(Line::from(vec![
             Span::styled(marker, Style::default().fg(theme.accent)),
             Span::styled(format!(" {} ", strategy.label()), style),
         ]));
     }
 
-    let selected_line = 2 + cursor;
-    crate::tui::widgets::dialog::choices(frame, area, "Merge", lines, selected_line);
+    let selected_line = lines.len() - strategies.len() + dialog.cursor;
+    crate::tui::widgets::dialog::choices_with_hints(
+        frame,
+        area,
+        "Merge",
+        lines,
+        selected_line,
+        &[("j/k", "move"), ("Enter", "merge"), ("Esc", "cancel")],
+    );
 }
 
 fn key_to_action(code: KeyCode) -> Option<Action> {
@@ -59,6 +91,9 @@ fn key_to_action(code: KeyCode) -> Option<Action> {
 #[derive(Debug, Default)]
 pub struct MergeDialog {
     cursor: usize,
+    pub pr_label: String,
+    pub target_branch: String,
+    pub source_branch: String,
 }
 impl MergeDialog {
     pub fn selected(
@@ -85,6 +120,6 @@ impl Component for MergeDialog {
         }
     }
     fn render(&mut self, frame: &mut Frame, area: Rect, ctx: &Self::Context<'_>) {
-        render(frame, ctx, self.cursor, area);
+        render(frame, ctx, self, area);
     }
 }
