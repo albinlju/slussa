@@ -55,9 +55,9 @@ pub fn render(frame: &mut Frame, pr_data: Option<&PrData>, cv: &mut CommitList, 
         .collect();
 
     let list = List::new(items).highlight_style(Style::default().bg(theme.highlight_bg));
-    let mut list_state = ListState::default();
-    list_state.select(Some(cv.selected.min(last_idx)));
-    frame.render_stateful_widget(list, area, &mut list_state);
+    cv.selected = cv.selected.min(last_idx);
+    cv.list_state.select(Some(cv.selected));
+    frame.render_stateful_widget(list, area, &mut cv.list_state);
 }
 
 fn commit_row(commit: &Commit, is_last: bool, now: DateTime<Utc>, width: usize) -> Line<'static> {
@@ -91,7 +91,7 @@ fn commit_row(commit: &Commit, is_last: bool, now: DateTime<Utc>, width: usize) 
 
     let left = vec![
         Span::styled(graph, Style::default().fg(theme.muted)),
-        Span::styled(oid_cell, Style::default().fg(theme.accent)),
+        Span::styled(oid_cell, Style::default().fg(theme.decorative)),
         Span::raw(headline),
     ];
     widgets::fitted_row(left, right, width)
@@ -148,12 +148,12 @@ fn render_commit_banner(frame: &mut Frame, pr_data: Option<&PrData>, oid: &str, 
     let mut left = vec![
         Span::styled(
             format!("{} ", icons::GIT_COMMIT),
-            Style::default().fg(theme.accent),
+            Style::default().fg(theme.decorative),
         ),
         Span::styled(
             short_oid(oid),
             Style::default()
-                .fg(theme.accent)
+                .fg(theme.decorative)
                 .add_modifier(Modifier::BOLD),
         ),
     ];
@@ -188,6 +188,7 @@ fn short_oid(oid: &str) -> String {
 #[derive(Debug, Default)]
 pub struct CommitList {
     pub selected: usize,
+    list_state: ListState,
     pub viewport: u16,
     pub search: SearchInput,
     pub open_commit: Option<String>,
@@ -283,6 +284,7 @@ impl CommitList {
         );
         if !matches!(action, SearchAction::Open | SearchAction::Confirm) {
             self.selected = 0;
+            self.list_state = ListState::default();
         }
     }
 }

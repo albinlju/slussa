@@ -777,7 +777,11 @@ fn dialog_footers_and_review_choices_remain_visible_with_large_queue() {
                 text.contains(expected),
                 "{kind} selection missing at {width}x{height}"
             );
-            assert!(text.contains("Enter select"));
+            assert!(text.contains(if kind == "review" {
+                "Enter submit"
+            } else {
+                "Enter select"
+            }));
             assert!(text.contains("Esc cancel"));
             assert!(!text.contains("v: finish"));
             local_key(&mut state, KeyCode::Esc);
@@ -1023,4 +1027,205 @@ fn overview_reveals_selected_reply_and_allows_scrolling_long_text() {
     let stable = state.ui.detail.overview.timeline.scroll;
     terminal.draw(|frame| render(frame, &mut state)).unwrap();
     assert_eq!(state.ui.detail.overview.timeline.scroll, stable);
+    let reply_row = |terminal: &Terminal<TestBackend>| {
+        terminal
+            .backend()
+            .buffer()
+            .content
+            .chunks(60)
+            .position(|row| {
+                row.iter()
+                    .map(ratatui::buffer::Cell::symbol)
+                    .collect::<String>()
+                    .contains("Selected reply is visible")
+            })
+    };
+    let before = reply_row(&terminal);
+    if let LoadState::Loaded(activity) =
+        &mut state.store.cache.details.get_mut(&42).unwrap().activity
+    {
+        let mut newer = comment(30, "New discussion arrived".into());
+        newer.created = now + chrono::Duration::seconds(10);
+        activity.comments.push(newer);
+        activity.threads[0]
+            .comments
+            .insert(1, comment(12, "Earlier reply inserted".into()));
+    }
+    terminal.draw(|frame| render(frame, &mut state)).unwrap();
+    assert_eq!(
+        state.ui.detail.overview.timeline.selected.unwrap().id,
+        Some(11)
+    );
+    assert_eq!(state.ui.detail.overview.timeline.cursor, 2);
+    assert_eq!(state.ui.detail.overview.timeline.sub, 2);
+    assert_eq!(before, reply_row(&terminal));
+    if let LoadState::Loaded(activity) =
+        &mut state.store.cache.details.get_mut(&42).unwrap().activity
+    {
+        activity.threads[0].comments.retain(|c| c.id != Some(11));
+    }
+    terminal.draw(|frame| render(frame, &mut state)).unwrap();
+    assert_ne!(
+        state.ui.detail.overview.timeline.selected.unwrap().id,
+        Some(11)
+    );
+}
+
+#[test]
+fn commit_list_returns_to_the_same_viewport_after_opening_a_commit() {
+    let mut state = fixture();
+    state.screen = Screen::Detail {
+        pr_id: 42,
+        tab: DetailTab::Commits,
+    };
+    state.store.cache.details.get_mut(&42).unwrap().commits = LoadState::Loaded(
+        (0..40)
+            .map(|n| Commit {
+                oid: format!("{n:07x}"),
+                headline: format!("Commit number {n}"),
+                author_name: "alice".into(),
+                authored_at: chrono::Utc::now(),
+                additions: 1,
+                deletions: 0,
+            })
+            .collect(),
+    );
+    let mut terminal = Terminal::new(TestBackend::new(60, 16)).unwrap();
+    terminal.draw(|frame| render(frame, &mut state)).unwrap();
+    for _ in 0..25 {
+        local_key(&mut state, KeyCode::Char('j'));
+        terminal.draw(|frame| render(frame, &mut state)).unwrap();
+    }
+    for _ in 0..3 {
+        local_key(&mut state, KeyCode::Char('k'));
+        terminal.draw(|frame| render(frame, &mut state)).unwrap();
+    }
+    let before = rendered_text(&terminal);
+    local_key(&mut state, KeyCode::Enter);
+    terminal.draw(|frame| render(frame, &mut state)).unwrap();
+    assert!(state.ui.detail.commits.open_commit.is_some());
+    local_key(&mut state, KeyCode::Esc);
+    terminal.draw(|frame| render(frame, &mut state)).unwrap();
+    assert_eq!(rendered_text(&terminal), before);
+}
+
+#[test]
+fn wide_description_can_pan_to_hidden_content_and_resets_when_resized() {
+    let mut state = fixture();
+    state.screen = Screen::Detail {
+        pr_id: 42,
+        tab: DetailTab::Description,
+    };
+    if let LoadState::Loaded(prs) = &mut state.store.cache.prs {
+        prs[0].description = Some(format!("```\n{}END_OF_CODE\n```", "x".repeat(100)));
+    }
+    let mut terminal = Terminal::new(TestBackend::new(40, 16)).unwrap();
+    terminal.draw(|frame| render(frame, &mut state)).unwrap();
+    assert!(rendered_text(&terminal).contains("H/L: pan"));
+    assert!(!rendered_text(&terminal).contains("END_OF_CODE"));
+    for _ in 0..20 {
+        local_key(&mut state, KeyCode::Char('L'));
+    }
+    terminal.draw(|frame| render(frame, &mut state)).unwrap();
+    assert!(rendered_text(&terminal).contains("END_OF_CODE"));
+    assert_eq!(
+        state.screen,
+        Screen::Detail {
+            pr_id: 42,
+            tab: DetailTab::Description
+        }
+    );
+    let mut wide = Terminal::new(TestBackend::new(160, 16)).unwrap();
+    wide.draw(|frame| render(frame, &mut state)).unwrap();
+    assert_eq!(state.ui.detail.description.horizontal, 0);
+    assert!(!rendered_text(&wide).contains("H/L: pan"));
+}
+
+#[test]
+fn review_preview_shows_full_comments_without_submitting() {
+    use crate::app::reviews::CommentAnchor;
+    let mut state = fixture();
+    state.screen = Screen::Detail {
+        pr_id: 42,
+        tab: DetailTab::Overview,
+    };
+    state.store.reviews.insert(
+        42,
+        crate::app::reviews::PendingReview {
+            comments: (0..4)
+                .map(|index| crate::app::reviews::PendingComment {
+                    anchor: CommentAnchor {
+                        revision: None,
+                        path: format!("src/file{index}.rs"),
+                        line: 1,
+                        removed: false,
+                    },
+                    text: format!(
+                        "{}END_COMMENT_{index}",
+                        "More context to review.\n".repeat(12)
+                    ),
+                })
+                .collect(),
+            submitted_summary: None,
+        },
+    );
+    local_key(&mut state, KeyCode::Char('v'));
+    let mut terminal = Terminal::new(TestBackend::new(60, 16)).unwrap();
+    terminal.draw(|frame| render(frame, &mut state)).unwrap();
+    assert!(rendered_text(&terminal).contains("inspect comments"));
+    local_key(&mut state, KeyCode::Tab);
+    terminal.draw(|frame| render(frame, &mut state)).unwrap();
+    assert!(rendered_text(&terminal).contains("not published"));
+    assert!(key_to_action(&state, KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE)).is_none());
+    for _ in 0..100 {
+        local_key(&mut state, KeyCode::Char('j'));
+        terminal.draw(|frame| render(frame, &mut state)).unwrap();
+    }
+    assert!(rendered_text(&terminal).contains("END_COMMENT_3"));
+    local_key(&mut state, KeyCode::Tab);
+    terminal.draw(|frame| render(frame, &mut state)).unwrap();
+    assert!(rendered_text(&terminal).contains("Approve"));
+    local_key(&mut state, KeyCode::Esc);
+    assert_eq!(state.store.reviews[&42].comments.len(), 4);
+    assert!(state.store.operations.is_empty());
+}
+
+#[test]
+fn editor_distinguishes_queued_comments_from_direct_publication() {
+    use crate::app::reviews::CommentAnchor;
+    use crate::tui::components::comment_editor::CommentEditor;
+    for (target, expected) in [
+        (
+            CommentTarget::Line(CommentAnchor {
+                revision: None,
+                path: "src/main.rs".into(),
+                line: 1,
+                removed: false,
+            }),
+            "add to review",
+        ),
+        (CommentTarget::Pr, "post comment"),
+        (CommentTarget::Reply(10), "post reply"),
+        (
+            CommentTarget::Review {
+                verdict: crate::domain::review::ReviewVerdict::Comment,
+            },
+            "submit review",
+        ),
+    ] {
+        for width in [40, 100] {
+            let mut editor = CommentEditor {
+                draft: Some(CommentDraft {
+                    target: target.clone(),
+                    text: "Draft".into(),
+                }),
+                ..CommentEditor::default()
+            };
+            let mut terminal = Terminal::new(TestBackend::new(width, 16)).unwrap();
+            terminal
+                .draw(|frame| editor.render_with_review(frame, frame.area(), false, true))
+                .unwrap();
+            assert!(rendered_text(&terminal).contains(expected));
+        }
+    }
 }

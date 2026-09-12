@@ -3,11 +3,72 @@ use ratatui::text::Line;
 const GLAMOUR_MARGIN: usize = 2;
 
 pub(in crate::tui) fn render(body: &str, width: u16) -> Vec<Line<'static>> {
-    trim_blank_lines(render_glamour(
-        body,
+    let source: Vec<_> = body.lines().collect();
+    let mut output = Vec::new();
+    let mut start = 0;
+    let mut i = 0;
+    let mut fence: Option<&str> = None;
+    while i < source.len() {
+        let trimmed = source[i].trim_start();
+        if trimmed.starts_with("```") || trimmed.starts_with("~~~") {
+            let marker = &trimmed[..3];
+            if fence == Some(marker) {
+                fence = None;
+            } else if fence.is_none() {
+                fence = Some(marker);
+            }
+        }
+        if fence.is_none()
+            && i + 1 < source.len()
+            && source[i].contains('|')
+            && table_separator(source[i + 1])
+        {
+            output.extend(render_glamour(
+                &source[start..i].join("\n"),
+                width,
+                description_style(crate::tui::theme::current()),
+            ));
+            let table_start = i;
+            i += 2;
+            while i < source.len() && source[i].contains('|') && !source[i].trim().is_empty() {
+                i += 1;
+            }
+            let mut columns = Vec::<usize>::new();
+            for row in &source[table_start..i] {
+                for (index, cell) in row.trim().trim_matches('|').split('|').enumerate() {
+                    if columns.len() <= index {
+                        columns.resize(index + 1, 0);
+                    }
+                    columns[index] = columns[index].max(ratatui::text::Span::raw(cell).width());
+                }
+            }
+            let table_width = columns.iter().sum::<usize>() + columns.len() * 4 + 8;
+            let render_width = width.max(table_width.min(u16::MAX as usize) as u16);
+            output.extend(render_glamour(
+                &source[table_start..i].join("\n"),
+                render_width,
+                description_style(crate::tui::theme::current()),
+            ));
+            start = i;
+        } else {
+            i += 1;
+        }
+    }
+    output.extend(render_glamour(
+        &source[start..].join("\n"),
         width,
         description_style(crate::tui::theme::current()),
-    ))
+    ));
+    trim_blank_lines(output)
+}
+
+fn table_separator(line: &str) -> bool {
+    let cells: Vec<_> = line.trim().trim_matches('|').split('|').collect();
+    !cells.is_empty()
+        && cells.iter().all(|cell| {
+            let cell = cell.trim().trim_matches(':');
+            cell.len() >= 3 && cell.chars().all(|ch| ch == '-')
+        })
 }
 
 pub(in crate::tui) fn render_no_margin(body: &str, width: u16) -> Vec<Line<'static>> {
@@ -87,7 +148,7 @@ fn description_style(theme: &crate::tui::theme::Theme) -> glamour::StyleConfig {
         &mut style.h5,
         &mut style.h6,
     ] {
-        block.style.color = ansi_color(theme.accent);
+        block.style.color = ansi_color(theme.decorative);
         block.style.background_color = None;
         block.style.bold = Some(true);
     }
@@ -130,13 +191,32 @@ fn ansi_color(color: ratatui::style::Color) -> Option<String> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::tui::theme::{CATPPUCCIN, GRUVBOX, TERMINAL};
+    use crate::tui::theme::{CATPPUCCIN, GRAPHITE, GRUVBOX, SLATE, TERMINAL};
     use ratatui::style::Color;
+
+    #[test]
+    fn long_markdown_content_remains_accessible_in_narrow_views() {
+        let sample = format!(
+            "```\n{}END_CODE\n```\n\n| Key | Value |\n| --- | --- |\n| path | {}END_CELL |\n\n[Docs](https://example.com/{}END_LINK)",
+            "x".repeat(120),
+            "y".repeat(120),
+            "z".repeat(120)
+        );
+        let lines = render(&sample, 38);
+        let text = lines
+            .iter()
+            .map(ToString::to_string)
+            .collect::<Vec<_>>()
+            .join("\n");
+        for marker in ["END_CODE", "END_CELL", "END_LINK"] {
+            assert!(text.contains(marker), "missing {marker}: {text}");
+        }
+    }
 
     #[test]
     fn description_uses_each_theme_without_colored_backgrounds() {
         let text = "# Review title\n\nRead [the docs](https://example.com) and `code`.\n\n> Context\n\n```\nlet value = 1;\n```";
-        for theme in [&TERMINAL, &GRUVBOX, &CATPPUCCIN] {
+        for theme in [&TERMINAL, &GRUVBOX, &CATPPUCCIN, &SLATE, &GRAPHITE] {
             for width in [40, 100] {
                 let lines = render_glamour(text, width, description_style(theme));
                 let rendered = lines

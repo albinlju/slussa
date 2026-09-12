@@ -116,7 +116,7 @@ fn builds_summary(pr_data: Option<&PrData>) -> Vec<Line<'static>> {
 }
 
 fn labels(pr: &PullRequest) -> Vec<Line<'static>> {
-    let accent = Style::default().fg(theme::current().accent);
+    let accent = Style::default().fg(theme::current().decorative);
     pr.labels
         .iter()
         .map(|label| Line::from(Span::styled(label.clone(), accent)))

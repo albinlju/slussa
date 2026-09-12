@@ -180,6 +180,18 @@ impl Component for CommentEditor {
         None
     }
     fn render(&mut self, frame: &mut Frame, area: Rect, sending: &bool) {
+        self.render_with_review(frame, area, *sending, false);
+    }
+}
+
+impl CommentEditor {
+    pub fn render_with_review(
+        &mut self,
+        frame: &mut Frame,
+        area: Rect,
+        sending: bool,
+        review_active: bool,
+    ) {
         if !self.is_open() {
             return;
         }
@@ -212,8 +224,15 @@ impl Component for CommentEditor {
         frame.render_widget(block, popup);
         let hints = footer_lines(
             inner.width.saturating_sub(2),
-            *sending,
+            sending,
             self.discard_confirm,
+            match &draft.target {
+                CommentTarget::Line(_) if review_active => "add to review",
+                CommentTarget::Review { .. } => "submit review",
+                CommentTarget::Reply(_) => "post reply",
+                CommentTarget::Edit { .. } => "save changes",
+                _ => "post comment",
+            },
         );
         let footer_height = hints.len() as u16 + 1;
         let body = Rect {
@@ -258,7 +277,12 @@ impl Component for CommentEditor {
     }
 }
 
-fn footer_lines(width: u16, sending: bool, discard: bool) -> Vec<Line<'static>> {
+fn footer_lines(
+    width: u16,
+    sending: bool,
+    discard: bool,
+    submit_label: &str,
+) -> Vec<Line<'static>> {
     let theme = theme::current();
     let muted = Style::default().fg(theme.muted);
     if sending {
@@ -269,7 +293,7 @@ fn footer_lines(width: u16, sending: bool, discard: bool) -> Vec<Line<'static>> 
     }
     let compact = width < 64;
     let editing = [
-        (if compact { "^S" } else { "Ctrl+S" }, "send"),
+        (if compact { "^S" } else { "Ctrl+S" }, submit_label),
         ("Esc", "keep draft"),
         ("Enter", "newline"),
         (if compact { "^X" } else { "Ctrl+X" }, "discard"),

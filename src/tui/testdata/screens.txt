@@ -90,7 +90,7 @@
 │                                                                 │                                │
 │                                                                 │                                │
 └──────────────────────────────────────────────────────────────────────────────────────────────────┘
-  c: comment  a: verdict  v: review  m: merge  x: decline                                   ?: help
+  c: comment  a: submit review  v: start review  m: merge  x: decline                       ?: help
 100x30 Detail { pr_id: 42, tab: Diff }
 ┌──────────────────────────────────────────────────────────────────────────────────────────────────┐
 │  #42 Component migration                                                                         │
@@ -222,7 +222,7 @@
 │                                      │
 │                                      │
 └──────────────────────────────────────┘
-  c: comment  a: verdict        ?: help
+  c: comment  a: submit review  ?: help
 40x12 Detail { pr_id: 42, tab: Diff }
 ┌──────────────────────────────────────┐
 │ #42 Component migration              │

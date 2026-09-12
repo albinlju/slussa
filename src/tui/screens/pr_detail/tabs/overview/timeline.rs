@@ -49,6 +49,7 @@ fn render_timeline(
     };
 
     if activity.comments.is_empty() && activity.threads.is_empty() && activity.events.is_empty() {
+        *ui = Timeline::default();
         frame.render_widget(widgets::empty_state("(no activity)"), area);
         return;
     }
@@ -72,6 +73,47 @@ fn render_timeline(
         LoadState::Loaded(diff) => Some(diff),
         _ => None,
     });
+
+    let previous_selection = ui.selected.filter(|selected| selected.id.is_some());
+    if let Some(selected) = previous_selection {
+        let mut items: Vec<_> = activity
+            .comments
+            .iter()
+            .map(TimelineItem::Comment)
+            .chain(
+                activity
+                    .threads
+                    .iter()
+                    .filter(|t| !t.comments.is_empty())
+                    .map(TimelineItem::Review),
+            )
+            .collect();
+        items.sort_by_key(|item| Reverse(item.timestamp()));
+        let found = items
+            .iter()
+            .enumerate()
+            .find_map(|(cursor, item)| match item {
+                TimelineItem::Comment(comment) if !selected.review && comment.id == selected.id => {
+                    Some((cursor, 0))
+                }
+                TimelineItem::Review(thread) if selected.review == thread.anchor.is_some() => {
+                    thread
+                        .comments
+                        .iter()
+                        .position(|comment| comment.id == selected.id)
+                        .map(|sub| (cursor, sub))
+                }
+                _ => None,
+            });
+        if let Some((cursor, sub)) = found {
+            ui.cursor = cursor;
+            ui.sub = sub;
+        } else {
+            ui.sub = 0;
+            ui.selected_row = None;
+            ui.reveal_selection = true;
+        }
+    }
 
     let count = focusable_count(&activity.comments, &activity.threads);
     let cursor = ui.cursor.min(count.saturating_sub(1));
@@ -101,6 +143,19 @@ fn render_timeline(
     ui.block_len = block_len;
     ui.sub = sub;
     ui.selected = focused.and_then(|n| n.comments.get(sub).copied());
+
+    let selected_row = focused.map(|n| n.selected_range.as_ref().map_or(n.start, |r| r.start));
+    if previous_selection.is_some_and(|old| {
+        ui.selected
+            .is_some_and(|new| old.id == new.id && old.review == new.review)
+    }) && let (Some(before), Some(after)) = (ui.selected_row, selected_row)
+    {
+        ui.scroll = (usize::from(ui.scroll)
+            .saturating_add(after)
+            .saturating_sub(before))
+        .min(u16::MAX as usize) as u16;
+    }
+    ui.selected_row = selected_row;
 
     let viewport = area.height as usize;
     let max_scroll = content.len().saturating_sub(viewport) as u16;
@@ -396,6 +451,7 @@ pub struct Timeline {
     pub selected: Option<CommentRef>,
     pub viewport: u16,
     reveal_selection: bool,
+    selected_row: Option<usize>,
 }
 
 impl Component for Timeline {
@@ -441,6 +497,8 @@ impl Component for Timeline {
                 } else {
                     let next = step_index(self.cursor, delta, self.item_count);
                     if next != self.cursor {
+                        self.selected = None;
+                        self.selected_row = None;
                         self.cursor = next;
                         self.sub = 0;
                         self.reveal_selection = true;
@@ -449,6 +507,10 @@ impl Component for Timeline {
             }
             DetailAction::OverviewSubMove(delta) => {
                 let next = step_index(self.sub, delta, self.block_len);
+                if next != self.sub {
+                    self.selected = None;
+                    self.selected_row = None;
+                }
                 self.reveal_selection = next != self.sub;
                 self.sub = next;
             }

@@ -955,3 +955,39 @@ fn failed_refresh_marks_cached_data_until_that_resource_recovers() {
     app.apply(Action::Loaded(LoadedAction::Diff(42, Ok(diff))));
     assert!(!app.state.store.refresh_failed(app.state.screen));
 }
+
+#[test]
+fn discarding_a_populated_review_requires_explicit_confirmation() {
+    let mut app = app();
+    detail(&mut app, DetailTab::Overview);
+    app.state.store.reviews.insert(
+        42,
+        crate::app::reviews::PendingReview {
+            comments: vec![crate::app::reviews::PendingComment {
+                anchor: CommentAnchor {
+                    revision: None,
+                    path: "src/main.rs".into(),
+                    line: 1,
+                    removed: false,
+                },
+                text: "Keep this draft".into(),
+            }],
+            submitted_summary: None,
+        },
+    );
+    press(&mut app, KeyCode::Char('V'));
+    assert_eq!(
+        app.state.ui.detail.confirm.as_ref().unwrap().kind(),
+        ConfirmKind::DiscardReview
+    );
+    // Enter defaults to keeping the review, not removing it.
+    press(&mut app, KeyCode::Enter);
+    assert_eq!(app.state.store.reviews[&42].comments.len(), 1);
+    press(&mut app, KeyCode::Char('V'));
+    press(&mut app, KeyCode::Esc);
+    assert_eq!(app.state.store.reviews[&42].comments.len(), 1);
+    press(&mut app, KeyCode::Char('V'));
+    press(&mut app, KeyCode::Char('k'));
+    press(&mut app, KeyCode::Enter);
+    assert!(!app.state.store.reviews.contains_key(&42));
+}

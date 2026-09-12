@@ -23,7 +23,48 @@ fn truncate_cols(s: &str, max: usize) -> String {
     format!("{head}…")
 }
 
-fn render(frame: &mut Frame, ctx: &ReviewContext<'_>, cursor: usize, area: Rect) {
+fn render(frame: &mut Frame, ctx: &ReviewContext<'_>, dialog: &mut ReviewDialog, area: Rect) {
+    let cursor = dialog.cursor;
+    if dialog.preview {
+        let body = crate::tui::widgets::dialog::frame(
+            frame,
+            area,
+            "Review draft · not published",
+            (76, area.height.saturating_sub(6)),
+            &[("j/k", "scroll"), ("Tab", "back"), ("Esc", "close")],
+        );
+        let mut lines = Vec::new();
+        if let Some(review) = ctx.pending {
+            for (index, comment) in review.comments.iter().enumerate() {
+                if index > 0 {
+                    lines.push(Line::default());
+                }
+                let heading = format!(
+                    "{}. {}:{}",
+                    index + 1,
+                    comment.anchor.path,
+                    comment.anchor.line
+                );
+                for line in crate::tui::widgets::wrap_text(&heading, body.width as usize) {
+                    lines.push(Line::styled(
+                        line,
+                        Style::default().fg(theme::current().link),
+                    ));
+                }
+                for line in crate::tui::widgets::wrap_text(&comment.text, body.width as usize) {
+                    lines.push(Line::styled(line, Style::default().fg(theme::current().fg)));
+                }
+            }
+        }
+        dialog.scroll = dialog
+            .scroll
+            .min(lines.len().saturating_sub(body.height as usize) as u16);
+        frame.render_widget(
+            ratatui::widgets::Paragraph::new(lines).scroll((dialog.scroll, 0)),
+            body,
+        );
+        return;
+    }
     let theme = theme::current();
     let selected = Style::default()
         .bg(theme.highlight_bg)
@@ -78,7 +119,47 @@ fn render(frame: &mut Frame, ctx: &ReviewContext<'_>, cursor: usize, area: Rect)
     }
 
     let selected_line = lines.len().saturating_sub(ctx.options.len()) + cursor;
-    crate::tui::widgets::dialog::choices(frame, area, "Review", lines, selected_line);
+    let action = dialog.selected(ctx).map_or("unavailable", |verdict| {
+        if verdict.needs_body() {
+            "continue"
+        } else {
+            "submit review"
+        }
+    });
+    let mut hints = vec![("j/k", "move"), ("Enter", action), ("Esc", "cancel")];
+    if ctx
+        .pending
+        .is_some_and(|review| !review.comments.is_empty())
+    {
+        hints.insert(0, ("Tab", "inspect comments"));
+    }
+    if area.width < 44 {
+        hints = vec![
+            (
+                "Enter",
+                if action == "submit review" {
+                    "submit"
+                } else {
+                    action
+                },
+            ),
+            ("Esc", "cancel"),
+        ];
+        if ctx
+            .pending
+            .is_some_and(|review| !review.comments.is_empty())
+        {
+            hints.insert(0, ("Tab", "comments"));
+        }
+    }
+    crate::tui::widgets::dialog::choices_with_hints(
+        frame,
+        area,
+        "Review",
+        lines,
+        selected_line,
+        &hints,
+    );
 }
 
 fn key_to_action(code: KeyCode) -> Option<Action> {
@@ -102,6 +183,8 @@ pub struct ReviewContext<'a> {
 #[derive(Debug, Default)]
 pub struct ReviewDialog {
     cursor: usize,
+    preview: bool,
+    scroll: u16,
 }
 impl ReviewDialog {
     pub fn new(ctx: &ReviewContext<'_>) -> Self {
@@ -111,6 +194,7 @@ impl ReviewDialog {
                 .iter()
                 .position(|(_, reason)| reason.is_none())
                 .unwrap_or(0),
+            ..Self::default()
         }
     }
     pub fn selected(
@@ -131,19 +215,33 @@ impl ReviewDialog {
 impl Component for ReviewDialog {
     type Context<'a> = ReviewContext<'a>;
     type Message = DetailAction;
-    fn handle_key(&self, key: KeyEvent, _: &Self::Context<'_>) -> Option<Action> {
+    fn handle_key(&self, key: KeyEvent, ctx: &Self::Context<'_>) -> Option<Action> {
+        if key.code == KeyCode::Tab && ctx.pending.is_some_and(|r| !r.comments.is_empty()) {
+            return Some(Action::Detail(DetailAction::ReviewPreview));
+        }
+        if self.preview && key.code == KeyCode::Enter {
+            return None;
+        }
         key_to_action(key.code)
     }
     fn update(&mut self, action: DetailAction, ctx: &ReviewContext<'_>) -> Option<Action> {
         match action {
+            DetailAction::ReviewPreview => {
+                self.preview = !self.preview;
+                None
+            }
             DetailAction::ReviewMove(delta) => {
-                self.cursor = step_index(self.cursor, delta, ctx.options.len());
+                if self.preview {
+                    self.scroll = crate::tui::component::scroll(self.scroll, delta);
+                } else {
+                    self.cursor = step_index(self.cursor, delta, ctx.options.len());
+                }
                 None
             }
             other => Some(Action::Detail(other)),
         }
     }
     fn render(&mut self, frame: &mut Frame, area: Rect, ctx: &ReviewContext<'_>) {
-        render(frame, ctx, self.cursor, area);
+        render(frame, ctx, self, area);
     }
 }

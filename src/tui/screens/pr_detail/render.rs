@@ -235,8 +235,12 @@ pub(super) fn render(
         pending: ctx.store.reviews.get(&pr_id),
     };
     if ui.editor.is_open() {
-        ui.editor
-            .render(frame, area, &ctx.store.operations.contains_key(&pr_id));
+        ui.editor.render_with_review(
+            frame,
+            area,
+            ctx.store.operations.contains_key(&pr_id),
+            ctx.store.reviews.contains_key(&pr_id),
+        );
     }
     if ui.help_open {
         ui.help.render(

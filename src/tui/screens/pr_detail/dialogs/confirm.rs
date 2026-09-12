@@ -17,6 +17,7 @@ use ratatui::{
 pub enum ConfirmKind {
     DeleteComment { id: u64, review: bool },
     Decline,
+    DiscardReview,
 }
 
 impl ConfirmKind {
@@ -24,6 +25,7 @@ impl ConfirmKind {
         match self {
             Self::DeleteComment { .. } => "Delete this comment?",
             Self::Decline => "Decline this PR?",
+            Self::DiscardReview => "Discard this review draft?",
         }
     }
 }
@@ -41,7 +43,12 @@ fn render(frame: &mut Frame, kind: ConfirmKind, cursor: usize, area: Rect) {
         Line::from(Span::styled(kind.prompt(), Style::default().fg(theme.fg))),
         Line::default(),
     ];
-    for (i, label) in CONFIRM_OPTIONS.iter().enumerate() {
+    let options = if kind == ConfirmKind::DiscardReview {
+        ["Discard review", "Keep reviewing"]
+    } else {
+        CONFIRM_OPTIONS
+    };
+    for (i, label) in options.iter().enumerate() {
         let marker = if i == cursor { "▶ " } else { "  " };
         let style = if i == cursor { selected } else { normal };
         lines.push(Line::from(vec![
@@ -75,7 +82,10 @@ pub struct ConfirmDialog {
 }
 impl ConfirmDialog {
     pub fn new(kind: ConfirmKind) -> Self {
-        Self { kind, cursor: 0 }
+        Self {
+            kind,
+            cursor: usize::from(kind == ConfirmKind::DiscardReview),
+        }
     }
     pub fn accepted(&self) -> Option<ConfirmKind> {
         (self.cursor == 0).then_some(self.kind)
