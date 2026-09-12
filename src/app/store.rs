@@ -9,6 +9,8 @@ use std::collections::{HashMap, HashSet};
 
 #[derive(Debug, Default)]
 pub struct Store {
+    pub link_pending: bool,
+    pub notice: Option<Notice>,
     pub draft_error: Option<String>,
     pub uncertain_submissions: std::collections::BTreeSet<u64>,
     pub operations: HashMap<u64, Operation>,
@@ -138,5 +140,24 @@ impl Store {
             ) => pr_id == *id,
             _ => false,
         })
+    }
+}
+
+#[derive(Debug)]
+pub struct Notice {
+    pub message: String,
+    pub error: bool,
+    created: std::time::Instant,
+}
+impl Notice {
+    pub fn new(message: String, error: bool) -> Self {
+        Self {
+            message,
+            error,
+            created: std::time::Instant::now(),
+        }
+    }
+    pub fn visible(&self) -> bool {
+        self.created.elapsed() < std::time::Duration::from_secs(if self.error { 5 } else { 2 })
     }
 }

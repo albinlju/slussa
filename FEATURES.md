@@ -13,6 +13,10 @@ scope includes how users find and leave the interaction, not only the API action
 
 ## Done
 
+- [x] **Open/copy PR links** — `o` opens the selected PR in the default browser;
+  `y` copies its link. Both work in list and detail views, appear in help only
+  when a URL is available, and show brief non-modal feedback.
+
 - [x] **Multiline comment editor** — focused dialog, Enter for newline, Ctrl+S to
   submit, cursor movement and bracketed paste. Esc keeps the draft; `c` resumes
   it. Ctrl+X explicitly confirms discarding it.
@@ -142,8 +146,8 @@ before treating them as gaps:
 - [ ] **Status bar** — provider, repo, match count, loading spinner.
 - [ ] **Config** — repos / providers, default filters, keybindings. *(theme is done: `~/.config/tuipr/config.toml` `theme = "…"`, overridden by `TUIPR_THEME`)*
 - [ ] **Empty / loading / error states** per view (use `LoadState` everywhere).
-- [ ] **Open in browser** (`o`) — the PR / focused file / line. Cheapest big payoff. *(write-adjacent)*
-- [ ] **Copy** (`y`) — SHA / branch / PR URL / permalink to a line.
+- [ ] **Open focused file / line in browser** — PR-level opening is implemented.
+- [ ] **Copy additional references** — SHA / branch / permalink to a line. PR URL copying is implemented.
 - [ ] **Check out PR locally**.
 - [ ] **Draft ↔ Ready**.
 - [ ] **GitLab MR support** via `glab` (mirrors `gh` well).

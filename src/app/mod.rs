@@ -16,6 +16,7 @@ use tokio_stream::StreamExt;
 
 pub mod action;
 mod commands;
+mod desktop;
 mod drafts;
 pub mod fetchers;
 mod loads;
@@ -68,7 +69,14 @@ impl App {
         self.draw(terminal)?;
 
         loop {
-            let animating = self.state.is_loading();
+            let animating = self.state.store.link_pending
+                || self.state.is_loading()
+                || self
+                    .state
+                    .store
+                    .notice
+                    .as_ref()
+                    .is_some_and(store::Notice::visible);
             tokio::select! {
                 () = time::sleep(SPINNER_INTERVAL), if animating => self.draw(terminal)?,
                 _ = refresh.tick() => {
@@ -135,6 +143,14 @@ impl App {
             Action::Quit => unreachable!("handled in run()"),
             Action::Navigate(screen) => self.state.screen = screen,
             Action::Refresh => self.refresh_actions(),
+            Action::PrLink { pr_id, kind } => self.pr_link(pr_id, kind),
+            Action::LinkFinished(result) => {
+                self.state.store.link_pending = false;
+                self.state.store.notice = Some(match result {
+                    Ok(message) => store::Notice::new(message, false),
+                    Err(message) => store::Notice::new(message, true),
+                });
+            }
             Action::List(crate::app::action::ListAction::OpenPr(id)) => self.open_pr(id),
             Action::Command { pr_id, command } => self.execute(pr_id, command),
             Action::LoadCommitDiff { pr_id, oid } => self.ensure_commit_diff(pr_id, oid),

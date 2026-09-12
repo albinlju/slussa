@@ -14,6 +14,11 @@ pub enum Action {
     Quit,
     HelpScroll(i16),
     Paste(String),
+    PrLink {
+        pr_id: u64,
+        kind: LinkAction,
+    },
+    LinkFinished(Result<String, String>),
     Command {
         pr_id: u64,
         command: Command,
@@ -190,4 +195,10 @@ impl Command {
             Self::ResolveThread { .. } => caps.supports(Feature::ResolveThreads),
         }
     }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum LinkAction {
+    Open,
+    Copy,
 }

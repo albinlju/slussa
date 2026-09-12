@@ -13,6 +13,8 @@ use crate::providers::error::FetchError;
 #[derive(Debug, Deserialize)]
 #[serde(rename_all = "camelCase")]
 struct BbPr {
+    #[serde(default)]
+    links: BbLinks,
     id: u64,
     title: String,
     #[serde(default)]
@@ -29,6 +31,16 @@ struct BbPr {
     reviewers: Vec<BbReviewer>,
     #[serde(default)]
     properties: BbProps,
+}
+
+#[derive(Debug, Default, Deserialize)]
+struct BbLinks {
+    #[serde(rename = "self", default)]
+    web: Vec<BbLink>,
+}
+#[derive(Debug, Deserialize)]
+struct BbLink {
+    href: String,
 }
 
 #[derive(Debug, Default, Deserialize)]
@@ -81,6 +93,7 @@ fn map_pr(bb: BbPr) -> PullRequest {
     };
 
     PullRequest {
+        url: bb.links.web.into_iter().next().map(|link| link.href),
         id: bb.id,
         title: bb.title,
         description: bb.description,
@@ -113,5 +126,28 @@ fn map_reviewer(r: BbReviewer) -> Reviewer {
     Reviewer {
         author: map_user(r.user),
         state,
+    }
+}
+
+#[cfg(test)]
+mod link_tests {
+    use super::*;
+    #[test]
+    fn uses_server_web_link_including_context_path_and_handles_missing_links() {
+        let mut json = serde_json::json!({
+            "id": 42, "title": "PR", "state": "OPEN", "createdDate": 0, "updatedDate": 0,
+            "fromRef": {"displayId": "feature"}, "toRef": {"displayId": "main"},
+            "author": {"user": {"name": "alice"}},
+            "links": {"self": [{"href": "https://code.example.com/context/projects/TEAM/repos/repo/pull-requests/42/overview"}]}
+        });
+        let pr = map_pr(serde_json::from_value(json.clone()).unwrap());
+        assert_eq!(
+            pr.url.as_deref(),
+            Some(
+                "https://code.example.com/context/projects/TEAM/repos/repo/pull-requests/42/overview"
+            )
+        );
+        json.as_object_mut().unwrap().remove("links");
+        assert!(map_pr(serde_json::from_value(json).unwrap()).url.is_none());
     }
 }

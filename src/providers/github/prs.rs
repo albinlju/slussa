@@ -76,6 +76,7 @@ struct GhCheck {
 #[derive(Debug, Deserialize)]
 #[serde(rename_all = "camelCase")]
 struct GhPr {
+    url: Option<String>,
     id: String,
     number: u64,
     title: String,
@@ -105,7 +106,7 @@ struct GhPr {
 pub fn fetch_prs() -> Result<Vec<PullRequest>, FetchError> {
     let mut prs: Vec<GhPr> = super::pagination::repo_nodes(
         "pullRequests",
-        "id title number author { login } state isDraft headRefName baseRefName body createdAt updatedAt additions deletions changedFiles comments { totalCount } latestReviews(first: 100) { nodes { state author { login } } pageInfo { hasNextPage } } labels(first: 100) { nodes { name } pageInfo { hasNextPage } } commits(last: 1) { nodes { commit { statusCheckRollup { state } } } }",
+        "id url title number author { login } state isDraft headRefName baseRefName body createdAt updatedAt additions deletions changedFiles comments { totalCount } latestReviews(first: 100) { nodes { state author { login } } pageInfo { hasNextPage } } labels(first: 100) { nodes { name } pageInfo { hasNextPage } } commits(last: 1) { nodes { commit { statusCheckRollup { state } } } }",
     )?;
     for pr in &mut prs {
         if pr.labels.page_info.has_next_page {
@@ -143,6 +144,7 @@ fn map_pr(gh: GhPr) -> PullRequest {
     let comment_count = gh.comments.total_count;
 
     PullRequest {
+        url: gh.url,
         id: gh.number,
         title: gh.title,
         description: gh.body,
@@ -232,4 +234,25 @@ fn map_reviewers(reviews: Vec<GhReviewSummary>) -> Vec<Reviewer> {
             }
         })
         .collect()
+}
+
+#[cfg(test)]
+mod link_tests {
+    use super::*;
+    #[test]
+    fn preserves_enterprise_pr_url_without_assuming_github_com() {
+        let json = serde_json::json!({
+            "id": "PR_42", "number": 42, "title": "PR", "state": "OPEN", "author": {"login": "alice"},
+            "url": "https://github.example.com/team/repo/pull/42",
+            "headRefName": "feature", "baseRefName": "main",
+            "createdAt": "2026-01-01T00:00:00Z", "updatedAt": "2026-01-01T00:00:00Z",
+            "comments": {"totalCount": 0},
+            "latestReviews": {"nodes": [], "pageInfo": {"hasNextPage": false}},
+            "labels": {"nodes": [], "pageInfo": {"hasNextPage": false}}
+        });
+        assert_eq!(
+            map_pr(serde_json::from_value(json).unwrap()).url.as_deref(),
+            Some("https://github.example.com/team/repo/pull/42")
+        );
+    }
 }

@@ -64,6 +64,16 @@ pub(in crate::tui) fn key_to_action(
         };
     }
 
+    if plain && state.has_pr_link() {
+        let kind = match code {
+            KeyCode::Char('o') => Some(crate::app::action::LinkAction::Open),
+            KeyCode::Char('y') => Some(crate::app::action::LinkAction::Copy),
+            _ => None,
+        };
+        if let Some(kind) = kind {
+            return Some(Action::PrLink { pr_id, kind });
+        }
+    }
     // `a` opens the review-verdict menu. Always available — even on your own PR
     // you can leave a comment review; the picker dims the verdicts you can't use.
     if plain && code == KeyCode::Char('a') && tab == DetailTab::Overview {

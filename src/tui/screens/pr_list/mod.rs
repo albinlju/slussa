@@ -34,6 +34,8 @@ const GUTTER: u16 = 2;
 const HELP_KEYS: &[(&str, &str)] = &[
     ("j/k / ↑↓", "move up/down"),
     ("enter", "open PR"),
+    ("o", "open PR in browser"),
+    ("y", "copy PR link"),
     ("/", "search title / author"),
     ("esc", "clear search"),
     ("f", "filter status"),
@@ -408,7 +410,16 @@ impl Component for PrListScreen {
         );
 
         if self.help_open {
-            self.help.render(frame, area, &HELP_KEYS);
+            let has_link = self
+                .filtered_prs(ctx.prs)
+                .get(self.selected)
+                .is_some_and(|pr| pr.url.is_some());
+            let entries: Vec<_> = HELP_KEYS
+                .iter()
+                .copied()
+                .filter(|(key, _)| has_link || !matches!(*key, "o" | "y"))
+                .collect();
+            self.help.render(frame, area, &entries.as_slice());
         }
         if self.filter_picker_open {
             render_filter_picker(frame, self, area);
@@ -438,6 +449,20 @@ impl Component for PrListScreen {
                 KeyCode::Char('q') => Some(Action::Quit),
                 _ => self.help.handle_key(key, &HELP_KEYS),
             };
+        }
+        if key.modifiers.is_empty() {
+            let kind = match key.code {
+                KeyCode::Char('o') => Some(crate::app::action::LinkAction::Open),
+                KeyCode::Char('y') => Some(crate::app::action::LinkAction::Copy),
+                _ => None,
+            };
+            if let Some(kind) = kind {
+                return self
+                    .filtered_prs(ctx.prs)
+                    .get(self.selected)
+                    .filter(|pr| pr.url.is_some())
+                    .map(|pr| Action::PrLink { pr_id: pr.id, kind });
+            }
         }
         let half = half_page(self.viewport);
         match key.code {
