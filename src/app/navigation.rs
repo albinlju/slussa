@@ -2,11 +2,11 @@ use crate::{app::App, tui::screens::pr_detail::tabs::DetailTab};
 
 impl App {
     pub(super) fn open_pr(&mut self, pr_id: u64) {
+        self.state.ui.open_pr(pr_id);
         self.state.screen = Screen::Detail {
             pr_id,
-            tab: DetailTab::default(),
+            tab: self.state.ui.detail.active_tab,
         };
-        self.state.ui.open_pr(pr_id);
 
         let pr_data = self.state.store.cache.details.entry(pr_id).or_default();
         let load_commits = pr_data.commits.start_loading();

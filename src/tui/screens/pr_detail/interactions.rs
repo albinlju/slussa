@@ -15,16 +15,36 @@ use crate::{
 };
 
 impl PrDetailScreen {
-    /// Reset view navigation while retaining each PR's unfinished editor.
+    /// Keep navigation and unfinished editors scoped to their PR for this session.
     pub fn open(&mut self, pr_id: u64) {
         if let Some(previous) = self.pr_id {
+            self.navigation.insert(
+                previous,
+                super::DetailNavigation {
+                    overview: std::mem::take(&mut self.overview),
+                    builds: std::mem::take(&mut self.builds),
+                    description: std::mem::take(&mut self.description),
+                    diff: std::mem::take(&mut self.diff),
+                    commits: std::mem::take(&mut self.commits),
+                    tab: self.active_tab,
+                },
+            );
             self.editors
                 .insert(previous, std::mem::take(&mut self.editor));
         }
         let editors = std::mem::take(&mut self.editors);
+        let mut navigation = std::mem::take(&mut self.navigation);
+        let position = navigation.remove(&pr_id).unwrap_or_default();
         *self = Self {
             pr_id: Some(pr_id),
             editors,
+            navigation,
+            active_tab: position.tab,
+            overview: position.overview,
+            builds: position.builds,
+            description: position.description,
+            diff: position.diff,
+            commits: position.commits,
             ..Self::default()
         };
         self.editor = self.editors.remove(&pr_id).unwrap_or_default();
@@ -53,6 +73,7 @@ impl PrDetailScreen {
 
     fn open_draft(&mut self, target: Option<CommentTarget>) {
         if self.editor.draft.is_some() {
+            self.editor.resuming = true;
             self.editor.suspended = false;
             return;
         }
@@ -129,8 +150,9 @@ impl PrDetailScreen {
                 let view = self.view(ctx);
                 let selected = view.editable_selected()?;
                 let id = selected.id?;
-                let text = view.find_comment(id)?.content.clone();
+                let text = view.find_comment(id, selected.review)?.content.clone();
                 if self.editor.draft.is_some() {
+                    self.editor.resuming = true;
                     self.editor.suspended = false;
                     return None;
                 }
@@ -146,10 +168,15 @@ impl PrDetailScreen {
             }
             DetailAction::DeleteComment => {
                 let selected = self.view(ctx).editable_selected()?;
-                self.confirm = Some(ConfirmDialog::new(ConfirmKind::DeleteComment {
-                    id: selected.id?,
-                    review: selected.review,
-                }));
+                let comment = self.view(ctx).find_comment(selected.id?, selected.review)?;
+                let preview = format!("@{}: {}", comment.author.username, comment.content);
+                self.confirm = Some(
+                    ConfirmDialog::new(ConfirmKind::DeleteComment {
+                        id: selected.id?,
+                        review: selected.review,
+                    })
+                    .with_context(preview),
+                );
                 return None;
             }
             DetailAction::ResolveThread => {
@@ -217,6 +244,7 @@ impl PrDetailScreen {
                     CommentEditor {
                         draft: Some(draft),
                         suspended: true,
+                        resuming: true,
                         ..CommentEditor::default()
                     },
                 )

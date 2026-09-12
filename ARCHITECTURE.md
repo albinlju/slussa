@@ -467,9 +467,9 @@ ordinary prose still uses the viewport width. Wide rendered content can be panne
 with H/L; the footer advertises this only when needed. Code, links and tables retain
 their full text. Resizing clamps horizontal and vertical scroll to valid bounds.
 
-Theme direction: keep terminal colors as the default and the existing Gruvbox and
-Catppuccin presets as optional configuration. There is no additional theme picker.
-A single fixed dark palette would not accommodate users' light terminal backgrounds.
+Theme direction: Graphite is the default. Terminal, Gruvbox, Catppuccin and Slate
+remain available through configuration or TUIPR_THEME. There is no additional theme
+picker. Terminal remains an option for users who prefer their terminal's palette.
 Prioritize consistent semantic roles and default backgrounds across all views.
 Description now follows theme roles; conversation Markdown still starts from the
 renderer dark style and should be visually compared before any further color change.
@@ -494,3 +494,24 @@ submission checkpoints and partial-submission recovery remain in place.
 
 Regression tests cover editor labels, preview navigation through the last queued
 comment, no submission from the preview, safe discard defaults and compact dialogs.
+
+### Mutation context and session navigation
+
+Merge and close dialogs identify the PR and target branch. Merge places the target
+on its own line so a long source branch cannot hide it, and labels Enter as merge.
+Close defaults to No and explains that it closes without merging. Successful PR
+state changes report the operation and PR number through the transient footer notice.
+
+Comment lookup includes both ID and comment kind to distinguish PR comments from
+review comments. Reply/edit editors show author and original text when available;
+delete confirmation captures the selected comment preview. Reopened drafts are
+labelled as resumed and retain their original target and text.
+
+PR list and commit list refreshes reconcile selection by PR ID and commit OID,
+falling back to a valid nearby index when the selected item disappears. Both lists
+own their viewport state. PrDetailScreen retains tab components per PR for the
+session, preserving search, scroll and focus when returning to a PR. Dialogs remain
+transient; unfinished editors continue to use the existing draft persistence.
+
+Regression coverage includes colliding comment IDs, inserted list items, returning
+to a different PR, success feedback and dialog/editor context at compact widths.

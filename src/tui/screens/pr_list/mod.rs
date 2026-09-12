@@ -119,7 +119,7 @@ fn render_table_body(
     frame: &mut Frame,
     table: &table::Table,
     prs: &[&PullRequest],
-    selected: usize,
+    list_state: &mut ListState,
     area: Rect,
     columns: &[usize],
 ) {
@@ -138,8 +138,6 @@ fn render_table_body(
             )
         })
         .collect();
-    let mut list_state = ListState::default();
-    list_state.select(Some(selected));
     let list = List::new(items)
         .highlight_style(
             Style::default()
@@ -147,7 +145,7 @@ fn render_table_body(
                 .add_modifier(Modifier::BOLD),
         )
         .highlight_symbol("▶ ");
-    frame.render_stateful_widget(list, area, &mut list_state);
+    frame.render_stateful_widget(list, area, list_state);
 }
 
 fn render_footer(
@@ -280,6 +278,7 @@ pub struct PrListScreen {
     pub help_open: bool,
     pub help: crate::tui::components::help_dialog::HelpDialog,
     pub selected: usize,
+    list_state: ListState,
     pub viewport: u16,
     pub filter: StatusFilter,
     pub search: SearchInput,
@@ -381,7 +380,8 @@ impl Component for PrListScreen {
                 };
                 frame.render_widget(widgets::empty_state(message), rows_area);
             } else {
-                render_table_body(frame, &table, prs, self.selected, rows_area, columns);
+                self.list_state.select(Some(self.selected));
+                render_table_body(frame, &table, prs, &mut self.list_state, rows_area, columns);
             }
         } else {
             widgets::loaded_or_placeholder(frame, Some(ctx.prs), "pull requests", rows_area);
@@ -528,6 +528,7 @@ impl PrListScreen {
         if new_filter != self.filter {
             self.filter = new_filter;
             self.selected = 0;
+            self.list_state = ListState::default();
         }
         self.filter_picker_open = false;
     }
@@ -545,6 +546,7 @@ impl PrListScreen {
         );
         if !matches!(action, SearchAction::Open | SearchAction::Confirm) {
             self.selected = 0;
+            self.list_state = ListState::default();
         }
     }
 }

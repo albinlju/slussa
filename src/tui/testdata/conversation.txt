@@ -8,20 +8,20 @@
 │  Description · Overview · Diff · Commits · Builds                                                │
 │──────────────────────────────────────────────────────────────────────────────────────────────────│
 │  *─ @alice commented on src/main.rs:1 unresolved  ·  just now   │ Reviewers                      │
-│  |  ┌────────────────────────────────────────────────────────   │ —                              │
+│  |  ┌────────────────────────────────────────────────────────   │ No reviewers                   │
 │  |  |   - old                                                   │                                │
 │  |  | 1 + new                                                   │ Builds                         │
-│  |  └────────────────────────────────────────────────────────   │ no builds                      │
+│  |  └────────────────────────────────────────────────────────   │ No builds                      │
 │  |  ┊ Comment 10                                                │                                │
-│  |  ┊                                                           │                                │
-│  |  └ alice · author · just now                                 │ Labels                         │
-│  |    Comment 11                                                │ rust                           │
-│                                                                 │                                │
+│  |  ┊                                                           │ Labels                         │
+│  |  └ alice · author · just now                                 │ rust                           │
+│  |    Comment 11                                                │                                │
 │                                                                 │ Details                        │
-│                                                                 │ opened  just now               │
-│                                                                 │ updated just now               │
-│                                                                 │ diff    +1 -1                  │
-│                                                                 │ files   1                      │
+│                                                                 │ Opened             just now    │
+│                                                                 │ Updated            just now    │
+│                                                                 │ Diff                  +1 -1    │
+│                                                                 │ Files                     1    │
+│                                                                 │                                │
 │                                                                 │                                │
 │                                                                 │                                │
 │                                                                 │                                │
@@ -39,20 +39,20 @@
 │  Description · Overview · Diff · Commits · Builds                            │
 │──────────────────────────────────────────────────────────────────────────────│
 │  *─ @alice comme… unresolved  ·  just now   │ Reviewers                      │
-│  |  ┌────────────────────────────────────   │ —                              │
+│  |  ┌────────────────────────────────────   │ No reviewers                   │
 │  |  |   - old                               │                                │
 │  |  | 1 + new                               │ Builds                         │
-│  |  └────────────────────────────────────   │ no builds                      │
+│  |  └────────────────────────────────────   │ No builds                      │
 │  |  ┊ Comment 10                            │                                │
-│  |  ┊                                       │                                │
-│  |  └ alice · author · just now             │ Labels                         │
-│  |    Comment 11                            │ rust                           │
-│                                             │                                │
+│  |  ┊                                       │ Labels                         │
+│  |  └ alice · author · just now             │ rust                           │
+│  |    Comment 11                            │                                │
 │                                             │ Details                        │
-│                                             │ opened  just now               │
-│                                             │ updated just now               │
-│                                             │ diff    +1 -1                  │
-│                                             │ files   1                      │
+│                                             │ Opened             just now    │
+│                                             │ Updated            just now    │
+│                                             │ Diff                  +1 -1    │
+│                                             │ Files                     1    │
+│                                             │                                │
 │                                             │                                │
 │                                             │                                │
 │                                             │                                │

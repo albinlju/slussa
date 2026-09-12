@@ -34,10 +34,34 @@ pub struct PrDetailScreen {
     pub help: crate::tui::components::help_dialog::HelpDialog,
     pub editor: crate::tui::components::comment_editor::CommentEditor,
     pr_id: Option<u64>,
+    pub active_tab: tabs::DetailTab,
+    navigation: std::collections::HashMap<u64, DetailNavigation>,
     editors: std::collections::HashMap<u64, crate::tui::components::comment_editor::CommentEditor>,
 }
 
+#[derive(Debug, Default)]
+struct DetailNavigation {
+    overview: tabs::overview::Overview,
+    builds: tabs::builds::Builds,
+    description: tabs::description::Description,
+    diff: DiffViewer,
+    commits: CommitList,
+    tab: tabs::DetailTab,
+}
+
 impl PrDetailScreen {
+    pub fn reconcile_commits(
+        &mut self,
+        pr_id: u64,
+        old: &[crate::domain::commit::Commit],
+        new: &[crate::domain::commit::Commit],
+    ) {
+        if self.pr_id == Some(pr_id) {
+            self.commits.reconcile(old, new);
+        } else if let Some(position) = self.navigation.get_mut(&pr_id) {
+            position.commits.reconcile(old, new);
+        }
+    }
     pub fn modal_open(&self) -> bool {
         self.confirm.is_some()
             || self.review_picker.is_some()
@@ -138,7 +162,7 @@ impl Component for PrDetailScreen {
                     DetailAction::SelectTab(tab) => tab,
                     _ => unreachable!(),
                 };
-                self.diff.focus = crate::tui::components::diff_viewer::DiffFocus::Tree;
+                self.active_tab = tab;
                 self.commits.open_commit = None;
                 return Some(Action::Navigate(Screen::Detail { pr_id, tab }));
             }

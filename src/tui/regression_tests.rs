@@ -197,7 +197,7 @@ fn extracted_dialogs_render_and_keep_their_key_bindings() {
         let (label, close) = match dialog {
             "confirm" => {
                 state.ui.detail.confirm = Some(ConfirmDialog::new(ConfirmKind::Decline));
-                ("Decline this PR?", DetailAction::CloseConfirm)
+                ("Close / decline this PR?", DetailAction::CloseConfirm)
             }
             "review" => {
                 state.ui.detail.review_picker = Some(ReviewDialog::default());
@@ -256,9 +256,9 @@ fn dialog_instances_own_selection_and_respect_available_choices() {
     };
     let mut confirm = ConfirmDialog::new(ConfirmKind::Decline);
     let other = ConfirmDialog::new(ConfirmKind::Decline);
-    confirm.update(DetailAction::ConfirmMove(1), &());
-    assert_eq!(confirm.accepted(), None);
-    assert_eq!(other.accepted(), Some(ConfirmKind::Decline));
+    confirm.update(DetailAction::ConfirmMove(-1), &());
+    assert_eq!(confirm.accepted(), Some(ConfirmKind::Decline));
+    assert_eq!(other.accepted(), None);
 
     let ctx = ReviewContext {
         options: vec![
@@ -779,6 +779,8 @@ fn dialog_footers_and_review_choices_remain_visible_with_large_queue() {
             );
             assert!(text.contains(if kind == "review" {
                 "Enter submit"
+            } else if kind == "merge" {
+                "Enter merge"
             } else {
                 "Enter select"
             }));
@@ -1227,5 +1229,80 @@ fn editor_distinguishes_queued_comments_from_direct_publication() {
                 .unwrap();
             assert!(rendered_text(&terminal).contains(expected));
         }
+    }
+}
+
+#[test]
+fn mutation_dialogs_show_pr_and_target_even_with_a_long_source_branch() {
+    for width in [40, 100] {
+        for merge in [false, true] {
+            let mut state = fixture();
+            state.screen = Screen::Detail {
+                pr_id: 42,
+                tab: DetailTab::Overview,
+            };
+            if let LoadState::Loaded(prs) = &mut state.store.cache.prs {
+                prs[0].source_branch = "feature/".repeat(20);
+            }
+            if merge {
+                state.ui.detail.merge_picker = Some(MergeDialog::default());
+            } else {
+                state.ui.detail.confirm = Some(ConfirmDialog::new(ConfirmKind::Decline));
+                assert!(
+                    state
+                        .ui
+                        .detail
+                        .confirm
+                        .as_ref()
+                        .unwrap()
+                        .accepted()
+                        .is_none()
+                );
+            }
+            let mut terminal = Terminal::new(TestBackend::new(width, 16)).unwrap();
+            terminal.draw(|frame| render(frame, &mut state)).unwrap();
+            let text = rendered_text(&terminal);
+            assert!(text.contains("PR #42"));
+            assert!(text.contains(if merge { "Into: main" } else { "Target: main" }));
+            assert!(text.contains(if merge {
+                "Enter merge"
+            } else {
+                "Closes without merging"
+            }));
+        }
+    }
+}
+
+#[test]
+fn resumed_editor_and_delete_dialog_identify_the_comment() {
+    use crate::tui::{component::Component, components::comment_editor::CommentEditor};
+    for width in [40, 100] {
+        let mut editor = CommentEditor {
+            draft: Some(CommentDraft {
+                target: CommentTarget::Reply(7),
+                text: "My draft".into(),
+            }),
+            resuming: true,
+            target_context: Some("@alice: Original comment".into()),
+            ..CommentEditor::default()
+        };
+        let mut terminal = Terminal::new(TestBackend::new(width, 16)).unwrap();
+        terminal
+            .draw(|frame| editor.render_with_review(frame, frame.area(), false, false))
+            .unwrap();
+        let text = rendered_text(&terminal);
+        assert!(text.contains("Resuming draft"));
+        assert!(text.contains("@alice: Original comment"));
+        assert!(text.contains("My draft"));
+        assert!(text.contains("post reply"));
+        let mut dialog = ConfirmDialog::new(ConfirmKind::DeleteComment {
+            id: 7,
+            review: true,
+        })
+        .with_context("@alice: Original comment".into());
+        terminal
+            .draw(|frame| dialog.render(frame, frame.area(), &()))
+            .unwrap();
+        assert!(rendered_text(&terminal).contains("@alice: Original comment"));
     }
 }

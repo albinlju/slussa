@@ -31,6 +31,17 @@ pub struct OverviewContext<'a> {
 pub struct Overview {
     pub timeline: Timeline,
 }
+impl Overview {
+    pub fn render_with_scrollbar(
+        &mut self,
+        frame: &mut Frame,
+        area: Rect,
+        ctx: &OverviewContext<'_>,
+        scrollbar: Rect,
+    ) {
+        render(frame, ctx, self, area, scrollbar);
+    }
+}
 impl Component for Overview {
     type Context<'a> = OverviewContext<'a>;
     type Message = DetailAction;
@@ -55,15 +66,21 @@ impl Component for Overview {
         )
     }
     fn render(&mut self, frame: &mut Frame, area: Rect, ctx: &Self::Context<'_>) {
-        render(frame, ctx, self, area);
+        self.render_with_scrollbar(frame, area, ctx, layout::scrollbar_area(area));
     }
 }
 
-pub fn render(frame: &mut Frame, ctx: &OverviewContext<'_>, ui: &mut Overview, area: Rect) {
+fn render(
+    frame: &mut Frame,
+    ctx: &OverviewContext<'_>,
+    ui: &mut Overview,
+    area: Rect,
+    scrollbar_area: Rect,
+) {
     let pr = ctx.pr;
     let pr_data = ctx.data;
-    let (body_area, sidebar_area, scrollbar_area) = if area.width >= SIDEBAR_BREAKPOINT {
-        let [body, sidebar, scrollbar] = layout::split(
+    let (body_area, sidebar_area) = if area.width >= SIDEBAR_BREAKPOINT {
+        let [body, sidebar, _gutter] = layout::split(
             area,
             Direction::Horizontal,
             [
@@ -72,14 +89,14 @@ pub fn render(frame: &mut Frame, ctx: &OverviewContext<'_>, ui: &mut Overview, a
                 Constraint::Length(1),
             ],
         );
-        (body, Some(sidebar), scrollbar)
+        (body, Some(sidebar))
     } else {
-        let [body, scrollbar] = layout::split(
+        let [body, _gutter] = layout::split(
             area,
             Direction::Horizontal,
             [Constraint::Min(0), Constraint::Length(1)],
         );
-        (body, None, scrollbar)
+        (body, None)
     };
 
     if let Some(sidebar) = sidebar_area {
