@@ -419,3 +419,79 @@ fn unsupported_features_are_hidden_from_content_footer_and_help() {
     assert!(text.contains("Builds"));
     assert!(!text.contains("a: verdict"));
 }
+
+#[test]
+fn compact_list_keeps_title_and_help_visible() {
+    for width in [40, 70, 100, 140] {
+        let mut state = fixture();
+        let mut terminal = Terminal::new(TestBackend::new(width, 12)).unwrap();
+        terminal.draw(|f| render(f, &mut state)).unwrap();
+        let text: String = terminal
+            .backend()
+            .buffer()
+            .content
+            .iter()
+            .map(ratatui::buffer::Cell::symbol)
+            .collect();
+        assert!(
+            text.contains("Component migration"),
+            "title lost at {width}"
+        );
+        assert!(text.contains("?: help"), "help lost at {width}");
+        assert!(!text.contains("donate"));
+    }
+}
+
+#[test]
+fn help_scroll_reaches_last_action_in_small_terminal() {
+    let mut state = fixture();
+    state.screen = Screen::Detail {
+        pr_id: 42,
+        tab: DetailTab::Overview,
+    };
+    state.ui.detail.help_open = true;
+    let mut terminal = Terminal::new(TestBackend::new(40, 12)).unwrap();
+    terminal.draw(|f| render(f, &mut state)).unwrap();
+    for _ in 0..8 {
+        let action = key(&state, KeyCode::PageDown);
+        state.ui.update(action, &state.store, state.screen);
+    }
+    terminal.draw(|f| render(f, &mut state)).unwrap();
+    let text: String = terminal
+        .backend()
+        .buffer()
+        .content
+        .iter()
+        .map(ratatui::buffer::Cell::symbol)
+        .collect();
+    assert!(text.contains("quit"));
+    assert!(text.contains("esc: close"));
+    assert_eq!(
+        state.screen,
+        Screen::Detail {
+            pr_id: 42,
+            tab: DetailTab::Overview
+        }
+    );
+}
+
+#[test]
+fn compact_detail_tabs_always_show_the_active_tab() {
+    for tab in DetailTab::ALL {
+        let mut state = fixture();
+        state.screen = Screen::Detail { pr_id: 42, tab };
+        let mut terminal = Terminal::new(TestBackend::new(40, 12)).unwrap();
+        terminal.draw(|f| render(f, &mut state)).unwrap();
+        let text: String = terminal
+            .backend()
+            .buffer()
+            .content
+            .iter()
+            .map(ratatui::buffer::Cell::symbol)
+            .collect();
+        assert!(
+            text.contains(&format!("{}   h/l: tabs", tab.label())),
+            "{tab:?}"
+        );
+    }
+}

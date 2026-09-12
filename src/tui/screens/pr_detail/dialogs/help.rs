@@ -1,14 +1,4 @@
-use crate::{
-    domain::capabilities::{Capabilities, Feature},
-    tui::theme,
-};
-use ratatui::{
-    Frame,
-    layout::Rect,
-    style::{Modifier, Style},
-    text::{Line, Span},
-    widgets::{Block, BorderType, Borders, Padding, Paragraph},
-};
+use crate::domain::capabilities::{Capabilities, Feature};
 
 const HELP_KEYS: &[(&str, &str)] = &[
     ("j/k", "move up/down"),
@@ -21,11 +11,11 @@ const HELP_KEYS: &[(&str, &str)] = &[
     ("n/N", "next/prev match"),
     ("[ ]", "prev/next tab/commit"),
     ("esc", "back"),
-    ("a", "quick verdict"),
+    ("a", "verdict (Overview)"),
     ("v", "start/finish review"),
     ("V", "discard review"),
-    ("m", "merge"),
-    ("x", "decline"),
+    ("m", "merge (Overview)"),
+    ("x", "close / decline (Overview)"),
     ("c", "comment"),
     ("r", "reply"),
     ("^j/^k", "step comment"),
@@ -37,11 +27,9 @@ const HELP_KEYS: &[(&str, &str)] = &[
     ("q", "quit"),
 ];
 
-pub(in crate::tui::screens::pr_detail) fn render(
-    frame: &mut Frame,
-    area: Rect,
+pub(in crate::tui::screens::pr_detail) fn entries(
     caps: &Capabilities,
-) {
+) -> Vec<(&'static str, &'static str)> {
     let keys: Vec<_> = HELP_KEYS
         .iter()
         .copied()
@@ -71,36 +59,5 @@ pub(in crate::tui::screens::pr_detail) fn render(
             )
         })
         .collect();
-    let theme = theme::current();
-    let block = Block::default()
-        .borders(Borders::ALL)
-        .border_type(BorderType::Rounded)
-        .title(" Help ")
-        .border_style(Style::default().fg(theme.accent))
-        .padding(Padding::symmetric(1, 1));
-    let inner = block.inner(area);
-    frame.render_widget(block, area);
-
-    let key_style = Style::default()
-        .fg(theme.accent)
-        .add_modifier(Modifier::BOLD);
-    let desc_style = Style::default().fg(theme.muted);
-    let key_w = keys.iter().map(|(k, _)| k.len()).max().unwrap_or(0);
-    let desc_w = keys.iter().map(|(_, d)| d.len()).max().unwrap_or(0);
-    let rows = (inner.height as usize).clamp(1, keys.len());
-    let cols = keys.len().div_ceil(rows);
-
-    let lines: Vec<Line<'static>> = (0..rows)
-        .map(|r| {
-            let mut spans: Vec<Span<'static>> = Vec::new();
-            for c in 0..cols {
-                if let Some((k, d)) = keys.get(c * rows + r) {
-                    spans.push(Span::styled(format!("{k:<key_w$}  "), key_style));
-                    spans.push(Span::styled(format!("{d:<w$}", w = desc_w + 3), desc_style));
-                }
-            }
-            Line::from(spans)
-        })
-        .collect();
-    frame.render_widget(Paragraph::new(lines), inner);
+    keys
 }

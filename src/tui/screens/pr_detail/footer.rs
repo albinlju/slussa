@@ -102,7 +102,15 @@ fn footer_actions(state: &DetailView<'_>, tab: DetailTab) -> Vec<Hint> {
     match state.comment_target() {
         Some(CommentTarget::Reply(_)) => vec![Hint::on("c: reply")],
         Some(_) => vec![Hint::on("c: comment")],
-        None => Vec::new(),
+        None => match tab {
+            DetailTab::Description => widgets::hints_on("h/l: tabs  j/k: scroll"),
+            DetailTab::Diff => widgets::hints_on("enter: code  /: files"),
+            DetailTab::Commits if state.detail.commits.open_commit.is_none() => {
+                widgets::hints_on("enter: open  /: search")
+            }
+            DetailTab::Builds => widgets::hints_on("h/l: tabs"),
+            _ => Vec::new(),
+        },
     }
 }
 

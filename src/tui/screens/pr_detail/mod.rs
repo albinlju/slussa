@@ -29,6 +29,7 @@ pub struct PrDetailScreen {
     pub diff: DiffViewer,
     pub commits: CommitList,
     pub help_open: bool,
+    pub help: crate::tui::components::help_dialog::HelpDialog,
     pub editor: crate::tui::components::comment_editor::CommentEditor,
     pr_id: Option<u64>,
     editors: std::collections::HashMap<u64, crate::tui::components::comment_editor::CommentEditor>,
@@ -161,7 +162,10 @@ impl Component for PrDetailScreen {
                     }
                 }
             }
-            DetailAction::ToggleHelp => self.help_open = !self.help_open,
+            DetailAction::ToggleHelp => {
+                self.help_open = !self.help_open;
+                self.help = crate::tui::components::help_dialog::HelpDialog::default();
+            }
             DetailAction::CloseConfirm => self.confirm = None,
             DetailAction::ConfirmMove(_) => {
                 if let Some(dialog) = &mut self.confirm {

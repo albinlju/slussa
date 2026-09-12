@@ -12,6 +12,7 @@ use crate::{
 #[derive(Debug)]
 pub enum Action {
     Quit,
+    HelpScroll(i16),
     Command {
         pr_id: u64,
         command: Command,
@@ -42,6 +43,7 @@ pub enum SearchAction {
 
 #[derive(Debug, Clone, Copy)]
 pub enum ListAction {
+    ToggleHelp,
     MoveSelection(i16),
     OpenPr(u64),
     OpenFilterPicker,

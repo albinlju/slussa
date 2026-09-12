@@ -4,7 +4,7 @@ pub mod table;
 use crate::{
     app::store::LoadState,
     domain::comment::Reaction,
-    tui::{format, icons, layout, theme},
+    tui::{format, layout, theme},
 };
 use chrono::{DateTime, Utc};
 use ratatui::{
@@ -176,12 +176,23 @@ pub(super) fn footer(width: u16, hints: &[Hint], refreshing: bool) -> Line<'stat
         .fg(theme.accent)
         .add_modifier(Modifier::BOLD);
 
-    let mut left = vec![Span::raw("  ")];
-    for (i, hint) in hints.iter().enumerate() {
-        if i > 0 {
-            left.push(Span::styled("  ", muted));
+    let width = width as usize;
+    let right = if refreshing && width >= 30 {
+        "refreshing…  ?: help "
+    } else {
+        "?: help "
+    };
+    let right = truncate_to_width(vec![Span::styled(right, muted)], width);
+    let right_width: usize = right.iter().map(Span::width).sum();
+    let budget = width.saturating_sub(right_width + 1);
+    let mut left = Vec::new();
+    let mut used = 0;
+    for hint in hints {
+        let hint_width = Span::raw(&hint.text).width() + 2;
+        if used + hint_width > budget {
+            continue;
         }
-        // Disabled hints drop the accent so the key reads as inactive.
+        left.push(Span::raw("  "));
         let key_style = if hint.enabled { key } else { muted };
         match hint.text.split_once(": ") {
             Some((keys, desc)) => {
@@ -190,32 +201,13 @@ pub(super) fn footer(width: u16, hints: &[Hint], refreshing: bool) -> Line<'stat
             }
             None => left.push(Span::styled(hint.text.clone(), muted)),
         }
+        used += hint_width;
     }
-
-    let version = format!("v{}", env!("CARGO_PKG_VERSION"));
-    let mut right = Vec::new();
-    if refreshing {
-        right.push(Span::styled(
-            icons::REFRESH,
-            Style::default().fg(theme.warning),
-        ));
-        right.push(Span::styled(
-            " refreshing",
-            Style::default().fg(theme.warning),
-        ));
-        right.push(Span::raw("    "));
-    }
-    right.extend([
-        Span::styled(icons::HEART, Style::default().fg(theme.orange)),
-        Span::styled(" donate", muted),
-        Span::raw("    "),
-        Span::styled(icons::QUESTION_CIRCLE, muted),
-        Span::styled(" help", muted),
-        Span::raw("    "),
-        Span::styled(version, muted),
-        Span::raw("  "),
-    ]);
-    Line::from(justify_between(left, right, width as usize))
+    left.push(Span::raw(
+        " ".repeat(width.saturating_sub(used + right_width)),
+    ));
+    left.extend(right);
+    Line::from(left)
 }
 
 pub(super) fn search_input_spans(query: &str) -> Vec<Span<'static>> {

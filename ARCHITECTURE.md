@@ -8,6 +8,47 @@ The application owns shared data and effects. Interactive UI components own
 local state, input handling, updates and rendering. Presentation widgets are
 ordinary rendering functions; they do not need the component interface.
 
+## Product and interaction principles
+
+tuipr should remain minimalist, easy to understand and comfortable for daily
+use as its feature set grows. Polish comes from consistent behavior, clear
+hierarchy, restrained styling and reliable feedback. These principles guide
+future features and UI changes; they do not imply every current screen already
+meets them.
+
+- **Content first.** Give code, diffs and conversations the most space. Keep
+  persistent controls and status indicators limited to what helps the current
+  task. Adding a feature does not automatically justify another visible control.
+- **Reveal actions in context.** Offer relevant actions for the focused item,
+  such as replying to a comment or inspecting a build. Put less frequent actions
+  behind a consistently placed, clearly labeled actions menu.
+- **Keep features discoverable.** Provide a visible route to actions and help;
+  shortcuts accelerate that route. Essential functions must not require users
+  to guess an undocumented key. Keep contextual hints short and predictable.
+- **Use dialogs for focused tasks.** A dialog can give a comment editor or merge
+  choice room when needed. Avoid chains of popups and unnecessary confirmations
+  that slow routine work. Opening and closing a dialog should preserve context.
+- **Use restrained visual emphasis.** Reserve strong colors and emphasis for
+  focus, meaningful changes and actionable problems. Use spacing and hierarchy
+  to organize information; avoid competing badges, panels and indicators.
+- **Keep interaction consistent.** Reuse navigation and selection behavior;
+  Enter opens or selects and Esc returns or dismisses the current interaction.
+  Text entry must clearly distinguish inserting a newline from sending text.
+  Restore focus predictably and make sending, success and failure understandable.
+- **Protect continuity.** Preserve work and reading position across ordinary
+  interactions. Draft saving should happen automatically when implemented;
+  failures should leave the user's work available for recovery.
+- **Respect platform support.** Show optional functions only when the adapter
+  supports them. Distinguish unsupported features from supported actions blocked
+  by the current PR's state, with a concise reason for the latter.
+
+When designing a feature, identify its entry point, what appears only after
+interaction, and how the user returns to their work. Review both discoverability
+and visual load, including narrow terminals and keyboard-only operation. Prefer
+reusing an existing interaction over adding a new visual pattern. Detailed merge
+requirements, for example, can open on demand while the main view keeps a brief
+status; a longer editor can occupy space only while composing.
+
 ```text
 src/
 ├── app/
@@ -28,6 +69,7 @@ src/
 │   ├── component.rs       Component contract and navigation helpers
 │   ├── components/
 │   │   ├── search_input.rs
+│   │   ├── help_dialog.rs   Scrollable help shared by list and detail
 │   │   ├── comment_editor.rs
 │   │   └── diff_viewer/
 │   │       ├── mod.rs     DiffViewer state and updates
@@ -90,7 +132,8 @@ each selectable dialog owns its private cursor. The screen resolves
 selected verdicts, merge strategies and accepted confirmations into `Command`
 payloads carrying the PR id. Application workflows never read dialog or editor
 state.
-Error and help displays remain simple presentation helpers. Sidebar implements
+Error displays remain simple presentation helpers. A shared `HelpDialog` component
+owns help scrolling; each screen owns opening/closing it and its help entries. Sidebar implements
 Ratatui `Widget` and borrows its data without owning navigation state.
 
 ## State ownership
@@ -268,3 +311,20 @@ Support is distinct from permission or PR state: a supported action can remain
 visible but disabled with a reason (for example approving your own PR or
 merging a closed PR). Profiles currently describe implemented adapter support;
 repository permissions and server-version feature discovery are not probed.
+
+## First UI polish pass
+
+The PR list prioritizes the title and progressively omits secondary columns on
+narrow terminals; omitted data remains available in PR details. Footer hints
+are shown whole when they fit, with space reserved for `?: help`. Decorative
+donation/version text no longer occupies the working footer. Help is reachable
+from both screens, scrolls independently and closes without changing the
+underlying selection or layout. Compact detail tabs show the active tab and
+navigation hint when the complete tab bar will not fit. A pending review can
+be finished from every tab where its footer advertises that action.
+
+Further work remains: a proper multiline editor and durable drafts, clearer
+merge requirements and build drilldown, and richer contextual action discovery.
+The compact detail header and very small diff layouts also deserve a separate
+pass. These changes establish a calmer baseline without replacing existing
+review, comment or lifecycle flows.

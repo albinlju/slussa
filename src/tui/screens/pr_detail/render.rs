@@ -49,14 +49,14 @@ fn render_tabs_and_content(
     let tabs_inner = tabs_block.inner(tabs_area);
     frame.render_widget(tabs_block, tabs_area);
     frame.render_widget(
-        Paragraph::new(tab_bar(tab, overview.capabilities)),
+        Paragraph::new(tab_bar(tab, overview.capabilities, tabs_inner.width)),
         tabs_inner,
     );
 
     render_content(frame, overview, ui, pending, tab, content_area);
 }
 
-fn tab_bar(tab: DetailTab, caps: &Capabilities) -> Line<'static> {
+fn tab_bar(tab: DetailTab, caps: &Capabilities, width: u16) -> Line<'static> {
     let theme = theme::current();
     let active = Style::default()
         .fg(theme.accent)
@@ -64,6 +64,16 @@ fn tab_bar(tab: DetailTab, caps: &Capabilities) -> Line<'static> {
     let inactive = Style::default().fg(theme.muted);
     let sep = Style::default().fg(theme.muted);
 
+    let tabs = DetailTab::available(caps);
+    let labels_width =
+        2 + tabs.iter().map(|t| t.label().len()).sum::<usize>() + tabs.len().saturating_sub(1) * 3;
+    if labels_width > width as usize {
+        let number = tabs.iter().position(|t| *t == tab).unwrap_or(0) + 1;
+        return Line::from(vec![
+            Span::styled(format!("  {number} {}", tab.label()), active),
+            Span::styled("   h/l: tabs", inactive),
+        ]);
+    }
     let mut spans = vec![Span::raw("  ")];
     for (i, t) in DetailTab::available(caps).iter().enumerate() {
         if i > 0 {
@@ -158,25 +168,11 @@ pub(super) fn render(
     };
 
     let theme = theme::current();
-    let (main_area, footer_area, help_area) = if ui.help_open {
-        let [main, footer, help] = layout::split(
-            area,
-            Direction::Vertical,
-            [
-                Constraint::Min(0),
-                Constraint::Length(1),
-                Constraint::Percentage(30),
-            ],
-        );
-        (main, footer, Some(help))
-    } else {
-        let [main, footer] = layout::split(
-            area,
-            Direction::Vertical,
-            [Constraint::Min(0), Constraint::Length(1)],
-        );
-        (main, footer, None)
-    };
+    let [main_area, footer_area] = layout::split(
+        area,
+        Direction::Vertical,
+        [Constraint::Min(0), Constraint::Length(1)],
+    );
 
     let outer = Block::default()
         .borders(Borders::ALL)
@@ -223,13 +219,17 @@ pub(super) fn render(
     };
     footer::render(frame, &state, pr_data, tab, footer_area);
 
-    if let Some(help_area) = help_area {
-        dialogs::help::render(frame, help_area, &ctx.store.capabilities);
-    }
     let review_ctx = dialogs::review::ReviewContext {
         options: state.review_context().options,
         pending: ctx.store.reviews.get(&pr_id),
     };
+    if ui.help_open {
+        ui.help.render(
+            frame,
+            area,
+            &dialogs::help::entries(&ctx.store.capabilities).as_slice(),
+        );
+    }
     if let Some(dialog) = &mut ui.confirm {
         dialog.render(frame, area, &());
     }

@@ -101,9 +101,8 @@ fn normalize_key(mut key: KeyEvent) -> KeyEvent {
 
 fn active_search(state: &AppState) -> Option<(&SearchInput, bool)> {
     match state.screen {
-        Screen::List => {
-            (!state.ui.list.filter_picker_open).then_some((&state.ui.list.search, false))
-        }
+        Screen::List => (!state.ui.list.filter_picker_open && !state.ui.list.help_open)
+            .then_some((&state.ui.list.search, false)),
         Screen::Detail { tab, .. } => state.ui.detail.active_search(tab),
     }
 }
@@ -124,7 +123,7 @@ impl Ui {
 
     pub fn modal_open(&self, store: &crate::app::store::Store, screen: Screen) -> bool {
         match screen {
-            Screen::List => self.list.filter_picker_open,
+            Screen::List => self.list.filter_picker_open || self.list.help_open,
             Screen::Detail { pr_id, .. } => {
                 self.detail.modal_open() || store.errors.contains_key(&pr_id)
             }
@@ -138,6 +137,16 @@ impl Ui {
         screen: Screen,
     ) -> Option<Action> {
         match action {
+            Action::HelpScroll(delta) => {
+                let (open, help) = match screen {
+                    Screen::List => (self.list.help_open, &mut self.list.help),
+                    Screen::Detail { .. } => (self.detail.help_open, &mut self.detail.help),
+                };
+                if open {
+                    help.update(delta, &&[][..]);
+                }
+                None
+            }
             Action::List(action) => self.list.update(
                 action,
                 &pr_list::ListContext {
