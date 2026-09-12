@@ -85,14 +85,18 @@ impl<'a> DetailView<'a> {
             Some(PrStatus::Open | PrStatus::Draft) => {}
             None => return Some("unavailable"),
         }
-        matches!(
-            self.store
-                .cache
-                .details
-                .get(&pr_id)
-                .map(|d| &d.mergeability),
-            Some(LoadState::Loaded(Mergeability::Conflicts))
-        )
+        (self
+            .store
+            .capabilities
+            .supports(crate::domain::capabilities::Feature::Mergeability)
+            && matches!(
+                self.store
+                    .cache
+                    .details
+                    .get(&pr_id)
+                    .map(|d| &d.mergeability),
+                Some(LoadState::Loaded(Mergeability::Conflicts))
+            ))
         .then_some("conflicts")
     }
 
@@ -108,7 +112,8 @@ impl<'a> DetailView<'a> {
 
     /// Whether to offer the `m` merge action.
     pub fn can_merge(&self, pr_id: u64) -> bool {
-        !self.store.merge_strategies.is_empty() && self.merge_blocked_reason(pr_id).is_none()
+        !self.store.capabilities.merge_strategies.is_empty()
+            && self.merge_blocked_reason(pr_id).is_none()
     }
 
     /// Why a review verdict can't be submitted on this PR, for dimming it in the
@@ -119,7 +124,8 @@ impl<'a> DetailView<'a> {
         verdict: ReviewVerdict,
         pr_id: u64,
     ) -> Option<&'static str> {
-        (verdict != ReviewVerdict::Comment && self.viewing_own_pr(pr_id)).then_some("your PR")
+        (self.viewing_own_pr(pr_id) && !self.store.capabilities.own_pr_verdicts.contains(&verdict))
+            .then_some("your PR")
     }
 
     /// The loaded comment with `id` in the current PR's activity, if any.
@@ -165,15 +171,11 @@ impl<'a> DetailView<'a> {
     /// The review verdicts to offer in the menu — `Unapprove` only where the
     /// provider supports withdrawing approval.
     pub fn review_verdicts(&self) -> Vec<ReviewVerdict> {
-        let mut verdicts = vec![
-            ReviewVerdict::Approve,
-            ReviewVerdict::RequestChanges,
-            ReviewVerdict::Comment,
-        ];
-        if self.store.can_unapprove {
-            verdicts.push(ReviewVerdict::Unapprove);
+        if self.store.capabilities.reviews() {
+            self.store.capabilities.review_verdicts.clone()
+        } else {
+            Vec::new()
         }
-        verdicts
     }
 
     /// Target for a brand-new comment (`c`): a top-level PR comment in Overview,
@@ -183,7 +185,11 @@ impl<'a> DetailView<'a> {
             return None;
         };
         match tab {
-            DetailTab::Overview => Some(CommentTarget::Pr),
+            DetailTab::Overview => self
+                .store
+                .capabilities
+                .supports(crate::domain::capabilities::Feature::PrComments)
+                .then_some(CommentTarget::Pr),
             DetailTab::Diff => self.pane_line_target(),
             DetailTab::Commits if self.detail.commits.open_commit.is_some() => {
                 self.pane_line_target()
@@ -192,9 +198,16 @@ impl<'a> DetailView<'a> {
         }
     }
 
-    /// Target for a reply (`r`): the focused comment/thread in Overview. `None`
+    /// Target for a reply (`r`): the focused comment/thread. `None`
     /// when nothing repliable is focused.
     pub fn reply_target(&self) -> Option<CommentTarget> {
+        if !self
+            .store
+            .capabilities
+            .supports(crate::domain::capabilities::Feature::Replies)
+        {
+            return None;
+        }
         let Screen::Detail { tab, .. } = self.screen else {
             return None;
         };
@@ -205,6 +218,13 @@ impl<'a> DetailView<'a> {
                 .timeline
                 .reply
                 .map(CommentTarget::Reply),
+            DetailTab::Diff | DetailTab::Commits => {
+                let view = self.detail.active_diff_view();
+                (view.focus == DiffFocus::Pane)
+                    .then_some(view.pane_reply)
+                    .flatten()
+                    .map(CommentTarget::Reply)
+            }
             _ => None,
         }
     }
@@ -215,7 +235,18 @@ impl<'a> DetailView<'a> {
             return None;
         }
         if let Some(parent) = view.pane_reply {
-            return Some(CommentTarget::Reply(parent));
+            return self
+                .store
+                .capabilities
+                .supports(crate::domain::capabilities::Feature::Replies)
+                .then_some(CommentTarget::Reply(parent));
+        }
+        if !self
+            .store
+            .capabilities
+            .supports(crate::domain::capabilities::Feature::InlineComments)
+        {
+            return None;
         }
         view.pane_anchor.clone().map(CommentTarget::Line)
     }
@@ -249,5 +280,29 @@ impl DetailView<'_> {
             return None;
         };
         self.store.errors.get(&pr_id).map(String::as_str)
+    }
+}
+
+impl DetailView<'_> {
+    pub fn supports_action(&self, action: crate::app::action::DetailAction) -> bool {
+        use crate::{app::action::DetailAction as A, domain::capabilities::Feature as F};
+        let caps = &self.store.capabilities;
+        match action {
+            A::OpenReviewPicker
+            | A::ReviewSelect
+            | A::StartReview
+            | A::FinishReview
+            | A::AbandonReview
+            | A::RemovePendingComment => caps.reviews(),
+            A::OpenMergePicker | A::MergeSelect => !caps.merge_strategies.is_empty(),
+            A::OpenDecline => caps.supports(F::ClosePr),
+            A::OpenComment => self.comment_target().is_some(),
+            A::OpenReply => self.reply_target().is_some(),
+            A::EditComment => caps.supports(F::EditComments),
+            A::DeleteComment => caps.supports(F::DeleteComments),
+            A::ResolveThread => caps.supports(F::ResolveThreads),
+            A::SelectTab(tab) => tab.supported_by(caps),
+            _ => true,
+        }
     }
 }

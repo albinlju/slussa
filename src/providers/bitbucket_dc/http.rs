@@ -145,3 +145,74 @@ pub(super) fn delete(base_url: &str, path: &str, pat: &str) -> Result<(), FetchE
     check_status(response, base_url, &url)?;
     Ok(())
 }
+
+#[derive(serde::Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct Page<T> {
+    values: Vec<T>,
+    #[serde(rename = "isLastPage")]
+    last: bool,
+    next_page_start: Option<u64>,
+}
+
+pub(super) fn get_all<T: DeserializeOwned>(
+    base_url: &str,
+    path: &str,
+    pat: &str,
+) -> Result<Vec<T>, FetchError> {
+    collect_pages(|start| {
+        let separator = if path.contains('?') { '&' } else { '?' };
+        get_json(base_url, &format!("{path}{separator}start={start}"), pat)
+    })
+}
+
+fn collect_pages<T>(
+    mut fetch: impl FnMut(u64) -> Result<Page<T>, FetchError>,
+) -> Result<Vec<T>, FetchError> {
+    let mut start = 0;
+    let mut values = Vec::new();
+    loop {
+        let page = fetch(start)?;
+        values.extend(page.values);
+        if page.last {
+            return Ok(values);
+        }
+        start = page
+            .next_page_start
+            .filter(|next| *next > start)
+            .ok_or_else(|| FetchError::ParseFailed("Invalid pagination cursor".into()))?;
+    }
+}
+
+#[cfg(test)]
+mod pagination_tests {
+    use super::*;
+    #[test]
+    fn follows_server_offsets_and_rejects_nonadvancing_pages() {
+        let values = collect_pages(|start| {
+            Ok(match start {
+                0 => Page {
+                    values: vec![1, 2],
+                    last: false,
+                    next_page_start: Some(17),
+                },
+                17 => Page {
+                    values: vec![3],
+                    last: true,
+                    next_page_start: None,
+                },
+                _ => panic!("must use server cursor"),
+            })
+        })
+        .unwrap();
+        assert_eq!(values, vec![1, 2, 3]);
+        assert!(
+            collect_pages(|_| Ok(Page {
+                values: vec![1],
+                last: false,
+                next_page_start: Some(0)
+            }))
+            .is_err()
+        );
+    }
+}

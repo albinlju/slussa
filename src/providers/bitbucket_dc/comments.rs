@@ -3,6 +3,7 @@ use serde::Deserialize;
 use super::{Config, http};
 use crate::providers::error::FetchError;
 
+#[allow(clippy::too_many_arguments)]
 pub fn post_comment(
     config: &Config,
     pr_id: u64,
@@ -10,7 +11,13 @@ pub fn post_comment(
     line: usize,
     removed: bool,
     text: &str,
+    revision: &crate::domain::diff::DiffRevision,
 ) -> Result<(), FetchError> {
+    if revision.base.is_none() {
+        return Err(FetchError::InvalidInput(
+            "The diff has no base revision. Reload it before commenting.".into(),
+        ));
+    }
     let endpoint = format!(
         "/rest/api/1.0/projects/{}/repos/{}/pull-requests/{pr_id}/comments",
         config.repo.project_key, config.repo.repo_slug,
@@ -23,6 +30,9 @@ pub fn post_comment(
     let body = serde_json::json!({
         "text": text,
         "anchor": {
+            "fromHash": revision.base,
+            "toHash": revision.head,
+            "diffType": if revision.commit { "COMMIT" } else { "EFFECTIVE" },
             "path": path,
             "line": line,
             "lineType": line_type,

@@ -55,7 +55,13 @@ pub fn submit_review(
         config.repo.project_key, config.repo.repo_slug,
     );
     let payload = serde_json::json!({ "status": status });
-    http::put_json(&config.repo.base_url, &endpoint, &config.pat, &payload)
+    http::put_json(&config.repo.base_url, &endpoint, &config.pat, &payload).map_err(|source| {
+        FetchError::PartialReview {
+            posted_comments: 0,
+            summary_posted: !body.is_empty(),
+            source: Box::new(source),
+        }
+    })
 }
 
 /// Bitbucket has no batched review: post each queued line comment, then submit
@@ -69,17 +75,58 @@ pub fn submit_full_review(
     user: &str,
     comments: &[ReviewComment],
 ) -> Result<(), FetchError> {
-    for (i, c) in comments.iter().enumerate() {
-        if let Err(e) = comments::post_comment(config, pr_id, &c.path, c.line, c.removed, &c.body) {
-            tracing::warn!(
-                "review flush aborted: posted {}/{} comments before failure",
-                i,
-                comments.len(),
-            );
-            return Err(e);
+    if comments.iter().any(|c| c.revision.is_none()) {
+        return Err(FetchError::InvalidInput(
+            "Comment revision is unknown; reload the diff.".into(),
+        ));
+    }
+    publish_steps(
+        comments,
+        |c| {
+            comments::post_comment(
+                config,
+                pr_id,
+                &c.path,
+                c.line,
+                c.removed,
+                &c.body,
+                c.revision.as_ref().expect("validated revision"),
+            )
+        },
+        || submit_review(config, pr_id, verdict, body, user),
+    )
+}
+
+fn publish_steps<T>(
+    comments: &[T],
+    mut post: impl FnMut(&T) -> Result<(), FetchError>,
+    finish: impl FnOnce() -> Result<(), FetchError>,
+) -> Result<(), FetchError> {
+    for (i, comment) in comments.iter().enumerate() {
+        if let Err(source) = post(comment) {
+            return Err(FetchError::PartialReview {
+                posted_comments: i,
+                summary_posted: false,
+                source: Box::new(source),
+            });
         }
     }
-    submit_review(config, pr_id, verdict, body, user)
+    finish().map_err(|error| match error {
+        FetchError::PartialReview {
+            summary_posted,
+            source,
+            ..
+        } => FetchError::PartialReview {
+            posted_comments: comments.len(),
+            summary_posted,
+            source,
+        },
+        source => FetchError::PartialReview {
+            posted_comments: comments.len(),
+            summary_posted: false,
+            source: Box::new(source),
+        },
+    })
 }
 
 pub fn fetch_mergeability(config: &Config, pr_id: u64) -> Result<Mergeability, FetchError> {
@@ -164,4 +211,50 @@ pub struct Config {
 
 fn ms_to_utc(ms: i64) -> DateTime<Utc> {
     Utc.timestamp_millis_opt(ms).single().unwrap_or_default()
+}
+
+#[cfg(test)]
+mod submission_tests {
+    use super::*;
+    #[test]
+    fn partial_failure_reports_only_acknowledged_steps() {
+        let result = publish_steps(
+            &[1, 2, 3],
+            |n| {
+                if *n == 3 {
+                    Err(FetchError::Network("offline".into()))
+                } else {
+                    Ok(())
+                }
+            },
+            || panic!("must not submit verdict"),
+        );
+        assert!(matches!(
+            result,
+            Err(FetchError::PartialReview {
+                posted_comments: 2,
+                summary_posted: false,
+                ..
+            })
+        ));
+        let result = publish_steps(
+            &[1, 2],
+            |_| Ok(()),
+            || {
+                Err(FetchError::PartialReview {
+                    posted_comments: 0,
+                    summary_posted: true,
+                    source: Box::new(FetchError::Network("offline".into())),
+                })
+            },
+        );
+        assert!(matches!(
+            result,
+            Err(FetchError::PartialReview {
+                posted_comments: 2,
+                summary_posted: true,
+                ..
+            })
+        ));
+    }
 }

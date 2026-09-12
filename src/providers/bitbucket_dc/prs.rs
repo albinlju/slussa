@@ -7,13 +7,8 @@ use crate::domain::{
     review::{Reviewer, ReviewerState},
     user::User,
 };
-use crate::providers::bitbucket_dc::http::get_json;
+use crate::providers::bitbucket_dc::http::get_all;
 use crate::providers::error::FetchError;
-
-#[derive(Debug, Deserialize)]
-struct PagedPrs {
-    values: Vec<BbPr>,
-}
 
 #[derive(Debug, Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -70,8 +65,8 @@ pub fn fetch_prs(config: &Config) -> Result<Vec<PullRequest>, FetchError> {
         "/rest/api/1.0/projects/{}/repos/{}/pull-requests?state=ALL&limit=50",
         config.repo.project_key, config.repo.repo_slug
     );
-    let page: PagedPrs = get_json(&config.repo.base_url, &path, &config.pat)?;
-    Ok(page.values.into_iter().map(map_pr).collect())
+    let values: Vec<BbPr> = get_all(&config.repo.base_url, &path, &config.pat)?;
+    Ok(values.into_iter().map(map_pr).collect())
 }
 
 fn map_pr(bb: BbPr) -> PullRequest {

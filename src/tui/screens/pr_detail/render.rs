@@ -5,7 +5,10 @@ use crate::{
         reviews::{PendingComment, PendingReview},
         store::{LoadState, PrData},
     },
-    domain::{comment::CommentThread, pr::PullRequest},
+    domain::{
+        capabilities::{Capabilities, Feature},
+        comment::CommentThread,
+    },
     tui::{
         component::Component,
         components::diff_viewer::DiffContext,
@@ -27,8 +30,7 @@ use ratatui::{
 
 fn render_tabs_and_content(
     frame: &mut Frame,
-    pr: &PullRequest,
-    pr_data: Option<&PrData>,
+    overview: &super::tabs::overview::OverviewContext<'_>,
     ui: &mut PrDetailScreen,
     pending: &[PendingComment],
     tab: DetailTab,
@@ -46,12 +48,15 @@ fn render_tabs_and_content(
         .border_style(Style::default().fg(theme.divider));
     let tabs_inner = tabs_block.inner(tabs_area);
     frame.render_widget(tabs_block, tabs_area);
-    frame.render_widget(Paragraph::new(tab_bar(tab)), tabs_inner);
+    frame.render_widget(
+        Paragraph::new(tab_bar(tab, overview.capabilities)),
+        tabs_inner,
+    );
 
-    render_content(frame, pr, pr_data, ui, pending, tab, content_area);
+    render_content(frame, overview, ui, pending, tab, content_area);
 }
 
-fn tab_bar(tab: DetailTab) -> Line<'static> {
+fn tab_bar(tab: DetailTab, caps: &Capabilities) -> Line<'static> {
     let theme = theme::current();
     let active = Style::default()
         .fg(theme.accent)
@@ -60,11 +65,11 @@ fn tab_bar(tab: DetailTab) -> Line<'static> {
     let sep = Style::default().fg(theme.muted);
 
     let mut spans = vec![Span::raw("  ")];
-    for (i, t) in DetailTab::ALL.iter().enumerate() {
+    for (i, t) in DetailTab::available(caps).iter().enumerate() {
         if i > 0 {
             spans.push(Span::styled(" · ", sep));
         }
-        let style = if i == tab.index() { active } else { inactive };
+        let style = if *t == tab { active } else { inactive };
         spans.push(Span::styled(t.label(), style));
     }
     Line::from(spans)
@@ -72,13 +77,14 @@ fn tab_bar(tab: DetailTab) -> Line<'static> {
 
 fn render_content(
     frame: &mut Frame,
-    pr: &PullRequest,
-    pr_data: Option<&PrData>,
+    overview: &super::tabs::overview::OverviewContext<'_>,
     ui: &mut PrDetailScreen,
     pending: &[PendingComment],
     tab: DetailTab,
     area: Rect,
 ) {
+    let pr = overview.pr;
+    let pr_data = overview.data;
     let inset = match tab {
         DetailTab::Description => area,
         _ => Rect {
@@ -90,7 +96,7 @@ fn render_content(
     };
     match tab {
         DetailTab::Description => ui.description.render(frame, inset, &pr),
-        DetailTab::Overview => ui.overview.render(frame, inset, &(pr, pr_data)),
+        DetailTab::Overview => ui.overview.render(frame, inset, overview),
         DetailTab::Diff => {
             let threads = activity_threads(pr_data);
             let diff = pr_data.and_then(|d| d.diff_for(ui.commits.open_commit.as_deref()));
@@ -189,11 +195,21 @@ pub(super) fn render(
     );
 
     let pr_data = ctx.store.cache.details.get(&pr.id);
-    header::render(frame, pr, pr_data.map(|d| &d.mergeability), header_area);
-    render_tabs_and_content(
+    header::render(
         frame,
         pr,
-        pr_data,
+        pr_data
+            .filter(|_| ctx.store.capabilities.supports(Feature::Mergeability))
+            .map(|d| &d.mergeability),
+        header_area,
+    );
+    render_tabs_and_content(
+        frame,
+        &super::tabs::overview::OverviewContext {
+            pr,
+            data: pr_data,
+            capabilities: &ctx.store.capabilities,
+        },
         ui,
         pending_comments(ctx.store.reviews.get(&pr_id)),
         tab,
@@ -208,7 +224,7 @@ pub(super) fn render(
     footer::render(frame, &state, pr_data, tab, footer_area);
 
     if let Some(help_area) = help_area {
-        dialogs::help::render(frame, help_area);
+        dialogs::help::render(frame, help_area, &ctx.store.capabilities);
     }
     let review_ctx = dialogs::review::ReviewContext {
         options: state.review_context().options,
@@ -221,7 +237,11 @@ pub(super) fn render(
         dialog.render(frame, area, &review_ctx);
     }
     if let Some(dialog) = &mut ui.merge_picker {
-        dialog.render(frame, area, &ctx.store.merge_strategies.as_slice());
+        dialog.render(
+            frame,
+            area,
+            &ctx.store.capabilities.merge_strategies.as_slice(),
+        );
     }
     if let Some(msg) = ctx.store.errors.get(&pr_id) {
         dialogs::error::render(frame, msg, area);

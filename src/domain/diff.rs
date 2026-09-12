@@ -1,5 +1,6 @@
 #[derive(Debug, Clone)]
 pub struct Diff {
+    pub revision: Option<DiffRevision>,
     pub files: Vec<FileDiff>,
 }
 
@@ -63,4 +64,12 @@ impl DiffLine {
             DiffLine::Added(c) | DiffLine::Removed(c) | DiffLine::Context(c) => c,
         }
     }
+}
+
+/// Revision of the diff actually displayed, retained with every comment draft.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct DiffRevision {
+    pub head: String,
+    pub base: Option<String>,
+    pub commit: bool,
 }

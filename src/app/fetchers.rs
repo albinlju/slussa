@@ -64,6 +64,14 @@ impl App {
     }
 
     pub(super) fn spawn_load_builds(&mut self, pr_id: u64) {
+        if !self
+            .state
+            .store
+            .capabilities
+            .supports(crate::domain::capabilities::Feature::Builds)
+        {
+            return;
+        }
         if !self.state.store.fetches.insert(FetchKey::Builds(pr_id)) {
             return;
         }
@@ -122,6 +130,14 @@ impl App {
         if !self
             .state
             .store
+            .capabilities
+            .supports(crate::domain::capabilities::Feature::Mergeability)
+        {
+            return;
+        }
+        if !self
+            .state
+            .store
             .fetches
             .insert(FetchKey::Mergeability(pr_id))
         {
@@ -138,9 +154,7 @@ impl App {
         let provider = self.provider.clone();
         self.spawn_fetch(
             move || match target {
-                CommentTarget::Line(a) => {
-                    provider.post_comment(pr_id, &a.path, a.line, a.removed, &text)
-                }
+                CommentTarget::Line(a) => provider.post_comment(pr_id, &a, &text),
                 CommentTarget::Pr => provider.post_pr_comment(pr_id, &text),
                 CommentTarget::Reply(parent) => provider.reply_comment(pr_id, parent, &text),
                 CommentTarget::Edit { id, review } => {
@@ -161,20 +175,6 @@ impl App {
         );
     }
 
-    pub(super) fn spawn_submit_review(
-        &self,
-        pr_id: u64,
-        verdict: ReviewVerdict,
-        body: String,
-        user: String,
-    ) {
-        let provider = self.provider.clone();
-        self.spawn_fetch(
-            move || provider.submit_review(pr_id, verdict, &body, &user),
-            move |r| Action::Loaded(LoadedAction::Commented(pr_id, r)),
-        );
-    }
-
     /// Flush a whole review at once: the queued line `comments` plus the
     /// `verdict` and its summary `body`. GitHub sends one atomic call; Bitbucket
     /// posts the comments then flips status (see the provider impls).
@@ -190,16 +190,42 @@ impl App {
         let review_comments: Vec<ReviewComment> = comments
             .into_iter()
             .map(|c| ReviewComment {
+                revision: c.anchor.revision,
                 path: c.anchor.path,
                 line: c.anchor.line,
                 removed: c.anchor.removed,
                 body: c.text,
             })
             .collect();
-        self.spawn_fetch(
-            move || provider.submit_full_review(pr_id, verdict, &body, &user, &review_comments),
-            move |r| Action::Loaded(LoadedAction::Commented(pr_id, r)),
-        );
+        let tx = self.action_tx.clone();
+        tokio::spawn(async move {
+            let submitted_body = body.clone();
+            let result = task::spawn_blocking(move || {
+                provider.submit_full_review(pr_id, verdict, &body, &user, &review_comments)
+            })
+            .await;
+            let action = match result {
+                Ok(Ok(())) => LoadedAction::Commented(pr_id, Ok(())),
+                Ok(Err(FetchError::PartialReview {
+                    posted_comments,
+                    summary_posted,
+                    source,
+                })) => LoadedAction::ReviewFailed {
+                    pr_id,
+                    posted_comments,
+                    submitted_summary: summary_posted.then_some(submitted_body),
+                    message: format!(
+                        "{}\n{posted_comments} line comments were sent; confirmed posts will be skipped on retry. Check the last attempted post before retrying.",
+                        source.user_message()
+                    ),
+                },
+                Ok(Err(error)) => LoadedAction::Commented(pr_id, Err(error.user_message())),
+                Err(error) => {
+                    LoadedAction::Commented(pr_id, Err(format!("worker thread panicked: {error}")))
+                }
+            };
+            tx.send(Action::Loaded(action)).ok();
+        });
     }
 
     pub(super) fn spawn_resolve_thread(

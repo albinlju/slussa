@@ -111,6 +111,12 @@ pub enum CommitsAction {
 
 #[derive(Debug)]
 pub enum LoadedAction {
+    ReviewFailed {
+        pr_id: u64,
+        posted_comments: usize,
+        submitted_summary: Option<String>,
+        message: String,
+    },
     Prs(Result<Vec<PullRequest>, String>),
     Commits(u64, Result<Vec<Commit>, String>),
     Diff(u64, Result<Diff, String>),
@@ -149,4 +155,28 @@ pub enum Command {
         resolved: bool,
     },
     DismissError,
+}
+
+impl Command {
+    pub fn supported_by(&self, caps: &crate::domain::capabilities::Capabilities) -> bool {
+        use crate::{app::reviews::CommentTarget, domain::capabilities::Feature};
+        match self {
+            Self::DismissError => true,
+            Self::StartReview | Self::AbandonReview | Self::RemovePendingComment(_) => {
+                caps.reviews()
+            }
+            Self::SubmitReview { verdict, .. } => caps.can_submit_verdict(*verdict, false),
+            Self::SubmitComment { target, .. } => match target {
+                CommentTarget::Pr => caps.supports(Feature::PrComments),
+                CommentTarget::Line(_) => caps.supports(Feature::InlineComments),
+                CommentTarget::Reply(_) => caps.supports(Feature::Replies),
+                CommentTarget::Edit { .. } => caps.supports(Feature::EditComments),
+                CommentTarget::Review { verdict } => caps.can_submit_verdict(*verdict, false),
+            },
+            Self::Merge(strategy) => caps.merge_strategies.contains(strategy),
+            Self::Decline => caps.supports(Feature::ClosePr),
+            Self::DeleteComment { .. } => caps.supports(Feature::DeleteComments),
+            Self::ResolveThread { .. } => caps.supports(Feature::ResolveThreads),
+        }
+    }
 }

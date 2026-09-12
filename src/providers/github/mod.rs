@@ -6,6 +6,7 @@ mod comments;
 mod commits;
 mod diff;
 mod events;
+mod pagination;
 mod prs;
 mod review_threads;
 
@@ -23,7 +24,7 @@ use serde::Deserialize;
 use serde::de::DeserializeOwned;
 
 use crate::domain::comment::{Comment, Reaction};
-use crate::domain::pr::{Mergeability, MergeStrategy};
+use crate::domain::pr::{MergeStrategy, Mergeability};
 use crate::domain::review::{ReviewComment, ReviewVerdict};
 use crate::domain::user::User;
 use crate::providers::error::FetchError;
@@ -94,7 +95,9 @@ fn review_event(verdict: ReviewVerdict) -> Option<&'static str> {
 
 pub fn submit_review(pr_number: u64, verdict: ReviewVerdict, body: &str) -> Result<(), FetchError> {
     let Some(event) = review_event(verdict) else {
-        return Ok(());
+        return Err(FetchError::InvalidInput(
+            "This review verdict is not supported by GitHub.".into(),
+        ));
     };
     let endpoint = format!("repos/{{owner}}/{{repo}}/pulls/{pr_number}/reviews");
     let event_arg = format!("event={event}");
@@ -121,9 +124,40 @@ pub fn submit_full_review(
         return submit_review(pr_number, verdict, body);
     }
     let Some(event) = review_event(verdict) else {
-        return Ok(());
+        return Err(FetchError::InvalidInput(
+            "This review verdict is not supported by GitHub.".into(),
+        ));
     };
-    let commit_id = comments::head_sha(pr_number)?;
+    let payload = review_payload(event, body, comments)?;
+    let endpoint = format!("repos/{{owner}}/{{repo}}/pulls/{pr_number}/reviews");
+    let input = serde_json::to_vec(&payload).map_err(|e| FetchError::ParseFailed(e.to_string()))?;
+    cli::run_gh_stdin(
+        &["api", "--method", "POST", &endpoint, "--input", "-"],
+        &input,
+    )?;
+    Ok(())
+}
+
+fn review_payload(
+    event: &str,
+    body: &str,
+    comments: &[ReviewComment],
+) -> Result<serde_json::Value, FetchError> {
+    let revision = comments
+        .first()
+        .and_then(|c| c.revision.as_ref())
+        .ok_or_else(|| {
+            FetchError::InvalidInput(
+                "Reload the diff and recreate comments with an unknown revision.".into(),
+            )
+        })?;
+    if comments
+        .iter()
+        .any(|c| c.revision.as_ref() != Some(revision))
+    {
+        return Err(FetchError::InvalidInput("A review must contain comments from one diff revision. Submit comments on different commits separately.".into()));
+    }
+    let commit_id = &revision.head;
     let comment_payload: Vec<serde_json::Value> = comments
         .iter()
         .map(|c| {
@@ -135,16 +169,12 @@ pub fn submit_full_review(
             })
         })
         .collect();
-    let payload = serde_json::json!({
+    Ok(serde_json::json!({
         "commit_id": commit_id,
         "event": event,
         "body": body,
         "comments": comment_payload,
-    });
-    let endpoint = format!("repos/{{owner}}/{{repo}}/pulls/{pr_number}/reviews");
-    let input = serde_json::to_vec(&payload).map_err(|e| FetchError::ParseFailed(e.to_string()))?;
-    cli::run_gh_stdin(&["api", "--method", "POST", &endpoint, "--input", "-"], &input)?;
-    Ok(())
+    }))
 }
 
 pub(super) fn run_pr_graphql<P: DeserializeOwned>(
@@ -188,6 +218,10 @@ pub(super) const COMMENT_FIELDS: &str = "databaseId body createdAt author { logi
 #[derive(Debug, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub(super) struct GqlComment {
+    #[serde(default)]
+    commit: Option<GqlCommentCommit>,
+    #[serde(default)]
+    original_commit: Option<GqlCommentCommit>,
     #[serde(default)]
     database_id: Option<u64>,
     #[serde(default)]
@@ -261,4 +295,34 @@ fn reaction_emoji(name: &str) -> Option<&'static str> {
         "EYES" => "👀",
         _ => return None,
     })
+}
+
+#[cfg(test)]
+mod revision_tests {
+    use super::*;
+    #[test]
+    fn review_uses_displayed_revision_and_rejects_mixed_revisions() {
+        let first = ReviewComment {
+            revision: Some(crate::domain::diff::DiffRevision {
+                head: "reviewed-sha".into(),
+                base: None,
+                commit: true,
+            }),
+            path: "file.rs".into(),
+            line: 7,
+            removed: true,
+            body: "comment".into(),
+        };
+        let payload = review_payload("COMMENT", "summary", std::slice::from_ref(&first)).unwrap();
+        assert_eq!(payload["commit_id"], "reviewed-sha");
+        assert_eq!(payload["comments"][0]["side"], "LEFT");
+        let mut other = first.clone();
+        other.revision.as_mut().unwrap().head = "new-sha".into();
+        assert!(review_payload("COMMENT", "summary", &[first, other]).is_err());
+    }
+}
+
+#[derive(Debug, Deserialize)]
+struct GqlCommentCommit {
+    oid: String,
 }

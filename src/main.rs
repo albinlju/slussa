@@ -37,7 +37,7 @@ fn run_tui(provider: Provider) -> ExitCode {
 
     let current_user = provider.current_user().unwrap_or_default();
 
-    rt.block_on(async move {
+    let result = rt.block_on(async move {
         let app = App::new(provider, current_user);
         let mut terminal = ratatui::init();
         let result = app.run(&mut terminal).await;
@@ -49,5 +49,9 @@ fn run_tui(provider: Provider) -> ExitCode {
                 ExitCode::from(1)
             }
         }
-    })
+    });
+    // Returning from the UI must not wait for blocking provider workers.
+    // Quitting does not imply that an in-flight server write was cancelled.
+    rt.shutdown_background();
+    result
 }

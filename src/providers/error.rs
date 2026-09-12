@@ -3,10 +3,25 @@ use std::fmt;
 #[derive(Debug)]
 pub enum FetchError {
     GhMissing,
-    GhFailed { code: Option<i32>, stderr: String },
-    HttpFailed { status: u16, body: String },
+    InvalidInput(String),
+    Timeout,
+    PartialReview {
+        posted_comments: usize,
+        summary_posted: bool,
+        source: Box<FetchError>,
+    },
+    GhFailed {
+        code: Option<i32>,
+        stderr: String,
+    },
+    HttpFailed {
+        status: u16,
+        body: String,
+    },
     Network(String),
-    NotAuthenticated { host: String },
+    NotAuthenticated {
+        host: String,
+    },
     ParseFailed(String),
 }
 
@@ -15,6 +30,9 @@ impl FetchError {
     /// The raw `Display` form is kept for logs.
     pub fn user_message(&self) -> String {
         match self {
+            Self::PartialReview { source, .. } => source.user_message(),
+            Self::InvalidInput(msg) => msg.clone(),
+            Self::Timeout => "The request timed out. Check the PR before retrying: the server may have applied the change.".into(),
             Self::GhMissing => "GitHub CLI (gh) isn't installed or on your PATH.".to_owned(),
             Self::GhFailed { stderr, .. } => {
                 api_message(stderr).unwrap_or_else(|| clean_gh(stderr))
@@ -70,6 +88,16 @@ fn clean_gh(stderr: &str) -> String {
 impl fmt::Display for FetchError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
+            Self::PartialReview {
+                posted_comments,
+                summary_posted,
+                source,
+            } => write!(
+                f,
+                "review partially sent ({posted_comments} comments, summary={summary_posted}): {source}"
+            ),
+            Self::InvalidInput(msg) => write!(f, "{msg}"),
+            Self::Timeout => write!(f, "request timed out"),
             Self::GhMissing => write!(f, "gh CLI not available"),
             Self::GhFailed { code, stderr } => {
                 let stderr = stderr.trim();

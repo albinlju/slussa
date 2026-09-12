@@ -5,7 +5,10 @@ use crate::{
         action::{Action, DetailAction},
         store::PrData,
     },
-    domain::pr::PullRequest,
+    domain::{
+        capabilities::{Capabilities, Feature},
+        pr::PullRequest,
+    },
     tui::{component::Component, layout},
 };
 use ratatui::{
@@ -18,19 +21,25 @@ use timeline::{Timeline, TimelineContext};
 const SIDEBAR_WIDTH: u16 = 30;
 const SIDEBAR_BREAKPOINT: u16 = 64;
 
+pub struct OverviewContext<'a> {
+    pub pr: &'a PullRequest,
+    pub data: Option<&'a PrData>,
+    pub capabilities: &'a Capabilities,
+}
+
 #[derive(Debug, Default)]
 pub struct Overview {
     pub timeline: Timeline,
 }
 impl Component for Overview {
-    type Context<'a> = (&'a PullRequest, Option<&'a PrData>);
+    type Context<'a> = OverviewContext<'a>;
     type Message = DetailAction;
     fn handle_key(&self, key: KeyEvent, ctx: &Self::Context<'_>) -> Option<Action> {
         self.timeline.handle_key(
             key,
             &TimelineContext {
-                data: ctx.1,
-                author: &ctx.0.author.username,
+                data: ctx.data,
+                author: &ctx.pr.author.username,
                 scrollbar: Rect::default(),
             },
         )
@@ -39,24 +48,20 @@ impl Component for Overview {
         self.timeline.update(
             action,
             &TimelineContext {
-                data: ctx.1,
-                author: &ctx.0.author.username,
+                data: ctx.data,
+                author: &ctx.pr.author.username,
                 scrollbar: Rect::default(),
             },
         )
     }
     fn render(&mut self, frame: &mut Frame, area: Rect, ctx: &Self::Context<'_>) {
-        render(frame, ctx.0, ctx.1, self, area);
+        render(frame, ctx, self, area);
     }
 }
 
-pub fn render(
-    frame: &mut Frame,
-    pr: &PullRequest,
-    pr_data: Option<&PrData>,
-    ui: &mut Overview,
-    area: Rect,
-) {
+pub fn render(frame: &mut Frame, ctx: &OverviewContext<'_>, ui: &mut Overview, area: Rect) {
+    let pr = ctx.pr;
+    let pr_data = ctx.data;
     let (body_area, sidebar_area, scrollbar_area) = if area.width >= SIDEBAR_BREAKPOINT {
         let [body, sidebar, scrollbar] = layout::split(
             area,
@@ -78,7 +83,14 @@ pub fn render(
     };
 
     if let Some(sidebar) = sidebar_area {
-        frame.render_widget(sidebar::Sidebar { pr, data: pr_data }, sidebar);
+        frame.render_widget(
+            sidebar::Sidebar {
+                pr,
+                data: pr_data,
+                show_builds: ctx.capabilities.supports(Feature::Builds),
+            },
+            sidebar,
+        );
     }
     ui.timeline.render(
         frame,

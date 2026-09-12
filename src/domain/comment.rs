@@ -55,6 +55,7 @@ pub struct CommentThread {
 /// The review-thread specifics — present only when a thread is anchored to code.
 #[derive(Debug, Clone)]
 pub struct ThreadAnchor {
+    pub revision: Option<String>,
     pub path: String,
     pub line: Option<usize>,
     pub old_line: Option<usize>,
@@ -65,6 +66,12 @@ pub struct ThreadAnchor {
 }
 
 impl CommentThread {
+    pub fn matches_revision(&self, revision: Option<&super::diff::DiffRevision>) -> bool {
+        self.anchor
+            .as_ref()
+            .is_some_and(|anchor| anchor.revision.as_deref() == revision.map(|r| r.head.as_str()))
+    }
+
     /// A code-review thread that's been resolved. General discussion is never
     /// resolved.
     pub fn resolved(&self) -> bool {

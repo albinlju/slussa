@@ -5,9 +5,10 @@ use crate::domain::activity::Activity;
 use crate::domain::comment::{Comment, CommentThread, Reaction, ThreadAnchor};
 use crate::domain::event::{EventKind, PushedCommit, TimelineEvent};
 use crate::domain::user::User;
-use crate::providers::bitbucket_dc::http::get_json;
+use crate::providers::bitbucket_dc::http::get_all;
 use crate::providers::error::FetchError;
 
+#[cfg(test)]
 #[derive(Debug, Deserialize)]
 struct Page {
     values: Vec<BbActivity>,
@@ -47,6 +48,8 @@ struct RescopeCommit {
 #[derive(Debug, Deserialize)]
 #[serde(rename_all = "camelCase")]
 struct Anchor {
+    #[serde(default)]
+    to_hash: Option<String>,
     #[serde(default)]
     path: String,
     #[serde(default)]
@@ -105,8 +108,8 @@ pub fn fetch(config: &Config, pr_id: u64) -> Result<Activity, FetchError> {
         "/rest/api/1.0/projects/{}/repos/{}/pull-requests/{pr_id}/activities?limit=100",
         config.repo.project_key, config.repo.repo_slug
     );
-    let page: Page = get_json(&config.repo.base_url, &path, &config.pat)?;
-    Ok(project(page.values))
+    let values: Vec<BbActivity> = get_all(&config.repo.base_url, &path, &config.pat)?;
+    Ok(project(values))
 }
 
 fn project(activities: Vec<BbActivity>) -> Activity {
@@ -178,6 +181,7 @@ fn make_thread(anchor: Anchor, root: &BbComment) -> CommentThread {
         comments,
         reply_to: (root.id != 0).then_some(root.id),
         anchor: Some(ThreadAnchor {
+            revision: anchor.to_hash,
             path: anchor.path,
             line,
             old_line,

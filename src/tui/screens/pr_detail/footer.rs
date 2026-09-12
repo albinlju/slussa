@@ -4,7 +4,7 @@ use crate::{
         reviews::CommentTarget,
         store::{LoadState, PrData},
     },
-    domain::diff::FileDiff,
+    domain::{capabilities::Feature, diff::FileDiff},
     tui::{
         components::{
             comment_editor::comment_prompt, diff_viewer::DiffFocus, search_input::SearchInput,
@@ -30,7 +30,7 @@ pub(super) fn render(
     area: Rect,
 ) {
     let line = if state.operation_pending() {
-        widgets::loading("sending…")
+        widgets::loading("sending…  Esc: back · q: quit")
     } else if let Some(draft) = &state.detail.editor.draft {
         comment_prompt(draft)
     } else if let Some(search) = active_search(state, pr_data, tab, area.width) {
@@ -44,11 +44,13 @@ pub(super) fn render(
 fn footer_actions(state: &DetailView<'_>, tab: DetailTab) -> Vec<Hint> {
     // While a batched review is open, surface its state and finish/discard keys
     // on every tab — line comments queue into it from the Diff too.
-    if let Some(review) = state.pending_review() {
-        let mut parts = vec![
-            Hint::on(format!("reviewing ({})", review.comments.len())),
-            Hint::on("c: comment"),
-        ];
+    if state.store.capabilities.reviews()
+        && let Some(review) = state.pending_review()
+    {
+        let mut parts = vec![Hint::on(format!("reviewing ({})", review.comments.len()))];
+        if state.comment_target().is_some() {
+            parts.push(Hint::on("c: comment"));
+        }
         if state.reply_target().is_some() {
             parts.push(Hint::on("r: reply"));
         }
@@ -60,27 +62,38 @@ fn footer_actions(state: &DetailView<'_>, tab: DetailTab) -> Vec<Hint> {
     // posts a PR comment, `r` replies, `a`/`v` review, `m` merges, `x` declines.
     // Lifecycle actions stay visible but dimmed-with-reason when unavailable.
     if tab == DetailTab::Overview {
-        let mut parts = vec![Hint::on("c: comment")];
+        let mut parts = vec![];
+        if state.comment_target().is_some() {
+            parts.push(Hint::on("c: comment"));
+        }
         if state.reply_target().is_some() {
             parts.push(Hint::on("r: reply"));
         }
         if state.editable_selected().is_some() {
-            parts.push(Hint::on("e: edit"));
-            parts.push(Hint::on("d: delete"));
+            if state.store.capabilities.supports(Feature::EditComments) {
+                parts.push(Hint::on("e: edit"));
+            }
+            if state.store.capabilities.supports(Feature::DeleteComments) {
+                parts.push(Hint::on("d: delete"));
+            }
         }
-        // `a`/`v` are always available — at minimum you can leave a comment review,
-        // even on your own PR; the picker dims the verdicts you can't use.
-        parts.push(Hint::on("a: verdict"));
-        parts.push(Hint::on("v: review"));
+        if state.store.capabilities.reviews() {
+            parts.push(Hint::on("a: verdict"));
+            parts.push(Hint::on("v: review"));
+        }
         if let Screen::Detail { pr_id, .. } = state.screen {
-            parts.push(match state.merge_blocked_reason(pr_id) {
-                None => Hint::on("m: merge"),
-                Some(reason) => Hint::off(format!("m: merge ({reason})")),
-            });
-            parts.push(match state.decline_blocked_reason(pr_id) {
-                None => Hint::on("x: decline"),
-                Some(reason) => Hint::off(format!("x: decline ({reason})")),
-            });
+            if !state.store.capabilities.merge_strategies.is_empty() {
+                parts.push(match state.merge_blocked_reason(pr_id) {
+                    None => Hint::on("m: merge"),
+                    Some(reason) => Hint::off(format!("m: merge ({reason})")),
+                });
+            }
+            if state.store.capabilities.supports(Feature::ClosePr) {
+                parts.push(match state.decline_blocked_reason(pr_id) {
+                    None => Hint::on("x: decline"),
+                    Some(reason) => Hint::off(format!("x: decline ({reason})")),
+                });
+            }
         }
         return parts;
     }

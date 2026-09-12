@@ -1,74 +1,104 @@
 use crate::providers::error::FetchError;
+use std::{
+    io::{Read, Write},
+    process::{Command, Stdio},
+    time::{Duration, Instant},
+};
+
+#[allow(clippy::duration_suboptimal_units)]
+const REQUEST_TIMEOUT: Duration = Duration::from_secs(60);
 
 pub(super) fn run_gh(args: &[&str]) -> Result<Vec<u8>, FetchError> {
-    tracing::debug!("gh {}", args.join(" "));
-    let output = std::process::Command::new("gh")
-        .args(args)
-        .output()
-        .map_err(|err| {
-            tracing::warn!("gh failed to spawn: {err}");
-            FetchError::GhMissing
-        })?;
-    if !output.status.success() {
-        // gh writes its short "(HTTP nnn)" line to stderr but the detailed error
-        // body (e.g. 422 validation fields) to stdout — capture both.
-        let stderr = String::from_utf8_lossy(&output.stderr).into_owned();
-        let body = String::from_utf8_lossy(&output.stdout).into_owned();
-        let detail = format!("{} {}", stderr.trim(), body.trim());
-        let detail = detail.trim().to_string();
-        tracing::warn!("gh exited {:?}: {detail}", output.status.code());
-        return Err(FetchError::GhFailed {
-            code: output.status.code(),
-            stderr: detail,
-        });
-    }
-    Ok(output.stdout)
+    run_gh_stdin(args, &[])
 }
 
-/// Like `run_gh` but feeds `stdin` to the process — for `gh api --input -`,
-/// where the JSON body (e.g. a review's `comments` array) can't be expressed
-/// with `-f` flags.
 pub(super) fn run_gh_stdin(args: &[&str], stdin: &[u8]) -> Result<Vec<u8>, FetchError> {
-    use std::io::Write;
-    use std::process::{Command, Stdio};
+    let mut command = Command::new("gh");
+    command.args(args);
+    run_command(&mut command, stdin, REQUEST_TIMEOUT)
+}
 
-    tracing::debug!("gh {} (stdin {}B)", args.join(" "), stdin.len());
-    let mut child = Command::new("gh")
-        .args(args)
+fn run_command(
+    command: &mut Command,
+    input: &[u8],
+    timeout: Duration,
+) -> Result<Vec<u8>, FetchError> {
+    let mut child = command
         .stdin(Stdio::piped())
         .stdout(Stdio::piped())
         .stderr(Stdio::piped())
         .spawn()
-        .map_err(|err| {
-            tracing::warn!("gh failed to spawn: {err}");
-            FetchError::GhMissing
-        })?;
-    // Drop the handle after writing so gh sees EOF and proceeds.
-    child
-        .stdin
-        .take()
-        .expect("stdin was piped")
-        .write_all(stdin)
-        .map_err(|err| {
-            tracing::warn!("gh stdin write failed: {err}");
-            FetchError::GhMissing
-        })?;
-    let output = child.wait_with_output().map_err(|err| {
-        tracing::warn!("gh wait failed: {err}");
-        FetchError::GhMissing
-    })?;
-    if !output.status.success() {
-        let stderr = String::from_utf8_lossy(&output.stderr).into_owned();
-        let body = String::from_utf8_lossy(&output.stdout).into_owned();
-        let detail = format!("{} {}", stderr.trim(), body.trim());
-        let detail = detail.trim().to_string();
-        tracing::warn!("gh exited {:?}: {detail}", output.status.code());
+        .map_err(|_| FetchError::GhMissing)?;
+    let mut stdin = child.stdin.take().expect("piped stdin");
+    let input = input.to_vec();
+    let writer = background(move || stdin.write_all(&input));
+    let mut stdout = child.stdout.take().expect("piped stdout");
+    let out = background(move || {
+        let mut bytes = Vec::new();
+        stdout.read_to_end(&mut bytes).map(|_| bytes)
+    });
+    let mut stderr = child.stderr.take().expect("piped stderr");
+    let err = background(move || {
+        let mut bytes = Vec::new();
+        stderr.read_to_end(&mut bytes).map(|_| bytes)
+    });
+    let started = Instant::now();
+    let status = loop {
+        match child.try_wait() {
+            Ok(Some(status)) => break status,
+            Ok(None) if started.elapsed() < timeout => {
+                std::thread::sleep(Duration::from_millis(10));
+            }
+            Ok(None) => {
+                let _ = child.kill();
+                let _ = child.wait();
+                // Do not wait for pipe readers: an inherited descriptor in a
+                // credential-helper child must not hold the UI operation open.
+                return Err(FetchError::Timeout);
+            }
+            Err(error) => {
+                let _ = child.kill();
+                let _ = child.wait();
+                return Err(FetchError::Network(error.to_string()));
+            }
+        }
+    };
+    let deadline = started + timeout;
+    let stdout = receive(&out, deadline)?;
+    let stderr = receive(&err, deadline)?;
+    if !status.success() {
         return Err(FetchError::GhFailed {
-            code: output.status.code(),
-            stderr: detail,
+            code: status.code(),
+            stderr: format!(
+                "{} {}",
+                String::from_utf8_lossy(&stderr).trim(),
+                String::from_utf8_lossy(&stdout).trim()
+            )
+            .trim()
+            .into(),
         });
     }
-    Ok(output.stdout)
+    receive(&writer, deadline)?;
+    Ok(stdout)
+}
+
+fn background<T: Send + 'static>(
+    work: impl FnOnce() -> std::io::Result<T> + Send + 'static,
+) -> std::sync::mpsc::Receiver<std::io::Result<T>> {
+    let (tx, rx) = std::sync::mpsc::channel();
+    std::thread::spawn(move || {
+        let _ = tx.send(work());
+    });
+    rx
+}
+
+fn receive<T>(
+    rx: &std::sync::mpsc::Receiver<std::io::Result<T>>,
+    deadline: Instant,
+) -> Result<T, FetchError> {
+    rx.recv_timeout(deadline.saturating_duration_since(Instant::now()))
+        .map_err(|_| FetchError::Timeout)?
+        .map_err(|e| FetchError::Network(e.to_string()))
 }
 
 pub(super) fn run_gh_json<T: serde::de::DeserializeOwned>(args: &[&str]) -> Result<T, FetchError> {
@@ -78,4 +108,27 @@ pub(super) fn run_gh_json<T: serde::de::DeserializeOwned>(args: &[&str]) -> Resu
         tracing::warn!("gh json parse failed: {e} (first 200B: {sample})");
         FetchError::ParseFailed(e.to_string())
     })
+}
+
+#[cfg(all(test, unix))]
+mod tests {
+    use super::*;
+    #[test]
+    fn hung_process_times_out_and_large_bidirectional_io_does_not_deadlock() {
+        let start = Instant::now();
+        assert!(matches!(
+            run_command(
+                Command::new("sh").args(["-c", "sleep 2"]),
+                &[],
+                Duration::from_millis(40)
+            ),
+            Err(FetchError::Timeout)
+        ));
+        assert!(start.elapsed() < Duration::from_secs(1));
+        let input = vec![b'x'; 256 * 1024];
+        assert_eq!(
+            run_command(&mut Command::new("cat"), &input, Duration::from_secs(2)).unwrap(),
+            input
+        );
+    }
 }

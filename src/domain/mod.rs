@@ -7,3 +7,5 @@ pub mod event;
 pub mod pr;
 pub mod review;
 pub mod user;
+
+pub mod capabilities;

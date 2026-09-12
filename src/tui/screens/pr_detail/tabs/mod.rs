@@ -21,19 +21,6 @@ impl DetailTab {
         Self::Commits,
         Self::Builds,
     ];
-
-    pub fn index(self) -> usize {
-        Self::ALL.iter().position(|&t| t == self).unwrap_or(0)
-    }
-
-    pub fn next(self) -> Self {
-        Self::ALL[(self.index() + 1) % Self::ALL.len()]
-    }
-
-    pub fn prev(self) -> Self {
-        let len = Self::ALL.len();
-        Self::ALL[(self.index() + len - 1) % len]
-    }
 }
 
 impl DetailTab {
@@ -45,5 +32,22 @@ impl DetailTab {
             Self::Commits => "Commits",
             Self::Builds => "Builds",
         }
+    }
+}
+
+impl DetailTab {
+    pub fn supported_by(self, caps: &crate::domain::capabilities::Capabilities) -> bool {
+        self != Self::Builds || caps.supports(crate::domain::capabilities::Feature::Builds)
+    }
+    pub fn available(caps: &crate::domain::capabilities::Capabilities) -> Vec<Self> {
+        Self::ALL
+            .into_iter()
+            .filter(|tab| tab.supported_by(caps))
+            .collect()
+    }
+    pub fn step(self, delta: i16, caps: &crate::domain::capabilities::Capabilities) -> Self {
+        let tabs = Self::available(caps);
+        let current = tabs.iter().position(|tab| *tab == self).unwrap_or(0);
+        tabs[(current as i16 + delta).rem_euclid(tabs.len() as i16) as usize]
     }
 }
