@@ -11,7 +11,6 @@ use ratatui::{
     layout::Rect,
     style::{Modifier, Style},
     text::{Line, Span},
-    widgets::{Block, BorderType, Borders, Clear, Padding, Paragraph},
 };
 
 /// Cap a single-line string to `max` columns, adding an ellipsis when cut, to
@@ -47,7 +46,8 @@ fn render(frame: &mut Frame, ctx: &ReviewContext<'_>, cursor: usize, area: Rect)
             format!("Including {n} {noun}:"),
             Style::default().fg(theme.muted),
         )));
-        for pc in &review.comments {
+        let preview = if area.height >= 20 { 2 } else { 0 };
+        for pc in review.comments.iter().take(preview) {
             let first = pc.text.lines().next().unwrap_or("");
             let summary = format!("  {}:{}  {first}", pc.anchor.path, pc.anchor.line);
             lines.push(Line::from(Span::styled(
@@ -77,26 +77,8 @@ fn render(frame: &mut Frame, ctx: &ReviewContext<'_>, cursor: usize, area: Rect)
         ]));
     }
 
-    let content_w = lines.iter().map(Line::width).max().unwrap_or(0) as u16;
-    let popup_w = (content_w + 4).min(area.width);
-    let popup_h = (lines.len() as u16 + 2).min(area.height);
-    let popup = Rect {
-        x: area.x + area.width.saturating_sub(popup_w) / 2,
-        y: area.y + area.height.saturating_sub(popup_h) / 2,
-        width: popup_w,
-        height: popup_h,
-    };
-
-    frame.render_widget(Clear, popup);
-    let block = Block::default()
-        .borders(Borders::ALL)
-        .border_type(BorderType::Rounded)
-        .title(" Review ")
-        .border_style(Style::default().fg(theme.accent))
-        .padding(Padding::horizontal(1));
-    let inner = block.inner(popup);
-    frame.render_widget(block, popup);
-    frame.render_widget(Paragraph::new(lines), inner);
+    let selected_line = lines.len().saturating_sub(ctx.options.len()) + cursor;
+    crate::tui::widgets::dialog::choices(frame, area, "Review", lines, selected_line);
 }
 
 fn key_to_action(code: KeyCode) -> Option<Action> {

@@ -17,6 +17,20 @@ impl App {
             _ => None,
         };
         if let Some(key) = &key {
+            let failed = match &action {
+                LoadedAction::Prs(r) => r.is_err(),
+                LoadedAction::Commits(_, r) => r.is_err(),
+                LoadedAction::Diff(_, r) | LoadedAction::CommitDiff(_, _, r) => r.is_err(),
+                LoadedAction::Builds(_, r) => r.is_err(),
+                LoadedAction::Activity(_, r) => r.is_err(),
+                LoadedAction::Mergeability(_, r) => r.is_err(),
+                _ => false,
+            };
+            if failed && self.state.store.has_cached_data(key) {
+                self.state.store.refresh_failures.insert(key.clone());
+            } else if !failed {
+                self.state.store.refresh_failures.remove(key);
+            }
             self.state.store.fetches.remove(key);
         }
         match action {

@@ -40,6 +40,13 @@ pub fn render(frame: &mut Frame, pr_data: Option<&PrData>, cv: &mut CommitList, 
     let now = Utc::now();
     let width = area.width as usize;
     let filtered: Vec<&Commit> = cv.search.filter_commits(commits);
+    if filtered.is_empty() {
+        frame.render_widget(
+            widgets::empty_state("No matching commits. Esc clears search."),
+            area,
+        );
+        return;
+    }
     let last_idx = filtered.len().saturating_sub(1);
     let items: Vec<ListItem> = filtered
         .iter()

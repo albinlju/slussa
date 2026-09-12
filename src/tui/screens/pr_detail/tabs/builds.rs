@@ -9,10 +9,9 @@ use ratatui::{
     layout::Rect,
     style::{Modifier, Style},
     text::{Line, Span},
-    widgets::Paragraph,
 };
 
-pub fn render(frame: &mut Frame, pr_data: Option<&PrData>, area: Rect) {
+fn render(frame: &mut Frame, pr_data: Option<&PrData>, ui: &mut Builds, area: Rect) {
     let Some(builds) =
         widgets::loaded_or_placeholder(frame, pr_data.map(|d| &d.builds), "builds", area)
     else {
@@ -25,10 +24,10 @@ pub fn render(frame: &mut Frame, pr_data: Option<&PrData>, area: Rect) {
         );
         return;
     }
-    render_builds(frame, builds, area);
+    render_builds(frame, builds, ui, area);
 }
 
-fn render_builds(frame: &mut Frame, builds: &[Build], area: Rect) {
+fn render_builds(frame: &mut Frame, builds: &[Build], ui: &mut Builds, area: Rect) {
     let width = area.width as usize;
     let mut lines: Vec<Line<'static>> = Vec::with_capacity(builds.len() + 2);
     lines.push(status_summary(builds));
@@ -45,7 +44,7 @@ fn render_builds(frame: &mut Frame, builds: &[Build], area: Rect) {
         lines.push(build_row(build, name_col, width));
     }
 
-    frame.render_widget(Paragraph::new(lines), area);
+    widgets::scrolled_paragraph(frame, lines, &mut ui.scroll, &mut ui.viewport, area);
 }
 
 fn status_summary(builds: &[Build]) -> Line<'static> {
@@ -117,5 +116,45 @@ fn format_duration(ms: Option<u64>) -> String {
             format!("{}m{:02}s", secs / 60, secs % 60)
         }
         None => "—".to_string(),
+    }
+}
+
+#[derive(Debug, Default)]
+pub struct Builds {
+    scroll: u16,
+    viewport: u16,
+}
+impl crate::tui::component::Component for Builds {
+    type Context<'a> = Option<&'a PrData>;
+    type Message = crate::app::action::DetailAction;
+    fn handle_key(
+        &self,
+        key: ratatui::crossterm::event::KeyEvent,
+        _: &Self::Context<'_>,
+    ) -> Option<crate::app::action::Action> {
+        use ratatui::crossterm::event::KeyCode;
+        let delta = match key.code {
+            KeyCode::Char('j') | KeyCode::Down => 1,
+            KeyCode::Char('k') | KeyCode::Up => -1,
+            KeyCode::PageDown => crate::tui::screens::half_page(self.viewport),
+            KeyCode::PageUp => -crate::tui::screens::half_page(self.viewport),
+            _ => return None,
+        };
+        Some(crate::app::action::Action::Detail(
+            crate::app::action::DetailAction::BuildsScroll(delta),
+        ))
+    }
+    fn update(
+        &mut self,
+        action: Self::Message,
+        _: &Self::Context<'_>,
+    ) -> Option<crate::app::action::Action> {
+        if let crate::app::action::DetailAction::BuildsScroll(delta) = action {
+            self.scroll = crate::tui::component::scroll(self.scroll, delta);
+        }
+        None
+    }
+    fn render(&mut self, frame: &mut Frame, area: Rect, data: &Self::Context<'_>) {
+        render(frame, *data, self, area);
     }
 }

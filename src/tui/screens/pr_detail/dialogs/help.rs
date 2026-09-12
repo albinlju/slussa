@@ -48,11 +48,20 @@ pub(in crate::tui::screens::pr_detail) fn entries(
             }
             "r" => caps.supports(Feature::Replies),
             "e" => caps.supports(Feature::EditComments),
-            "d" => caps.supports(Feature::DeleteComments),
+            "d" => caps.supports(Feature::DeleteComments) || caps.reviews(),
             "R" => caps.supports(Feature::ResolveThreads),
             _ => true,
         })
         .map(|(key, desc)| {
+            let desc = if key == "d" && caps.reviews() {
+                if caps.supports(Feature::DeleteComments) {
+                    "delete own / pending"
+                } else {
+                    "remove pending comment"
+                }
+            } else {
+                desc
+            };
             (
                 if key == "1-5" && !caps.supports(Feature::Builds) {
                     "1-4"

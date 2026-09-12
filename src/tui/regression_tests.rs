@@ -491,7 +491,7 @@ fn compact_detail_tabs_always_show_the_active_tab() {
             .map(ratatui::buffer::Cell::symbol)
             .collect();
         assert!(
-            text.contains(&format!("{}   h/l: tabs", tab.label())),
+            text.contains(&format!("{}   1-5: tabs", tab.label())),
             "{tab:?}"
         );
     }
@@ -641,4 +641,221 @@ fn notice_replaces_entire_footer_and_normal_hints_return_afterward() {
         assert!(footer.contains("?: help"));
         assert!(!footer.contains("link copied"));
     }
+}
+
+fn rendered_text(terminal: &Terminal<TestBackend>) -> String {
+    terminal
+        .backend()
+        .buffer()
+        .content
+        .iter()
+        .map(ratatui::buffer::Cell::symbol)
+        .collect()
+}
+fn local_key(state: &mut AppState, code: KeyCode) {
+    if let Some(action) = key_to_action(state, KeyEvent::new(code, KeyModifiers::NONE)) {
+        let effect = state.ui.update(action, &state.store, state.screen);
+        if let Some(Action::Navigate(screen)) = effect {
+            state.screen = screen;
+        }
+    }
+}
+
+#[test]
+fn compact_diff_switches_panels_and_keeps_file_selection() {
+    let mut state = fixture();
+    state.screen = Screen::Detail {
+        pr_id: 42,
+        tab: DetailTab::Diff,
+    };
+    let mut terminal = Terminal::new(TestBackend::new(40, 12)).unwrap();
+    terminal.draw(|f| render(f, &mut state)).unwrap();
+    assert!(rendered_text(&terminal).contains("Files"));
+    local_key(&mut state, KeyCode::Char('j'));
+    let cursor = state.ui.detail.diff.cursor;
+    local_key(&mut state, KeyCode::Enter);
+    terminal.draw(|f| render(f, &mut state)).unwrap();
+    let text = rendered_text(&terminal);
+    assert!(text.contains("Code"));
+    assert!(text.contains("old"));
+    assert!(text.contains("h: files"));
+    assert!(state.ui.detail.diff.pane_anchor.is_some());
+    local_key(&mut state, KeyCode::Esc);
+    terminal.draw(|f| render(f, &mut state)).unwrap();
+    assert_eq!(state.ui.detail.diff.focus, DiffFocus::Tree);
+    assert_eq!(state.ui.detail.diff.cursor, cursor);
+    assert!(rendered_text(&terminal).contains("Files"));
+}
+
+#[test]
+fn dialog_footers_and_review_choices_remain_visible_with_large_queue() {
+    use crate::app::reviews::{CommentAnchor, PendingComment, PendingReview};
+    for (width, height) in [(100, 30), (40, 12), (24, 8)] {
+        for kind in ["review", "merge", "confirm"] {
+            let mut state = fixture();
+            state.screen = Screen::Detail {
+                pr_id: 42,
+                tab: DetailTab::Overview,
+            };
+            state.store.reviews.insert(
+                42,
+                PendingReview {
+                    comments: (0..100)
+                        .map(|_| PendingComment {
+                            anchor: CommentAnchor {
+                                revision: None,
+                                path: "src/main.rs".into(),
+                                line: 2,
+                                removed: false,
+                            },
+                            text: "Long queued comment".into(),
+                        })
+                        .collect(),
+                    submitted_summary: None,
+                },
+            );
+            let expected = match kind {
+                "review" => {
+                    state.ui.detail.review_picker = Some(ReviewDialog::default());
+                    "Approve"
+                }
+                "merge" => {
+                    state.ui.detail.merge_picker = Some(MergeDialog::default());
+                    "Merge commit"
+                }
+                _ => {
+                    state.ui.detail.confirm = Some(ConfirmDialog::new(ConfirmKind::Decline));
+                    "Yes"
+                }
+            };
+            let mut terminal = Terminal::new(TestBackend::new(width, height)).unwrap();
+            terminal.draw(|f| render(f, &mut state)).unwrap();
+            let text = rendered_text(&terminal);
+            assert!(
+                text.contains(expected),
+                "{kind} selection missing at {width}x{height}"
+            );
+            assert!(text.contains("Enter select"));
+            assert!(text.contains("Esc cancel"));
+            assert!(!text.contains("v: finish"));
+            local_key(&mut state, KeyCode::Esc);
+            assert!(!state.ui.detail.modal_open());
+            assert_eq!(state.store.reviews[&42].comments.len(), 100);
+        }
+    }
+}
+
+#[test]
+fn long_error_scrolls_without_dismissing_or_acting_on_the_pr() {
+    let mut state = fixture();
+    state.screen = Screen::Detail {
+        pr_id: 42,
+        tab: DetailTab::Overview,
+    };
+    state.store.errors.insert(
+        42,
+        format!("{}END_OF_ERROR", "Long failure details.\n".repeat(40)),
+    );
+    let mut terminal = Terminal::new(TestBackend::new(24, 8)).unwrap();
+    terminal.draw(|f| render(f, &mut state)).unwrap();
+    assert!(
+        key_to_action(
+            &state,
+            KeyEvent::new(KeyCode::Char('a'), KeyModifiers::NONE)
+        )
+        .is_none()
+    );
+    for _ in 0..40 {
+        local_key(&mut state, KeyCode::PageDown);
+    }
+    terminal.draw(|f| render(f, &mut state)).unwrap();
+    let text = rendered_text(&terminal);
+    assert!(text.contains("END_OF_ERROR"));
+    assert!(text.contains("Esc / Enter close"));
+    assert!(state.ui.detail.review_picker.is_none());
+    assert!(matches!(
+        key(&state, KeyCode::Esc),
+        Action::Detail(DetailAction::DismissError)
+    ));
+}
+
+#[test]
+fn empty_searches_offer_recovery_in_list_files_and_commits() {
+    for screen in [
+        Screen::List,
+        Screen::Detail {
+            pr_id: 42,
+            tab: DetailTab::Diff,
+        },
+        Screen::Detail {
+            pr_id: 42,
+            tab: DetailTab::Commits,
+        },
+    ] {
+        let mut state = fixture();
+        state.screen = screen;
+        state.ui.list.search.query = "absent".into();
+        state.ui.detail.diff.tree_search.query = "absent".into();
+        state.ui.detail.commits.search.query = "absent".into();
+        let mut terminal = Terminal::new(TestBackend::new(60, 20)).unwrap();
+        terminal.draw(|f| render(f, &mut state)).unwrap();
+        let text = rendered_text(&terminal);
+        assert!(text.contains("No matching"));
+        assert!(text.contains("Esc"));
+        assert!(
+            key_to_action(
+                &state,
+                KeyEvent::new(KeyCode::Char('c'), KeyModifiers::NONE)
+            )
+            .is_none()
+        );
+    }
+}
+
+#[test]
+fn unloaded_diff_cannot_reuse_a_previous_comment_target() {
+    use crate::app::reviews::CommentAnchor;
+    let mut state = fixture();
+    state.screen = Screen::Detail {
+        pr_id: 42,
+        tab: DetailTab::Diff,
+    };
+    state.ui.detail.diff.focus = DiffFocus::Pane;
+    state.ui.detail.diff.pane_anchor = Some(CommentAnchor {
+        revision: None,
+        path: "old.rs".into(),
+        line: 20,
+        removed: false,
+    });
+    state.store.cache.details.get_mut(&42).unwrap().diff = LoadState::Failed("offline".into());
+    let mut terminal = Terminal::new(TestBackend::new(40, 12)).unwrap();
+    terminal.draw(|f| render(f, &mut state)).unwrap();
+    assert!(state.detail_view().comment_target().is_none());
+    assert!(rendered_text(&terminal).contains("F: retry"));
+}
+
+#[test]
+fn builds_scroll_to_last_check_in_a_short_terminal() {
+    use crate::domain::ci::{Build, BuildState};
+    let mut state = fixture();
+    state.screen = Screen::Detail {
+        pr_id: 42,
+        tab: DetailTab::Builds,
+    };
+    state.store.cache.details.get_mut(&42).unwrap().builds = LoadState::Loaded(
+        (0..30)
+            .map(|i| Build {
+                name: format!("check-{i:02}"),
+                state: BuildState::Successful,
+                duration_ms: None,
+            })
+            .collect(),
+    );
+    let mut terminal = Terminal::new(TestBackend::new(60, 12)).unwrap();
+    terminal.draw(|f| render(f, &mut state)).unwrap();
+    for _ in 0..40 {
+        local_key(&mut state, KeyCode::Char('j'));
+    }
+    terminal.draw(|f| render(f, &mut state)).unwrap();
+    assert!(rendered_text(&terminal).contains("check-29"));
 }

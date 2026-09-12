@@ -22,6 +22,7 @@ pub(super) fn render(
     author: &str,
     area: Rect,
 ) {
+    ui_diff.clear_targets();
     let Some(diff) = widgets::loaded_or_placeholder(frame, diff_state, "diff", area) else {
         return;
     };
@@ -30,11 +31,12 @@ pub(super) fn render(
         return;
     }
 
-    let [tree_area, _, pane_area] = layout::split(
+    let compact = area.width < 72;
+    let [mut tree_area, _, mut pane_area] = layout::split(
         area,
         Direction::Horizontal,
         [
-            Constraint::Percentage(28),
+            Constraint::Length((area.width / 4).clamp(24, 36)),
             Constraint::Length(1),
             Constraint::Min(0),
         ],
@@ -48,25 +50,39 @@ pub(super) fn render(
         .collect();
 
     let pane_focused = matches!(ui_diff.focus, DiffFocus::Pane);
-    tree::render(
-        frame,
-        diff,
-        ui_diff,
-        &file_stats,
-        &comment_counts,
-        tree_area,
-    );
-    pane::render(
-        frame,
-        diff,
-        ui_diff,
-        &file_stats,
-        threads,
-        pending,
-        pane_focused,
-        author,
-        pane_area,
-    );
+    if compact {
+        tree_area = area;
+        pane_area = area;
+    }
+    if !compact || !pane_focused {
+        tree::render(
+            frame,
+            diff,
+            ui_diff,
+            &file_stats,
+            &comment_counts,
+            tree_area,
+        );
+    }
+    let has_files = !super::file_tree::build_visible_rows(
+        &diff.files,
+        &ui_diff.collapsed,
+        &ui_diff.tree_search.query,
+    )
+    .is_empty();
+    if has_files && (!compact || pane_focused) {
+        pane::render(
+            frame,
+            diff,
+            ui_diff,
+            &file_stats,
+            threads,
+            pending,
+            pane_focused,
+            author,
+            pane_area,
+        );
+    }
 }
 
 fn file_comment_count(

@@ -27,7 +27,7 @@ pub(super) fn render(
     tab: DetailTab,
     area: Rect,
 ) {
-    let line = if state.detail.editor.is_open() {
+    let line = if state.detail.modal_open() || state.error().is_some() {
         Line::default()
     } else if state.operation_pending() {
         widgets::loading("sending…  Esc: back · q: quit")
@@ -49,13 +49,22 @@ fn footer_actions(state: &DetailView<'_>, tab: DetailTab) -> Vec<Hint> {
         && let Some(review) = state.pending_review()
     {
         let mut parts = vec![Hint::on(format!("reviewing ({})", review.comments.len()))];
-        if state.comment_target().is_some() {
-            parts.push(Hint::on("c: comment"));
+        parts.push(Hint::on("v: finish"));
+        if state.detail.active_diff_view().pane_pending.is_some()
+            && state.detail.active_diff_view().focus == DiffFocus::Pane
+            && matches!(tab, DetailTab::Diff | DetailTab::Commits)
+        {
+            parts.push(Hint::on("d: remove pending"));
         }
-        if state.reply_target().is_some() {
+        let target = state.comment_target();
+        match target {
+            Some(CommentTarget::Reply(_)) => parts.push(Hint::on("r: reply")),
+            Some(_) => parts.push(Hint::on("c: comment")),
+            None => {}
+        }
+        if state.reply_target().is_some() && !matches!(target, Some(CommentTarget::Reply(_))) {
             parts.push(Hint::on("r: reply"));
         }
-        parts.push(Hint::on("v: finish"));
         parts.push(Hint::on("V: discard"));
         return parts;
     }
@@ -70,13 +79,28 @@ fn footer_actions(state: &DetailView<'_>, tab: DetailTab) -> Vec<Hint> {
         if state.reply_target().is_some() {
             parts.push(Hint::on("r: reply"));
         }
-        if state.editable_selected().is_some() {
+        if state
+            .editable_selected()
+            .and_then(|comment| comment.id)
+            .is_some()
+        {
             if state.store.capabilities.supports(Feature::EditComments) {
                 parts.push(Hint::on("e: edit"));
             }
             if state.store.capabilities.supports(Feature::DeleteComments) {
                 parts.push(Hint::on("d: delete"));
             }
+        }
+        if state.store.capabilities.supports(Feature::ResolveThreads)
+            && let Some(thread) = state
+                .focused_thread()
+                .filter(|thread| thread.node_id.is_some() || thread.comment_id.is_some())
+        {
+            parts.push(Hint::on(if thread.resolved {
+                "R: reopen thread"
+            } else {
+                "R: resolve thread"
+            }));
         }
         if state.store.capabilities.reviews() {
             parts.push(Hint::on("a: verdict"));
@@ -98,20 +122,66 @@ fn footer_actions(state: &DetailView<'_>, tab: DetailTab) -> Vec<Hint> {
         }
         return parts;
     }
-    // Other tabs: only the line-comment hint, shown once you're on a row in the
-    // diff pane (a thread turns it into a reply).
-    match state.comment_target() {
-        Some(CommentTarget::Reply(_)) => vec![Hint::on("c: reply")],
-        Some(_) => vec![Hint::on("c: comment")],
-        None => match tab {
-            DetailTab::Description => widgets::hints_on("h/l: tabs  j/k: scroll"),
-            DetailTab::Diff => widgets::hints_on("enter: code  /: files"),
-            DetailTab::Commits if state.detail.commits.open_commit.is_none() => {
-                widgets::hints_on("enter: open  /: search")
+    if tab == DetailTab::Diff
+        || (tab == DetailTab::Commits && state.detail.commits.open_commit.is_some())
+    {
+        let view = state.detail.active_diff_view();
+        if view.focus == DiffFocus::Tree {
+            let data = match state.screen {
+                Screen::Detail { pr_id, .. } => state.store.cache.details.get(&pr_id),
+                Screen::List => None,
+            };
+            let rows = crate::tui::components::diff_viewer::file_tree::build_visible_rows(
+                tree_files(state, data),
+                &view.collapsed,
+                &view.tree_search.query,
+            );
+            let mut hints = Vec::new();
+            if let Some(row) = rows.get(view.cursor) {
+                hints.push(Hint::on(match row {
+                    crate::tui::components::diff_viewer::file_tree::TreeRow::Dir { .. } => {
+                        "enter: toggle folder"
+                    }
+                    crate::tui::components::diff_viewer::file_tree::TreeRow::File { .. } => {
+                        "enter: code"
+                    }
+                }));
             }
-            DetailTab::Builds => widgets::hints_on("h/l: tabs"),
-            _ => Vec::new(),
-        },
+            hints.push(Hint::on("/: files"));
+            return hints;
+        }
+        let mut hints = vec![Hint::on("h: files")];
+        match state.comment_target() {
+            Some(CommentTarget::Reply(_)) => hints.push(Hint::on("r: reply")),
+            Some(_) => hints.push(Hint::on("c: comment")),
+            None => {}
+        }
+        if state.store.capabilities.supports(Feature::ResolveThreads)
+            && let Some(thread) = state
+                .focused_thread()
+                .filter(|thread| thread.node_id.is_some() || thread.comment_id.is_some())
+        {
+            hints.push(Hint::on(if thread.resolved {
+                "R: reopen thread"
+            } else {
+                "R: resolve thread"
+            }));
+        }
+        if view
+            .pane_thread
+            .as_ref()
+            .is_some_and(|thread| thread.resolved)
+        {
+            hints.push(Hint::on("space: fold thread"));
+        }
+        hints.push(Hint::on("/: search"));
+        return hints;
+    }
+    match tab {
+        DetailTab::Description => widgets::hints_on("h/l: tabs  j/k: scroll"),
+        DetailTab::Commits => widgets::hints_on("enter: open  /: search"),
+        DetailTab::Builds => widgets::hints_on("j/k: scroll  h/l: tabs"),
+        _ => Vec::new(),
     }
 }
 

@@ -1,7 +1,7 @@
 use crate::{
     app::store::LoadState,
     domain::pr::{Mergeability, PrStatus, PullRequest},
-    tui::{icons, theme},
+    tui::{icons, theme, widgets},
 };
 use ratatui::{
     Frame,
@@ -65,11 +65,15 @@ pub(super) fn render(
             format!(" @{}", pr.author.username),
             Style::default().fg(theme.info),
         ),
-        Span::styled("  wants to merge  ", Style::default().fg(theme.muted)),
-        Span::styled(pr.source_branch.clone(), Style::default().fg(theme.orange)),
-        Span::raw(" → "),
-        Span::styled(pr.target_branch.clone(), Style::default().fg(theme.info)),
     ];
+    if area.height > 2 {
+        left_spans.extend([
+            Span::styled("  wants to merge  ", Style::default().fg(theme.muted)),
+            Span::styled(pr.source_branch.clone(), Style::default().fg(theme.orange)),
+            Span::raw(" → "),
+            Span::styled(pr.target_branch.clone(), Style::default().fg(theme.info)),
+        ]);
+    }
     // Mergeability is only meaningful while the PR is still open.
     let open = !matches!(pr.status, PrStatus::Merged | PrStatus::Declined);
     if open && let Some(badge) = mergeability.and_then(mergeability_badge) {
@@ -78,7 +82,18 @@ pub(super) fn render(
     }
     let meta_line = Line::from(left_spans);
 
-    let paragraph = Paragraph::new(vec![title_line, Line::default(), meta_line])
-        .block(Block::default().padding(Padding::horizontal(2)));
+    let padding = if area.width < 70 { 1 } else { 2 };
+    let width = area.width.saturating_sub(padding * 2) as usize;
+    let mut lines = vec![title_line];
+    if area.height > 2 {
+        lines.push(Line::default());
+    }
+    lines.push(meta_line);
+    let lines: Vec<_> = lines
+        .into_iter()
+        .map(|line| Line::from(widgets::truncate_to_width(line.spans, width)))
+        .collect();
+    let paragraph =
+        Paragraph::new(lines).block(Block::default().padding(Padding::horizontal(padding)));
     frame.render_widget(paragraph, area);
 }

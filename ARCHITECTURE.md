@@ -127,14 +127,14 @@ author. The detail screen receives a read-only Store and navigation context.
 The concrete implementations are `PrListScreen`, `PrDetailScreen`, `DiffViewer`,
 `CommitList`, `Overview`, `Timeline`, `Description`, `SearchInput`, `CommentEditor`,
 `ConfirmDialog`, `ReviewDialog` and `MergeDialog`.
-Small visual pieces, including badges and the Builds display, stay render
+Small visual pieces, including badges, stay render
 functions. Tree and pane are internal parts of DiffViewer; its shared file
 selection and focus are coordinated by that owner. PrDetailScreen owns optional dialog instances and manages opening/closing them;
 each selectable dialog owns its private cursor. The screen resolves
 selected verdicts, merge strategies and accepted confirmations into `Command`
 payloads carrying the PR id. Application workflows never read dialog or editor
 state.
-Error displays remain simple presentation helpers. A shared `HelpDialog` component
+`ErrorDialog` owns message scrolling and input capture. A shared `HelpDialog` component
 owns help scrolling; each screen owns opening/closing it and its help entries. Sidebar implements
 Ratatui `Widget` and borrows its data without owning navigation state.
 
@@ -328,9 +328,9 @@ be finished from every tab where its footer advertises that action.
 
 Further work remains: clearer merge requirements and build drilldown, and richer
 contextual action discovery. Multiline editing and durable drafts are now implemented.
-The compact detail header and very small diff layouts also deserve a separate
-pass. These changes establish a calmer baseline without replacing existing
-review, comment or lifecycle flows.
+The subsequent polish pass below addresses compact headers and diff layouts.
+These changes establish a calmer baseline without replacing existing review,
+comment or lifecycle flows.
 
 ## Comment editing and local recovery
 
@@ -386,3 +386,35 @@ routing, missing support and helper success/failure/timeouts without launching
 a real browser or changing the user's clipboard. Linux and Windows desktop
 integration have not been exercised live. File/line links and copying commit
 SHAs or branch names remain separate future work.
+
+## Existing UI polish: dialogs, compact layouts and feedback
+
+- Review, merge, confirmation and filter dialogs share geometry and a separated
+  keyboard footer through `widgets/dialog.rs`. Their selected option stays in
+  view on short terminals. Review queues show a count and a bounded preview so
+  a large queue cannot displace the verdict choices. Modal footers replace
+  unrelated screen hints while the dialog is open.
+- Compact PR details use two header rows, prioritize title/status/author and
+  reclaim unnecessary vertical spacing. Full branch metadata remains in the
+  roomy header. A compact tab bar advertises number keys, which actually select
+  tabs in every detail context (h/l have other meanings in a diff).
+- Diffs under 72 content columns show Files or Code according to focus, keeping
+  the selected file when switching back. Wider layouts retain both panels with
+  a bounded tree width. Panel titles and focused borders identify the active
+  area; the code footer exposes `h: files`. Small panels use a shorter header.
+- Context hints distinguish directories, code, replies, resolvable threads and
+  queued comments. Thread folding is advertised only for resolved threads, and
+  comment targets are cleared when their diff cannot be rendered. Optional
+  provider support still gates operations and hints.
+- Empty PR/file/commit searches explain how to clear the search or change a
+  filter. Initial failures wrap their message and advertise refresh; unrequested
+  data is distinct from an active load. Failed reloads retain cached data with
+  a scoped warning until the affected resource succeeds. Error dialogs scroll
+  long messages and close explicitly with Esc/Enter, preserving the underlying
+  editor and selection. The Builds component now owns scrolling so long CI
+  lists remain accessible.
+
+Regression coverage includes 24x8 dialogs, 40x12 diff focus switching, large
+review queues, long errors, empty searches, stale-target prevention, CI scrolling
+and resource-specific refresh recovery. No server writes are required for this
+polish verification.

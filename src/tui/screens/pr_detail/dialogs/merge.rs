@@ -11,7 +11,6 @@ use ratatui::{
     layout::Rect,
     style::{Modifier, Style},
     text::{Line, Span},
-    widgets::{Block, BorderType, Borders, Clear, Padding, Paragraph},
 };
 
 fn render(
@@ -39,26 +38,8 @@ fn render(
         ]));
     }
 
-    let content_w = lines.iter().map(Line::width).max().unwrap_or(0) as u16;
-    let popup_w = (content_w + 4).min(area.width);
-    let popup_h = (lines.len() as u16 + 2).min(area.height);
-    let popup = Rect {
-        x: area.x + area.width.saturating_sub(popup_w) / 2,
-        y: area.y + area.height.saturating_sub(popup_h) / 2,
-        width: popup_w,
-        height: popup_h,
-    };
-
-    frame.render_widget(Clear, popup);
-    let block = Block::default()
-        .borders(Borders::ALL)
-        .border_type(BorderType::Rounded)
-        .title(" Merge ")
-        .border_style(Style::default().fg(theme.accent))
-        .padding(Padding::horizontal(1));
-    let inner = block.inner(popup);
-    frame.render_widget(block, popup);
-    frame.render_widget(Paragraph::new(lines), inner);
+    let selected_line = 2 + cursor;
+    crate::tui::widgets::dialog::choices(frame, area, "Merge", lines, selected_line);
 }
 
 fn key_to_action(code: KeyCode) -> Option<Action> {

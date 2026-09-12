@@ -1,45 +1,64 @@
-use crate::tui::theme;
-use ratatui::{
-    Frame,
-    layout::Rect,
-    style::Style,
-    text::{Line, Span},
-    widgets::{Block, BorderType, Borders, Clear, Padding, Paragraph, Wrap},
+use crate::{
+    app::action::{Action, DetailAction},
+    tui::{component::Component, theme, widgets},
 };
+use ratatui::{Frame, layout::Rect, style::Style, text::Line, widgets::Paragraph};
 
-pub(in crate::tui::screens::pr_detail) fn render(frame: &mut Frame, message: &str, area: Rect) {
-    let theme = theme::current();
-    let popup_w = 60.min(area.width.saturating_sub(4)).max(20);
-    let text_w = popup_w.saturating_sub(4).max(1);
-    let wrapped = (message.chars().count() as u16).div_ceil(text_w);
-    let popup_h = (wrapped + 4).min(area.height);
-    let popup = Rect {
-        x: area.x + area.width.saturating_sub(popup_w) / 2,
-        y: area.y + area.height.saturating_sub(popup_h) / 2,
-        width: popup_w,
-        height: popup_h,
-    };
+#[derive(Debug, Default)]
+pub struct ErrorDialog {
+    pub scroll: u16,
+    pub max_scroll: u16,
+}
+impl ErrorDialog {
+    pub fn render(&mut self, frame: &mut Frame, message: &str, area: Rect) {
+        let width = area.width.min(64);
+        let lines = widgets::wrap_text(message, width.saturating_sub(4).max(1) as usize);
+        let body = widgets::dialog::frame(
+            frame,
+            area,
+            "Error",
+            (width, lines.len() as u16),
+            &[("j/k", "scroll"), ("Esc / Enter", "close")],
+        );
+        self.max_scroll = lines.len().saturating_sub(body.height as usize) as u16;
+        self.scroll = self.scroll.min(self.max_scroll);
+        frame.render_widget(
+            Paragraph::new(lines.into_iter().map(Line::raw).collect::<Vec<_>>())
+                .style(Style::default().fg(theme::current().fg))
+                .scroll((self.scroll, 0)),
+            body,
+        );
+    }
+}
 
-    let lines = vec![
-        Line::from(Span::styled(
-            message.to_string(),
-            Style::default().fg(theme.fg),
-        )),
-        Line::default(),
-        Line::from(Span::styled(
-            "any key to dismiss",
-            Style::default().fg(theme.muted),
-        )),
-    ];
-
-    frame.render_widget(Clear, popup);
-    let block = Block::default()
-        .borders(Borders::ALL)
-        .border_type(BorderType::Rounded)
-        .title(" Error ")
-        .border_style(Style::default().fg(theme.error))
-        .padding(Padding::horizontal(1));
-    let inner = block.inner(popup);
-    frame.render_widget(block, popup);
-    frame.render_widget(Paragraph::new(lines).wrap(Wrap { trim: false }), inner);
+impl Component for ErrorDialog {
+    type Context<'a> = &'a str;
+    type Message = DetailAction;
+    fn handle_key(
+        &self,
+        key: ratatui::crossterm::event::KeyEvent,
+        _: &Self::Context<'_>,
+    ) -> Option<Action> {
+        use ratatui::crossterm::event::KeyCode;
+        let action = match key.code {
+            KeyCode::Esc | KeyCode::Enter => DetailAction::DismissError,
+            KeyCode::Char('j') | KeyCode::Down => DetailAction::ErrorScroll(1),
+            KeyCode::Char('k') | KeyCode::Up => DetailAction::ErrorScroll(-1),
+            KeyCode::PageDown => DetailAction::ErrorScroll(5),
+            KeyCode::PageUp => DetailAction::ErrorScroll(-5),
+            _ => return None,
+        };
+        Some(Action::Detail(action))
+    }
+    fn update(&mut self, action: DetailAction, _: &Self::Context<'_>) -> Option<Action> {
+        if let DetailAction::ErrorScroll(delta) = action {
+            self.scroll = crate::tui::component::scroll(self.scroll, delta).min(self.max_scroll);
+            None
+        } else {
+            Some(Action::Detail(action))
+        }
+    }
+    fn render(&mut self, frame: &mut Frame, area: Rect, message: &Self::Context<'_>) {
+        self.render(frame, message, area);
+    }
 }

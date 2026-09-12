@@ -13,6 +13,10 @@ scope includes how users find and leave the interaction, not only the API action
 
 ## Done
 
+- [x] **Existing UI polish** — consistent dialog footers, compact PR headers,
+  adaptive Files/Code panels, contextual hints, scrollable errors and CI lists,
+  useful empty states and visible recovery from failed refreshes.
+
 - [x] **Open/copy PR links** — `o` opens the selected PR in the default browser;
   `y` copies its link. Both work in list and detail views, appear in help only
   when a URL is available, and show brief non-modal feedback.
