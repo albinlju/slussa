@@ -239,3 +239,15 @@ pub struct ThreadRef {
     pub comment_id: Option<u64>,
     pub resolved: bool,
 }
+
+impl DetailView<'_> {
+    pub fn operation_pending(&self) -> bool {
+        matches!(self.screen, Screen::Detail { pr_id, .. } if self.store.operations.contains_key(&pr_id))
+    }
+    pub fn error(&self) -> Option<&str> {
+        let Screen::Detail { pr_id, .. } = self.screen else {
+            return None;
+        };
+        self.store.errors.get(&pr_id).map(String::as_str)
+    }
+}

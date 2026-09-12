@@ -223,7 +223,7 @@ pub(super) fn render(
     if let Some(dialog) = &mut ui.merge_picker {
         dialog.render(frame, area, &ctx.store.merge_strategies.as_slice());
     }
-    if let Some(msg) = &ui.error {
+    if let Some(msg) = ctx.store.errors.get(&pr_id) {
         dialogs::error::render(frame, msg, area);
     }
 }

@@ -29,10 +29,10 @@ pub(super) fn render(
     tab: DetailTab,
     area: Rect,
 ) {
-    let line = if let Some(draft) = &state.detail.editor.draft {
+    let line = if state.operation_pending() {
+        widgets::loading("sending…")
+    } else if let Some(draft) = &state.detail.editor.draft {
         comment_prompt(draft)
-    } else if state.detail.comment_pending {
-        widgets::loading("posting comment…")
     } else if let Some(search) = active_search(state, pr_data, tab, area.width) {
         search
     } else {

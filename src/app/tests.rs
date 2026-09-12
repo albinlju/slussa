@@ -258,7 +258,7 @@ fn own_pr_review_gate_and_decline_cancel_are_preserved() {
     press(&mut app, KeyCode::Char('l'));
     press(&mut app, KeyCode::Enter);
     assert!(app.state.ui.detail.confirm.is_none());
-    assert!(!app.state.ui.detail.comment_pending);
+    assert!(!app.state.store.operations.contains_key(&42));
 }
 
 #[test]
@@ -294,4 +294,231 @@ fn overview_navigation_resets_reply_selection() {
     app.state.ui.detail.overview.timeline.item_count = 1;
     press(&mut app, KeyCode::Char('j'));
     assert_eq!(app.state.ui.detail.overview.timeline.scroll, 1);
+}
+
+// These current-thread tests deliberately never yield: provider futures are
+// queued but never polled. We inject their results through the real dispatcher;
+// dropping the runtime cancels the queued work without contacting a provider.
+#[tokio::test(flavor = "current_thread")]
+async fn failed_submission_preserves_draft_and_blocks_duplicate_input() {
+    let mut app = app();
+    detail(&mut app, DetailTab::Overview);
+    press(&mut app, KeyCode::Char('c'));
+    for c in "Keep this draft".chars() {
+        press(&mut app, KeyCode::Char(c));
+    }
+    press(&mut app, KeyCode::Enter);
+    assert!(app.state.store.operations.contains_key(&42));
+    press(&mut app, KeyCode::Char('x'));
+    press(&mut app, KeyCode::Backspace);
+    press(&mut app, KeyCode::Esc);
+    press(&mut app, KeyCode::Enter);
+    assert_eq!(app.state.store.operations.len(), 1);
+    assert_eq!(
+        app.state.ui.detail.editor.draft.as_ref().unwrap().text,
+        "Keep this draft"
+    );
+    // A read result must never acknowledge a write.
+    app.apply(Action::Loaded(LoadedAction::Activity(
+        42,
+        Err("read failed".into()),
+    )));
+    assert!(app.state.store.operations.contains_key(&42));
+    app.apply(Action::Loaded(LoadedAction::Commented(
+        42,
+        Err("offline".into()),
+    )));
+    assert!(!app.state.store.operations.contains_key(&42));
+    assert_eq!(
+        app.state.store.errors.get(&42).map(String::as_str),
+        Some("offline")
+    );
+    press(&mut app, KeyCode::Enter); // dismiss error, do not resubmit
+    assert!(!app.state.store.operations.contains_key(&42));
+    assert!(app.state.store.errors.is_empty());
+    assert_eq!(
+        app.state.ui.detail.editor.draft.as_ref().unwrap().text,
+        "Keep this draft"
+    );
+    press(&mut app, KeyCode::Enter);
+    app.apply(Action::Loaded(LoadedAction::Commented(42, Ok(()))));
+    assert!(app.state.ui.detail.editor.draft.is_none());
+}
+
+#[tokio::test(flavor = "current_thread")]
+async fn late_completion_only_clears_the_submitting_pr_editor() {
+    let mut app = app();
+    if let LoadState::Loaded(prs) = &mut app.state.store.cache.prs {
+        let mut second = prs[0].clone();
+        second.id = 43;
+        prs.push(second);
+    }
+    detail(&mut app, DetailTab::Overview);
+    press(&mut app, KeyCode::Char('c'));
+    press(&mut app, KeyCode::Char('A'));
+    press(&mut app, KeyCode::Enter);
+    app.open_pr(43);
+    app.apply(Action::Detail(DetailAction::SelectTab(DetailTab::Overview)));
+    app.apply(Action::Detail(DetailAction::OpenComment));
+    app.apply(Action::Detail(DetailAction::CommentType('B')));
+    app.apply(Action::Loaded(LoadedAction::Commented(42, Ok(()))));
+    assert_eq!(app.state.ui.detail.editor.draft.as_ref().unwrap().text, "B");
+    app.open_pr(42);
+    assert!(app.state.ui.detail.editor.draft.is_none());
+    app.open_pr(43);
+    assert_eq!(app.state.ui.detail.editor.draft.as_ref().unwrap().text, "B");
+}
+
+#[tokio::test(flavor = "current_thread")]
+async fn failed_review_and_error_stay_with_their_pr_until_success() {
+    use crate::{
+        app::{
+            reviews::{PendingComment, PendingReview},
+            store::Operation,
+        },
+        domain::review::ReviewVerdict,
+    };
+    let mut app = app();
+    detail(&mut app, DetailTab::Overview);
+    app.state.store.reviews.insert(
+        42,
+        PendingReview {
+            comments: vec![PendingComment {
+                anchor: CommentAnchor {
+                    path: "file.rs".into(),
+                    line: 1,
+                    removed: false,
+                },
+                text: "review comment".into(),
+            }],
+        },
+    );
+    app.apply(Action::Command {
+        pr_id: 42,
+        command: Command::SubmitReview {
+            verdict: ReviewVerdict::Approve,
+            body: String::new(),
+        },
+    });
+    assert_eq!(app.state.store.reviews[&42].comments.len(), 1);
+    app.open_pr(43);
+    app.state.store.operations.insert(43, Operation::Merge);
+    app.apply(Action::Loaded(LoadedAction::Commented(
+        42,
+        Err("offline".into()),
+    )));
+    assert!(app.state.store.operations.contains_key(&43));
+    assert!(app.state.detail_view().error().is_none());
+    assert_eq!(app.state.store.reviews[&42].comments.len(), 1);
+    app.open_pr(42);
+    assert_eq!(app.state.detail_view().error(), Some("offline"));
+    press(&mut app, KeyCode::Esc);
+    app.apply(Action::Command {
+        pr_id: 42,
+        command: Command::SubmitReview {
+            verdict: ReviewVerdict::Approve,
+            body: String::new(),
+        },
+    });
+    app.apply(Action::Loaded(LoadedAction::Commented(42, Ok(()))));
+    assert!(!app.state.store.reviews.contains_key(&42));
+    assert!(app.state.store.operations.contains_key(&43));
+}
+
+#[tokio::test(flavor = "current_thread")]
+async fn refresh_tracks_each_resource_and_refetches_after_mutation() {
+    use crate::app::store::{FetchKey, Operation};
+    let mut app = app();
+    detail(&mut app, DetailTab::Overview);
+    app.apply(Action::Refresh);
+    app.apply(Action::Refresh);
+    assert_eq!(app.state.store.fetches.len(), 3);
+    assert!(app.state.store.refreshing(app.state.screen));
+    app.apply(Action::Loaded(LoadedAction::Prs(Err("offline".into()))));
+    assert!(app.state.store.refreshing(app.state.screen));
+    app.state.store.operations.insert(42, Operation::Moderation);
+    app.apply(Action::Loaded(LoadedAction::Commented(42, Ok(()))));
+    assert!(
+        app.state
+            .store
+            .reload_after_fetch
+            .contains(&FetchKey::Activity(42))
+    );
+    app.apply(Action::Loaded(LoadedAction::Activity(
+        42,
+        Err("old response".into()),
+    )));
+    assert!(app.state.store.fetches.contains(&FetchKey::Activity(42)));
+    assert!(
+        !app.state
+            .store
+            .reload_after_fetch
+            .contains(&FetchKey::Activity(42))
+    );
+    app.apply(Action::Loaded(LoadedAction::Activity(
+        42,
+        Err("new response".into()),
+    )));
+    assert!(!app.state.store.fetches.contains(&FetchKey::Activity(42)));
+    app.apply(Action::Loaded(LoadedAction::Mergeability(
+        42,
+        Err("old response".into()),
+    )));
+    app.apply(Action::Loaded(LoadedAction::Mergeability(
+        42,
+        Err("new response".into()),
+    )));
+    app.apply(Action::Loaded(LoadedAction::Prs(Err("offline".into()))));
+    assert!(!app.state.store.refreshing(app.state.screen));
+    assert!(matches!(app.state.store.cache.prs, LoadState::Loaded(_)));
+}
+
+#[test]
+fn review_and_merge_dialogs_both_suspend_background_refresh() {
+    let mut app = app();
+    detail(&mut app, DetailTab::Overview);
+    for action in [
+        DetailAction::OpenReviewPicker,
+        DetailAction::OpenMergePicker,
+    ] {
+        app.apply(Action::Detail(action));
+        assert!(app.state.ui.modal_open(&app.state.store, app.state.screen));
+        // A regression would attempt to spawn a provider task without a runtime.
+        app.apply(Action::Refresh);
+        assert!(app.state.store.fetches.is_empty());
+        app.apply(Action::Detail(DetailAction::CloseReviewPicker));
+        app.apply(Action::Detail(DetailAction::CloseMergePicker));
+    }
+}
+
+#[test]
+fn detail_emits_resolved_commands_and_retains_submission_payload() {
+    let mut app = app();
+    detail(&mut app, DetailTab::Overview);
+    press(&mut app, KeyCode::Char('c'));
+    press(&mut app, KeyCode::Char('å'));
+    let command = app.state.ui.update(
+        Action::Detail(DetailAction::CommentSubmit),
+        &app.state.store,
+        app.state.screen,
+    );
+    assert!(matches!(command, Some(Action::Command {
+        pr_id: 42, command: Command::SubmitComment { target: CommentTarget::Pr, text }
+    }) if text == "å"));
+    assert_eq!(app.state.ui.detail.editor.draft.as_ref().unwrap().text, "å");
+    press(&mut app, KeyCode::Esc);
+    app.apply(Action::Detail(DetailAction::OpenDecline));
+    let command = app.state.ui.update(
+        Action::Detail(DetailAction::SubmitConfirm),
+        &app.state.store,
+        app.state.screen,
+    );
+    assert!(matches!(
+        command,
+        Some(Action::Command {
+            pr_id: 42,
+            command: Command::Decline
+        })
+    ));
+    assert!(app.state.ui.detail.confirm.is_none());
 }

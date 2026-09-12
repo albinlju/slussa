@@ -3,6 +3,7 @@ use crate::{
         App,
         action::{Action, LoadedAction},
         reviews::{CommentTarget, PendingComment},
+        store::FetchKey,
     },
     domain::{
         pr::MergeStrategy,
@@ -29,7 +30,10 @@ impl App {
         });
     }
 
-    pub(super) fn spawn_load_prs(&self) {
+    pub(super) fn spawn_load_prs(&mut self) {
+        if !self.state.store.fetches.insert(FetchKey::Prs) {
+            return;
+        }
         let provider = self.provider.clone();
         self.spawn_fetch(
             move || provider.fetch_prs(),
@@ -37,7 +41,10 @@ impl App {
         );
     }
 
-    pub(super) fn spawn_load_commits(&self, pr_id: u64) {
+    pub(super) fn spawn_load_commits(&mut self, pr_id: u64) {
+        if !self.state.store.fetches.insert(FetchKey::Commits(pr_id)) {
+            return;
+        }
         let provider = self.provider.clone();
         self.spawn_fetch(
             move || provider.fetch_commits(pr_id),
@@ -45,7 +52,10 @@ impl App {
         );
     }
 
-    pub(super) fn spawn_load_diff(&self, pr_id: u64) {
+    pub(super) fn spawn_load_diff(&mut self, pr_id: u64) {
+        if !self.state.store.fetches.insert(FetchKey::Diff(pr_id)) {
+            return;
+        }
         let provider = self.provider.clone();
         self.spawn_fetch(
             move || provider.fetch_diff(pr_id),
@@ -53,7 +63,10 @@ impl App {
         );
     }
 
-    pub(super) fn spawn_load_builds(&self, pr_id: u64) {
+    pub(super) fn spawn_load_builds(&mut self, pr_id: u64) {
+        if !self.state.store.fetches.insert(FetchKey::Builds(pr_id)) {
+            return;
+        }
         let provider = self.provider.clone();
         self.spawn_fetch(
             move || provider.fetch_builds(pr_id),
@@ -61,7 +74,15 @@ impl App {
         );
     }
 
-    pub(super) fn spawn_load_commit_diff(&self, pr_id: u64, oid: String) {
+    pub(super) fn spawn_load_commit_diff(&mut self, pr_id: u64, oid: String) {
+        if !self
+            .state
+            .store
+            .fetches
+            .insert(FetchKey::CommitDiff(pr_id, oid.clone()))
+        {
+            return;
+        }
         let provider = self.provider.clone();
         let oid_fetch = oid.clone();
         self.spawn_fetch(
@@ -70,7 +91,10 @@ impl App {
         );
     }
 
-    pub(super) fn spawn_load_activity(&self, pr_id: u64) {
+    pub(super) fn spawn_load_activity(&mut self, pr_id: u64) {
+        if !self.state.store.fetches.insert(FetchKey::Activity(pr_id)) {
+            return;
+        }
         let provider = self.provider.clone();
         self.spawn_fetch(
             move || provider.fetch_activity(pr_id),
@@ -94,7 +118,15 @@ impl App {
         );
     }
 
-    pub(super) fn spawn_load_mergeability(&self, pr_id: u64) {
+    pub(super) fn spawn_load_mergeability(&mut self, pr_id: u64) {
+        if !self
+            .state
+            .store
+            .fetches
+            .insert(FetchKey::Mergeability(pr_id))
+        {
+            return;
+        }
         let provider = self.provider.clone();
         self.spawn_fetch(
             move || provider.fetch_mergeability(pr_id),
@@ -182,5 +214,34 @@ impl App {
             move || provider.set_thread_resolved(pr_id, node_id.as_deref(), comment_id, resolved),
             move |r| Action::Loaded(LoadedAction::Commented(pr_id, r)),
         );
+    }
+}
+
+impl App {
+    /// A mutation must be followed by a fetch started after its acknowledgement.
+    fn reload_resource(&mut self, key: FetchKey) {
+        if self.state.store.fetches.contains(&key) {
+            self.state.store.reload_after_fetch.insert(key);
+        } else {
+            self.load_resource(key);
+        }
+    }
+
+    pub(super) fn reload_after_mutation(&mut self, pr_id: u64) {
+        self.reload_resource(FetchKey::Activity(pr_id));
+        self.reload_resource(FetchKey::Prs);
+        self.reload_resource(FetchKey::Mergeability(pr_id));
+    }
+
+    pub(super) fn load_resource(&mut self, key: FetchKey) {
+        match key {
+            FetchKey::Prs => self.spawn_load_prs(),
+            FetchKey::Commits(id) => self.spawn_load_commits(id),
+            FetchKey::Diff(id) => self.spawn_load_diff(id),
+            FetchKey::Builds(id) => self.spawn_load_builds(id),
+            FetchKey::Activity(id) => self.spawn_load_activity(id),
+            FetchKey::Mergeability(id) => self.spawn_load_mergeability(id),
+            FetchKey::CommitDiff(id, oid) => self.spawn_load_commit_diff(id, oid),
+        }
     }
 }

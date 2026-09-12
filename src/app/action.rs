@@ -12,6 +12,10 @@ use crate::{
 #[derive(Debug)]
 pub enum Action {
     Quit,
+    Command {
+        pr_id: u64,
+        command: Command,
+    },
     Navigate(crate::app::navigation::Screen),
     /// Force a re-fetch of the active view now (`F`).
     Refresh,
@@ -117,4 +121,32 @@ pub enum LoadedAction {
     Declined(u64, Result<(), String>),
     CommitDiff(u64, String, Result<Diff, String>),
     Commented(u64, Result<(), String>),
+}
+
+/// Fully resolved user intent; no dialog or editor state is read by the app.
+#[derive(Debug)]
+pub enum Command {
+    StartReview,
+    AbandonReview,
+    RemovePendingComment(usize),
+    SubmitComment {
+        target: crate::app::reviews::CommentTarget,
+        text: String,
+    },
+    SubmitReview {
+        verdict: crate::domain::review::ReviewVerdict,
+        body: String,
+    },
+    Merge(crate::domain::pr::MergeStrategy),
+    Decline,
+    DeleteComment {
+        id: u64,
+        review: bool,
+    },
+    ResolveThread {
+        node_id: Option<String>,
+        comment_id: Option<u64>,
+        resolved: bool,
+    },
+    DismissError,
 }

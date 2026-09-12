@@ -13,10 +13,10 @@ src/
 ├── app/
 │   ├── mod.rs             Event loop, task channel and effect dispatch
 │   ├── state.rs           AppState composition (Store, Ui, Screen)
-│   ├── store.rs           Shared cache, user/capabilities and reviews by PR id
+│   ├── store.rs           Cache, PR operations/errors, in-flight loads and reviews
 │   ├── action.rs          UI messages, application requests and load results
 │   ├── navigation.rs     Screen identity, open PR and initiate missing loads
-│   ├── commands.rs       Review/comment/lifecycle workflows
+│   ├── commands.rs       Execute resolved review/comment/lifecycle commands
 │   ├── reviews.rs        Review drafts, comment targets and anchors
 │   ├── fetchers.rs        Run providers off the UI thread
 │   ├── loads.rs           Apply asynchronous results
@@ -40,6 +40,7 @@ src/
 │   │   ├── pr_list/       PrListScreen: table, filter and search
 │   │   └── pr_detail/
 │   │       ├── mod.rs     PrDetailScreen: children and local dialog state
+│   │       ├── interactions.rs  Dialog/editor workflows and resolved commands
 │   │       ├── keys.rs    Modal, screen and focused-child routing
 │   │       ├── view.rs    Read-only component/store queries
 │   │       ├── render.rs Screen layout and child rendering
@@ -85,8 +86,10 @@ The concrete implementations are `PrListScreen`, `PrDetailScreen`, `DiffViewer`,
 Small visual pieces, including badges and the Builds display, stay render
 functions. Tree and pane are internal parts of DiffViewer; its shared file
 selection and focus are coordinated by that owner. PrDetailScreen owns optional dialog instances and manages opening/closing them;
-each selectable dialog owns its private cursor. Application workflows consume
-selected verdicts, merge strategies or accepted confirmations, not cursor indices.
+each selectable dialog owns its private cursor. The screen resolves
+selected verdicts, merge strategies and accepted confirmations into `Command`
+payloads carrying the PR id. Application workflows never read dialog or editor
+state.
 Error and help displays remain simple presentation helpers. Sidebar implements
 Ratatui `Widget` and borrows its data without owning navigation state.
 
@@ -95,11 +98,16 @@ Ratatui `Widget` and borrows its data without owning navigation state.
 `AppState` composes `Store`, `Ui` and `Screen`:
 
 - **Store** owns fetched PR data, user identity/provider capabilities and a map
-  of review drafts keyed by PR id. Reviews survive screen changes and cannot
-  appear in or be submitted for a different PR.
-- **Ui** owns the list and detail screen instances, plus the refresh indicator.
+  of review drafts keyed by PR id. Operations and action errors are also keyed
+  by PR id; reads are tracked by resource (including PR id and commit oid).
+  Reviews survive screen changes and cannot appear in or be submitted for a
+  different PR.
+- **Ui** owns the list and detail screen instances. Refresh indicators derive
+  from the Store's in-flight resources for the visible screen.
 - **PrListScreen** owns selection, status filter, filter picker and SearchInput.
-- **PrDetailScreen** owns its child components, editor and dialog state.
+- **PrDetailScreen** owns its child components, editor and dialog state. Its
+  `open(pr_id)` lifecycle resets navigation and saves/restores editors by PR id.
+  A submission acknowledgement only clears the corresponding PR's editor.
 - **DiffViewer** owns file selection, tree expansion, focus, scroll, searches and
   rendered line/thread anchors. CommitList owns a second DiffViewer instance,
   so drilling into a commit cannot change the PR diff's cursor or search.
@@ -108,9 +116,17 @@ Ratatui `Widget` and borrows its data without owning navigation state.
   its own scroll state.
 - **CommentEditor** owns the active text draft and editing behavior.
 
-Review drafts are in-memory session data, not persisted to disk. Submission
-error recovery and partial Bitbucket review submissions remain separate work:
-review/comment payloads are still consumed when a submission is started.
+Review and editor drafts are in-memory session data, not persisted to disk.
+Submission retains the draft and queued review comments until success. While a
+mutation is pending, another mutation or editor change for that PR is blocked.
+An error leaves the payload available for an explicit retry and is shown only
+on its own PR. Errors capture input before the retained editor.
+
+Provider writes still cannot guarantee exactly-once delivery: an ambiguous
+network failure may follow a successful server write. Bitbucket full reviews
+also submit multiple requests; a failed batch can have already posted some
+comments. Retaining the payload prevents data loss but does not deduplicate
+those posts on retry. There is no automatic retry.
 
 ## Input, updates and effects
 
@@ -124,7 +140,7 @@ terminal key
           → App commands / navigation / refresh
           → provider task
           → Loaded action
-          → Store
+          → Store + PR-scoped component acknowledgement
   → render
 ```
 
@@ -160,9 +176,18 @@ metadata refresh on a 60-second cadence. `F` requests an immediate refresh.
 Existing data remains visible if a reload fails. Initial loading uses
 `LoadState::{NotRequested, Loading, Loaded, Failed}`.
 
-Refresh still uses the existing cache/loading scheme. Separate in-flight
-tracking, stale-response rejection, and complete provider pagination are
-follow-up reliability tasks, not implicit benefits of component ownership.
+All fetch entry points register a resource key before spawning work and skip
+an already-running fetch of that resource. Completion removes only its own
+key; the refresh indicator remains active until the relevant loads settle.
+This serializes requests per resource, preventing older overlapping reads from
+replacing newer results. If a mutation finishes during an existing read, that
+resource is marked for another fetch after the old read settles, so the change
+is not missed. Successful mutations refresh activity, PR metadata and
+mergeability. Read completions never acknowledge pending mutations.
+
+UI modal detection is shared by keyboard routing and periodic/manual refresh,
+including review and merge pickers. Complete provider pagination remains
+separate follow-up work.
 
 ## Verification and adding behavior
 
@@ -171,6 +196,10 @@ and rendering. The screen snapshots were captured before migration: all five
 detail tabs and the PR list at 100×30 and 40×12. They compare terminal text;
 interactive tests additionally exercise search, filters, diff focus and match
 wrapping, commit drilldown, review ownership, editor input and dialog priority.
+Additional asynchronous regressions exercise draft recovery, review retention,
+late acknowledgements across PR navigation, duplicate-submit blocking and
+refresh bookkeeping. These use a current-thread runtime without yielding and
+inject results directly; queued provider futures are cancelled without running.
 These are local tests and do not submit anything to a provider.
 
 For a local interaction, change the owning component's message handling and
@@ -181,8 +210,8 @@ when navigation or asynchronous state is involved.
 
 Import types from their owners: loading models from `app/store`, review work
 from `app/reviews`, tab identities from `pr_detail/tabs`, and editor drafts from
-`components/comment_editor`. `app/state` is not a UI type re-export hub. Use
-`AppState::detail_view()` explicitly for read-only detail queries; there is no
-second layer of forwarding query methods on AppState.
+`components/comment_editor`. `app/state` is not a UI type re-export hub. Screens use
+`DetailView` for read-only queries. `AppState::detail_view()` is a test helper;
+application effects do not query UI state.
 
 Run `cargo clippy --all-targets --locked -- -D warnings` alongside the tests.
