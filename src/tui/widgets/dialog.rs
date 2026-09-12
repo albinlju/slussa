@@ -83,14 +83,26 @@ pub fn choices(
     lines: Vec<Line<'static>>,
     selected: usize,
 ) {
-    let width = (lines.iter().map(Line::width).max().unwrap_or(0) as u16 + 4).clamp(44, 72);
-    let body = self::frame(
+    choices_with_hints(
         frame,
         area,
         title,
-        (width, lines.len() as u16),
+        lines,
+        selected,
         &[("j/k", "move"), ("Enter", "select"), ("Esc", "cancel")],
     );
+}
+
+pub fn choices_with_hints(
+    frame: &mut Frame,
+    area: Rect,
+    title: &str,
+    lines: Vec<Line<'static>>,
+    selected: usize,
+    hints: &[(&str, &str)],
+) {
+    let width = (lines.iter().map(Line::width).max().unwrap_or(0) as u16 + 4).clamp(44, 72);
+    let body = self::frame(frame, area, title, (width, lines.len() as u16), hints);
     let scroll = selected
         .saturating_add(1)
         .saturating_sub(body.height as usize);

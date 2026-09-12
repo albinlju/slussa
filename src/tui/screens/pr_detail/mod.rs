@@ -114,6 +114,7 @@ impl Component for PrDetailScreen {
                     | DetailAction::DismissError
                     | DetailAction::ToggleHelp
                     | DetailAction::BuildsScroll(_)
+                    | DetailAction::DescriptionHorizontal(_)
                     | DetailAction::DescriptionScroll(_)
                     | DetailAction::OverviewScroll(_)
                     | DetailAction::OverviewMove(_)
@@ -144,7 +145,8 @@ impl Component for PrDetailScreen {
             DetailAction::BuildsScroll(_) => {
                 self.builds.update(action, &None);
             }
-            DetailAction::DescriptionScroll(_)
+            DetailAction::DescriptionHorizontal(_)
+            | DetailAction::DescriptionScroll(_)
             | DetailAction::OverviewScroll(_)
             | DetailAction::OverviewMove(_)
             | DetailAction::OverviewSubMove(_) => {
@@ -155,7 +157,8 @@ impl Component for PrDetailScreen {
                     && let Some(pr) = prs.iter().find(|p| p.id == pr_id)
                 {
                     match action {
-                        DetailAction::DescriptionScroll(_) => {
+                        DetailAction::DescriptionHorizontal(_)
+                        | DetailAction::DescriptionScroll(_) => {
                             self.description.update(action, &pr);
                         }
                         _ => {
@@ -184,7 +187,7 @@ impl Component for PrDetailScreen {
                     return dialog.update(action, &());
                 }
             }
-            DetailAction::ReviewMove(_) => {
+            DetailAction::ReviewPreview | DetailAction::ReviewMove(_) => {
                 let options = DetailView {
                     detail: self,
                     store: ctx.store,

@@ -450,3 +450,47 @@ Description derives heading, link, quote and code colors from the app theme and
 keeps the terminal background. This is scoped to Description; conversation
 Markdown retains its existing presentation. Regression coverage includes narrow
 rows, Unicode paths, long conversations and Description in all three themes.
+
+### Stable reading positions and wide Description content
+
+Overview reconciles selection by comment ID and comment kind before rendering
+refreshed activity. It adjusts scroll by the selected comment's row displacement,
+keeping that comment at the same viewport height as earlier content changes.
+Explicit keyboard navigation clears the identity anchor; deletion falls back to
+a valid nearby block instead of retaining the deleted action target.
+
+CommitList owns its Ratatui ListState so opening a commit and returning preserves
+the viewport; changes to the search reset that state.
+
+Description renders pipe tables with enough width to retain cell contents, while
+ordinary prose still uses the viewport width. Wide rendered content can be panned
+with H/L; the footer advertises this only when needed. Code, links and tables retain
+their full text. Resizing clamps horizontal and vertical scroll to valid bounds.
+
+Theme direction: keep terminal colors as the default and the existing Gruvbox and
+Catppuccin presets as optional configuration. There is no additional theme picker.
+A single fixed dark palette would not accommodate users' light terminal backgrounds.
+Prioritize consistent semantic roles and default backgrounds across all views.
+Description now follows theme roles; conversation Markdown still starts from the
+renderer dark style and should be visually compared before any further color change.
+No palette was removed or changed in this pass.
+
+### Review draft clarity
+
+Editor submit hints derive from the actual target and whether the PR has an active
+review: line comments say `add to review`, direct PR comments say `post comment`,
+replies say `post reply`, edits say `save changes`, and verdict summaries say
+`submit review`. These labels do not change the publication semantics.
+
+The draft footer combines state, count and the next action as `v: finish draft (N)`.
+The verdict dialog distinguishes `Enter submit review` from `Enter continue` when
+a summary editor follows. Tab opens a scrollable preview of every queued comment,
+including full text and file locations. Enter in that preview does nothing; Tab
+returns to verdict selection and Esc closes the dialog without discarding work.
+
+Discarding a populated review opens a confirmation with `Keep reviewing` selected.
+An empty review can still be abandoned directly. Existing provider capability gates,
+submission checkpoints and partial-submission recovery remain in place.
+
+Regression tests cover editor labels, preview navigation through the last queued
+comment, no submission from the preview, safe discard defaults and compact dialogs.

@@ -48,8 +48,10 @@ fn footer_actions(state: &DetailView<'_>, tab: DetailTab) -> Vec<Hint> {
     if state.store.capabilities.reviews()
         && let Some(review) = state.pending_review()
     {
-        let mut parts = vec![Hint::on(format!("reviewing ({})", review.comments.len()))];
-        parts.push(Hint::on("v: finish"));
+        let mut parts = vec![Hint::on(format!(
+            "v: finish draft ({})",
+            review.comments.len()
+        ))];
         if state.detail.active_diff_view().pane_pending.is_some()
             && state.detail.active_diff_view().focus == DiffFocus::Pane
             && matches!(tab, DetailTab::Diff | DetailTab::Commits)
@@ -103,8 +105,8 @@ fn footer_actions(state: &DetailView<'_>, tab: DetailTab) -> Vec<Hint> {
             }));
         }
         if state.store.capabilities.reviews() {
-            parts.push(Hint::on("a: verdict"));
-            parts.push(Hint::on("v: review"));
+            parts.push(Hint::on("a: submit review"));
+            parts.push(Hint::on("v: start review"));
         }
         if let Screen::Detail { pr_id, .. } = state.screen {
             if !state.store.capabilities.merge_strategies.is_empty() {
@@ -184,6 +186,9 @@ fn footer_actions(state: &DetailView<'_>, tab: DetailTab) -> Vec<Hint> {
         return hints;
     }
     match tab {
+        DetailTab::Description if state.detail.description.max_horizontal > 0 => {
+            widgets::hints_on("H/L: pan  j/k: scroll  h/l: tabs")
+        }
         DetailTab::Description => widgets::hints_on("h/l: tabs  j/k: scroll"),
         DetailTab::Commits => widgets::hints_on("enter: open  /: search"),
         DetailTab::Builds => widgets::hints_on("j/k: scroll  h/l: tabs"),

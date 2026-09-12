@@ -102,7 +102,18 @@ impl PrDetailScreen {
                 }
             }
             DetailAction::StartReview => Command::StartReview,
-            DetailAction::AbandonReview => Command::AbandonReview,
+            DetailAction::AbandonReview => {
+                if ctx
+                    .store
+                    .reviews
+                    .get(&pr_id)
+                    .is_some_and(|review| !review.comments.is_empty())
+                {
+                    self.confirm = Some(ConfirmDialog::new(ConfirmKind::DiscardReview));
+                    return None;
+                }
+                Command::AbandonReview
+            }
             DetailAction::RemovePendingComment => {
                 Command::RemovePendingComment(self.active_diff_view().pane_pending?)
             }
@@ -159,6 +170,7 @@ impl PrDetailScreen {
             ),
             DetailAction::SubmitConfirm => match self.confirm.take()?.accepted()? {
                 ConfirmKind::Decline => Command::Decline,
+                ConfirmKind::DiscardReview => Command::AbandonReview,
                 ConfirmKind::DeleteComment { id, review } => Command::DeleteComment { id, review },
             },
             DetailAction::CommentSubmit => {

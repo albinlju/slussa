@@ -28,7 +28,7 @@
 │                                                                 │                                │
 │                                                                 │                                │
 └──────────────────────────────────────────────────────────────────────────────────────────────────┘
-  c: comment  r: reply  e: edit  d: delete  R: resolve thread  a: verdict  v: review        ?: help
+  c: comment  r: reply  e: edit  d: delete  R: resolve thread  a: submit review  m: merge   ?: help
 80x30 Overview
 ┌──────────────────────────────────────────────────────────────────────────────┐
 │  #42 Component migration                                                     │
