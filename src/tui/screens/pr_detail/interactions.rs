@@ -52,12 +52,17 @@ impl PrDetailScreen {
     }
 
     fn open_draft(&mut self, target: Option<CommentTarget>) {
+        if self.editor.draft.is_some() {
+            self.editor.suspended = false;
+            return;
+        }
         if let Some(target) = target {
             self.editor = CommentEditor {
                 draft: Some(CommentDraft {
                     target,
                     text: String::new(),
                 }),
+                ..CommentEditor::default()
             };
         }
     }
@@ -114,6 +119,11 @@ impl PrDetailScreen {
                 let selected = view.editable_selected()?;
                 let id = selected.id?;
                 let text = view.find_comment(id)?.content.clone();
+                if self.editor.draft.is_some() {
+                    self.editor.suspended = false;
+                    return None;
+                }
+                self.editor = CommentEditor::default();
                 self.editor.draft = Some(CommentDraft {
                     target: CommentTarget::Edit {
                         id,
@@ -165,5 +175,37 @@ impl PrDetailScreen {
             _ => unreachable!("local interaction handled by screen"),
         };
         Some(Action::Command { pr_id, command })
+    }
+}
+
+impl PrDetailScreen {
+    pub fn draft_snapshot(&self) -> std::collections::BTreeMap<u64, CommentDraft> {
+        let mut drafts: std::collections::BTreeMap<_, _> = self
+            .editors
+            .iter()
+            .filter_map(|(id, editor)| editor.draft.clone().map(|draft| (*id, draft)))
+            .collect();
+        if let Some(id) = self.pr_id {
+            drafts.remove(&id);
+            if let Some(draft) = &self.editor.draft {
+                drafts.insert(id, draft.clone());
+            }
+        }
+        drafts
+    }
+    pub fn restore_drafts(&mut self, drafts: std::collections::BTreeMap<u64, CommentDraft>) {
+        self.editors = drafts
+            .into_iter()
+            .map(|(id, draft)| {
+                (
+                    id,
+                    CommentEditor {
+                        draft: Some(draft),
+                        suspended: true,
+                        ..CommentEditor::default()
+                    },
+                )
+            })
+            .collect();
     }
 }

@@ -59,6 +59,7 @@ src/
 │   ├── navigation.rs     Screen identity, open PR and initiate missing loads
 │   ├── commands.rs       Execute resolved review/comment/lifecycle commands
 │   ├── reviews.rs        Review drafts, comment targets and anchors
+│   ├── drafts.rs         Scoped, atomic local draft recovery
 │   ├── fetchers.rs        Run providers off the UI thread
 │   ├── loads.rs           Apply asynchronous results
 │   ├── refresh.rs         Manual and periodic refresh
@@ -159,7 +160,8 @@ Ratatui `Widget` and borrows its data without owning navigation state.
   its own scroll state.
 - **CommentEditor** owns the active text draft and editing behavior.
 
-Review and editor drafts are in-memory session data, not persisted to disk.
+Review and editor drafts are persisted locally by `app/drafts.rs`, independently
+of the provider APIs.
 Submission retains the draft and queued review comments until success. While a
 mutation is pending, another mutation or editor change for that PR is blocked.
 `Esc` leaves the detail screen with the draft retained; `q` exits. Neither action
@@ -274,7 +276,7 @@ when navigation or asynchronous state is involved.
 
 Import types from their owners: loading models from `app/store`, review work
 from `app/reviews`, tab identities from `pr_detail/tabs`, and editor drafts from
-`components/comment_editor`. `app/state` is not a UI type re-export hub. Screens use
+`app/reviews` (also re-exported by `components/comment_editor`). `app/state` is not a UI type re-export hub. Screens use
 `DetailView` for read-only queries. `AppState::detail_view()` is a test helper;
 application effects do not query UI state.
 
@@ -323,8 +325,39 @@ underlying selection or layout. Compact detail tabs show the active tab and
 navigation hint when the complete tab bar will not fit. A pending review can
 be finished from every tab where its footer advertises that action.
 
-Further work remains: a proper multiline editor and durable drafts, clearer
-merge requirements and build drilldown, and richer contextual action discovery.
+Further work remains: clearer merge requirements and build drilldown, and richer
+contextual action discovery. Multiline editing and durable drafts are now implemented.
 The compact detail header and very small diff layouts also deserve a separate
 pass. These changes establish a calmer baseline without replacing existing
 review, comment or lifecycle flows.
+
+## Comment editing and local recovery
+
+The comment editor opens as a focused dialog. Enter inserts a newline; Ctrl+S
+submits (or queues an inline comment in an active review). Arrows and Home/End
+move within the text; Delete and Backspace edit at the cursor. Bracketed paste
+is handled as one text insertion, never as navigation or submit commands. Esc
+keeps the draft and closes the editor. `c` resumes it on any detail tab. Ctrl+X
+opens a discard confirmation. Existing drafts are resumed instead of silently
+replaced when another comment action is selected.
+
+`app/drafts.rs` persists draft targets, their captured diff revisions, review
+queues and partial-submission receipts in the platform's local data directory
+under `tuipr/drafts/`. Files are versioned and scoped by provider, remote host,
+repository path and authenticated account; no tokens are included. The snapshot
+uses ordered maps, writes only when content changes, syncs a temporary file,
+and renames it over the previous version. Files use mode 0600 on Unix. A
+[standard-library file lock](https://doc.rust-lang.org/std/fs/struct.File.html#method.try_lock)
+prevents simultaneous writers for the same scope and is released on process exit.
+Corrupt or incompatible files are preserved and reported at startup.
+
+Recovery data is checkpointed before a server mutation starts. A failed
+checkpoint blocks that submission and leaves the editor intact. Autosave
+failures are visible in the footer. Successful acknowledgements remove the
+corresponding drafts; partial reviews keep only the unacknowledged comments and
+remember an already submitted summary. An interrupted or failed request is
+marked for inspection after restart: its server outcome may be uncertain.
+Restore never sends anything automatically. Recovered editors start closed,
+with a contextual resume hint. The current model keeps one editor draft per PR,
+plus the PR's review queue. Provider-side draft synchronization and an external
+editor integration are not implemented.

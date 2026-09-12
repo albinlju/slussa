@@ -13,6 +13,7 @@ use crate::{
 pub enum Action {
     Quit,
     HelpScroll(i16),
+    Paste(String),
     Command {
         pr_id: u64,
         command: Command,
@@ -87,6 +88,14 @@ pub enum DetailAction {
     DismissError,
     CommentType(char),
     CommentBackspace,
+    CommentDelete,
+    CommentMove(i16),
+    CommentVertical(i16),
+    CommentHome,
+    CommentEnd,
+    CommentDiscard,
+    CommentDiscardConfirm,
+    CommentKeep,
     CommentSubmit,
     CommentCancel,
 }

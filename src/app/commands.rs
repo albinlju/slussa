@@ -57,6 +57,9 @@ impl App {
                         .store
                         .operations
                         .insert(pr_id, Operation::Comment);
+                    if !self.checkpoint_submission(pr_id) {
+                        return;
+                    }
                     self.spawn_comment(pr_id, target, text);
                 }
             }
@@ -65,6 +68,9 @@ impl App {
             }
             Command::Merge(strategy) => {
                 self.state.store.operations.insert(pr_id, Operation::Merge);
+                if !self.checkpoint_submission(pr_id) {
+                    return;
+                }
                 self.spawn_merge(pr_id, strategy);
             }
             Command::Decline => {
@@ -72,6 +78,9 @@ impl App {
                     .store
                     .operations
                     .insert(pr_id, Operation::Decline);
+                if !self.checkpoint_submission(pr_id) {
+                    return;
+                }
                 self.spawn_decline(pr_id);
             }
             Command::DeleteComment { id, review } => {
@@ -79,6 +88,9 @@ impl App {
                     .store
                     .operations
                     .insert(pr_id, Operation::Moderation);
+                if !self.checkpoint_submission(pr_id) {
+                    return;
+                }
                 self.spawn_delete_comment(pr_id, id, review);
             }
             Command::ResolveThread {
@@ -90,6 +102,9 @@ impl App {
                     .store
                     .operations
                     .insert(pr_id, Operation::Moderation);
+                if !self.checkpoint_submission(pr_id) {
+                    return;
+                }
                 self.spawn_resolve_thread(pr_id, node_id, comment_id, resolved);
             }
             Command::DismissError => unreachable!(),
@@ -141,6 +156,9 @@ impl App {
             body
         };
         let comments = review.comments.clone();
+        if !self.checkpoint_submission(pr_id) {
+            return;
+        }
         self.spawn_submit_full_review(pr_id, verdict, body, user, comments);
     }
 }

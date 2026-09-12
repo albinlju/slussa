@@ -38,9 +38,18 @@ fn run_tui(provider: Provider) -> ExitCode {
     let current_user = provider.current_user().unwrap_or_default();
 
     let result = rt.block_on(async move {
-        let app = App::new(provider, current_user);
+        let mut app = App::new(provider, current_user);
+        if let Err(err) = app.enable_drafts() {
+            eprintln!("tuipr: {err}");
+            return ExitCode::from(1);
+        }
         let mut terminal = ratatui::init();
-        let result = app.run(&mut terminal).await;
+        let result =
+            match crossterm::execute!(std::io::stdout(), crossterm::event::EnableBracketedPaste) {
+                Ok(()) => app.run(&mut terminal).await,
+                Err(err) => Err(err),
+            };
+        let _ = crossterm::execute!(std::io::stdout(), crossterm::event::DisableBracketedPaste);
         ratatui::restore();
         match result {
             Ok(()) => ExitCode::SUCCESS,

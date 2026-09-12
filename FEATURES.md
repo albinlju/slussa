@@ -13,6 +13,13 @@ scope includes how users find and leave the interaction, not only the API action
 
 ## Done
 
+- [x] **Multiline comment editor** — focused dialog, Enter for newline, Ctrl+S to
+  submit, cursor movement and bracketed paste. Esc keeps the draft; `c` resumes
+  it. Ctrl+X explicitly confirms discarding it.
+- [x] **Persistent local drafts** — editor drafts and review queues survive
+  restart, scoped by repo/provider/account. Atomic saves, one writer per scope,
+  partial-review receipts and interrupted-request notices protect recovery.
+
 - [x] **Component architecture** — local UI state and behavior live with their
   components; a shared Store holds provider data and review drafts keyed by PR.
   Rendering snapshots and interaction regression tests protect existing flows.

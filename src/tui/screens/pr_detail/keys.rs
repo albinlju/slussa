@@ -19,15 +19,15 @@ pub(in crate::tui) fn key_to_action(
     if state.error().is_some() {
         return Some(Action::Detail(DetailAction::DismissError));
     }
-    if state.operation_pending() && state.detail.editor.draft.is_some() {
+    if state.operation_pending() && state.detail.editor.is_open() {
         return match key.code {
             KeyCode::Esc => Some(Action::Detail(DetailAction::Back)),
             KeyCode::Char('q') => Some(Action::Quit),
             _ => None,
         };
     }
-    if state.detail.editor.draft.is_some() {
-        return state.detail.editor.handle_key(key, &());
+    if state.detail.editor.is_open() {
+        return state.detail.editor.handle_key(key, &false);
     }
     if key.code == KeyCode::Char('q') {
         return Some(Action::Quit);

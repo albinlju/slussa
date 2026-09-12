@@ -38,6 +38,18 @@ pub fn render(frame: &mut Frame, state: &mut AppState) {
             },
         ),
     }
+    if let Some(error) = &state.store.draft_error {
+        let area = frame.area();
+        if area.height > 0 {
+            let footer =
+                ratatui::layout::Rect::new(area.x, area.y + area.height - 1, area.width, 1);
+            frame.render_widget(
+                ratatui::widgets::Paragraph::new(error.as_str())
+                    .style(ratatui::style::Style::default().fg(theme::current().error)),
+                footer,
+            );
+        }
+    }
 }
 
 pub fn key_to_action(state: &AppState, key: KeyEvent) -> Option<Action> {
@@ -137,6 +149,16 @@ impl Ui {
         screen: Screen,
     ) -> Option<Action> {
         match action {
+            Action::Paste(text) => {
+                if let Screen::Detail { pr_id, .. } = screen
+                    && !store.operations.contains_key(&pr_id)
+                    && !store.errors.contains_key(&pr_id)
+                    && self.detail.editor.is_open()
+                {
+                    self.detail.editor.insert_text(&text);
+                }
+                None
+            }
             Action::HelpScroll(delta) => {
                 let (open, help) = match screen {
                     Screen::List => (self.list.help_open, &mut self.list.help),

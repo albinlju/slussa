@@ -16,6 +16,7 @@ use tokio_stream::StreamExt;
 
 pub mod action;
 mod commands;
+mod drafts;
 pub mod fetchers;
 mod loads;
 pub mod navigation;
@@ -29,6 +30,7 @@ pub mod store;
 const SPINNER_INTERVAL: Duration = Duration::from_millis(100);
 
 pub struct App {
+    drafts: Option<drafts::DraftStorage>,
     pub state: AppState,
     pub(crate) provider: Provider,
     action_tx: UnboundedSender<Action>,
@@ -40,6 +42,7 @@ impl App {
     pub fn new(provider: Provider, current_user: String) -> Self {
         let (action_tx, action_rx) = mpsc::unbounded_channel();
         Self {
+            drafts: None,
             state: AppState {
                 store: store::Store {
                     current_user,
@@ -77,6 +80,7 @@ impl App {
                         if self.handle_key(key) { return Ok(()); }
                         self.draw(terminal)?;
                     }
+                    Event::Paste(text) => { self.apply(Action::Paste(text)); self.draw(terminal)?; }
                     Event::Resize(_, _) => self.draw(terminal)?,
                     _ => {}
                 },
@@ -95,7 +99,7 @@ impl App {
     /// selection/dialog state produced by all preceding input.
     fn handle_key(&mut self, key: ratatui::crossterm::event::KeyEvent) -> bool {
         match key_to_action(&self.state, key) {
-            Some(Action::Quit) => true,
+            Some(Action::Quit) => self.save_drafts(),
             Some(action) => {
                 self.apply(action);
                 false
@@ -115,6 +119,11 @@ mod tests;
 
 impl App {
     pub(super) fn apply(&mut self, action: Action) {
+        self.apply_inner(action);
+        self.save_drafts();
+    }
+
+    fn apply_inner(&mut self, action: Action) {
         let Some(action) = self
             .state
             .ui
@@ -130,7 +139,8 @@ impl App {
             Action::Command { pr_id, command } => self.execute(pr_id, command),
             Action::LoadCommitDiff { pr_id, oid } => self.ensure_commit_diff(pr_id, oid),
             Action::Loaded(a) => self.loaded_actions(a),
-            Action::HelpScroll(_)
+            Action::Paste(_)
+            | Action::HelpScroll(_)
             | Action::Detail(_)
             | Action::List(_)
             | Action::Diff(_)
