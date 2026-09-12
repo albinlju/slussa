@@ -41,21 +41,49 @@ struct GqlThread {
 #[derive(Debug, Default, Deserialize)]
 struct GqlComments {
     nodes: Vec<GqlComment>,
+    #[serde(default, rename = "pageInfo")]
+    page_info: Option<super::pagination::PageInfo>,
 }
 
 pub fn fetch_review_threads(pr_number: u64) -> Result<Vec<CommentThread>, FetchError> {
-    let mut nodes: Vec<GqlThread> = super::pagination::pr_nodes(
+    let fields = format!("{COMMENT_FIELDS} commit {{ oid }} originalCommit {{ oid }}");
+    // Keep the nested page modest: a PR page can contain 100 review threads.
+    let nodes: Vec<GqlThread> = super::pagination::pr_nodes(
         pr_number,
         "reviewThreads",
-        "id isResolved isOutdated path line originalLine diffSide",
+        &format!(
+            "id isResolved isOutdated path line originalLine diffSide comments(first: 20) {{ nodes {{ {fields} }} pageInfo {{ hasNextPage endCursor }} }}"
+        ),
     )?;
-    for thread in &mut nodes {
-        thread.comments.nodes = super::pagination::node_nodes(
-            &thread.id,
+    complete_threads(nodes, |id, cursor| {
+        super::pagination::node_nodes_after(
+            id,
             "PullRequestReviewThread",
             "comments",
-            &format!("{COMMENT_FIELDS} commit {{ oid }} originalCommit {{ oid }}"),
-        )?;
+            &fields,
+            Some(cursor),
+        )
+    })
+}
+
+fn complete_threads(
+    mut nodes: Vec<GqlThread>,
+    mut remaining: impl FnMut(&str, &str) -> Result<Vec<GqlComment>, FetchError>,
+) -> Result<Vec<CommentThread>, FetchError> {
+    for thread in &mut nodes {
+        let info = thread
+            .comments
+            .page_info
+            .as_ref()
+            .ok_or_else(|| FetchError::ParseFailed("Missing thread comment pageInfo".into()))?;
+        if info.has_next_page {
+            let cursor = info
+                .end_cursor
+                .as_deref()
+                .filter(|c| !c.is_empty())
+                .ok_or_else(|| FetchError::ParseFailed("Missing thread comment cursor".into()))?;
+            thread.comments.nodes.extend(remaining(&thread.id, cursor)?);
+        }
     }
     Ok(nodes.into_iter().map(map_thread).collect())
 }
@@ -98,6 +126,58 @@ fn map_thread(t: GqlThread) -> CommentThread {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    fn paged_thread(id: &str, next: bool) -> GqlThread {
+        serde_json::from_value(serde_json::json!({
+            "id": id, "path": "src/main.rs", "line": 42,
+            "comments": {
+                "nodes": [{"databaseId": 1, "body": "First", "createdAt": "2026-01-01T00:00:00Z", "author": {"login": "alice"}}],
+                "pageInfo": {"hasNextPage": next, "endCursor": "page-one"}
+            }
+        })).unwrap()
+    }
+
+    #[test]
+    fn embedded_comments_only_fetch_remaining_pages_when_needed() {
+        let mut requests = Vec::new();
+        let threads = complete_threads(
+            vec![paged_thread("short", false), paged_thread("long", true)],
+            |id, cursor| {
+                requests.push((id.to_owned(), cursor.to_owned()));
+                let mut extra = paged_thread("unused", false).comments.nodes;
+                extra[0].database_id = Some(2);
+                Ok(extra)
+            },
+        )
+        .unwrap();
+        assert_eq!(requests, vec![("long".into(), "page-one".into())]);
+        assert_eq!(threads[0].comments.len(), 1);
+        assert_eq!(
+            threads[1].comments.iter().map(|c| c.id).collect::<Vec<_>>(),
+            vec![Some(1), Some(2)]
+        );
+        assert_eq!(threads[1].reply_to, Some(1));
+    }
+
+    #[test]
+    fn incomplete_comment_pages_fail_instead_of_dropping_replies() {
+        assert!(
+            complete_threads(vec![paged_thread("long", true)], |_, _| Err(
+                FetchError::Timeout
+            ))
+            .is_err()
+        );
+        let mut missing = paged_thread("long", true);
+        missing.comments.page_info.as_mut().unwrap().end_cursor = None;
+        assert!(
+            complete_threads(vec![missing], |_, _| panic!("missing cursor must fail")).is_err()
+        );
+        let mut missing = paged_thread("short", false);
+        missing.comments.page_info = None;
+        assert!(
+            complete_threads(vec![missing], |_, _| panic!("missing page info must fail")).is_err()
+        );
+    }
 
     const SAMPLE: &str = r#"{ "reviewThreads": {
         "nodes": [{

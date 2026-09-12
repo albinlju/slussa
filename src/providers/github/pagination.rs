@@ -24,14 +24,25 @@ pub(super) fn node_nodes<T: DeserializeOwned>(
     field: &str,
     selection: &str,
 ) -> Result<Vec<T>, FetchError> {
+    node_nodes_after(id, kind, field, selection, None)
+}
+
+pub(super) fn node_nodes_after<T: DeserializeOwned>(
+    id: &str,
+    kind: &str,
+    field: &str,
+    selection: &str,
+    cursor: Option<&str>,
+) -> Result<Vec<T>, FetchError> {
     let id = serde_json::to_string(id).expect("string JSON");
-    nodes(
+    nodes_after(
         |cursor| {
             format!(
                 "query {{ item: node(id: {id}) {{ ... on {kind} {{ connection: {field}(first: 100, after: {cursor}) {{ nodes {{ {selection} }} pageInfo {{ hasNextPage endCursor }} }} }} }} }}"
             )
         },
         &["data", "item", "connection"],
+        cursor,
     )
 }
 
@@ -49,18 +60,26 @@ pub(super) fn repo_nodes<T: DeserializeOwned>(
     )
 }
 
-#[derive(Deserialize)]
+#[derive(Debug, Deserialize)]
 #[serde(rename_all = "camelCase")]
-struct PageInfo {
-    has_next_page: bool,
-    end_cursor: Option<String>,
+pub(super) struct PageInfo {
+    pub has_next_page: bool,
+    pub end_cursor: Option<String>,
 }
 
 fn nodes<T: DeserializeOwned>(
     query: impl Fn(&str) -> String,
     path: &[&str],
 ) -> Result<Vec<T>, FetchError> {
-    collect(|cursor| {
+    nodes_after(query, path, None)
+}
+
+fn nodes_after<T: DeserializeOwned>(
+    query: impl Fn(&str) -> String,
+    path: &[&str],
+    cursor: Option<&str>,
+) -> Result<Vec<T>, FetchError> {
+    collect_from(cursor, |cursor| {
         let cursor = serde_json::to_string(&cursor).expect("cursor JSON");
         let query = query(&cursor);
         let mut args = vec!["api", "graphql"];
@@ -90,11 +109,22 @@ fn nodes<T: DeserializeOwned>(
     })
 }
 
+#[cfg(test)]
 fn collect<T>(
+    fetch: impl FnMut(Option<&str>) -> Result<(Vec<T>, PageInfo), FetchError>,
+) -> Result<Vec<T>, FetchError> {
+    collect_from(None, fetch)
+}
+
+fn collect_from<T>(
+    cursor: Option<&str>,
     mut fetch: impl FnMut(Option<&str>) -> Result<(Vec<T>, PageInfo), FetchError>,
 ) -> Result<Vec<T>, FetchError> {
-    let mut cursor: Option<String> = None;
+    let mut cursor = cursor.map(str::to_owned);
     let mut seen = std::collections::HashSet::new();
+    if let Some(cursor) = &cursor {
+        seen.insert(cursor.clone());
+    }
     let mut result = Vec::new();
     loop {
         let (nodes, info) = fetch(cursor.as_deref())?;
@@ -113,6 +143,44 @@ fn collect<T>(
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[test]
+    fn continuation_starts_after_embedded_page_and_rejects_repeated_cursor() {
+        let mut cursors = Vec::new();
+        let items = collect_from(Some("embedded"), |cursor| {
+            cursors.push(cursor.unwrap().to_owned());
+            Ok(if cursor == Some("embedded") {
+                (
+                    vec![2],
+                    PageInfo {
+                        has_next_page: true,
+                        end_cursor: Some("second".into()),
+                    },
+                )
+            } else {
+                (
+                    vec![3],
+                    PageInfo {
+                        has_next_page: false,
+                        end_cursor: None,
+                    },
+                )
+            })
+        })
+        .unwrap();
+        assert_eq!(items, vec![2, 3]);
+        assert_eq!(cursors, vec!["embedded", "second"]);
+        assert!(
+            collect_from(Some("embedded"), |_| Ok((
+                vec![1],
+                PageInfo {
+                    has_next_page: true,
+                    end_cursor: Some("embedded".into()),
+                }
+            )))
+            .is_err()
+        );
+    }
+
     #[test]
     fn follows_cursors_and_fails_instead_of_returning_partial_data() {
         let result = collect(|cursor| {

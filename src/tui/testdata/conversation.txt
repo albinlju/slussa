@@ -1,0 +1,93 @@
+100x30 Overview
+┌──────────────────────────────────────────────────────────────────────────────────────────────────┐
+│  #42 Component migration                                                                         │
+│                                                                                                  │
+│   Open  @alice  wants to merge  feature → main    ✓ mergeable                                    │
+│                                                                                                  │
+│──────────────────────────────────────────────────────────────────────────────────────────────────│
+│  Description · Overview · Diff · Commits · Builds                                                │
+│──────────────────────────────────────────────────────────────────────────────────────────────────│
+│  *─ @alice commented on src/main.rs:1 unresolved  ·  just now   │ Reviewers                      │
+│  |  ┌────────────────────────────────────────────────────────   │ —                              │
+│  |  |   - old                                                   │                                │
+│  |  | 1 + new                                                   │ Builds                         │
+│  |  └────────────────────────────────────────────────────────   │ no builds                      │
+│  |  ┊ Comment 10                                                │                                │
+│  |  ┊                                                           │                                │
+│  |  └ alice · author · just now                                 │ Labels                         │
+│  |    Comment 11                                                │ rust                           │
+│                                                                 │                                │
+│                                                                 │ Details                        │
+│                                                                 │ opened  just now               │
+│                                                                 │ updated just now               │
+│                                                                 │ diff    +1 -1                  │
+│                                                                 │ files   1                      │
+│                                                                 │                                │
+│                                                                 │                                │
+│                                                                 │                                │
+│                                                                 │                                │
+│                                                                 │                                │
+└──────────────────────────────────────────────────────────────────────────────────────────────────┘
+  c: comment  r: reply  e: edit  d: delete  R: resolve thread  a: verdict  v: review        ?: help
+80x30 Overview
+┌──────────────────────────────────────────────────────────────────────────────┐
+│  #42 Component migration                                                     │
+│                                                                              │
+│   Open  @alice  wants to merge  feature → main    ✓ mergeable                │
+│                                                                              │
+│──────────────────────────────────────────────────────────────────────────────│
+│  Description · Overview · Diff · Commits · Builds                            │
+│──────────────────────────────────────────────────────────────────────────────│
+│  *─ @alice commented on src/main.rs:1 unr   │ Reviewers                      │
+│  |  ┌────────────────────────────────────   │ —                              │
+│  |  |   - old                               │                                │
+│  |  | 1 + new                               │ Builds                         │
+│  |  └────────────────────────────────────   │ no builds                      │
+│  |  ┊ Comment 10                            │                                │
+│  |  ┊                                       │                                │
+│  |  └ alice · author · just now             │ Labels                         │
+│  |    Comment 11                            │ rust                           │
+│                                             │                                │
+│                                             │ Details                        │
+│                                             │ opened  just now               │
+│                                             │ updated just now               │
+│                                             │ diff    +1 -1                  │
+│                                             │ files   1                      │
+│                                             │                                │
+│                                             │                                │
+│                                             │                                │
+│                                             │                                │
+│                                             │                                │
+└──────────────────────────────────────────────────────────────────────────────┘
+  c: comment  r: reply  e: edit  d: delete  R: resolve thread  m: merge ?: help
+40x30 Overview
+┌──────────────────────────────────────┐
+│ #42 Component migration              │
+│  Open  @alice    ✓ mergeable         │
+│──────────────────────────────────────│
+│  2 Overview   1-5: tabs              │
+│──────────────────────────────────────│
+│*─ @alice commented on src/main.rs    │
+│|  ┌──────────────────────────────    │
+│|  |   - old                          │
+│|  | 1 + new                          │
+│|  └──────────────────────────────    │
+│|  ┊ Comment 10                       │
+│|  ┊                                  │
+│|  └ alice · author · just now        │
+│|    Comment 11                       │
+│                                      │
+│                                      │
+│                                      │
+│                                      │
+│                                      │
+│                                      │
+│                                      │
+│                                      │
+│                                      │
+│                                      │
+│                                      │
+│                                      │
+│                                      │
+└──────────────────────────────────────┘
+  c: comment  r: reply  e: edit ?: help

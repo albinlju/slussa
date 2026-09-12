@@ -91,7 +91,7 @@ fn reviewers(pr: &PullRequest) -> Vec<Line<'static>> {
 }
 
 fn builds_summary(pr_data: Option<&PrData>) -> Vec<Line<'static>> {
-    match pr_data.map(|d| &d.builds) {
+    let mut lines = match pr_data.map(|d| &d.builds) {
         Some(LoadState::Loaded(builds)) if !builds.is_empty() => {
             let stats = crate::tui::screens::pr_detail::build_status::build_stats(builds);
             vec![
@@ -109,7 +109,10 @@ fn builds_summary(pr_data: Option<&PrData>) -> Vec<Line<'static>> {
         Some(LoadState::Loaded(_)) => vec![muted_line("no builds")],
         Some(LoadState::Failed(_)) => vec![muted_line("unavailable")],
         _ => vec![widgets::loading("loading…")],
-    }
+    };
+    // Keep Labels and Details stationary when the progress bar arrives.
+    lines.resize(2, Line::default());
+    lines
 }
 
 fn labels(pr: &PullRequest) -> Vec<Line<'static>> {
@@ -166,4 +169,23 @@ fn muted_line(text: &str) -> Line<'static> {
         text.to_string(),
         Style::default().fg(theme::current().muted),
     ))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn build_summary_reserves_progress_row_in_all_loading_states() {
+        assert_eq!(builds_summary(None).len(), 2);
+        let mut data = PrData::default();
+        for builds in [
+            LoadState::Loading,
+            LoadState::Failed("offline".into()),
+            LoadState::Loaded(vec![]),
+        ] {
+            data.builds = builds;
+            assert_eq!(builds_summary(Some(&data)).len(), 2);
+        }
+    }
 }
