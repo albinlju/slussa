@@ -418,3 +418,17 @@ Regression coverage includes 24x8 dialogs, 40x12 diff focus switching, large
 review queues, long errors, empty searches, stale-target prevention, CI scrolling
 and resource-specific refresh recovery. No server writes are required for this
 polish verification.
+
+### Visual comparison: original layout with clearer colors
+
+The active presentation restores the original conversation layout from `6edd115`:
+frames, timeline rail, spacing, labels and sidebar breakpoint. Focused comment
+edges, timeline connectors and reply selection use accent. File locations use
+link color separately from the surrounding metadata. Resolved fold status remains
+success-colored when focused or expanded; disclosure and metadata use focus color.
+Theme palettes and backgrounds remain unchanged.
+
+Variant A is preserved in `docs/ui-examples/reference/variant-a.patch`, relative
+to `6edd115`, with its tests and populated snapshot. The accompanying preview is
+available for layout comparison. The earlier experiment is preserved separately.
+Restore presentation changes selectively when comparing against later work.

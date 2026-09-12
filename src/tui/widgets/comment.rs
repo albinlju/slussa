@@ -29,7 +29,7 @@ pub(in crate::tui) fn render_inline_thread(
     expanded: bool,
 ) -> Vec<Line<'static>> {
     let theme = theme::current();
-    let frame = if active { theme.muted } else { theme.divider };
+    let frame = if active { theme.accent } else { theme.divider };
 
     // A resolved thread collapses to a one-line summary until expanded (`space`).
     if thread.resolved() && !expanded {
@@ -69,11 +69,9 @@ fn collapse_summary(thread: &CommentThread, expanded: bool, active: bool) -> Lin
     } else {
         format!("{n} comments")
     };
-    // No border when collapsed, so the whole line takes the focus colour when
-    // active — including the check/"resolved", which is green otherwise.
-    let active = !expanded && active;
+    // Accent identifies focus; resolved status stays green in either state.
     let focus_color = if active { theme.accent } else { theme.muted };
-    let resolved_color = if active { focus_color } else { theme.success };
+    let resolved_color = theme.success;
     Line::from(vec![
         Span::styled(
             if expanded { "▾ " } else { "▸ " },
@@ -105,7 +103,7 @@ pub(in crate::tui) fn comment_box(
     author: &str,
 ) -> Vec<Line<'static>> {
     let theme = theme::current();
-    let frame = if active { theme.muted } else { theme.divider };
+    let frame = if active { theme.accent } else { theme.divider };
     let header = header_line(
         author_meta(
             &comment.author.username,
@@ -153,7 +151,7 @@ pub(in crate::tui) fn comment_thread_box(
     let diff = diff.filter(|d| thread.matches_revision(d.revision.as_ref()));
     let theme = theme::current();
     let first = thread.comments.first()?;
-    let frame = if active { theme.muted } else { theme.divider };
+    let frame = if active { theme.accent } else { theme.divider };
 
     let location = thread
         .anchor
@@ -174,15 +172,19 @@ pub(in crate::tui) fn comment_thread_box(
     } else {
         "suggested a change"
     };
-    let phrase = match &location {
-        Some(l) => format!(" {action} on {l}"),
-        None => format!(" {action}"),
+    let phrase = if location.is_some() {
+        format!(" {action} on ")
+    } else {
+        format!(" {action}")
     };
     let mut left: Vec<Span<'static>> = vec![Span::styled(
         format!("@{}", first.author.username),
         Style::default().fg(theme.info).add_modifier(Modifier::BOLD),
     )];
     left.push(Span::styled(phrase, Style::default().fg(theme.muted)));
+    if let Some(location) = location {
+        left.push(Span::styled(location, Style::default().fg(theme.link)));
+    }
     let age = format::relative_age(first.created, now);
     // A general discussion thread (no anchor) has no resolve status — just the
     // age; review threads keep their resolved/unresolved label.
@@ -296,7 +298,7 @@ fn conversation(
             // Header already shows the meta; the body hangs straight off the trunk.
         } else if selected == Some(i) {
             let marker = Style::default()
-                .fg(theme.muted)
+                .fg(theme.accent)
                 .add_modifier(Modifier::BOLD);
             let mut spans = vec![Span::styled("▸ ", marker)];
             spans.extend(meta);

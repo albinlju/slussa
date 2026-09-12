@@ -53,6 +53,21 @@ fn render_timeline(
         return;
     }
 
+    // Anchored comments gain snippets (and suggestion context) from the diff.
+    // On first load, reveal them together instead of resizing cards under the reader.
+    let waiting_for_context = activity
+        .threads
+        .iter()
+        .any(|thread| thread.anchor.is_some())
+        && pr_data.is_some_and(|data| matches!(data.diff, LoadState::Loading));
+    if waiting_for_context {
+        frame.render_widget(
+            Paragraph::new(widgets::loading("Loading code context…")),
+            area,
+        );
+        return;
+    }
+
     let diff = pr_data.and_then(|d| match &d.diff {
         LoadState::Loaded(diff) => Some(diff),
         _ => None,
@@ -211,7 +226,7 @@ fn build_blocks(
                 blocks.push(TimelineBlock {
                     lines: crate::tui::widgets::comment::comment_box(c, width, now, active, author),
                     node: theme.link,
-                    border: if active { theme.muted } else { theme.divider },
+                    border: if active { theme.accent } else { theme.divider },
                     reply_to: c.reply_to,
                     focusable: true,
                     comments: vec![CommentRef {
@@ -231,7 +246,7 @@ fn build_blocks(
                     blocks.push(TimelineBlock {
                         lines,
                         node: theme.link,
-                        border: if active { theme.muted } else { theme.divider },
+                        border: if active { theme.accent } else { theme.divider },
                         reply_to: t.reply_to,
                         focusable: true,
                         comments: t

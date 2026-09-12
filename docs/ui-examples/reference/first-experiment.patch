@@ -1,0 +1,355 @@
+diff --git a/src/tui/screens/pr_detail/tabs/overview/mod.rs b/src/tui/screens/pr_detail/tabs/overview/mod.rs
+index ebaa506..edfa80f 100644
+--- a/src/tui/screens/pr_detail/tabs/overview/mod.rs
++++ b/src/tui/screens/pr_detail/tabs/overview/mod.rs
+@@ -19,7 +19,7 @@ use ratatui::{
+ use timeline::{Timeline, TimelineContext};
+ 
+ const SIDEBAR_WIDTH: u16 = 30;
+-const SIDEBAR_BREAKPOINT: u16 = 64;
++const SIDEBAR_BREAKPOINT: u16 = 88;
+ 
+ pub struct OverviewContext<'a> {
+     pub pr: &'a PullRequest,
+diff --git a/src/tui/screens/pr_detail/tabs/overview/timeline.rs b/src/tui/screens/pr_detail/tabs/overview/timeline.rs
+index 6640de0..72938e5 100644
+--- a/src/tui/screens/pr_detail/tabs/overview/timeline.rs
++++ b/src/tui/screens/pr_detail/tabs/overview/timeline.rs
+@@ -274,7 +274,7 @@ fn build_blocks(
+ 
+ fn timeline_rail(blocks: Vec<TimelineBlock>) -> (Vec<Line<'static>>, Vec<ItemNav>) {
+     let theme = theme::current();
+-    let connector = || Span::styled("|  ", Style::default().fg(theme.divider));
++    let connector = || Span::styled("│  ", Style::default().fg(theme.divider));
+ 
+     let mut all: Vec<Line<'static>> = Vec::new();
+     let mut navs: Vec<ItemNav> = Vec::new();
+@@ -282,7 +282,6 @@ fn timeline_rail(blocks: Vec<TimelineBlock>) -> (Vec<Line<'static>>, Vec<ItemNav
+         // Connector lines keep the rail unbroken in the gap between activities.
+         if i > 0 {
+             all.push(Line::from(connector()));
+-            all.push(Line::from(connector()));
+         }
+         let start = all.len();
+         let span = block.lines.len();
+@@ -327,7 +326,7 @@ fn event_block(event: &TimelineEvent, now: DateTime<Utc>) -> (Color, Vec<Line<'s
+         if let Some(actor) = &event.actor {
+             lead.push(Span::styled(
+                 format!("@{}", actor.username),
+-                Style::default().fg(theme.info).add_modifier(Modifier::BOLD),
++                Style::default().fg(theme.muted),
+             ));
+             lead.push(Span::raw(" "));
+         }
+diff --git a/src/tui/widgets/comment.rs b/src/tui/widgets/comment.rs
+index 43fe779..5bb9da9 100644
+--- a/src/tui/widgets/comment.rs
++++ b/src/tui/widgets/comment.rs
+@@ -33,19 +33,14 @@ pub(in crate::tui) fn render_inline_thread(
+ 
+     // A resolved thread collapses to a one-line summary until expanded (`space`).
+     if thread.resolved() && !expanded {
+-        return vec![collapse_summary(thread, false, active)];
++        return vec![collapse_summary(thread, false, active, width)];
+     }
+ 
+     let pos = anchor_pos(thread).zip(anchor_text);
+-    let has_suggestion = thread
+-        .comments
+-        .iter()
+-        .any(|c| !split_suggestions(&c.content).1.is_empty());
+-
+     let mut out: Vec<Line<'static>> = Vec::new();
+     if thread.resolved() {
+-        out.push(collapse_summary(thread, true, active));
+-    } else if !has_suggestion {
++        out.push(collapse_summary(thread, true, active, width));
++    } else {
+         out.push(status_rule(status_label(thread.resolved()), width, frame));
+     }
+     out.extend(conversation(
+@@ -54,9 +49,14 @@ pub(in crate::tui) fn render_inline_thread(
+     out
+ }
+ 
+-/// `▸ ✓ resolved · @author · N comments` — the collapsed/expanded thread header.
++/// `▸ ✓ resolved · N comments · @author` — the collapsed/expanded thread header.
+ /// Collapsed has no border to mark focus, so the arrow carries it (accent).
+-fn collapse_summary(thread: &CommentThread, expanded: bool, active: bool) -> Line<'static> {
++fn collapse_summary(
++    thread: &CommentThread,
++    expanded: bool,
++    active: bool,
++    width: u16,
++) -> Line<'static> {
+     let theme = theme::current();
+     let author = thread
+         .comments
+@@ -69,22 +69,22 @@ fn collapse_summary(thread: &CommentThread, expanded: bool, active: bool) -> Lin
+     } else {
+         format!("{n} comments")
+     };
+-    // No border when collapsed, so the whole line takes the focus colour when
+-    // active — including the check/"resolved", which is green otherwise.
+-    let active = !expanded && active;
++    // Keep resolved threads quiet; focus highlights the disclosure row.
+     let focus_color = if active { theme.accent } else { theme.muted };
+-    let resolved_color = if active { focus_color } else { theme.success };
+-    Line::from(vec![
+-        Span::styled(
+-            if expanded { "▾ " } else { "▸ " },
+-            Style::default().fg(focus_color),
+-        ),
+-        Span::styled("✓ resolved", Style::default().fg(resolved_color)),
+-        Span::styled(
+-            format!(" · {author} · {count}"),
+-            Style::default().fg(focus_color),
+-        ),
+-    ])
++    Line::from(widgets::truncate_to_width(
++        vec![
++            Span::styled(
++                if expanded { "▾ " } else { "▸ " },
++                Style::default().fg(focus_color),
++            ),
++            Span::styled("✓ resolved", Style::default().fg(focus_color)),
++            Span::styled(
++                format!(" · {count} · @{author}"),
++                Style::default().fg(focus_color),
++            ),
++        ],
++        width as usize,
++    ))
+ }
+ 
+ fn status_rule(label: Vec<Span<'static>>, width: u16, color: Color) -> Line<'static> {
+@@ -116,24 +116,22 @@ pub(in crate::tui) fn comment_box(
+         kind_label(comment),
+         width,
+     );
+-    let mut out = vec![header];
++    let mut out = vec![header, Line::default()];
+     out.extend(bracket(
+         comment_body(comment, None, width.saturating_sub(2)),
+-        width,
+         frame,
+-        theme.divider,
+     ));
+     out
+ }
+ 
+-/// Right-aligned header label: `SUGGESTION` when the comment proposes a change.
++/// Only suggestions need a kind label; ordinary comments are self-explanatory.
+ fn kind_label(comment: &Comment) -> Vec<Span<'static>> {
+     let theme = theme::current();
+     if split_suggestions(&comment.content).1.is_empty() {
+-        vec![Span::styled("COMMENT", Style::default().fg(theme.muted))]
++        Vec::new()
+     } else {
+         vec![Span::styled(
+-            "SUGGESTION",
++            "suggestion",
+             Style::default()
+                 .fg(theme.suggestion)
+                 .add_modifier(Modifier::BOLD),
+@@ -168,19 +166,20 @@ pub(in crate::tui) fn comment_thread_box(
+         .iter()
+         .any(|comment| !split_suggestions(&comment.content).1.is_empty());
+ 
+-    // The header reads as the opening activity: "@user commented on file:line".
++    // Author first; keep the file location separate so neither competes with status.
+     let action = if split_suggestions(&first.content).1.is_empty() {
+-        "commented"
++        ""
+     } else {
+         "suggested a change"
+     };
+-    let phrase = match &location {
+-        Some(l) => format!(" {action} on {l}"),
+-        None => format!(" {action}"),
++    let phrase = if action.is_empty() {
++        String::new()
++    } else {
++        format!(" {action}")
+     };
+     let mut left: Vec<Span<'static>> = vec![Span::styled(
+         format!("@{}", first.author.username),
+-        Style::default().fg(theme.info).add_modifier(Modifier::BOLD),
++        Style::default().fg(theme.fg).add_modifier(Modifier::BOLD),
+     )];
+     left.push(Span::styled(phrase, Style::default().fg(theme.muted)));
+     let age = format::relative_age(first.created, now);
+@@ -197,6 +196,13 @@ pub(in crate::tui) fn comment_thread_box(
+         r
+     };
+     let mut out: Vec<Line<'static>> = vec![header_line(left, right, width)];
++    if let Some(location) = location {
++        out.push(Line::from(widgets::truncate_to_width(
++            vec![Span::styled(location, Style::default().fg(theme.muted))],
++            width as usize,
++        )));
++    }
++    out.push(Line::default());
+ 
+     let (snippet, anchor_text) = match (diff, &thread.anchor) {
+         (Some(d), Some(a)) => diff_snippet(d, &a.path, a.line, a.old_line, width.saturating_sub(2)),
+@@ -205,7 +211,7 @@ pub(in crate::tui) fn comment_thread_box(
+     let pos = anchor_pos(thread).zip(anchor_text.as_deref());
+ 
+     if !has_suggestion && !snippet.is_empty() {
+-        out.extend(bracket(align_snippet(snippet), width, frame, theme.divider));
++        out.extend(bracket(align_snippet(snippet), frame));
+     }
+     // The header carries the first comment's author + time, so the conversation
+     // skips its meta line to avoid repeating it.
+@@ -216,26 +222,28 @@ pub(in crate::tui) fn comment_thread_box(
+ }
+ 
+ fn header_line(left: Vec<Span<'static>>, right: Vec<Span<'static>>, width: u16) -> Line<'static> {
+-    Line::from(widgets::justify_between(left, right, width as usize))
++    let width = width as usize;
++    let right = widgets::truncate_to_width(right, width.saturating_sub(12));
++    let right_width: usize = right.iter().map(Span::width).sum();
++    let left = widgets::truncate_to_width(
++        left,
++        width.saturating_sub(right_width + usize::from(right_width > 0)),
++    );
++    Line::from(widgets::truncate_to_width(
++        widgets::justify_between(left, right, width),
++        width,
++    ))
+ }
+ 
+-/// `left` colours the vertical edge (accent marks focus); `rule` colours the
+-/// top/bottom — kept muted so focus only lights up the left border.
+-fn bracket(body: Vec<Line<'static>>, width: u16, left: Color, rule: Color) -> Vec<Line<'static>> {
++/// A quiet left edge preserves focus without enclosing every comment in rules.
++fn bracket(body: Vec<Line<'static>>, left: Color) -> Vec<Line<'static>> {
+     let left_style = Style::default().fg(left);
+-    let rule_line = |corner: &str| {
+-        Line::from(Span::styled(
+-            format!("{corner}{}", "─".repeat((width as usize).saturating_sub(1))),
+-            Style::default().fg(rule),
+-        ))
+-    };
+-    let mut out = vec![rule_line("┌")];
++    let mut out = Vec::new();
+     for line in body {
+-        let mut spans = vec![Span::styled("| ", left_style)];
++        let mut spans = vec![Span::styled("│ ", left_style)];
+         spans.extend(line.spans);
+         out.push(Line::from(spans).style(line.style));
+     }
+-    out.push(rule_line("└"));
+     out
+ }
+ 
+@@ -271,19 +279,13 @@ fn conversation(
+             )
+         };
+         if !split_suggestions(&comment.content).1.is_empty() {
+-            let label = if suppress {
+-                Vec::new()
+-            } else {
+-                status_label(thread.resolved())
+-            };
+-            out.extend(framed(
+-                meta,
+-                label,
+-                comment_body(comment, anchor, width.saturating_sub(2)),
+-                width,
+-                frame,
+-                theme.divider,
+-            ));
++            if !meta.is_empty() {
++                let gutter = if selected == Some(i) { "▸ " } else { "│ " };
++                out.push(prefix_gutter(Line::from(meta), gutter, style));
++            }
++            for line in comment_body(comment, anchor, width.saturating_sub(2)) {
++                out.push(prefix_gutter(line, "│ ", style));
++            }
+             continue;
+         }
+         let (head, body_gutter) = match i {
+@@ -345,7 +347,7 @@ fn framed(
+ 
+     let mut out = vec![Line::from(top)];
+     for line in body {
+-        let mut spans = vec![Span::styled("| ", left_style)];
++        let mut spans = vec![Span::styled("│ ", left_style)];
+         spans.extend(line.spans);
+         out.push(Line::from(spans).style(line.style));
+     }
+@@ -361,7 +363,7 @@ fn status_label(resolved: bool) -> Vec<Span<'static>> {
+     let (text, color) = if resolved {
+         ("resolved", theme.success)
+     } else {
+-        ("unresolved", theme.warning)
++        ("open", theme.muted)
+     };
+     vec![Span::styled(text, Style::default().fg(color))]
+ }
+@@ -410,7 +412,7 @@ fn author_title(name: &str, note: Option<&str>) -> Vec<Span<'static>> {
+     let theme = theme::current();
+     let mut spans = vec![Span::styled(
+         name.to_string(),
+-        Style::default().fg(theme.info).add_modifier(Modifier::BOLD),
++        Style::default().fg(theme.fg).add_modifier(Modifier::BOLD),
+     )];
+     if let Some(note) = note {
+         spans.push(Span::styled(
+@@ -608,3 +610,54 @@ fn diff_snippet(
+         .collect();
+     (lines, Some(anchor_text))
+ }
++
++#[cfg(test)]
++mod tests {
++    use super::*;
++    use crate::domain::{comment::ThreadAnchor, user::User};
++
++    #[test]
++    fn resolved_fold_preserves_content_and_fits_narrow_panes() {
++        let now = Utc::now();
++        let thread = CommentThread {
++            comments: vec![Comment {
++                id: Some(10),
++                author: User {
++                    username: "reviewer-with-a-long-name".into(),
++                },
++                content: "Keep the error context.".into(),
++                created: now,
++                reactions: vec![],
++                reply_to: Some(10),
++            }],
++            reply_to: Some(10),
++            anchor: Some(ThreadAnchor {
++                revision: None,
++                path: "src/main.rs".into(),
++                line: Some(1),
++                old_line: None,
++                resolved: true,
++                node_id: Some("thread-10".into()),
++            }),
++        };
++        for width in [1, 20, 40, 80] {
++            let folded = render_inline_thread(&thread, width, now, true, None, "", false);
++            assert_eq!(folded.len(), 1);
++            assert!(folded[0].width() <= width as usize);
++        }
++        let expanded = render_inline_thread(&thread, 80, now, true, None, "", true);
++        let text = expanded
++            .iter()
++            .map(ToString::to_string)
++            .collect::<Vec<_>>()
++            .join("\n");
++        assert!(text.contains("▾ ✓ resolved · 1 comment"));
++        assert!(text.contains("Keep the error context."));
++        let folded = render_inline_thread(&thread, 80, now, false, None, "", false);
++        assert!(
++            folded[0]
++                .to_string()
++                .starts_with("▸ ✓ resolved · 1 comment")
++        );
++    }
++}

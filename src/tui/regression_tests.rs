@@ -315,7 +315,23 @@ fn timeline_keeps_thread_selection_and_sidebar_is_responsive() {
             }),
         }],
     });
-    for width in [100, 40] {
+    // Activity can arrive before the diff. Do not show cards that will grow
+    // when snippets arrive; a failed diff must still let the discussion be read.
+    let loaded_diff = std::mem::replace(
+        &mut state.store.cache.details.get_mut(&42).unwrap().diff,
+        LoadState::Loading,
+    );
+    let mut terminal = Terminal::new(TestBackend::new(100, 30)).unwrap();
+    terminal.draw(|frame| render(frame, &mut state)).unwrap();
+    let loading = rendered_text(&terminal);
+    assert!(loading.contains("Loading code context"));
+    assert!(!loading.contains("Comment 10"));
+    state.store.cache.details.get_mut(&42).unwrap().diff = LoadState::Failed("offline".into());
+    terminal.draw(|frame| render(frame, &mut state)).unwrap();
+    assert!(rendered_text(&terminal).contains("Comment 10"));
+    state.store.cache.details.get_mut(&42).unwrap().diff = loaded_diff;
+    let mut preview = String::new();
+    for width in [100, 80, 40] {
         let mut terminal = Terminal::new(TestBackend::new(width, 30)).unwrap();
         terminal.draw(|frame| render(frame, &mut state)).unwrap();
         let text: String = terminal
@@ -325,7 +341,25 @@ fn timeline_keeps_thread_selection_and_sidebar_is_responsive() {
             .iter()
             .map(ratatui::buffer::Cell::symbol)
             .collect();
-        assert_eq!(text.contains("Reviewers"), width == 100);
+        writeln!(
+            preview,
+            "{width}x30 Overview\n{}",
+            terminal
+                .backend()
+                .buffer()
+                .content
+                .chunks(width as usize)
+                .map(|row| row
+                    .iter()
+                    .map(ratatui::buffer::Cell::symbol)
+                    .collect::<String>()
+                    .trim_end()
+                    .to_string())
+                .collect::<Vec<_>>()
+                .join("\n")
+        )
+        .unwrap();
+        assert_eq!(text.contains("Reviewers"), width >= 80);
         assert_eq!(state.ui.detail.overview.timeline.reply, Some(10));
         assert_eq!(
             state
@@ -337,6 +371,14 @@ fn timeline_keeps_thread_selection_and_sidebar_is_responsive() {
             Some("thread-1")
         );
     }
+    let path = concat!(
+        env!("CARGO_MANIFEST_DIR"),
+        "/src/tui/testdata/conversation.txt"
+    );
+    if std::env::var_os("TUIPR_UPDATE_SNAPSHOTS").is_some() {
+        std::fs::write(path, &preview).unwrap();
+    }
+    assert_eq!(preview, std::fs::read_to_string(path).unwrap());
     assert_eq!(
         state.detail_view().editable_selected().unwrap().id,
         Some(10)
