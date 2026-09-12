@@ -231,7 +231,7 @@ pub(super) fn render(
         ui.help.render(
             frame,
             area,
-            &dialogs::help::entries(&ctx.store.capabilities).as_slice(),
+            &dialogs::help::entries(&ctx.store.capabilities, pr.url.is_some()).as_slice(),
         );
     }
     if let Some(dialog) = &mut ui.confirm {

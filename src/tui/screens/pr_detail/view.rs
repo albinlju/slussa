@@ -306,3 +306,15 @@ impl DetailView<'_> {
         }
     }
 }
+
+impl DetailView<'_> {
+    pub fn has_pr_link(&self) -> bool {
+        let Screen::Detail { pr_id, .. } = self.screen else {
+            return false;
+        };
+        let LoadState::Loaded(prs) = &self.store.cache.prs else {
+            return false;
+        };
+        prs.iter().any(|pr| pr.id == pr_id && pr.url.is_some())
+    }
+}

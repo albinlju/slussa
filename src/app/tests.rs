@@ -888,3 +888,43 @@ fn journal_failure_prevents_remote_submission_and_keeps_editor() {
     drop(app);
     std::fs::remove_dir_all(root).unwrap();
 }
+
+#[test]
+fn invalid_link_is_rejected_before_starting_desktop_work() {
+    let mut app = app();
+    if let LoadState::Loaded(prs) = &mut app.state.store.cache.prs {
+        prs[0].url = Some("file:///tmp/local".into());
+    }
+    app.apply(Action::PrLink {
+        pr_id: 42,
+        kind: LinkAction::Open,
+    });
+    assert!(!app.state.store.link_pending);
+    assert!(app.state.store.notice.as_ref().unwrap().error);
+    assert!(app.state.store.operations.is_empty());
+}
+
+#[tokio::test(flavor = "current_thread")]
+async fn link_completion_keeps_navigation_and_reports_failure_without_blocking_pr_work() {
+    let mut app = app();
+    app.apply(Action::PrLink {
+        pr_id: 42,
+        kind: LinkAction::Copy,
+    });
+    assert!(app.state.store.link_pending);
+    detail(&mut app, DetailTab::Overview);
+    app.apply(Action::LinkFinished(Err(
+        "PR #42: clipboard unavailable".into()
+    )));
+    assert!(!app.state.store.link_pending);
+    assert!(app.state.store.notice.as_ref().unwrap().error);
+    assert!(app.state.store.errors.is_empty());
+    assert!(app.state.store.operations.is_empty());
+    assert_eq!(
+        app.state.screen,
+        Screen::Detail {
+            pr_id: 42,
+            tab: DetailTab::Overview
+        }
+    );
+}

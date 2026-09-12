@@ -1,6 +1,8 @@
 use crate::domain::capabilities::{Capabilities, Feature};
 
 const HELP_KEYS: &[(&str, &str)] = &[
+    ("o", "open PR in browser"),
+    ("y", "copy PR link"),
     ("j/k", "move up/down"),
     ("^d/^u", "half-page"),
     ("h/l", "tab / pane / fold"),
@@ -29,11 +31,13 @@ const HELP_KEYS: &[(&str, &str)] = &[
 
 pub(in crate::tui::screens::pr_detail) fn entries(
     caps: &Capabilities,
+    has_pr_link: bool,
 ) -> Vec<(&'static str, &'static str)> {
     let keys: Vec<_> = HELP_KEYS
         .iter()
         .copied()
         .filter(|(key, _)| match *key {
+            "o" | "y" => has_pr_link,
             "a" | "v" | "V" => caps.reviews(),
             "m" => !caps.merge_strategies.is_empty(),
             "x" => caps.supports(Feature::ClosePr),

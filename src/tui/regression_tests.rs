@@ -27,6 +27,7 @@ pub(crate) fn fixture() -> AppState {
     let now = chrono::Utc::now();
     let mut state = AppState::default();
     state.store.cache.prs = LoadState::Loaded(vec![PullRequest {
+        url: Some("https://example.com/team/project/pull/42".into()),
         id: 42,
         title: "Component migration".into(),
         description: Some("Review **this change**.".into()),
@@ -523,5 +524,121 @@ fn multiline_editor_scrolls_to_cursor_and_keeps_controls_visible() {
         assert!(text.contains("discard"));
         let cursor = terminal.get_cursor_position().unwrap();
         assert!(cursor.x < width - 2 && cursor.y < height - 3);
+    }
+}
+
+#[test]
+fn link_shortcuts_target_selected_pr_and_never_escape_editor_or_help() {
+    use crate::app::action::LinkAction;
+    let mut state = fixture();
+    if let LoadState::Loaded(prs) = &mut state.store.cache.prs {
+        let mut second = prs[0].clone();
+        second.id = 43;
+        second.title = "Different PR".into();
+        prs.push(second);
+    }
+    state.ui.list.search.query = "Different".into();
+    assert!(matches!(
+        key(&state, KeyCode::Char('y')),
+        Action::PrLink {
+            pr_id: 43,
+            kind: LinkAction::Copy
+        }
+    ));
+    for tab in DetailTab::ALL {
+        state.screen = Screen::Detail { pr_id: 42, tab };
+        assert!(matches!(
+            key(&state, KeyCode::Char('o')),
+            Action::PrLink {
+                pr_id: 42,
+                kind: LinkAction::Open
+            }
+        ));
+    }
+    state.ui.detail.help_open = true;
+    assert!(
+        key_to_action(
+            &state,
+            KeyEvent::new(KeyCode::Char('o'), KeyModifiers::NONE)
+        )
+        .is_none()
+    );
+    state.ui.detail.help_open = false;
+    state.ui.detail.editor.draft = Some(CommentDraft {
+        target: CommentTarget::Pr,
+        text: String::new(),
+    });
+    for ch in ['o', 'y'] {
+        assert!(
+            matches!(key(&state, KeyCode::Char(ch)), Action::Detail(DetailAction::CommentType(c)) if c == ch)
+        );
+    }
+}
+
+#[test]
+fn missing_pr_link_hides_shortcuts_and_help_entries_in_both_screens() {
+    for screen in [
+        Screen::List,
+        Screen::Detail {
+            pr_id: 42,
+            tab: DetailTab::Overview,
+        },
+    ] {
+        let mut state = fixture();
+        if let LoadState::Loaded(prs) = &mut state.store.cache.prs {
+            prs[0].url = None;
+        }
+        state.screen = screen;
+        for ch in ['o', 'y'] {
+            assert!(
+                key_to_action(&state, KeyEvent::new(KeyCode::Char(ch), KeyModifiers::NONE))
+                    .is_none()
+            );
+        }
+        let action = key(&state, KeyCode::Char('?'));
+        state.ui.update(action, &state.store, state.screen);
+        let mut terminal = Terminal::new(TestBackend::new(100, 40)).unwrap();
+        terminal.draw(|f| render(f, &mut state)).unwrap();
+        let text: String = terminal
+            .backend()
+            .buffer()
+            .content
+            .iter()
+            .map(ratatui::buffer::Cell::symbol)
+            .collect();
+        assert!(!text.contains("copy PR link"));
+        assert!(!text.contains("open PR in browser"));
+    }
+}
+
+#[test]
+fn notice_replaces_entire_footer_and_normal_hints_return_afterward() {
+    for screen in [
+        Screen::List,
+        Screen::Detail {
+            pr_id: 42,
+            tab: DetailTab::Overview,
+        },
+    ] {
+        let mut state = fixture();
+        state.screen = screen;
+        let mut terminal = Terminal::new(TestBackend::new(100, 30)).unwrap();
+        terminal.draw(|f| render(f, &mut state)).unwrap();
+        state.store.notice = Some(crate::app::store::Notice::new(
+            "PR #42: link copied".into(),
+            false,
+        ));
+        terminal.draw(|f| render(f, &mut state)).unwrap();
+        let footer: String = (0..100)
+            .map(|x| terminal.backend().buffer()[(x, 29)].symbol())
+            .collect();
+        assert_eq!(footer.trim(), "PR #42: link copied");
+        state.store.notice = None;
+        terminal.draw(|f| render(f, &mut state)).unwrap();
+        let footer: String = (0..100)
+            .map(|x| terminal.backend().buffer()[(x, 29)].symbol())
+            .collect();
+        assert!(footer.contains("?: help"));
+        assert!(!footer.contains("link copied"));
     }
 }

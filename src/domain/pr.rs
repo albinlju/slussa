@@ -50,6 +50,7 @@ impl MergeStrategy {
 
 #[derive(Debug, Clone)]
 pub struct PullRequest {
+    pub url: Option<String>,
     pub id: u64,
     pub title: String,
     pub description: Option<String>,

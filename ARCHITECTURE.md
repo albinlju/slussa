@@ -60,6 +60,7 @@ src/
 │   ├── commands.rs       Execute resolved review/comment/lifecycle commands
 │   ├── reviews.rs        Review drafts, comment targets and anchors
 │   ├── drafts.rs         Scoped, atomic local draft recovery
+│   ├── desktop.rs        Browser and clipboard effects
 │   ├── fetchers.rs        Run providers off the UI thread
 │   ├── loads.rs           Apply asynchronous results
 │   ├── refresh.rs         Manual and periodic refresh
@@ -361,3 +362,27 @@ Restore never sends anything automatically. Recovered editors start closed,
 with a contextual resume hint. The current model keeps one editor draft per PR,
 plus the PR's review queue. Provider-side draft synchronization and an external
 editor integration are not implemented.
+
+## PR links
+
+Providers populate the optional `PullRequest.url` using the server's web link:
+GitHub's GraphQL `url` and Bitbucket DC's `links.self[].href`. Components do not
+construct platform-specific routes. In either list or detail, `o` opens the PR
+in the browser and `y` copies its URL; missing URLs suppress both actions and
+their help entries. Search, editor and modal input retain precedence.
+
+`Action::PrLink` captures the target PR id. The app resolves the cached URL and
+runs the desktop effect off the UI thread, independently of PR mutations and
+draft recovery. A brief notice reports completion or failure, identifies the
+PR, and leaves the selection unchanged. HTTP(S) URLs are validated before use;
+helper processes receive argument arrays or stdin, not interpolated commands.
+
+macOS uses `open`/`pbcopy`; Windows uses the URL handler and PowerShell clipboard;
+Linux uses `xdg-open` and an available `wl-copy`, `xclip` or `xsel`. Clipboard
+helpers require an appropriate local graphical session. Failed helpers and
+timeouts are reported; there is no unverified terminal clipboard fallback.
+Each helper has a five-second deadline. Local tests cover URL mapping, input
+routing, missing support and helper success/failure/timeouts without launching
+a real browser or changing the user's clipboard. Linux and Windows desktop
+integration have not been exercised live. File/line links and copying commit
+SHAs or branch names remain separate future work.

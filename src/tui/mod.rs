@@ -38,11 +38,38 @@ pub fn render(frame: &mut Frame, state: &mut AppState) {
             },
         ),
     }
+    if state.store.draft_error.is_none()
+        && !state.ui.modal_open(&state.store, state.screen)
+        && !active_search(state).is_some_and(|(search, _)| search.open)
+        && let Some(notice) = state
+            .store
+            .notice
+            .as_ref()
+            .filter(|notice| notice.visible() || state.store.link_pending)
+    {
+        let area = frame.area();
+        if area.height > 0 {
+            let footer =
+                ratatui::layout::Rect::new(area.x, area.y + area.height - 1, area.width, 1);
+            frame.render_widget(ratatui::widgets::Clear, footer);
+            frame.render_widget(
+                ratatui::widgets::Paragraph::new(format!("  {}", notice.message)).style(
+                    ratatui::style::Style::default().fg(if notice.error {
+                        theme::current().error
+                    } else {
+                        theme::current().accent
+                    }),
+                ),
+                footer,
+            );
+        }
+    }
     if let Some(error) = &state.store.draft_error {
         let area = frame.area();
         if area.height > 0 {
             let footer =
                 ratatui::layout::Rect::new(area.x, area.y + area.height - 1, area.width, 1);
+            frame.render_widget(ratatui::widgets::Clear, footer);
             frame.render_widget(
                 ratatui::widgets::Paragraph::new(error.as_str())
                     .style(ratatui::style::Style::default().fg(theme::current().error)),
