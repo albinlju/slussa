@@ -61,7 +61,8 @@ pub(super) fn render(
 
     let theme = theme::current();
 
-    let (header_inner, body_area) = widgets::framed_panel(frame, area);
+    let (header_inner, body_area) = widgets::framed_panel(frame, area, "Code", focused);
+    ui_diff.pane_viewport = body_area.height;
     let active = focused.then_some(pane_cursor);
     let DiffBody {
         mut lines,

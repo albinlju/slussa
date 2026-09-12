@@ -15,7 +15,7 @@ use crate::{
         layout,
         screens::pr_detail::{
             DetailContext, DetailView, PrDetailScreen,
-            tabs::{DetailTab, builds, commits},
+            tabs::{DetailTab, commits},
         },
         theme,
     },
@@ -37,14 +37,22 @@ fn render_tabs_and_content(
     area: Rect,
 ) {
     let theme = theme::current();
+    let compact = area.height < 16;
     let [tabs_area, content_area] = layout::split(
         area,
         Direction::Vertical,
-        [Constraint::Length(3), Constraint::Min(0)],
+        [
+            Constraint::Length(if compact { 2 } else { 3 }),
+            Constraint::Min(0),
+        ],
     );
 
     let tabs_block = Block::default()
-        .borders(Borders::TOP | Borders::BOTTOM)
+        .borders(if compact {
+            Borders::BOTTOM
+        } else {
+            Borders::TOP | Borders::BOTTOM
+        })
         .border_style(Style::default().fg(theme.divider));
     let tabs_inner = tabs_block.inner(tabs_area);
     frame.render_widget(tabs_block, tabs_area);
@@ -71,7 +79,7 @@ fn tab_bar(tab: DetailTab, caps: &Capabilities, width: u16) -> Line<'static> {
         let number = tabs.iter().position(|t| *t == tab).unwrap_or(0) + 1;
         return Line::from(vec![
             Span::styled(format!("  {number} {}", tab.label()), active),
-            Span::styled("   h/l: tabs", inactive),
+            Span::styled(format!("   1-{}: tabs", tabs.len()), inactive),
         ]);
     }
     let mut spans = vec![Span::raw("  ")];
@@ -98,9 +106,11 @@ fn render_content(
     let inset = match tab {
         DetailTab::Description => area,
         _ => Rect {
-            x: area.x + 2,
+            x: area.x + if area.width < 70 { 0 } else { 2 },
             y: area.y,
-            width: area.width.saturating_sub(4),
+            width: area
+                .width
+                .saturating_sub(if area.width < 70 { 0 } else { 4 }),
             height: area.height,
         },
     };
@@ -133,7 +143,7 @@ fn render_content(
                 },
             );
         }
-        DetailTab::Builds => builds::render(frame, pr_data, inset),
+        DetailTab::Builds => ui.builds.render(frame, inset, &pr_data),
     }
 }
 
@@ -180,12 +190,13 @@ pub(super) fn render(
     let inner = outer.inner(main_area);
     frame.render_widget(outer, main_area);
 
+    let compact = area.width < 70 || area.height < 22;
     let [header_area, _gap, content_area] = layout::split(
         inner,
         Direction::Vertical,
         [
-            Constraint::Length(3),
-            Constraint::Length(1),
+            Constraint::Length(if compact { 2 } else { 3 }),
+            Constraint::Length(u16::from(!compact)),
             Constraint::Min(0),
         ],
     );
@@ -248,6 +259,6 @@ pub(super) fn render(
         );
     }
     if let Some(msg) = ctx.store.errors.get(&pr_id) {
-        dialogs::error::render(frame, msg, area);
+        ui.error.render(frame, msg, area);
     }
 }

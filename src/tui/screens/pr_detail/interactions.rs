@@ -171,7 +171,10 @@ impl PrDetailScreen {
                     text: draft.text.clone(),
                 }
             }
-            DetailAction::DismissError => Command::DismissError,
+            DetailAction::DismissError => {
+                self.error = super::dialogs::error::ErrorDialog::default();
+                Command::DismissError
+            }
             _ => unreachable!("local interaction handled by screen"),
         };
         Some(Action::Command { pr_id, command })

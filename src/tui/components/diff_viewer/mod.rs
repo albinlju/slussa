@@ -108,6 +108,13 @@ impl Component for DiffViewer {
 }
 
 impl DiffViewer {
+    pub(super) fn clear_targets(&mut self) {
+        self.pane_anchor = None;
+        self.pane_reply = None;
+        self.pane_thread = None;
+        self.pane_pending = None;
+    }
+
     fn diff_toggle_thread_expand(&mut self) {
         let view = &mut *self;
         let Some(id) = view.pane_thread.as_ref().and_then(|t| t.comment_id) else {

@@ -1,4 +1,5 @@
 pub mod comment;
+pub mod dialog;
 pub mod markdown;
 pub mod table;
 use crate::{
@@ -12,7 +13,7 @@ use ratatui::{
     layout::{Constraint, Direction, Rect},
     style::{Color, Modifier, Style},
     text::{Line, Span},
-    widgets::{Block, BorderType, Borders, Paragraph},
+    widgets::{Block, BorderType, Borders, Paragraph, Wrap},
 };
 
 pub(super) fn author_line(
@@ -27,23 +28,36 @@ pub(super) fn author_line(
     Line::from(lead)
 }
 
-pub(super) fn framed_panel(frame: &mut Frame, area: Rect) -> (Rect, Rect) {
+pub(super) fn framed_panel(
+    frame: &mut Frame,
+    area: Rect,
+    title: &str,
+    focused: bool,
+) -> (Rect, Rect) {
     let theme = theme::current();
     let block = Block::default()
         .borders(Borders::ALL)
         .border_type(BorderType::Rounded)
-        .border_style(Style::default().fg(theme.divider));
+        .title(format!(" {title} "))
+        .border_style(Style::default().fg(if focused { theme.accent } else { theme.divider }));
     let inner = block.inner(area);
     frame.render_widget(block, area);
 
     let [band_area, body_area] = layout::split(
         inner,
         Direction::Vertical,
-        [Constraint::Length(2), Constraint::Min(0)],
+        [
+            Constraint::Length(if area.height < 12 { 1 } else { 2 }),
+            Constraint::Min(0),
+        ],
     );
 
     let header_band = Block::default()
-        .borders(Borders::BOTTOM)
+        .borders(if area.height < 12 {
+            Borders::NONE
+        } else {
+            Borders::BOTTOM
+        })
         .border_style(Style::default().fg(theme.divider));
     let header_inner = header_band.inner(band_area);
     frame.render_widget(header_band, band_area);
@@ -52,7 +66,9 @@ pub(super) fn framed_panel(frame: &mut Frame, area: Rect) -> (Rect, Rect) {
 }
 
 pub(super) fn empty_state(text: &str) -> Paragraph<'static> {
-    Paragraph::new(text.to_string()).style(Style::default().fg(theme::current().muted))
+    Paragraph::new(text.to_string())
+        .style(Style::default().fg(theme::current().muted))
+        .wrap(Wrap { trim: false })
 }
 
 pub(super) fn loaded_or_placeholder<'a, T>(
@@ -65,12 +81,16 @@ pub(super) fn loaded_or_placeholder<'a, T>(
     match state {
         Some(LoadState::Loaded(value)) => return Some(value),
         Some(LoadState::Failed(msg)) => {
-            let p = Paragraph::new(format!("Couldn't load {noun}: {msg}"))
-                .style(Style::default().fg(theme.error));
+            let p = Paragraph::new(format!("Couldn't load {noun}. F: retry\n{msg}"))
+                .style(Style::default().fg(theme.error))
+                .wrap(Wrap { trim: false });
             frame.render_widget(p, area);
         }
-        None | Some(LoadState::NotRequested | LoadState::Loading) => {
+        Some(LoadState::Loading) => {
             frame.render_widget(Paragraph::new(loading(&format!("Loading {noun}..."))), area);
+        }
+        None | Some(LoadState::NotRequested) => {
+            frame.render_widget(empty_state(&format!("No {noun} loaded. F: refresh")), area);
         }
     }
     None
@@ -376,6 +396,28 @@ pub(super) fn numbered_diff_row(
         Span::styled(prefix, prefix_style),
         Span::styled(format!(" {content}{}", " ".repeat(pad)), text_style),
     ])
+}
+
+/// Wrap by terminal columns, preserving newlines and supporting long unbroken errors.
+pub(super) fn wrap_text(text: &str, width: usize) -> Vec<String> {
+    let width = width.max(1);
+    let mut rows = Vec::new();
+    for logical in text.split('\n') {
+        let mut row = String::new();
+        let mut used = 0;
+        for c in logical.chars().filter(|c| !c.is_control()) {
+            let size = Span::raw(c.to_string()).width();
+            if used + size > width && !row.is_empty() {
+                rows.push(row);
+                row = String::new();
+                used = 0;
+            }
+            row.push(c);
+            used += size;
+        }
+        rows.push(row);
+    }
+    rows
 }
 
 #[cfg(test)]

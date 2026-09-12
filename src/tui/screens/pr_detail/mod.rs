@@ -22,12 +22,14 @@ pub use view::{DetailContext, DetailView};
 #[allow(clippy::struct_excessive_bools)] // a UI-state bag, not a state machine
 pub struct PrDetailScreen {
     pub overview: tabs::overview::Overview,
+    pub builds: tabs::builds::Builds,
     pub description: tabs::description::Description,
     pub confirm: Option<dialogs::confirm::ConfirmDialog>,
     pub review_picker: Option<dialogs::review::ReviewDialog>,
     pub merge_picker: Option<dialogs::merge::MergeDialog>,
     pub diff: DiffViewer,
     pub commits: CommitList,
+    pub error: dialogs::error::ErrorDialog,
     pub help_open: bool,
     pub help: crate::tui::components::help_dialog::HelpDialog,
     pub editor: crate::tui::components::comment_editor::CommentEditor,
@@ -108,8 +110,10 @@ impl Component for PrDetailScreen {
                     | DetailAction::NextTab
                     | DetailAction::PrevTab
                     | DetailAction::SelectTab(_)
+                    | DetailAction::ErrorScroll(_)
                     | DetailAction::DismissError
                     | DetailAction::ToggleHelp
+                    | DetailAction::BuildsScroll(_)
                     | DetailAction::DescriptionScroll(_)
                     | DetailAction::OverviewMove(_)
                     | DetailAction::OverviewSubMove(_)
@@ -136,6 +140,9 @@ impl Component for PrDetailScreen {
                 self.commits.open_commit = None;
                 return Some(Action::Navigate(Screen::Detail { pr_id, tab }));
             }
+            DetailAction::BuildsScroll(_) => {
+                self.builds.update(action, &None);
+            }
             DetailAction::DescriptionScroll(_)
             | DetailAction::OverviewMove(_)
             | DetailAction::OverviewSubMove(_) => {
@@ -161,6 +168,9 @@ impl Component for PrDetailScreen {
                         }
                     }
                 }
+            }
+            DetailAction::ErrorScroll(_) => {
+                self.error.update(action, &"");
             }
             DetailAction::ToggleHelp => {
                 self.help_open = !self.help_open;

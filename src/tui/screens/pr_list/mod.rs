@@ -27,7 +27,7 @@ use ratatui::{
     layout::{Constraint, Direction, Rect},
     style::{Color, Modifier, Style},
     text::{Line, Span},
-    widgets::{Block, BorderType, Borders, Clear, List, ListItem, ListState, Paragraph},
+    widgets::{Block, Borders, List, ListItem, ListState, Paragraph},
 };
 
 const GUTTER: u16 = 2;
@@ -171,31 +171,13 @@ fn render_footer(
 
 fn render_filter_picker(frame: &mut Frame, state: &PrListScreen, area: Rect) {
     let theme = theme::current();
-    let popup_width = 40u16.min(area.width);
-    let popup_height = 8u16.min(area.height);
-    let popup_area = Rect {
-        x: area.x + area.width.saturating_sub(popup_width) / 2,
-        y: area.y + area.height.saturating_sub(popup_height) / 2,
-        width: popup_width,
-        height: popup_height,
-    };
-
-    frame.render_widget(Clear, popup_area);
-
-    let block = Block::default()
-        .borders(Borders::ALL)
-        .border_type(BorderType::Rounded)
-        .title(" Filter ")
-        .border_style(Style::default().fg(theme.accent));
-    let inner = block.inner(popup_area);
-    frame.render_widget(block, popup_area);
-
-    let [list_area, help_area] = layout::split(
-        inner,
-        Direction::Vertical,
-        [Constraint::Min(0), Constraint::Length(1)],
+    let list_area = widgets::dialog::frame(
+        frame,
+        area,
+        "Filter",
+        (44, StatusFilter::CYCLE.len() as u16),
+        &[("j/k", "move"), ("Enter", "select"), ("Esc", "cancel")],
     );
-
     let items: Vec<ListItem> = StatusFilter::CYCLE
         .iter()
         .map(|f| ListItem::new(Line::raw(f.label())))
@@ -210,10 +192,6 @@ fn render_filter_picker(frame: &mut Frame, state: &PrListScreen, area: Rect) {
         )
         .highlight_symbol("▶ ");
     frame.render_stateful_widget(list, list_area, &mut list_state);
-
-    let help = Paragraph::new(" j/k: nav  enter: apply  esc: cancel ")
-        .style(Style::default().fg(theme.muted));
-    frame.render_widget(help, help_area);
 }
 
 fn row_cells(pr: &PullRequest) -> Vec<Cell> {
@@ -395,7 +373,16 @@ impl Component for PrListScreen {
         render_table_header(frame, &table, header_area);
 
         if let Some(prs) = &filtered {
-            render_table_body(frame, &table, prs, self.selected, rows_area, columns);
+            if prs.is_empty() {
+                let message = if self.search.query.is_empty() {
+                    "No PRs in this view. f changes filter; F refreshes."
+                } else {
+                    "No matching PRs. Esc clears search; f changes filter."
+                };
+                frame.render_widget(widgets::empty_state(message), rows_area);
+            } else {
+                render_table_body(frame, &table, prs, self.selected, rows_area, columns);
+            }
         } else {
             widgets::loaded_or_placeholder(frame, Some(ctx.prs), "pull requests", rows_area);
         }

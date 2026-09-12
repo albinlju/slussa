@@ -38,6 +38,22 @@ pub fn render(frame: &mut Frame, state: &mut AppState) {
             },
         ),
     }
+    if state.store.refresh_failed(state.screen)
+        && !state.ui.modal_open(&state.store, state.screen)
+        && !active_search(state).is_some_and(|(search, _)| search.open)
+    {
+        let area = frame.area();
+        if area.height > 0 {
+            let footer =
+                ratatui::layout::Rect::new(area.x, area.y + area.height - 1, area.width, 1);
+            frame.render_widget(ratatui::widgets::Clear, footer);
+            frame.render_widget(
+                ratatui::widgets::Paragraph::new("Refresh failed · cached data · F retry")
+                    .style(ratatui::style::Style::default().fg(theme::current().warning)),
+                footer,
+            );
+        }
+    }
     if state.store.draft_error.is_none()
         && !state.ui.modal_open(&state.store, state.screen)
         && !active_search(state).is_some_and(|(search, _)| search.open)

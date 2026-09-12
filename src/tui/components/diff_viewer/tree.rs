@@ -27,13 +27,26 @@ pub(super) fn render(
     ui_diff.tree_viewport = area.height.saturating_sub(4);
     let rows = build_visible_rows(&diff.files, &ui_diff.collapsed, &ui_diff.tree_search.query);
 
-    let (header_inner, body) = widgets::framed_panel(frame, area);
+    let (header_inner, body) = widgets::framed_panel(
+        frame,
+        area,
+        "Files",
+        ui_diff.focus == super::DiffFocus::Tree,
+    );
     let header_width = (header_inner.width as usize).saturating_sub(1);
     frame.render_widget(
         Paragraph::new(tree_header(file_stats, header_width)),
         header_inner,
     );
 
+    ui_diff.tree_viewport = body.height;
+    if rows.is_empty() {
+        frame.render_widget(
+            widgets::empty_state("No matching files. Esc clears search."),
+            body,
+        );
+        return;
+    }
     let row_width = body.width as usize;
     let items: Vec<ListItem> = rows
         .iter()
@@ -44,11 +57,13 @@ pub(super) fn render(
     let mut list_state = ListState::default();
     list_state.select(Some(bounded_cursor));
 
-    let list = List::new(items).highlight_style(
+    let list = List::new(items).highlight_style(if ui_diff.focus == super::DiffFocus::Tree {
         Style::default()
             .bg(theme::current().highlight_bg)
-            .add_modifier(Modifier::BOLD),
-    );
+            .add_modifier(Modifier::BOLD)
+    } else {
+        Style::default().fg(theme::current().muted)
+    });
     frame.render_stateful_widget(list, body, &mut list_state);
 }
 
@@ -60,7 +75,10 @@ fn tree_header(file_stats: &[(u32, u32)], width: usize) -> Line<'static> {
         .fold((0u32, 0u32), |(a, d), (na, nd)| (a + na, d + nd));
 
     let left = vec![Span::styled(
-        format!("{file_count} files"),
+        format!(
+            "{file_count} {}",
+            if file_count == 1 { "file" } else { "files" }
+        ),
         Style::default().fg(theme.fg).add_modifier(Modifier::BOLD),
     )];
     let right = vec![

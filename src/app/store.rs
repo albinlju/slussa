@@ -9,6 +9,7 @@ use std::collections::{HashMap, HashSet};
 
 #[derive(Debug, Default)]
 pub struct Store {
+    pub refresh_failures: HashSet<FetchKey>,
     pub link_pending: bool,
     pub notice: Option<Notice>,
     pub draft_error: Option<String>,
@@ -159,5 +160,58 @@ impl Notice {
     }
     pub fn visible(&self) -> bool {
         self.created.elapsed() < std::time::Duration::from_secs(if self.error { 5 } else { 2 })
+    }
+}
+
+impl Store {
+    pub fn has_cached_data(&self, key: &FetchKey) -> bool {
+        let id = match key {
+            FetchKey::Prs => return matches!(self.cache.prs, LoadState::Loaded(_)),
+            FetchKey::Commits(id)
+            | FetchKey::Diff(id)
+            | FetchKey::Builds(id)
+            | FetchKey::Activity(id)
+            | FetchKey::Mergeability(id)
+            | FetchKey::CommitDiff(id, _) => id,
+        };
+        let Some(data) = self.cache.details.get(id) else {
+            return false;
+        };
+        match key {
+            FetchKey::Prs => false,
+            FetchKey::Commits(_) => matches!(data.commits, LoadState::Loaded(_)),
+            FetchKey::Diff(_) => matches!(data.diff, LoadState::Loaded(_)),
+            FetchKey::Builds(_) => matches!(data.builds, LoadState::Loaded(_)),
+            FetchKey::Activity(_) => matches!(data.activity, LoadState::Loaded(_)),
+            FetchKey::Mergeability(_) => matches!(data.mergeability, LoadState::Loaded(_)),
+            FetchKey::CommitDiff(_, oid) => {
+                matches!(data.commit_diffs.get(oid), Some(LoadState::Loaded(_)))
+            }
+        }
+    }
+    pub fn refresh_failed(&self, screen: crate::app::navigation::Screen) -> bool {
+        use crate::{app::navigation::Screen, tui::screens::pr_detail::tabs::DetailTab};
+        self.refresh_failures.iter().any(|key| match (screen, key) {
+            (_, FetchKey::Prs) => true,
+            (Screen::Detail { pr_id, tab }, FetchKey::Diff(id)) => {
+                pr_id == *id && tab == DetailTab::Diff
+            }
+            (Screen::Detail { pr_id, tab }, FetchKey::Activity(id)) => {
+                pr_id == *id
+                    && matches!(
+                        tab,
+                        DetailTab::Overview | DetailTab::Diff | DetailTab::Commits
+                    )
+            }
+            (Screen::Detail { pr_id, tab }, FetchKey::Builds(id)) => {
+                pr_id == *id && matches!(tab, DetailTab::Overview | DetailTab::Builds)
+            }
+            (Screen::Detail { pr_id, .. }, FetchKey::Mergeability(id)) => pr_id == *id,
+            (
+                Screen::Detail { pr_id, tab },
+                FetchKey::Commits(id) | FetchKey::CommitDiff(id, _),
+            ) => pr_id == *id && tab == DetailTab::Commits,
+            _ => false,
+        })
     }
 }

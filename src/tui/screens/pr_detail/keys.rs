@@ -15,9 +15,9 @@ pub(in crate::tui) fn key_to_action(
     state: &super::DetailView<'_>,
     key: KeyEvent,
 ) -> Option<Action> {
-    // An error popup is modal: any key dismisses it.
-    if state.error().is_some() {
-        return Some(Action::Detail(DetailAction::DismissError));
+    // Errors capture input; navigation reads the message rather than acting on the PR.
+    if let Some(error) = state.error() {
+        return state.detail.error.handle_key(key, &error);
     }
     if state.operation_pending() && state.detail.editor.is_open() {
         return match key.code {
@@ -282,7 +282,11 @@ fn tab_key(
             };
             action.or_else(|| tab_nav(code))
         }
-        DetailTab::Builds => tab_nav(code),
+        DetailTab::Builds => state
+            .detail
+            .builds
+            .handle_key(KeyEvent::new(code, KeyModifiers::NONE), &None)
+            .or_else(|| tab_nav(code)),
     }
 }
 

@@ -335,7 +335,7 @@ async fn failed_submission_preserves_draft_and_blocks_duplicate_input() {
         app.state.store.errors.get(&42).map(String::as_str),
         Some("offline")
     );
-    send_comment(&mut app); // dismiss error, do not resubmit
+    press(&mut app, KeyCode::Enter); // dismiss error, do not resubmit
     assert!(!app.state.store.operations.contains_key(&42));
     assert!(app.state.store.errors.is_empty());
     assert_eq!(
@@ -927,4 +927,31 @@ async fn link_completion_keeps_navigation_and_reports_failure_without_blocking_p
             tab: DetailTab::Overview
         }
     );
+}
+
+#[test]
+fn failed_refresh_marks_cached_data_until_that_resource_recovers() {
+    let mut app = app();
+    detail(&mut app, DetailTab::Diff);
+    app.apply(Action::Loaded(LoadedAction::Diff(
+        42,
+        Err("offline".into()),
+    )));
+    assert!(app.state.store.refresh_failed(app.state.screen));
+    assert!(matches!(
+        app.state.store.cache.details[&42].diff,
+        LoadState::Loaded(_)
+    ));
+    assert!(!app.state.store.refresh_failed(Screen::Detail {
+        pr_id: 43,
+        tab: DetailTab::Diff
+    }));
+    app.apply(Action::Loaded(LoadedAction::Builds(42, Ok(vec![]))));
+    assert!(app.state.store.refresh_failed(app.state.screen));
+    let diff = match &app.state.store.cache.details[&42].diff {
+        LoadState::Loaded(diff) => diff.clone(),
+        _ => unreachable!(),
+    };
+    app.apply(Action::Loaded(LoadedAction::Diff(42, Ok(diff))));
+    assert!(!app.state.store.refresh_failed(app.state.screen));
 }
