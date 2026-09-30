@@ -1,0 +1,48 @@
+# cargo-deny configuration: https://embarkstudios.github.io/cargo-deny/
+
+[graph]
+all-features = true
+
+[advisories]
+yanked = "warn"
+unmaintained = "workspace"
+ignore = []
+
+[licenses]
+confidence-threshold = 0.8
+allow = [
+    "Apache-2.0",
+    "Apache-2.0 WITH LLVM-exception",
+    "MIT",
+    "MIT-0",
+    "BSD-2-Clause",
+    "BSD-3-Clause",
+    "ISC",
+    "Zlib",
+    "Unicode-3.0",
+    "CC0-1.0",
+    # Permissive data license (Mozilla root store data in webpki-roots).
+    "CDLA-Permissive-2.0",
+]
+
+# MPL-2.0 is file-level copyleft; fine for unmodified dependencies in a binary.
+# Named exceptions so a *new* MPL crate still fails the check.
+exceptions = [
+    { allow = ["MPL-2.0"], crate = "colored" },
+    { allow = ["MPL-2.0"], crate = "option-ext" },
+]
+
+[licenses.private]
+# tuipr itself has no license field yet.
+ignore = true
+
+[bans]
+multiple-versions = "warn"
+wildcards = "allow"
+highlight = "all"
+
+[sources]
+unknown-registry = "deny"
+unknown-git = "deny"
+allow-registry = ["https://github.com/rust-lang/crates.io-index"]
+allow-git = []
