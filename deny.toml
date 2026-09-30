@@ -33,7 +33,7 @@ exceptions = [
 ]
 
 [licenses.private]
-# tuipr itself has no license field yet.
+# Unpublished workspace crates are not checked against the allow-list.
 ignore = true
 
 [bans]

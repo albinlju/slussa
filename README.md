@@ -8,8 +8,8 @@ tuipr is built for the moment after an agent (or a teammate) opened the PR:
 see what needs you, check that the change matches the intent, and make the
 call. It is not a replacement for the web UI, and it stays small on purpose.
 
-**Status:** early and unreleased. It is used daily by its author, has no
-published builds yet and no license has been chosen.
+**Status:** early and unreleased. It is used daily by its author and has no
+published builds yet.
 
 ## Providers
 
@@ -107,3 +107,7 @@ cargo deny check        # cargo install cargo-deny --locked
 
 CI runs the same four checks. `target/` grows quickly (several GB); `cargo
 clean` is always safe.
+
+## License
+
+[MIT](LICENSE)
