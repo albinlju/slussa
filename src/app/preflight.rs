@@ -47,6 +47,20 @@ pub enum PreflightError {
     DcUnparseableRemote { host: String, remote: String },
 }
 
+/// `auth login` stores a Bitbucket Data Center token. For the hosts known not to
+/// be one, this says what to do instead, so nothing is asked for or stored.
+pub fn login_redirect(host: &str) -> Option<String> {
+    match host {
+        "github.com" => Some(
+            "GitHub uses the `gh` CLI, so there is no token to store here.\n\
+             Run `gh auth login`."
+                .into(),
+        ),
+        "bitbucket.org" => Some(PreflightError::BitbucketCloudUnsupported.to_string()),
+        _ => None,
+    }
+}
+
 pub fn run() -> Result<Provider, PreflightError> {
     let remote = remote::origin_url()?;
     let host = remote::parse_host(&remote).ok_or_else(|| PreflightError::UnparseableRemote {

@@ -163,6 +163,44 @@ fn auth_login_needs_a_repository_too() {
 }
 
 #[test]
+fn auth_login_on_github_points_to_gh_instead_of_asking_for_a_token() {
+    let sandbox = Sandbox::new();
+    sandbox.git(&["init", "-q"]);
+    sandbox.git(&["remote", "add", "origin", "git@github.com:owner/repo.git"]);
+    let output = sandbox.run_in_work(&["auth", "login"]);
+    assert_eq!(output.code, 1);
+    assert!(
+        output.combined.contains("gh auth login"),
+        "{}",
+        output.combined
+    );
+    assert!(
+        !output.combined.contains("access token"),
+        "no Bitbucket instructions are shown: {}",
+        output.combined
+    );
+}
+
+#[test]
+fn auth_login_on_bitbucket_cloud_says_it_is_unsupported() {
+    let sandbox = Sandbox::new();
+    sandbox.git(&["init", "-q"]);
+    sandbox.git(&["remote", "add", "origin", "git@bitbucket.org:team/repo.git"]);
+    let output = sandbox.run_in_work(&["auth", "login"]);
+    assert_eq!(output.code, 1);
+    assert!(
+        output.combined.contains("Bitbucket Cloud"),
+        "{}",
+        output.combined
+    );
+    assert!(
+        !output.combined.contains("access token"),
+        "no token instructions are shown: {}",
+        output.combined
+    );
+}
+
+#[test]
 fn unparseable_remote_is_reported_with_the_remote() {
     let sandbox = Sandbox::new();
     sandbox.git(&["init", "-q"]);

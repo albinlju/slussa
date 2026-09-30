@@ -74,6 +74,9 @@ fn run_auth(args: &[String]) -> ExitCode {
                 .and_then(|url| {
                     let host = remote::parse_host(&url)
                         .ok_or_else(|| format!("couldn't read a host from `{url}`"))?;
+                    if let Some(message) = preflight::login_redirect(&host) {
+                        return Err(message);
+                    }
                     let base = bitbucket_dc::remote::base_url(&url, &host);
                     bitbucket_dc::auth::login(&host, &base)
                 });

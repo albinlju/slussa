@@ -101,7 +101,7 @@ scope includes how users find and leave the interaction, not only the API action
 - [x] **Inline review threads in the diff** — comments anchored to their line (new- and old-side), a comment-count badge per file in the tree, and a cursor that can focus a thread (accent border) as groundwork for replying.
 - [x] **Commits tab** — commit list with a per-commit diff drill-in (`enter` opens, `[`/`]` prev/next, `esc` back); reuses the Diff widget.
 - [x] **Builds / Checks tab** — CI build statuses for the source commit with a pass/total summary.
-- [x] **Bitbucket Data Center provider** — PRs, diff, commits, comments/events/threads, builds — alongside GitHub.
+- [x] **Bitbucket Data Center provider** — PRs, diff, commits, comments/events/threads, builds — alongside GitHub. `slussa auth login` stores its token; on a GitHub or Bitbucket Cloud remote it says what to do instead (`gh auth login`, or that Cloud is unsupported) and asks for nothing.
 - [x] **Markdown rendering** in descriptions and comments.
 - [x] **File filter** (`/`) in the diff tree — case-insensitive substring match.
 - [x] **PR list search** — free text on title / author.
