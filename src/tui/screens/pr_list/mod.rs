@@ -4,6 +4,7 @@ use crate::{
         store::LoadState,
     },
     domain::{
+        attention::{Attention, attention},
         ci::CiSummary,
         pr::{PrStatus, PullRequest},
         review::{Reviewer, ReviewerState},
@@ -39,6 +40,7 @@ const HELP_KEYS: &[(&str, &str)] = &[
     ("/", "search title / author"),
     ("esc", "clear search"),
     ("f", "filter status"),
+    ("s", "sort: needs you first / newest first"),
     ("^d/^u", "half-page"),
     ("F", "refresh"),
     ("? / esc", "close help"),
@@ -46,12 +48,14 @@ const HELP_KEYS: &[(&str, &str)] = &[
 ];
 
 // Reserve space for the title first; secondary details remain in the PR view.
+// Index 9 is the attention column; `render` drops it while no row has a reason.
+const ATTENTION_COLUMN: usize = 9;
 const fn visible_columns(width: u16) -> &'static [usize] {
     match width {
         0..=59 => &[0, 3],
         60..=89 => &[0, 3, 2, 4],
-        90..=119 => &[0, 3, 2, 4, 7, 8],
-        _ => &[0, 3, 2, 1, 4, 5, 6, 7, 8],
+        90..=119 => &[0, 3, 9, 2, 4, 7, 8],
+        _ => &[0, 3, 9, 2, 1, 4, 5, 6, 7, 8],
     }
 }
 
@@ -92,6 +96,10 @@ const COLS: &[Column] = &[
         title: "Age",
         width: Width::Fixed(8),
     },
+    Column {
+        title: "Needs you",
+        width: Width::Fixed(19),
+    },
 ];
 
 fn pr_list_container(filter: StatusFilter, count_label: &str) -> Block<'static> {
@@ -122,12 +130,13 @@ fn render_table_body(
     list_state: &mut ListState,
     area: Rect,
     columns: &[usize],
+    viewer: &str,
 ) {
     let theme = theme::current();
     let items: Vec<ListItem<'_>> = prs
         .iter()
         .map(|pr| {
-            let cells = row_cells(pr);
+            let cells = row_cells(pr, viewer);
             ListItem::new(
                 table.row(
                     &columns
@@ -192,7 +201,19 @@ fn render_filter_picker(frame: &mut Frame<'_>, state: &PrListScreen, area: Rect)
     frame.render_stateful_widget(list, list_area, &mut list_state);
 }
 
-fn row_cells(pr: &PullRequest) -> Vec<Cell> {
+fn attention_cell(reason: Option<Attention>) -> Cell {
+    let theme = theme::current();
+    reason.map_or_else(Vec::new, |reason| {
+        let color = match reason {
+            Attention::ChangesRequested | Attention::CiFailed => theme.error,
+            Attention::ReviewRequested => theme.warning,
+            Attention::Approved => theme.success,
+        };
+        vec![Span::styled(reason.label(), Style::default().fg(color))]
+    })
+}
+
+fn row_cells(pr: &PullRequest, viewer: &str) -> Vec<Cell> {
     let theme = theme::current();
     let muted = Style::default().fg(theme.muted);
 
@@ -239,6 +260,7 @@ fn row_cells(pr: &PullRequest) -> Vec<Cell> {
         vec![Span::styled(comm_text, muted)],
         vec![Span::styled(rev_text, Style::default().fg(rev_color))],
         vec![Span::styled(age, muted)],
+        attention_cell(attention(pr, viewer)),
     ]
 }
 
@@ -284,7 +306,41 @@ pub struct PrListScreen {
     pub search: SearchInput,
     pub filter_picker_open: bool,
     pub filter_picker_cursor: usize,
+    pub sort: Sort,
 }
+
+/// How the list is ordered. Both keep the provider's order (newest first)
+/// within a group.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+pub enum Sort {
+    /// PRs that need the viewer first, most urgent first, then the rest.
+    #[default]
+    Attention,
+    /// The provider's order only.
+    Recent,
+}
+
+impl Sort {
+    pub const fn toggled(self) -> Self {
+        match self {
+            Self::Attention => Self::Recent,
+            Self::Recent => Self::Attention,
+        }
+    }
+
+    /// The value written in `config.toml`; unset or unknown means attention.
+    pub fn from_config(name: Option<&str>) -> Self {
+        match name {
+            None | Some("attention") => Self::Attention,
+            Some("recent") => Self::Recent,
+            Some(other) => {
+                tracing::warn!("unknown sort {other:?}, using attention");
+                Self::Attention
+            }
+        }
+    }
+}
+
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
 pub enum StatusFilter {
     #[default]
@@ -329,6 +385,8 @@ impl StatusFilter {
 pub struct ListContext<'a> {
     pub prs: &'a LoadState<Vec<PullRequest>>,
     pub refreshing: bool,
+    /// Who is looking, for the attention column and order.
+    pub viewer: &'a str,
 }
 
 impl Component for PrListScreen {
@@ -343,7 +401,8 @@ impl Component for PrListScreen {
             [Constraint::Min(0), Constraint::Length(1)],
         );
 
-        let filtered = matches!(ctx.prs, LoadState::Loaded(_)).then(|| self.filtered_prs(ctx.prs));
+        let filtered =
+            matches!(ctx.prs, LoadState::Loaded(_)).then(|| self.filtered_prs(ctx.prs, ctx.viewer));
         let count_label = match (&filtered, ctx.prs) {
             (Some(prs), _) => prs.len().to_string(),
             (_, LoadState::Failed(_)) => "!".to_string(),
@@ -360,7 +419,15 @@ impl Component for PrListScreen {
             [Constraint::Length(1), Constraint::Min(0)],
         );
         let width = inner.width.saturating_sub(GUTTER);
-        let columns = visible_columns(width);
+        let any_reason = filtered
+            .as_ref()
+            .is_some_and(|prs| prs.iter().any(|pr| attention(pr, ctx.viewer).is_some()));
+        let columns: Vec<usize> = visible_columns(width)
+            .iter()
+            .copied()
+            .filter(|&i| i != ATTENTION_COLUMN || any_reason)
+            .collect();
+        let columns = columns.as_slice();
         let definitions: Vec<_> = columns
             .iter()
             .map(|&i| Column {
@@ -381,7 +448,15 @@ impl Component for PrListScreen {
                 frame.render_widget(widgets::empty_state(message), rows_area);
             } else {
                 self.list_state.select(Some(self.selected));
-                render_table_body(frame, &table, prs, &mut self.list_state, rows_area, columns);
+                render_table_body(
+                    frame,
+                    &table,
+                    prs,
+                    &mut self.list_state,
+                    rows_area,
+                    columns,
+                    ctx.viewer,
+                );
             }
         } else {
             widgets::loaded_or_placeholder(frame, Some(ctx.prs), "pull requests", rows_area);
@@ -398,7 +473,7 @@ impl Component for PrListScreen {
 
         if self.help_open {
             let has_link = self
-                .filtered_prs(ctx.prs)
+                .filtered_prs(ctx.prs, ctx.viewer)
                 .get(self.selected)
                 .is_some_and(|pr| pr.url.is_some());
             let entries: Vec<_> = HELP_KEYS
@@ -445,7 +520,7 @@ impl Component for PrListScreen {
             };
             if let Some(kind) = kind {
                 return self
-                    .filtered_prs(ctx.prs)
+                    .filtered_prs(ctx.prs, ctx.viewer)
                     .get(self.selected)
                     .filter(|pr| pr.url.is_some())
                     .map(|pr| Action::PrLink { pr_id: pr.id, kind });
@@ -457,12 +532,13 @@ impl Component for PrListScreen {
             KeyCode::Char('?') => Some(Action::List(ListAction::ToggleHelp)),
             KeyCode::Char('F') => Some(Action::Refresh),
             KeyCode::Char('f') => Some(Action::List(ListAction::OpenFilterPicker)),
+            KeyCode::Char('s') => Some(Action::List(ListAction::ToggleSort)),
             KeyCode::Down | KeyCode::Char('j') => Some(Action::List(ListAction::MoveSelection(1))),
             KeyCode::Up | KeyCode::Char('k') => Some(Action::List(ListAction::MoveSelection(-1))),
             KeyCode::PageDown => Some(Action::List(ListAction::MoveSelection(half))),
             KeyCode::PageUp => Some(Action::List(ListAction::MoveSelection(-half))),
             KeyCode::Enter => self
-                .filtered_prs(ctx.prs)
+                .filtered_prs(ctx.prs, ctx.viewer)
                 .get(self.selected)
                 .map(|p| Action::List(ListAction::OpenPr(p.id))),
             _ => None,
@@ -475,8 +551,26 @@ impl Component for PrListScreen {
                 self.help_open = !self.help_open;
                 self.help = crate::tui::components::help_dialog::HelpDialog::default();
             }
+            ListAction::ToggleSort => {
+                // Follow the highlighted PR to its new place.
+                let current = self
+                    .filtered_prs(ctx.prs, ctx.viewer)
+                    .get(self.selected)
+                    .map(|pr| pr.id);
+                self.sort = self.sort.toggled();
+                let index = current.and_then(|id| {
+                    self.filtered_prs(ctx.prs, ctx.viewer)
+                        .iter()
+                        .position(|pr| pr.id == id)
+                });
+                self.selected = index.unwrap_or(0);
+            }
             ListAction::MoveSelection(delta) => {
-                self.selected = step_index(self.selected, delta, self.filtered_prs(ctx.prs).len());
+                self.selected = step_index(
+                    self.selected,
+                    delta,
+                    self.filtered_prs(ctx.prs, ctx.viewer).len(),
+                );
             }
             ListAction::OpenPr(id) => return Some(Action::List(ListAction::OpenPr(id))),
             ListAction::OpenFilterPicker => self.open_filter_picker(),
@@ -489,15 +583,28 @@ impl Component for PrListScreen {
     }
 }
 impl PrListScreen {
-    pub fn filtered_prs<'a>(&self, prs: &'a LoadState<Vec<PullRequest>>) -> Vec<&'a PullRequest> {
-        match prs {
-            LoadState::Loaded(prs) => prs
-                .iter()
-                .filter(|p| self.filter.matches(&p.status))
-                .filter(|p| self.search.matches_pr(p))
-                .collect(),
-            _ => Vec::new(),
+    /// The rows to show, filtered and ordered. With the attention order the
+    /// PRs that need `viewer` come first, most urgent first; the sort is stable,
+    /// so the provider's order holds within each group.
+    pub fn filtered_prs<'a>(
+        &self,
+        prs: &'a LoadState<Vec<PullRequest>>,
+        viewer: &str,
+    ) -> Vec<&'a PullRequest> {
+        let LoadState::Loaded(prs) = prs else {
+            return Vec::new();
+        };
+        let mut rows: Vec<&PullRequest> = prs
+            .iter()
+            .filter(|p| self.filter.matches(&p.status))
+            .filter(|p| self.search.matches_pr(p))
+            .collect();
+        if self.sort == Sort::Attention {
+            rows.sort_by_key(|pr| {
+                attention(pr, viewer).map_or(usize::MAX, |reason| reason as usize)
+            });
         }
+        rows
     }
     fn open_filter_picker(&mut self) {
         self.filter_picker_cursor = StatusFilter::CYCLE
@@ -550,3 +657,6 @@ impl PrListScreen {
         }
     }
 }
+
+#[cfg(test)]
+mod tests;

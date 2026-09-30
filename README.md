@@ -65,6 +65,7 @@ state (for example merging with conflicts) stay visible and say why.
 | `enter` | open PR | open / view |
 | `/` | search title and author | search (diff, commits) |
 | `f` | filter by status | |
+| `s` | sort: needs you first / newest first | |
 | `1`-`5` | | select tab |
 | `h` / `l` | | tab, pane or fold |
 | `a` | | submit review verdict |
@@ -75,6 +76,19 @@ state (for example merging with conflicts) stay visible and say why.
 | `F` | refresh | refresh |
 | `esc` | clear search | back |
 | `q` | quit | quit |
+
+The list opens sorted by what needs you. A "Needs you" column, shown at 90
+columns or wider and only when some row has a reason, says why:
+
+| Reason | Meaning |
+| --- | --- |
+| `changes requested` | your PR, a reviewer asked for changes |
+| `CI failed` | your PR, the checks failed |
+| `review requested` | someone else's PR, you were asked to review it |
+| `approved` | your PR, every reviewer approved, so merging is your call |
+
+Only open PRs ask for anything. Team review requests on GitHub are not
+counted yet. Press `s` for plain newest-first order, or set `sort = "recent"`.
 
 Drafts (comment editor text and queued review comments) are saved locally and
 survive a restart.
@@ -91,6 +105,7 @@ message says "sent to terminal clipboard". Inside tmux this needs
 
 ```toml
 theme = "graphite"   # graphite (default), slate, gruvbox, catppuccin, terminal
+sort = "attention"   # attention (default) or recent
 ```
 
 `TUIPR_THEME` overrides the file.

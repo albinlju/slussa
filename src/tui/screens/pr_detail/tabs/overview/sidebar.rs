@@ -78,7 +78,9 @@ fn reviewers(pr: &PullRequest) -> Vec<Line<'static>> {
             let (icon, color) = match r.state {
                 ReviewerState::Approved => (icons::CHECK_CIRCLE, theme.success),
                 ReviewerState::ChangesRequested => (icons::TIMES_CIRCLE, theme.error),
-                ReviewerState::Commented => (icons::CIRCLE_O, theme.muted),
+                ReviewerState::Commented | ReviewerState::Requested => {
+                    (icons::CIRCLE_O, theme.muted)
+                }
             };
             Line::from(vec![
                 Span::styled(icon, Style::default().fg(color)),

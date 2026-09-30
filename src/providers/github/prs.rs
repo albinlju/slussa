@@ -62,6 +62,23 @@ struct GhReviewSummary {
     author: GhAuthor,
 }
 
+/// Outstanding review requests. A request for a team has no `login` and is
+/// skipped; only people are listed as reviewers.
+#[derive(Debug, Default, Deserialize)]
+struct ReviewRequests {
+    #[serde(default)]
+    nodes: Vec<ReviewRequest>,
+}
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct ReviewRequest {
+    requested_reviewer: Option<RequestedReviewer>,
+}
+#[derive(Debug, Default, Deserialize)]
+struct RequestedReviewer {
+    login: Option<String>,
+}
+
 #[derive(Debug, Deserialize)]
 #[serde(rename_all = "camelCase")]
 struct GhCheck {
@@ -99,6 +116,8 @@ struct GhPr {
     comments: Count,
     latest_reviews: Connection<GhReviewSummary>,
     #[serde(default)]
+    review_requests: ReviewRequests,
+    #[serde(default)]
     commits: Commits,
     labels: Connection<GhLabel>,
 }
@@ -113,14 +132,12 @@ const PR_FIELDS: &str = r"
     comments { totalCount }
     latestReviews(first: 100) { nodes { state author { login } } pageInfo { hasNextPage } }
     labels(first: 100) { nodes { name } pageInfo { hasNextPage } }
+    reviewRequests(first: 100) { nodes { requestedReviewer { ... on User { login } } } }
     commits(last: 1) { nodes { commit { statusCheckRollup { state } } } }
 ";
 
 pub fn fetch_prs() -> Result<Vec<PullRequest>, FetchError> {
-    let mut prs: Vec<GhPr> = super::pagination::repo_nodes(
-        "pullRequests",
-        PR_FIELDS,
-    )?;
+    let mut prs: Vec<GhPr> = super::pagination::repo_nodes("pullRequests", PR_FIELDS)?;
     for pr in &mut prs {
         if pr.labels.page_info.has_next_page {
             pr.labels.nodes =
@@ -153,7 +170,7 @@ fn map_pr(gh: GhPr) -> PullRequest {
         })
         .collect();
     let ci_state = summarize_checks(&checks);
-    let reviewers = map_reviewers(gh.latest_reviews.nodes);
+    let reviewers = with_requests(map_reviewers(gh.latest_reviews.nodes), gh.review_requests);
     let comment_count = gh.comments.total_count;
 
     PullRequest {
@@ -228,6 +245,23 @@ fn summarize_checks(checks: &[GhCheck]) -> CiSummary {
     } else {
         CiSummary::Unknown
     }
+}
+
+/// An outstanding request supersedes that person's earlier review: GitHub shows
+/// a re-requested reviewer as pending again.
+fn with_requests(mut reviewers: Vec<Reviewer>, requests: ReviewRequests) -> Vec<Reviewer> {
+    for login in requests
+        .nodes
+        .into_iter()
+        .filter_map(|request| request.requested_reviewer?.login)
+    {
+        reviewers.retain(|r| !r.author.username.eq_ignore_ascii_case(&login));
+        reviewers.push(Reviewer {
+            author: User { username: login },
+            state: ReviewerState::Requested,
+        });
+    }
+    reviewers
 }
 
 fn map_reviewers(reviews: Vec<GhReviewSummary>) -> Vec<Reviewer> {
