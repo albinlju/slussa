@@ -92,7 +92,7 @@ Decisions and the release procedure are in [RELEASING.md](RELEASING.md).
   4. Approve it; expect the reason to disappear after the next refresh (`F`).
   Report: whether it appeared, and where it sorted.
 
-- [ ] **V6. Reopen on a real PR.** This changes a real PR and notifies people,
+- [x] **V6. Reopen on a real PR.** This changes a real PR and notifies people,
   so use a throwaway. PR #3 in `albinlju/tuipr` is closed and not merged.
   1. In the list press `f`, choose Declined, open the PR, go to the Overview.
   2. Press `x`, confirm. Expect `PR #3 · reopened` and the status to change
@@ -109,8 +109,10 @@ Decisions and the release procedure are in [RELEASING.md](RELEASING.md).
   decline that puts it back (steps 2 and 3), which needs the other open PR from
   `feat/newtest` closed first.
   Afterwards the maintainer reported that declining and reopening through
-  tuipr "seems to work"; no details (the `reopened` line, the status after the
-  refresh) were recorded, so the box stays unticked until they are.
+  tuipr, that the `reopened` line appeared and that the status changed by
+  itself, without a manual refresh. **Done 2026-09-30, pass.** Not exercised:
+  the refusal with a *deleted head branch* (step 4's exact case); the refusal
+  seen was the one-open-PR-per-branch-pair rule, which shows the same path.
 
 - [x] **V7. A large repository.** The list used to read every PR ever opened.
   It now reads the open ones and a batch of closed ones. This has been checked
