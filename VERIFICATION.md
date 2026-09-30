@@ -153,6 +153,14 @@ Decisions and the release procedure are in [RELEASING.md](RELEASING.md).
 
 ## C. Bitbucket Data Center
 
+**Decided 2026-09-30: no local Docker test will be run.** Atlassian ends Data
+Center licence sales on 2028-03-30 and end of life is 2029-03-28, and a trial
+licence could not be ordered (the ordering page failed), so the provider is in
+maintenance: bugs found are fixed, nothing more is verified. B1 to B10 below
+stay as a recipe for anyone who wants to run them; they are not planned work.
+The README keeps saying that only listing has been seen working on a real
+server.
+
 Every Bitbucket path is tested only against a mock written from Atlassian's
 documentation. The customer's server cannot be used freely, so the real test is
 a **local Bitbucket Data Center in Docker**. It is the only way to exercise the
