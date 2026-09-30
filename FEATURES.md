@@ -91,6 +91,10 @@ scope includes how users find and leave the interaction, not only the API action
 
 - [x] **PR list** with status filter (open / draft / merged / declined / all).
 - [x] **Reviewers / approvals in the list** — a state icon per reviewer.
+- [x] **Comments column** — on GitHub the conversation comments plus the
+  threads on lines of code (a thread counts once, however many replies it has);
+  on Bitbucket the server's own `commentCount`, which has not been checked
+  against a real server to include inline comments.
 - [x] **Description tab**, rendered above the tab row.
 - [x] **Overview tab** — conversation timeline (comments + lifecycle events) with a sidebar (reviewers, builds summary, labels, details). On GitHub the labels and the description are read when the PR is opened, not with the list; the Description tab shows a spinner until they arrive. The PR-level actions (`a`, `v`, `m`, `x`) work from both Description and Overview, so a PR can be approved or merged straight after reading what it claims to do; thread keys stay on Overview.
 - [x] **Diff tab** — file tree on the left, diff pane on the right, +/− row coloring, per-file +A/−D stats.

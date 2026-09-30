@@ -242,6 +242,7 @@ pub fn gh_pr(number: u64, created: &str) -> Value {
         "deletions": 1,
         "changedFiles": 2,
         "comments": {"totalCount": 4},
+        "reviewThreads": {"totalCount": 2},
         "latestReviews": {
             "nodes": [{"state": "APPROVED", "author": {"login": "bob"}}],
             "pageInfo": {"hasNextPage": false}
