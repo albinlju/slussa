@@ -75,23 +75,17 @@ pub fn submit_full_review(
     user: &str,
     comments: &[ReviewComment],
 ) -> Result<(), FetchError> {
-    if comments.iter().any(|c| c.revision.is_none()) {
-        return Err(FetchError::InvalidInput(
-            "Comment revision is unknown; reload the diff.".into(),
-        ));
-    }
+    let with_revisions: Vec<_> = comments
+        .iter()
+        .map(|c| c.revision.as_ref().map(|revision| (c, revision)))
+        .collect::<Option<_>>()
+        .ok_or_else(|| {
+            FetchError::InvalidInput("Comment revision is unknown; reload the diff.".into())
+        })?;
     publish_steps(
-        comments,
-        |c| {
-            comments::post_comment(
-                config,
-                pr_id,
-                &c.path,
-                c.line,
-                c.removed,
-                &c.body,
-                c.revision.as_ref().expect("validated revision"),
-            )
+        &with_revisions,
+        |&(c, revision)| {
+            comments::post_comment(config, pr_id, &c.path, c.line, c.removed, &c.body, revision)
         },
         || submit_review(config, pr_id, verdict, body, user),
     )

@@ -17,14 +17,14 @@ pub fn frame(
 ) -> Rect {
     let width = size.0.min(area.width);
     let theme = theme::current();
-    let mut lines = vec![Line::default()];
+    let mut lines = Vec::new();
+    let mut line = Line::default();
     let available = width.saturating_sub(4) as usize;
     for &(key, description) in hints {
-        let used = lines.last().map_or(0, Line::width);
+        let used = line.width();
         if used > 0 && used + key.len() + description.len() + 4 > available {
-            lines.push(Line::default());
+            lines.push(std::mem::take(&mut line));
         }
-        let line = lines.last_mut().expect("one footer line");
         if !line.spans.is_empty() {
             line.spans
                 .push(Span::styled(" · ", Style::default().fg(theme.muted)));
@@ -36,6 +36,7 @@ pub fn frame(
             Style::default().fg(theme.muted),
         ));
     }
+    lines.push(line);
     let footer_height = lines.len() as u16 + 1;
     let height = size.1.saturating_add(footer_height + 2).min(area.height);
     let popup = Rect::new(

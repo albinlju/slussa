@@ -107,7 +107,8 @@ impl App {
                 }
                 self.spawn_resolve_thread(pr_id, node_id, comment_id, resolved);
             }
-            Command::DismissError => unreachable!(),
+            // Handled before the match; kept so the match stays exhaustive.
+            Command::DismissError => {}
         }
     }
 

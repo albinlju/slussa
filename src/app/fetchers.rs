@@ -161,7 +161,9 @@ impl App {
                     provider.edit_comment(pr_id, id, review, &text)
                 }
                 // Review verdicts are routed to `spawn_submit_review` upstream.
-                CommentTarget::Review { .. } => unreachable!("review target handled separately"),
+                CommentTarget::Review { .. } => Err(FetchError::InvalidInput(
+                    "A review verdict cannot be posted as a plain comment.".into(),
+                )),
             },
             move |r| Action::Loaded(LoadedAction::Commented(pr_id, r)),
         );
