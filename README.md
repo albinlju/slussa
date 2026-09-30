@@ -86,7 +86,7 @@ state (for example merging with conflicts) stay visible and say why.
 | `s` | sort: needs you first / newest first | |
 | `L` | load more PRs, while the view has more unread | |
 | `1`-`5` | | select tab |
-| `h` / `l` | | tab, pane or fold |
+| `h` / `l` | | previous / next tab, on every tab (in a diff, `enter`, `esc` and the arrow keys move between the file tree and the code) |
 | `a` | | submit review verdict |
 | `v` | | start or finish a batched review |
 | `m` / `x` | | merge / close or decline, and `x` reopens a declined PR; the merge dialog lists what blocks it |

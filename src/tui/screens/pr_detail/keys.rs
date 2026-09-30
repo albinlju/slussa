@@ -223,19 +223,10 @@ fn tab_key(
     code: KeyCode,
 ) -> Option<Action> {
     match tab {
-        DetailTab::Diff => state.detail.active_diff_view().handle_key(
-            KeyEvent::new(code, KeyModifiers::NONE),
-            &DiffContext {
-                diff: None,
-                threads: &[],
-                pending: &[],
-                author: "",
-            },
-        ),
-        DetailTab::Commits if viewing_commit => match code {
-            KeyCode::Char('[') => Some(Action::Commits(CommitsAction::StepCommit(-1))),
-            KeyCode::Char(']') => Some(Action::Commits(CommitsAction::StepCommit(1))),
-            _ => state.detail.active_diff_view().handle_key(
+        DetailTab::Diff => state
+            .detail
+            .active_diff_view()
+            .handle_key(
                 KeyEvent::new(code, KeyModifiers::NONE),
                 &DiffContext {
                     diff: None,
@@ -243,7 +234,24 @@ fn tab_key(
                     pending: &[],
                     author: "",
                 },
-            ),
+            )
+            .or_else(|| tab_letters(code)),
+        DetailTab::Commits if viewing_commit => match code {
+            KeyCode::Char('[') => Some(Action::Commits(CommitsAction::StepCommit(-1))),
+            KeyCode::Char(']') => Some(Action::Commits(CommitsAction::StepCommit(1))),
+            _ => state
+                .detail
+                .active_diff_view()
+                .handle_key(
+                    KeyEvent::new(code, KeyModifiers::NONE),
+                    &DiffContext {
+                        diff: None,
+                        threads: &[],
+                        pending: &[],
+                        author: "",
+                    },
+                )
+                .or_else(|| tab_letters(code)),
         },
         DetailTab::Commits => {
             let Screen::Detail { pr_id, .. } = state.screen else {
@@ -293,6 +301,16 @@ fn tab_key(
             .builds
             .handle_key(KeyEvent::new(code, KeyModifiers::NONE), &None)
             .or_else(|| tab_nav(code)),
+    }
+}
+
+/// `h` and `l` change tab on every tab. The arrow keys do too, except in the
+/// diff, where they move between the file tree and the code.
+const fn tab_letters(code: KeyCode) -> Option<Action> {
+    match code {
+        KeyCode::Char('l') => Some(Action::Detail(DetailAction::NextTab)),
+        KeyCode::Char('h') => Some(Action::Detail(DetailAction::PrevTab)),
+        _ => None,
     }
 }
 
