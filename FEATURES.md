@@ -4,6 +4,60 @@
 (via the `gh` CLI) and Bitbucket Data Center (REST + PAT). You can read, comment,
 review, merge, and decline.
 
+## Positioning
+
+tuipr is the **human approval surface for AI-generated pull requests**: the place
+where a reviewer decides, not the place where the code gets read line by line.
+
+The assumption behind the backlog: agents write more of the code and open more of
+the PRs, and AI reviewers do the line-level reading. What stays human is triage
+("what needs me?"), intent-checking ("did the agent do what was asked, and what did
+the AI review flag?"), and the sign-off itself (approve, merge, decline). Those are
+overview-and-decision tasks, and a keyboard-driven terminal UI is better at them
+than a web page. tuipr should be the missing piece in a terminal workflow next to
+an editor, a git client and a coding agent — never a competitor to the provider's
+web UI.
+
+**Simplicity is the constraint everything else bends to.** tuipr has two views —
+the list and the PR — and stays that way. New capability shows up as a better
+default, a column, a marker or a single key inside those two views, not as a new
+screen, a dashboard or a sidebar of widgets. If a feature cannot be explained in
+one sentence and reached in one keypress, it is not ready. When in doubt, leave
+it out.
+
+What this rules in:
+
+- **The list is the inbox.** The PR list opens sorted by what needs the user —
+  review requests, failed CI, new activity since last look — with a short reason
+  on the row. No separate inbox screen; the plain list is the same view with the
+  attention sort turned off.
+- **AI review is a first-class thread.** Comments from an AI reviewer (Copilot,
+  Claude, a team bot) are shown inline with their own marker and summarized in the
+  header. Running a review from tuipr and reading the result in place is a core
+  action, not a plugin.
+- **Fast act-on-suggestion.** Suggestions get applied, not just displayed; the
+  approve → merge path is as short as the provider allows.
+- **Handoff to the coding agent.** A thread, a file or a whole PR can be sent to
+  Claude Code (or a configured command) with context, and the outcome shows up
+  back in tuipr on refresh.
+- **Providers others neglect.** Bitbucket Data Center support is a real gap in
+  the terminal-tooling space and stays a supported provider, not a port.
+
+What this rules out:
+
+- **Feature parity with the web UI.** Authoring, administration and metadata
+  editing are not the job (see *Scope decision* below).
+- **Being a chat.** tuipr is deterministic and immediate. It shows state and takes
+  actions; it does not host a conversation with a model. The agent does the
+  analysis, tuipr is where the decision gets made.
+- **Being a dashboard.** No third view, no configurable panes, no widget grid.
+  gh-dash already exists; tuipr wins by being the one you do not have to
+  configure or learn.
+
+Priority order for anything new: attention signals in the list → AI-review
+integration → act-on-suggestion / merge path → agent handoff → diff ergonomics →
+everything else.
+
 All upcoming features follow the [product and interaction principles](ARCHITECTURE.md#product-and-interaction-principles):
 a calm default view, discoverable contextual actions, focused dialogs, consistent
 keyboard behavior and optional features based on provider capabilities. Feature
@@ -72,88 +126,152 @@ scope includes how users find and leave the interaction, not only the API action
 - [x] **Disabled-with-affordance** — lifecycle actions stay visible in the footer but
   dimmed with their reason (e.g. `m: merge (conflicts)`) rather than being hidden.
 - [x] **Help overlay** (`?`) — lists the keybindings.
+
 ---
 
 ## Backlog
 
-### Refined
+Grouped by the priority order in *Positioning*. Within a group, items marked
+*refined* have a settled design; the rest still need one.
 
-- [ ] **Apply suggestions** — apply a suggested change, and batch several into one
-  commit. No provider exposes a clean "apply" API: it means fetch the file → replace
-  the anchored line(s) → commit on the head branch. Realistically GitHub-only and
-  same-repo to start (forks need the fork's coords + push access), and our `ThreadAnchor`
-  only carries a single line, so multi-line suggestions aren't applicable yet. Needs a
-  free key — `a` is the review menu, `b` is unused.
-- [ ] **Mergeability detail** — beyond the basic mergeable/conflicts badge: *N commits
-  behind base* and *required-checks gating* (both currently collapse to `Unknown`).
-- [ ] **Repo-allowed merge strategies** — the picker offers Merge / Squash / Rebase on
-  GitHub regardless of repo settings and lets the server reject; querying the repo would
-  pre-filter the menu.
-- [ ] **Assignees, milestones, projects** (reviewers + labels are already shown).
-- [ ] **Branch ahead / behind base** info.
-- [ ] **Mergeability in the pr list** — conflict / behind-base indicators (the detail
-  header badge is done; this extends it to list rows).
+### 1. Attention signals in the list
+
+Still one list, still one PR view. The list just knows what needs the user and
+says so on the row.
+
+- [ ] **Attention sort with a reason column** *(refined)* — the list opens sorted
+  by attention: review requested of me, my PRs with failed CI, my PRs with new
+  comments or changes requested, threads where I'm mentioned, then everything
+  else by recent update. One short reason per row (`review requested`,
+  `CI failed`, `2 new`); blank when there is none. Enter opens the PR on the tab
+  the reason points at. A single key toggles back to the plain sort; the choice
+  persists. GitHub via search qualifiers + notifications; Bitbucket DC via the
+  dashboard/inbox endpoints. This replaces the earlier "Notifications inbox" and
+  "Mine quick views" items — neither becomes a screen.
+- [ ] **Unread / updated** *(refined)* — remember per PR when it was last opened
+  and flag rows with activity since then. Local state, scoped like drafts.
+- [ ] **Structured filters** — `author:`, `label:`, `review:approved`, `is:draft`,
+  `status:`, plus `is:agent` (see *AI authorship* below).
+- [ ] **Sorting** — recently updated, created, comment count, CI status.
+- [ ] **Mergeability in the PR list** — conflict / behind-base indicators
+  (the detail header badge is done; this extends it to rows).
 - [ ] **Labels in the list** — colored and filterable (shown in Overview today).
-- [ ] **No-panic audit** — the error popup + `FetchError::user_message()` are done; what
-  remains is auditing fetch/parse paths so a bad response never panics (use
-  `LoadState::Failed` / the popup everywhere instead of `unwrap`/`unreachable!`).
-- [ ] **React to a comment** — add / remove your own emoji reaction (display is done but
-  read-only). GitHub `addReaction` / `removeReaction`; Bitbucket DC reaction endpoints.
-- [ ] **Request / re-request reviewers** — ask a user or team to review, and re-request
-  after pushing changes. Today "Review requested" exists only as a list view, not an action.
-- [ ] **Re-run CI checks** — re-trigger a failed (or all) check from the Builds tab.
-- [ ] **Update / sync branch** — when the PR is behind base, merge or rebase base into it
-  (pairs with the *behind base* indicator).
-- [ ] **Reopen a closed PR** — the inverse of decline / close.
-- [ ] **Multi-line (range) comments** — comment on a selected line range, not just a
-  single line (the anchor model currently carries one line).
-- [ ] **Implement Bitbucket Cloud client** 
-- [ ] **Implement Gitlab client**
+- [ ] **Compact diff stats** (files / +/−) on list rows.
+- [ ] **Pagination / load more** — the list is currently capped at 50.
+- [ ] **Jump to PR by number** (`#123`).
+- [ ] **Status bar** — provider, repo, match count, loading spinner. Only if it
+  fits in the existing footer line; a second persistent bar is not wanted.
+
+### 2. AI review integration
+
+The AI reviewer's output has to be as easy to read and act on as a human's, and
+easier to tell apart.
+
+- [ ] **AI-authored comments marked** *(refined)* — detect comments from bot /
+  app accounts (GitHub `isBot` / app login suffix; Bitbucket DC a configurable
+  account list) and render them with a distinct marker and a per-file badge count
+  separate from human threads. Filter in the Overview: humans / AI / all.
+- [ ] **Review summary in the header** — one line: latest AI verdict, number of
+  open flags, number resolved. Collapses to nothing when no AI review exists.
+- [ ] **Run a review from tuipr** *(refined)* — a key on the PR that runs a
+  configured command (default `claude -p` with a review prompt and the PR
+  context: title, body, diff) and posts the result either as a review with line
+  comments or as a local-only overlay the user can promote to comments. Command
+  and prompt in `config.toml`; the command runs off the UI thread with the same
+  deadline rules as `gh`.
+- [ ] **AI authorship of the PR** — flag PRs opened by an agent account or with
+  an agent trailer / label, so the reviewer knows to read for intent. `is:agent`
+  filter and an inbox reason.
+- [ ] **Review as a group (display)** — render a review's comments + summary +
+  state as one grouped timeline entry. Matters more once AI reviews arrive as one
+  batch with many comments.
+- [ ] **Jump to next / prev unresolved thread** (`]c` / `[c`) — the core loop for
+  walking through flags.
+- [ ] **Resolved / unresolved filter** in the Overview.
+- [ ] **Outdated comments** — hide threads whose anchored line is gone from the
+  diff; keep them in the Overview timeline.
+
+### 3. Act on suggestions, then merge
+
+- [ ] **Apply suggestions** *(refined)* — apply a suggested change, and batch
+  several into one commit. No provider exposes a clean "apply" API: fetch the
+  file → replace the anchored line(s) → commit on the head branch. GitHub-only and
+  same-repo to start; multi-line needs the range anchor below. Needs a free key
+  (`b` is unused).
+- [ ] **Multi-line (range) comments** — the anchor model carries one line today;
+  needed for both range comments and multi-line suggestions.
+- [ ] **Mergeability detail** — *N commits behind base* and *required-checks
+  gating* (both currently collapse to `Unknown`).
+- [ ] **Update / sync branch** — merge or rebase base into the PR when behind.
+- [ ] **Repo-allowed merge strategies** — pre-filter the merge picker from repo
+  settings instead of letting the server reject.
+- [ ] **Re-run CI checks** — re-trigger a failed (or all) check from Builds.
+- [ ] **Request / re-request reviewers** — including re-request after a push.
+- [ ] **Delete the source branch after merge** — moved here from *Scope
+  decision*: it is part of the merge path, not administration.
+- [ ] **Enable auto-merge** (GitHub) — same reasoning: "merge when green" is a
+  decision, not admin.
+- [ ] **Reopen a closed PR.**
+- [ ] **React to a comment** — add / remove your own emoji reaction.
+
+### 4. Handoff to the coding agent
+
+tuipr never hosts the conversation; it hands context over and reads the result
+back on refresh.
+
+- [ ] **Send to agent** *(refined)* — from a thread, a file or the PR: run a
+  configured command with a context payload (PR ref, thread body, file path and
+  line, or the whole diff). Default target `claude` in the repo directory. Two
+  modes: spawn in a new terminal pane / tmux window and return immediately, or run
+  headless (`-p`) and show the output in a dialog. Command per mode in
+  `config.toml`.
+- [ ] **Check out PR locally** — precondition for most handoffs; also useful alone.
+- [ ] **Open focused file / line in editor** — `$EDITOR` at the anchored line
+  (PR-level browser opening is implemented).
+- [ ] **Copy additional references** — SHA / branch / permalink to a line.
+- [ ] **Linked issues / cross-references** — "closes #123", shown and openable.
+
+### 5. Diff ergonomics
+
+Still valuable, but the reviewer reads less of the diff than before, so these
+rank below the decision path.
+
+- [ ] **Word-level (intra-line) diff.**
+- [ ] **Expand context** — unfold above/below a hunk (needs a full-file fetch).
+- [ ] **Side-by-side (split) diff** as an alternative to unified.
+- [ ] **Rename / move display** — "renamed from X" instead of delete + add.
+- [ ] **Whitespace toggle.**
+- [ ] **Binary / image files** — a clear "(binary file)" instead of a broken diff.
+- [ ] **Viewed-files tracking** — local "mark file reviewed", saved per PR.
+- [ ] **Branch ahead / behind base** info.
+- [ ] **Bitbucket "tasks"** — checkable to-do items on a PR.
+- [ ] **Assignees, milestones, projects** (reviewers + labels already shown).
+
+### 6. Providers and platform
+
+- [ ] **GitLab MR support** via `glab` (mirrors `gh` well).
+- [ ] **Bitbucket Cloud client.**
+- [ ] **Unified cross-provider list** with a provider icon per row.
+- [ ] **Normalized "requirements to merge"** — GitLab approvals, Bitbucket
+  default reviewers / merge checks, GitHub branch protection → one shared model.
+- [ ] **Config** — repos / providers, default filters, keybindings, agent
+  commands. *(theme is done: `~/.config/tuipr/config.toml` `theme = "…"`,
+  overridden by `TUIPR_THEME`)*
+- [ ] **No-panic audit** — audit fetch/parse paths so a bad response never
+  panics (use `LoadState::Failed` / the popup everywhere instead of
+  `unwrap`/`unreachable!`).
+- [ ] **Empty / loading / error states** per view (use `LoadState` everywhere).
+- [ ] **Release** — a real README with a demo, `cargo install`, a Homebrew
+  formula, tagged builds. Without this the rest has no audience.
 
 ### Scope decision: authoring / management
 
-tuipr is review-and-act focused (read, comment, review, merge, decline). Authoring and
-PR *administration* are deliberately not built — decide whether they belong here at all
-before treating them as gaps:
+tuipr is review-and-act focused. Authoring and PR *administration* belong in the
+editor, the coding agent or the web UI, and are explicitly out of scope unless
+a decision-path feature needs them:
 
 - [ ] **Edit PR title / description** (the description is shown, not editable).
-- [ ] **Edit labels** — add / remove (only display + filter is planned).
-- [ ] **Create a PR.**
-- [ ] **Delete the source branch after merge** (a merge option).
-- [ ] **Enable auto-merge** (GitHub).
-
-### Not refined
-
-- [ ] **Word-level (intra-line) diff** — highlight the changed words within a modified line.
-- [ ] **Expand context** — unfold more lines above/below a hunk (needs a full-file fetch).
-- [ ] **Side-by-side (split) diff** as an alternative to unified; jump between files/hunks.
-- [ ] **Rename / move display** — "renamed from X" instead of delete + add.
-- [ ] **Whitespace toggle** — ignore whitespace-only changes.
-- [ ] **Binary / image files** — a clear "(binary file)" instead of a broken diff.
-- [ ] **Jump to next / prev unresolved thread** (`]c` / `[c`).
-- [ ] **Resolved / unresolved filter** in the Overview.
-- [ ] **Outdated comments** — a thread whose anchored line no longer exists in the current diff is *outdated*: hide it from the diff (like GitHub) and show it only in the Overview timeline. Needs comparing each thread's anchor against the loaded diff.
-- [ ] **Review as a group (display)** — in the timeline, render a review's comments +
-  summary + state (approved / changes requested) as one grouped entry instead of loose
-  entries. (Submitting a batched review is already done — this is the read side.)
-- [ ] **Bitbucket "tasks"** — show the checkable to-do items on a PR.
-- [ ] **Linked issues / cross-references** — "closes #123".
-- [ ] **Compact diff stats** (files / +/−) on PR list rows.
-- [ ] **Structured filters** — `author:`, `label:`, `review:approved`, `is:draft`, `status:`.
-- [ ] **Sorting** — recently updated, created, comment count, CI status.
-- [ ] **"Mine" quick views** — Created / Assigned / Review requested / Mentioned.
-- [ ] **Pagination / load more** — the list is currently capped at 50.
-- [ ] **Jump to PR by number** (`#123`).
-- [ ] **Unread / updated** — flag PRs with new activity since you last looked.
-- [ ] **Notifications inbox** — "what needs my attention" (review requested, mentioned, CI failed).
-- [ ] **Viewed-files tracking** — local "mark file reviewed" (GitHub's *Viewed*), saved per PR.
-- [ ] **Status bar** — provider, repo, match count, loading spinner.
-- [ ] **Config** — repos / providers, default filters, keybindings. *(theme is done: `~/.config/tuipr/config.toml` `theme = "…"`, overridden by `TUIPR_THEME`)*
-- [ ] **Empty / loading / error states** per view (use `LoadState` everywhere).
-- [ ] **Open focused file / line in browser** — PR-level opening is implemented.
-- [ ] **Copy additional references** — SHA / branch / permalink to a line. PR URL copying is implemented.
-- [ ] **Check out PR locally**.
-- [ ] **Draft ↔ Ready**.
-- [ ] **GitLab MR support** via `glab` (mirrors `gh` well).
-- [ ] **Unified cross-provider list** with a provider icon per row.
-- [ ] **Normalized "requirements to merge"** — GitLab approvals, Bitbucket default reviewers / merge checks, GitHub branch protection → one shared model.
+- [ ] **Edit labels** — add / remove (display + filter is planned).
+- [ ] **Create a PR** — the agent or `gh pr create` does this.
+- [ ] **Draft ↔ Ready** — borderline; revisit if agent-opened drafts become the
+  norm and flipping them is part of triage.
