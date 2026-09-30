@@ -8,12 +8,21 @@ use std::{
 #[allow(clippy::duration_suboptimal_units)]
 const REQUEST_TIMEOUT: Duration = Duration::from_secs(60);
 
+/// The `gh` command. Tests can swap it for a scripted fake.
+fn gh_command() -> Command {
+    #[cfg(test)]
+    if let Some(command) = crate::test_support::gh_command() {
+        return command;
+    }
+    Command::new("gh")
+}
+
 pub(super) fn run_gh(args: &[&str]) -> Result<Vec<u8>, FetchError> {
     run_gh_stdin(args, &[])
 }
 
 pub(super) fn run_gh_stdin(args: &[&str], stdin: &[u8]) -> Result<Vec<u8>, FetchError> {
-    let mut command = Command::new("gh");
+    let mut command = gh_command();
     command.args(args);
     run_command(&mut command, stdin, REQUEST_TIMEOUT)
 }

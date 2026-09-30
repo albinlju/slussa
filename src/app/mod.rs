@@ -123,6 +123,8 @@ impl App {
 }
 
 #[cfg(test)]
+mod flow_tests;
+#[cfg(test)]
 mod tests;
 
 impl App {
