@@ -74,6 +74,12 @@ state (for example merging with conflicts) stay visible and say why.
 Drafts (comment editor text and queued review comments) are saved locally and
 survive a restart.
 
+Copying a link uses the system clipboard helper (`pbcopy`, `wl-copy`, `xclip`,
+`xsel`, PowerShell). Over SSH, or when no helper works, tuipr asks the terminal
+to set the clipboard instead (OSC 52). The terminal cannot confirm that, so the
+message says "sent to terminal clipboard". Inside tmux this needs
+`set -g set-clipboard on`; some terminals disable OSC 52 by default.
+
 ## Configure
 
 `~/.config/tuipr/config.toml` (or `$XDG_CONFIG_HOME/tuipr/config.toml`):

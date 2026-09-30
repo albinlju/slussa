@@ -157,7 +157,11 @@ list; see *Not borrowed* below.
   Release; generate the changelog from commits. Then a Homebrew tap and
   `cargo install tuipr`. Their `release-tag.yml` computes versions once and
   fans out; copy the shape, not the size.
-- [ ] **OSC 52 clipboard.** Their `clipboard.rs` writes
+- [x] **OSC 52 clipboard.** *Done.* Helper first, OSC 52 as fallback, and
+  OSC 52 first when `SSH_CONNECTION` or `SSH_TTY` is set (the helper would fill
+  the remote machine's clipboard). Reported as "sent to terminal clipboard"
+  because the terminal never confirms. Uses the `base64` crate; the escape
+  goes to `/dev/tty`, not stdout. Original note: Their `clipboard.rs` writes
   `ESC ] 52 ; c ; <base64> BEL` straight to `/dev/tty`, so copy works over
   SSH, tmux and mosh without `pbcopy`/`xclip`/`wl-copy`. tuipr's
   `app/desktop.rs` shells out to platform helpers. Use OSC 52 first and keep
@@ -167,7 +171,11 @@ list; see *Not borrowed* below.
   `auto | dark | light` as the config value. tuipr's `theme = "…"` picks a
   named palette; add `auto` that maps to a light or dark default. Detection
   must run before `ratatui::init()`.
-- [ ] **Integration tests in `tests/`.** Their crates keep unit tests inline
+- [x] **Integration tests in `tests/`.** *Done for the CLI surface:*
+  `tests/cli_integration.rs`, 9 tests, isolated HOME and git ceiling, no
+  network. Not covered: config parsing (only reachable through the TUI) and
+  any provider behaviour; those need the transport-mock work. Original note:
+  Their crates keep unit tests inline
   and put subprocess-level tests in `tests/*_integration.rs` (for the CLI:
   `cli_help_integration.rs`, `cli_color_integration.rs`). The helper is
   small: `run_isolated(args)` runs `env!("CARGO_BIN_EXE_openshell")` with

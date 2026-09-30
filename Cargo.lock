@@ -2540,6 +2540,7 @@ name = "tuipr"
 version = "0.1.0"
 dependencies = [
  "ansi-to-tui",
+ "base64",
  "charmed-glamour",
  "chrono",
  "crossterm",
