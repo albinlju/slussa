@@ -243,6 +243,69 @@ parallel type trees in `openshell-policy` (churn from a proto/schema split),
 and the twenty-field `Mutex<Option<…>>` mock-state bags, which are the same
 flag-bag pattern as their TUI `App`.
 
+### Structure: crates, folders, files
+
+A pass over the whole tree (38 crates, 521 Rust files). Their crate-level
+structure is disciplined and worth copying in principle; their file-level
+structure is worse than tuipr's and worth a written rule against.
+
+**What they do well at crate level**
+
+- **Role-first naming with variant suffixes.** `openshell-<role>` and
+  `openshell-<role>-<variant>`: `-driver-docker`, `-driver-podman`,
+  `-supervisor-network`, `-supervisor-process`, `-prover-cli`,
+  `-otel-test-support`, `-server-macros`. The crate list reads as the
+  architecture. If tuipr ever splits, name the pieces `tuipr-core`,
+  `tuipr-provider-github`, `tuipr-provider-bitbucket-dc`, `tuipr-tui`, not
+  `core`/`gh`/`bb`.
+- **Four recurring crate kinds.** `-interface` (trait + types, no impl),
+  `-schema` (dependency-light serde types and parsing), `-core` (shared
+  helpers, 50 small files), `-test-support` (fixtures shared without
+  dev-dependency cycles). Contracts never depend on implementations: server →
+  interface ← driver, and the conformance test lives with the interface.
+- **Per-crate README about the runtime model,** not the API: what gets
+  created, what runs as non-root, which volume carries what. 13 of 38 crates
+  have one. ARCHITECTURE.md already plays that role for tuipr.
+
+- [ ] **Shape `providers/` as domain + trait + leaves.** When the provider
+  trait lands: `domain/` and the trait in the middle, `github/` and
+  `bitbucket_dc/` as leaves that depend on it, never on each other, and the
+  conformance test next to the trait. Same as their server → interface ←
+  driver rule, inside one crate.
+- [ ] **Shared test fixtures in one module.** They keep `test_utils.rs` /
+  `test_support.rs` per crate rather than `#[cfg(test)]` helpers scattered
+  through files. tuipr has `tui/testdata/` for snapshots; add
+  `src/test_support.rs` for the fake provider, `EnvVarGuard` and any
+  transport mocks when those arrive (see *Mock the transport*).
+
+**What they do badly at file level**
+
+| File | Size |
+|---|---|
+| `server/src/grpc/policy.rs` | 835 KB |
+| `server/src/grpc/provider.rs` | 575 KB |
+| `server/src/compute/mod.rs` | 574 KB |
+| `supervisor-network/src/proxy.rs` | 553 KB |
+| `driver-docker/src/lib.rs` | 237 KB, 6 600 lines, 217 fns, tests in a sibling file |
+
+39 files over 100 KB. `too_many_lines = "allow"` in the workspace lints, used
+in full. It is culture, not scale: `driver-podman` does the same job as
+`driver-docker` in eleven named files (`client`, `config`, `container`,
+`driver`, `watcher`, `socket_discovery`). Three sibling-test conventions
+coexist (`tests.rs`, `<module>_tests.rs`, `src/**/tests/*.rs`), and `mod.rs`
+is often the main body rather than an index. The CLI's `main.rs` (242 KB) and
+`run.rs` (271 KB) hold the command logic while `commands/` has four files.
+
+tuipr's largest file is 475 lines, `mod.rs` files compose and named files hold
+the parts, and `cli.rs` dispatches to `preflight` and `auth`. Keep all three.
+
+- [ ] **Write the file-size rule down.** In CONTRIBUTING (or CLAUDE.md until
+  one exists): modules stay under ~500 lines, `mod.rs` composes and does not
+  implement, tests for a module live inline or in exactly one sibling
+  `tests.rs`, never both conventions. Consider `too_many_lines` at `warn`
+  with a threshold instead of `allow`; it is cheaper to keep than to
+  reintroduce.
+
 ### From their AI reviewer ("gator")
 
 OpenShell runs an autonomous PR reviewer in a sandbox. None of its code is
