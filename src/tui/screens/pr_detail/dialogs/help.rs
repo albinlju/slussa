@@ -5,7 +5,7 @@ const HELP_KEYS: &[(&str, &str)] = &[
     ("y", "copy PR link"),
     ("j/k", "move up/down"),
     ("^d/^u", "half-page"),
-    ("h/l", "tab / pane / fold"),
+    ("h/l", "previous / next tab"),
     ("H/L", "pan wide Description"),
     ("1-5", "select tab"),
     ("enter", "open / view"),

@@ -724,7 +724,7 @@ fn compact_diff_switches_panels_and_keeps_file_selection() {
     let text = rendered_text(&terminal);
     assert!(text.contains("Code"));
     assert!(text.contains("old"));
-    assert!(text.contains("h: files"));
+    assert!(text.contains("esc: files"));
     assert!(state.ui.detail.diff.pane_anchor.is_some());
     local_key(&mut state, KeyCode::Esc);
     terminal.draw(|f| render(f, &mut state)).unwrap();

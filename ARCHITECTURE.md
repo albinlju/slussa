@@ -452,7 +452,9 @@ SHAs or branch names remain separate future work.
 - Compact PR details use two header rows, prioritize title/status/author and
   reclaim unnecessary vertical spacing. Full branch metadata remains in the
   roomy header. A compact tab bar advertises number keys, which actually select
-  tabs in every detail context (h/l have other meanings in a diff).
+  tabs in every detail context. `h`/`l` change tab on every tab, the diff
+  included; there `enter`, `esc` and the arrow keys move between the file tree
+  and the code, and `[`/`]` step commits while one is open.
 - Diffs under 72 content columns show Files or Code according to focus, keeping
   the selected file when switching back. Wider layouts retain both panels with
   a bounded tree width. Panel titles and focused borders identify the active

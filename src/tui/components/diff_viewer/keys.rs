@@ -16,10 +16,11 @@ fn tree_key(code: KeyCode, view: &super::DiffViewer) -> Option<DiffAction> {
         return Some(DiffAction::MoveCursor(delta));
     }
     match code {
-        // `l`/Enter steps right into the pane (a file) or drills into a folder.
-        KeyCode::Enter | KeyCode::Right | KeyCode::Char('l') => Some(DiffAction::EnterPane),
+        // Enter steps right into the pane (a file) or drills into a folder. `h`
+        // and `l` are not used here: on the PR page they always change tab.
+        KeyCode::Enter | KeyCode::Right => Some(DiffAction::EnterPane),
         KeyCode::Char(' ') => Some(DiffAction::ToggleAtCursor),
-        KeyCode::Left | KeyCode::Char('h') => Some(DiffAction::CollapseAtCursor),
+        KeyCode::Left => Some(DiffAction::CollapseAtCursor),
         _ => None,
     }
 }
@@ -34,7 +35,7 @@ fn pane_key(code: KeyCode, view: &super::DiffViewer) -> Option<DiffAction> {
         KeyCode::Char('N') if searching => Some(DiffAction::JumpMatch(-1)),
         // Expand/collapse the focused resolved thread.
         KeyCode::Char(' ') if view.pane_thread.is_some() => Some(DiffAction::ToggleThreadExpand),
-        KeyCode::Enter | KeyCode::Left | KeyCode::Char('h') => Some(DiffAction::FocusTree),
+        KeyCode::Enter | KeyCode::Left => Some(DiffAction::FocusTree),
         _ => None,
     }
 }

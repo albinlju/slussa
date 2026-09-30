@@ -6,7 +6,10 @@ use crate::{
         store::LoadState,
     },
     domain::{capabilities::Feature, pr::PrStatus},
-    tui::{key_to_action, regression_tests::fixture, render, screens::pr_detail::tabs::DetailTab},
+    tui::{
+        components::diff_viewer::DiffFocus, key_to_action, regression_tests::fixture, render,
+        screens::pr_detail::tabs::DetailTab,
+    },
 };
 use ratatui::{
     Terminal,
@@ -120,6 +123,37 @@ fn the_description_footer_lists_the_pr_actions() {
     assert!(text.contains("a: submit review"), "{text}");
     assert!(text.contains("x: decline"), "{text}");
     assert!(text.contains("j/k: scroll"), "{text}");
+}
+
+#[test]
+fn h_and_l_change_tab_on_every_tab_including_the_diff_panes() {
+    for tab in DetailTab::ALL {
+        for focus in [DiffFocus::Tree, DiffFocus::Pane] {
+            let mut state = on_tab(overview_of(PrStatus::Open), tab);
+            state.ui.detail.diff.focus = focus;
+            assert!(
+                matches!(
+                    key(&state, 'l'),
+                    Some(Action::Detail(DetailAction::NextTab))
+                ),
+                "l on {tab:?} with {focus:?} focus"
+            );
+            assert!(
+                matches!(
+                    key(&state, 'h'),
+                    Some(Action::Detail(DetailAction::PrevTab))
+                ),
+                "h on {tab:?} with {focus:?} focus"
+            );
+        }
+    }
+}
+
+#[test]
+fn the_diff_footer_says_how_to_go_back_and_change_tab() {
+    let mut state = on_tab(overview_of(PrStatus::Open), DetailTab::Diff);
+    let text = footer_of(&mut state);
+    assert!(text.contains("h/l: tabs"), "{text}");
 }
 
 #[test]

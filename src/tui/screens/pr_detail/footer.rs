@@ -160,9 +160,10 @@ fn footer_actions(state: &DetailView<'_>, tab: DetailTab) -> Vec<Hint> {
                 }));
             }
             hints.push(Hint::on("/: files"));
+            hints.push(Hint::on("h/l: tabs"));
             return hints;
         }
-        let mut hints = vec![Hint::on("h: files")];
+        let mut hints = vec![Hint::on("esc: files")];
         if let Some(thread) = view.pane_thread.as_ref().filter(|thread| thread.resolved)
             && let Some(id) = thread.comment_id
         {
@@ -193,6 +194,7 @@ fn footer_actions(state: &DetailView<'_>, tab: DetailTab) -> Vec<Hint> {
             }));
         }
         hints.push(Hint::on("/: search"));
+        hints.push(Hint::on("h/l: tabs"));
         return hints;
     }
     match tab {
