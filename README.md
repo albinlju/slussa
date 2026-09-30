@@ -161,7 +161,6 @@ sort = "attention"   # attention (default) or recent
 - [ARCHITECTURE.md](docs/ARCHITECTURE.md): how the code is organised and why
 - [IMPROVEMENTS.md](docs/IMPROVEMENTS.md): engineering and tooling backlog
 - [RELEASING.md](docs/RELEASING.md): how a release is cut
-- [VERIFICATION.md](docs/VERIFICATION.md): what has been checked against the real services, and what has not
 
 ## Develop
 

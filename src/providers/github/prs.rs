@@ -143,7 +143,7 @@ const PR_FIELDS: &str = r"
 /// How many PRs one request asks for, and how many a closed page holds, most
 /// recently updated first. GitHub gives a GraphQL request about ten seconds,
 /// and with this selection 100 PRs took 7 to 11 seconds on a large repository
-/// and once timed out, while 30 took about 2 (VERIFICATION.md, V7).
+/// and once timed out, while 30 took about 2 (measured on cli/cli, 2026-09-30).
 const PAGE: u32 = 30;
 const OPEN_ARGS: &str = "states: OPEN, ";
 const MERGED_ARGS: &str = "states: MERGED, orderBy: {field: UPDATED_AT, direction: DESC}, ";

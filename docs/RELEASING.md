@@ -14,12 +14,21 @@ combined `SHA256SUMS`.
 
 ## Before the first release (0.1.0)
 
-[VERIFICATION.md](VERIFICATION.md) lists what has not been checked against a
-real service and how to check it: the release rehearsal, a clean install, the
-Linux ARM binary, a blocked GitHub PR, a real review request, reopening, a
-large repository, and Bitbucket Data Center. It also holds the two decisions
-the release needs, repository visibility and a screenshot for the README.
-Release when its items are ticked or knowingly accepted.
+Checked against the real services before 0.1.0: two release rehearsals (the
+second with the renamed package), the macOS and Linux ARM binaries, a blocked
+GitHub PR, reopening a PR and a large repository. Still open:
+
+- **Repository visibility.** While the repository is private nobody else can
+  download a release. Decide whether 0.1.0 makes it public.
+- **A real review request.** "Review requested" in the list has only been seen
+  against scripted `gh` output. It needs a PR where someone else asked for your
+  review, which one account cannot create. It can follow the release.
+- **Bitbucket Data Center** is in maintenance and has only been seen listing
+  PRs on one real server; every write is tested against a mock of the documented
+  API. The README says so.
+
+Release when these are done or knowingly accepted. The last two are accepted
+for 0.1.0.
 
 ## Cut a release
 

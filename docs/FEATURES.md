@@ -314,8 +314,8 @@ rank below the decision path.
   Windows CI job and release target, or keep it stated as unsupported.
 - [x] **Bitbucket on plain http and under a context path** — an http(s)
   remote now gives the scheme, port and the context path in front of `scm/`;
-  ssh remotes still assume `https://host`. Covered by unit tests only; the
-  local Docker test (VERIFICATION.md, B1 to B10) exercises it for real.
+  ssh remotes still assume `https://host`. Covered by unit tests only; it has
+  not been tried against a real server.
 - [ ] **Bitbucket Cloud client.** (Not a successor to Data Center in this tool
   unless someone asks for it.)
 - [ ] **Unified cross-provider list** with a provider icon per row.

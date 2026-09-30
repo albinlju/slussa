@@ -55,8 +55,8 @@ Make the change, then open a pull request against `main` from your fork.
    asynchronous state. Tests never call a real service: use `FakeGh` and
    `MockHttp` from `src/test_support.rs`.
 5. **Update [docs/FEATURES.md](docs/FEATURES.md)** when behaviour changes, and
-   [docs/VERIFICATION.md](docs/VERIFICATION.md) when a test double stands in
-   for something new. Read [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) before
+   say in the pull request when a test double stands in for behaviour you could
+   not check against the real service. Read [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) before
    you change app-level code; it has checklists for adding a provider write or
    a read resource.
 6. **You must understand your code**, including code an AI tool wrote. Say in

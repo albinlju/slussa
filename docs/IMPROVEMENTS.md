@@ -4,8 +4,9 @@ Companion to [FEATURES.md](FEATURES.md) (what to build) and
 [ARCHITECTURE.md](ARCHITECTURE.md) (how it is built). This file tracks how the
 codebase, tooling and delivery should get better. It is not a bug list.
 
-**Baseline (2026-09-30):** single crate, ~18 400 lines of Rust, 126 tests,
-`clippy::pedantic` clean, no CI, no releases, README says "test".
+**State on 2026-09-30:** single crate, about 23 600 lines of Rust, 254 tests,
+`clippy::pedantic` clean, CI on Linux and macOS, a release workflow that has
+been rehearsed, a README.
 
 Rule of thumb for everything below: **do the refactors when a feature touches
 the code anyway, do the tooling now.** Nothing here is worth a refactor-only
@@ -75,7 +76,7 @@ stays.
   general.
 
 - [x] **A page of 100 PRs can hit GitHub's time limit.** *Fixed 2026-09-30.*
-  Measured on `cli/cli` (see VERIFICATION.md, V7): a 100-PR page with slussa's
+  Measured on `cli/cli` (2026-09-30): a 100-PR page with slussa's
   selection took 7 to 11 s and once failed with "We couldn't respond to your
   request in time", while 30 PRs took about 2 s. The list now reads 30 PRs per
   request (`PAGE` in `github/prs.rs`, passed through `repo_nodes`), and the open
@@ -311,7 +312,7 @@ list; see *Not borrowed* below.
 - [x] **PR template.** *Done 2026-09-30 (`.github/pull_request_template.md`).* Summary / Changes / Testing, and a rule that
   user-visible changes update FEATURES.md.
 - [ ] **CodeRabbit on the repository.** An automatic AI reviewer on every PR.
-  *Trigger:* the repository becomes public (VERIFICATION.md, D1). Third-party
+  *Trigger:* the repository becomes public (the release decision in RELEASING.md). Third-party
   pages say it is free for public repositories and about 24 USD per user and
   month for private ones; the vendor's own pricing page was not checked, so
   check it first.

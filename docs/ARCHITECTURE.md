@@ -267,7 +267,7 @@ Provider-side limits and server/version compatibility still require live checks.
   an `Action`; `App` decides whether work starts.
 - **A child process that needs the terminal** (an editor, an agent) cannot use
   this path. It needs the suspend and resume sequence described in
-  IMPROVEMENTS.md, which does not exist yet.
+  IMPROVEMENTS.md, which is not built yet.
 
 ## Lifecycle: a read
 

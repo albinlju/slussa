@@ -44,9 +44,6 @@ CI runs all four on Linux and macOS. The toolchain is pinned in
 - `docs/IMPROVEMENTS.md`: engineering backlog; each refactor has a trigger, so do
   not do them ahead of the feature that needs them.
 - `docs/RELEASING.md`: how a release is cut.
-- `docs/VERIFICATION.md`: what has only been tested against doubles, and how to
-  check it against the real service. Keep it current when a double stands in
-  for something new.
 
 ## Working here
 
@@ -55,5 +52,6 @@ CI runs all four on Linux and macOS. The toolchain is pinned in
   asynchronous state is involved. Tests never call a real provider: use
   `FakeGh` and `MockHttp` from `src/test_support.rs`. A test that installs
   `FakeGh` holds a process-wide lock, so never install two in one test without
-  dropping the first.
+  dropping the first. Say in the PR when a double stands in for real behaviour
+  you could not check.
 - Commit and push only when asked.
