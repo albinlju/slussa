@@ -15,7 +15,7 @@ Decisions and the release procedure are in [RELEASING.md](RELEASING.md).
 
 ## A. Release mechanics (you)
 
-- [ ] **V1. Rehearse the release.** The publish job has never run. Do it from
+- [x] **V1. Rehearse the release.** The publish job has never run. Do it from
   a throwaway branch, so `main` keeps `0.1.0`, nothing needs reverting, and the
   repository can stay private: a prerelease in a private repository is visible
   only to people with access.
@@ -35,6 +35,17 @@ Decisions and the release procedure are in [RELEASING.md](RELEASING.md).
      `git push origin --delete release-rehearsal`,
      `git branch -D release-rehearsal`.
   Report: pass, or the failing step and its log.
+  **Done 2026-09-30, pass.** Run for tag `v0.1.0-pre.1` from branch
+  `release-rehearsal`: all six jobs succeeded, including Publish. The release
+  is a prerelease (not a draft) with four archives and `SHA256SUMS`. All four
+  checksums verified, and each binary has the right architecture: arm64 and
+  x86_64 Mach-O for macOS, ARM aarch64 and x86-64 ELF for Linux. Each archive
+  holds `tuipr`, `LICENSE` and `README.md`. The Mac arm64 binary ran and printed
+  `tuipr 0.1.0-pre.1` (maintainer), and the x86_64 Mac binary did the same under
+  Rosetta. Cleaned up the same day: release, tag and branch are deleted and
+  `main` is untouched at `0.1.0`.
+  Deleting it removed the archives V2 and V3 use, so they need a release to
+  download from: repeat V1 to get one, or do them on the real `0.1.0`.
 
 - [ ] **V2. Clean install.** Use an archive from that prerelease on a
   machine *without Rust*, unpack it, run `./tuipr --version` and then `./tuipr`
@@ -42,6 +53,11 @@ Decisions and the release procedure are in [RELEASING.md](RELEASING.md).
   `xattr -d com.apple.quarantine tuipr` is enough. Check the checksum with
   `shasum -a 256 -c <file>.sha256`.
   Report: what happened, and the exact message if it was blocked.
+  **Partly done 2026-09-30.** The Mac arm64 archive, fetched with `gh`, unpacked
+  and ran. Still open: a machine without Rust, and above all the quarantine
+  question, which only arises for a file downloaded in a browser (`gh` does not
+  set the flag). Download an archive from the release page in a browser, then
+  run `xattr -l tuipr` and `./tuipr --version`.
 
 - [ ] **V3. The Linux ARM binary runs.** It is cross-compiled and has never been
   executed. On a Mac with Docker:
