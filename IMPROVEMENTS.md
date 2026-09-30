@@ -74,6 +74,54 @@ stays.
   the wording for `BLOCKED` is derived from `reviewDecision` and may be too
   general.
 
+- [x] **A page of 100 PRs can hit GitHub's time limit.** *Fixed 2026-09-30.*
+  Measured on `cli/cli` (see VERIFICATION.md, V7): a 100-PR page with tuipr's
+  selection took 7 to 11 s and once failed with "We couldn't respond to your
+  request in time", while 30 PRs took about 2 s. The list now reads 30 PRs per
+  request (`PAGE` in `github/prs.rs`, passed through `repo_nodes`), and the open
+  pages and the first closed page run in parallel threads. A failure in either
+  read fails the list, with the open error reported when both fail. On `cli/cli`
+  the first load fell from about 10 s to 6.5 s and nothing failed in five live
+  reads. The cost in points is unchanged. **Limits:** a repository with
+  hundreds of open PRs still reads them page by page, about 2 s each, since a
+  cursor cannot be skipped ahead; one network, and GitHub's timing is noisy. The
+  nested `first: 100` on reviews, labels and requests was left alone because
+  the measurement did not show that it mattered. Bitbucket was not changed: it
+  has no such limit and has not shown the problem.
+
+- [ ] **The first load is slow on a large repository.** Reported by the
+  maintainer after running tuipr on `cli/cli` (63 open PRs): "quite slow", even
+  after the page-size fix (first load 6.5 s in the provider, about 0.75 s more
+  before the first frame for `git`, `gh --version`, `gh auth status` and
+  `gh api user`). The open pages are a cursor chain and cannot run in parallel.
+  What each page costs is the selection: a page of 30 open PRs took 3.7 to 7.0 s
+  with everything, about 2.2 to 2.8 s with any one of CI, body, reviews or labels
+  removed, and 1.1 to 1.4 s with only core fields plus the comment count. The
+  list shows neither the body nor the labels, yet reads both for every PR.
+  **Done so far:** (a) merged and declined PRs are read only when their view is
+  opened; (b) the list query no longer reads the body and the labels, which
+  `fetch_info` reads per PR when it is opened (GitHub only, `Feature::PrInfo`;
+  Bitbucket lists them for free); (c) the open group is read a page at a time
+  and the list appears with the first page, the rest appended (a refresh holds
+  the pages and swaps the list in after the last one, so it never shrinks). A
+  page of 30 without body and labels took 2.0 to 2.7 s on `cli/cli` (three
+  runs), against 3.7 to 7.0 s before. The pages are still a sequential chain,
+  so the whole list takes about three pages on that repository; only the first
+  is waited for. (d) Rows no longer move while pages arrive: they stay in
+  arrival order and the attention order applies once when the reading ends. The
+  reading stops at 90 open PRs and `L` reads 90 more, so a very large
+  repository gets a bound instead of a long chain. The maintainer found the
+  first version "better" but unsettling because rows kept moving; (d) is the
+  answer to that and has not been felt in the TUI yet. Searching for the PRs
+  that need the viewer (`review-requested:@me`, `author:@me`) to have them
+  before the later pages arrive was considered and declined: the search index
+  lags.
+  **Left, if it is still not enough:** two phases, core fields first and
+  reviews, CI and requests filled in after (about 1.1 to 1.4 s a page);
+  re-reading only what changed instead of the whole list every minute. A
+  persisted last list was considered and declined.
+  Timings noisy, one network, one repository.
+
 ### With the next feature that touches the area
 
 - [ ] **Split `Action` into local and app-level.** Today one enum carries both

@@ -79,6 +79,10 @@ pub(crate) fn fixture() -> AppState {
             }),
             builds: LoadState::Loaded(vec![]),
             mergeability: LoadState::Loaded(MergeStatus::new(Mergeability::Mergeable)),
+            info: LoadState::Loaded(PrInfo {
+                description: Some("Review **this change**.".into()),
+                labels: vec!["rust".into()],
+            }),
             ..PrData::default()
         },
     );
@@ -1118,8 +1122,11 @@ fn wide_description_can_pan_to_hidden_content_and_resets_when_resized() {
         pr_id: 42,
         tab: DetailTab::Description,
     };
-    if let LoadState::Loaded(prs) = &mut state.store.cache.prs {
-        prs[0].description = Some(format!("```\n{}END_OF_CODE\n```", "x".repeat(100)));
+    if let Some(data) = state.store.cache.details.get_mut(&42) {
+        data.info = LoadState::Loaded(PrInfo {
+            description: Some(format!("```\n{}END_OF_CODE\n```", "x".repeat(100))),
+            labels: vec![],
+        });
     }
     let mut terminal = Terminal::new(TestBackend::new(40, 16)).unwrap();
     terminal.draw(|frame| render(frame, &mut state)).unwrap();

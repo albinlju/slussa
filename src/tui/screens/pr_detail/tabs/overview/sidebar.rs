@@ -42,9 +42,10 @@ impl Widget for Sidebar<'_> {
             lines.push(Line::default());
         }
 
-        if !pr.labels.is_empty() {
+        let labels = labels(pr, pr_data);
+        if !labels.is_empty() {
             section_heading(&mut lines, "Labels");
-            lines.extend(labels(pr));
+            lines.extend(labels);
             lines.push(Line::default());
         }
 
@@ -116,9 +117,15 @@ fn builds_summary(pr_data: Option<&PrData>) -> Vec<Line<'static>> {
     }
 }
 
-fn labels(pr: &PullRequest) -> Vec<Line<'static>> {
+/// The labels read for this PR when the provider's list leaves them out,
+/// otherwise the list's own.
+fn labels(pr: &PullRequest, pr_data: Option<&PrData>) -> Vec<Line<'static>> {
     let accent = Style::default().fg(theme::current().decorative);
-    pr.labels
+    let labels = match pr_data.map(|data| &data.info) {
+        Some(LoadState::Loaded(info)) => &info.labels,
+        _ => &pr.labels,
+    };
+    labels
         .iter()
         .map(|label| Line::from(Span::styled(label.clone(), accent)))
         .collect()

@@ -1,12 +1,13 @@
 use crate::{
     app::{
         action::{Action, ListAction},
-        store::LoadState,
+        navigation::Screen,
+        store::{LoadState, OpenChain, Store},
     },
     domain::{
         attention::{Attention, attention},
         ci::CiSummary,
-        pr::{PrStatus, PullRequest},
+        pr::{PrGroup, PrStatus, PullRequest},
         review::{Reviewer, ReviewerState},
     },
     tui::{
@@ -41,7 +42,7 @@ const HELP_KEYS: &[(&str, &str)] = &[
     ("esc", "clear search"),
     ("f", "filter status"),
     ("s", "sort: needs you first / newest first"),
-    ("L", "load older merged and declined PRs"),
+    ("L", "load more PRs"),
     ("^d/^u", "half-page"),
     ("F", "refresh"),
     ("? / esc", "close help"),
@@ -167,7 +168,7 @@ fn render_footer(
     area: Rect,
 ) {
     let hints = if load_older {
-        "enter: open  /: search  f: filter  L: older"
+        "enter: open  /: search  f: filter  L: more"
     } else {
         "enter: open  /: search  f: filter"
     };
@@ -310,6 +311,10 @@ pub struct PrListScreen {
     pub filter_picker_open: bool,
     pub filter_picker_cursor: usize,
     pub sort: Sort,
+    /// While the open PRs are still being read for the first time the rows stay
+    /// in the order they arrive, so nothing moves under the reader. The
+    /// attention order is applied once, when the reading ends.
+    pub hold_order: bool,
 }
 
 /// How the list is ordered. Both keep the provider's order (newest first)
@@ -373,24 +378,32 @@ impl StatusFilter {
         }
     }
 
-    /// Whether this view lists merged or declined PRs.
-    pub const fn shows_closed(self) -> bool {
-        matches!(self, Self::Merged | Self::Declined | Self::All)
+    /// The groups of PRs this view shows. Open and Draft share one: a provider
+    /// does not separate drafts when asked for the open ones.
+    pub const fn groups(self) -> &'static [PrGroup] {
+        match self {
+            Self::Open | Self::Draft => &[PrGroup::Open],
+            Self::Merged => &[PrGroup::Merged],
+            Self::Declined => &[PrGroup::Declined],
+            Self::All => &PrGroup::ALL,
+        }
     }
 
-    /// The list's heading. Merged and declined PRs are read a batch at a time,
-    /// so while older ones remain unread the views that show them say "recent"
-    /// rather than imply the count is the whole history.
-    pub const fn title(self, more_closed: bool) -> &'static str {
-        match (self, more_closed) {
-            (Self::Open, _) => "Open",
-            (Self::Draft, _) => "Draft",
+    /// The list's heading. PRs are read a batch at a time past a limit, so
+    /// while more remain unread the views that show them say so rather than
+    /// imply the count is everything.
+    pub const fn title(self, more: bool) -> &'static str {
+        match (self, more) {
+            (Self::Open, false) => "Open",
+            (Self::Open, true) => "Open, more unread",
+            (Self::Draft, false) => "Draft",
+            (Self::Draft, true) => "Draft, more unread",
             (Self::Merged, false) => "Merged",
             (Self::Merged, true) => "Merged, recent",
             (Self::Declined, false) => "Declined",
             (Self::Declined, true) => "Declined, recent",
             (Self::All, false) => "All",
-            (Self::All, true) => "All, closed are recent",
+            (Self::All, true) => "All, more unread",
         }
     }
 
@@ -406,13 +419,33 @@ impl StatusFilter {
     }
 }
 
+#[allow(clippy::struct_excessive_bools)] // independent facts about what is being read
 pub struct ListContext<'a> {
     pub prs: &'a LoadState<Vec<PullRequest>>,
     pub refreshing: bool,
     /// Who is looking, for the attention column and order.
     pub viewer: &'a str,
-    /// Older merged and declined PRs exist that have not been loaded.
-    pub more_closed: bool,
+    /// More PRs exist, in a group this view shows, that have not been loaded.
+    pub more: bool,
+    /// The open PRs are being read page by page.
+    pub loading_more: bool,
+    /// A group this view shows is being read.
+    pub view_loading: bool,
+}
+
+impl<'a> ListContext<'a> {
+    pub fn from_store(store: &'a Store, filter: StatusFilter, screen: Screen) -> Self {
+        let groups = filter.groups();
+        Self {
+            prs: &store.cache.prs,
+            refreshing: store.refreshing(screen),
+            viewer: &store.current_user,
+            more: groups.iter().any(|&group| store.group_has_more(group)),
+            loading_more: groups.contains(&PrGroup::Open)
+                && matches!(store.open_chain, OpenChain::Appending),
+            view_loading: groups.iter().any(|&group| store.group_loading(group)),
+        }
+    }
 }
 
 impl Component for PrListScreen {
@@ -430,12 +463,13 @@ impl Component for PrListScreen {
         let filtered =
             matches!(ctx.prs, LoadState::Loaded(_)).then(|| self.filtered_prs(ctx.prs, ctx.viewer));
         let count_label = match (&filtered, ctx.prs) {
+            (Some(prs), _) if ctx.loading_more => format!("{}, loading more...", prs.len()),
             (Some(prs), _) => prs.len().to_string(),
             (_, LoadState::Failed(_)) => "!".to_string(),
             _ => "…".to_string(),
         };
 
-        let container = pr_list_container(self.filter, &count_label, ctx.more_closed);
+        let container = pr_list_container(self.filter, &count_label, ctx.more);
         let inner = container.inner(body_area);
         frame.render_widget(container, body_area);
 
@@ -466,12 +500,17 @@ impl Component for PrListScreen {
 
         if let Some(prs) = &filtered {
             if prs.is_empty() {
-                let message = if self.search.query.is_empty() {
-                    "No PRs in this view. f changes filter; F refreshes."
+                if ctx.view_loading {
+                    let text = format!("Loading {} PRs...", self.filter.label().to_lowercase());
+                    frame.render_widget(Paragraph::new(widgets::loading(&text)), rows_area);
                 } else {
-                    "No matching PRs. Esc clears search; f changes filter."
-                };
-                frame.render_widget(widgets::empty_state(message), rows_area);
+                    let message = if self.search.query.is_empty() {
+                        "No PRs in this view. f changes filter; F refreshes."
+                    } else {
+                        "No matching PRs. Esc clears search; f changes filter."
+                    };
+                    frame.render_widget(widgets::empty_state(message), rows_area);
+                }
             } else {
                 self.list_state.select(Some(self.selected));
                 render_table_body(
@@ -494,7 +533,7 @@ impl Component for PrListScreen {
             &self.search,
             match_count,
             ctx.refreshing,
-            self.can_load_older(ctx),
+            Self::can_load_older(ctx),
             footer_area,
         );
 
@@ -503,7 +542,7 @@ impl Component for PrListScreen {
                 .filtered_prs(ctx.prs, ctx.viewer)
                 .get(self.selected)
                 .is_some_and(|pr| pr.url.is_some());
-            let can_load_older = self.can_load_older(ctx);
+            let can_load_older = Self::can_load_older(ctx);
             let entries: Vec<_> = HELP_KEYS
                 .iter()
                 .copied()
@@ -562,7 +601,7 @@ impl Component for PrListScreen {
             KeyCode::Char('F') => Some(Action::Refresh),
             KeyCode::Char('f') => Some(Action::List(ListAction::OpenFilterPicker)),
             KeyCode::Char('s') => Some(Action::List(ListAction::ToggleSort)),
-            KeyCode::Char('L') if self.can_load_older(ctx) => {
+            KeyCode::Char('L') if Self::can_load_older(ctx) => {
                 Some(Action::List(ListAction::LoadOlder))
             }
             KeyCode::Down | KeyCode::Char('j') => Some(Action::List(ListAction::MoveSelection(1))),
@@ -610,16 +649,21 @@ impl Component for PrListScreen {
             ListAction::CloseFilterPicker => self.close_filter_picker(),
             ListAction::FilterPickerNext => self.filter_picker_next(),
             ListAction::FilterPickerPrev => self.filter_picker_prev(),
-            ListAction::ApplyFilter => self.apply_filter(),
+            ListAction::ApplyFilter => {
+                if self.apply_filter() {
+                    return Some(Action::List(ListAction::FilterChanged));
+                }
+            }
+            ListAction::FilterChanged => return Some(Action::List(ListAction::FilterChanged)),
         }
         None
     }
 }
 impl PrListScreen {
-    /// `L` is offered only where it would show something: a view that lists
-    /// closed PRs, while older ones remain.
-    const fn can_load_older(&self, ctx: &ListContext<'_>) -> bool {
-        ctx.more_closed && self.filter.shows_closed()
+    /// `L` is offered only where it would show something: while a group this
+    /// view shows has more PRs unread, and nothing is being read.
+    const fn can_load_older(ctx: &ListContext<'_>) -> bool {
+        ctx.more && !ctx.loading_more
     }
 
     /// The rows to show, filtered and ordered. With the attention order the
@@ -638,7 +682,7 @@ impl PrListScreen {
             .filter(|p| self.filter.matches(&p.status))
             .filter(|p| self.search.matches_pr(p))
             .collect();
-        if self.sort == Sort::Attention {
+        if self.sort == Sort::Attention && !self.hold_order {
             rows.sort_by_key(|pr| {
                 attention(pr, viewer).map_or(usize::MAX, |reason| reason as usize)
             });
@@ -666,17 +710,20 @@ impl PrListScreen {
         self.filter_picker_cursor = self.filter_picker_cursor.saturating_sub(1);
     }
 
-    fn apply_filter(&mut self) {
+    /// Apply the picked filter; whether it changed the view.
+    fn apply_filter(&mut self) -> bool {
         let new_filter = StatusFilter::CYCLE
             .get(self.filter_picker_cursor)
             .copied()
             .unwrap_or(StatusFilter::Open);
-        if new_filter != self.filter {
+        let changed = new_filter != self.filter;
+        if changed {
             self.filter = new_filter;
             self.selected = 0;
             self.list_state = ListState::default();
         }
         self.filter_picker_open = false;
+        changed
     }
 }
 

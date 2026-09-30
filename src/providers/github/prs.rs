@@ -2,7 +2,7 @@ use chrono::{DateTime, Utc};
 use serde::Deserialize;
 
 use crate::domain::ci::CiSummary;
-use crate::domain::pr::{PrBatch, PrStatus, PullRequest};
+use crate::domain::pr::{PrBatch, PrGroup, PrInfo, PrStatus, PullRequest};
 use crate::domain::review::{Reviewer, ReviewerState};
 use crate::domain::user::User;
 use crate::providers::error::FetchError;
@@ -97,8 +97,6 @@ struct GhPr {
     id: String,
     number: u64,
     title: String,
-    #[serde(default)]
-    body: Option<String>,
     author: GhAuthor,
     state: String,
     #[serde(default)]
@@ -119,63 +117,58 @@ struct GhPr {
     review_requests: ReviewRequests,
     #[serde(default)]
     commits: Commits,
-    labels: Connection<GhLabel>,
 }
 
-/// What the list needs of each pull request. Connections nested here are
-/// capped at 100; `fetch_prs` refetches the ones that report more.
+/// What the list needs of each pull request. The description and the labels
+/// are left out: the list shows neither, and they made a page about twice as
+/// slow (IMPROVEMENTS.md); `fetch_info` reads them when a PR is opened.
+/// Connections nested here are capped at 100; `fetch_prs` refetches the ones
+/// that report more.
 const PR_FIELDS: &str = r"
     id url title number
     author { login }
-    state isDraft headRefName baseRefName body createdAt updatedAt
+    state isDraft headRefName baseRefName createdAt updatedAt
     additions deletions changedFiles
     comments { totalCount }
     latestReviews(first: 100) { nodes { state author { login } } pageInfo { hasNextPage } }
-    labels(first: 100) { nodes { name } pageInfo { hasNextPage } }
     reviewRequests(first: 100) { nodes { requestedReviewer { ... on User { login } } } }
     commits(last: 1) { nodes { commit { statusCheckRollup { state } } } }
 ";
 
-/// How many merged and closed PRs one read returns, most recently updated
-/// first. Open PRs are always read in full; closed ones are history, so they
-/// come a page at a time.
-const RECENT_CLOSED: u32 = 50;
-const CLOSED_ARGS: &str =
-    "states: [MERGED, CLOSED], orderBy: {field: UPDATED_AT, direction: DESC}, ";
+/// How many PRs one request asks for, and how many a closed page holds, most
+/// recently updated first. GitHub gives a GraphQL request about ten seconds,
+/// and with this selection 100 PRs took 7 to 11 seconds on a large repository
+/// and once timed out, while 30 took about 2 (VERIFICATION.md, V7).
+const PAGE: u32 = 30;
+const OPEN_ARGS: &str = "states: OPEN, ";
+const MERGED_ARGS: &str = "states: MERGED, orderBy: {field: UPDATED_AT, direction: DESC}, ";
+const DECLINED_ARGS: &str = "states: CLOSED, orderBy: {field: UPDATED_AT, direction: DESC}, ";
 
-/// Every open PR and the first page of closed ones.
-pub fn fetch_prs() -> Result<PrBatch, FetchError> {
-    let mut prs: Vec<GhPr> =
-        super::pagination::repo_nodes("pullRequests", "states: OPEN, ", PR_FIELDS)?;
-    let (closed, more) = closed_page(None)?;
-    prs.extend(closed);
+/// One page of a group of the repository's PRs, after `after`, and the
+/// position to continue from in `more` (`None` at the end). The open group is
+/// read the same way, a page at a time, so the caller can show the first page
+/// while the rest are read.
+pub fn fetch_prs(group: PrGroup, after: Option<&str>) -> Result<PrBatch, FetchError> {
+    let args = match group {
+        PrGroup::Open => OPEN_ARGS,
+        PrGroup::Merged => MERGED_ARGS,
+        PrGroup::Declined => DECLINED_ARGS,
+    };
+    let (nodes, more) = one_page(args, after)?;
     Ok(PrBatch {
-        prs: complete(prs)?,
+        prs: complete(nodes)?,
         more,
     })
 }
 
-/// The page of closed PRs after the position an earlier read returned.
-pub fn fetch_older_prs(after: &str) -> Result<PrBatch, FetchError> {
-    let (closed, more) = closed_page(Some(after))?;
-    Ok(PrBatch {
-        prs: complete(closed)?,
-        more,
-    })
-}
-
-fn closed_page(after: Option<&str>) -> Result<(Vec<GhPr>, Option<String>), FetchError> {
-    super::pagination::repo_page("pullRequests", CLOSED_ARGS, PR_FIELDS, RECENT_CLOSED, after)
+fn one_page(args: &str, after: Option<&str>) -> Result<(Vec<GhPr>, Option<String>), FetchError> {
+    super::pagination::repo_page("pullRequests", args, PR_FIELDS, PAGE, after)
 }
 
 /// Read the nested connections the list query capped at 100, order newest
 /// first and map to the domain.
 fn complete(mut prs: Vec<GhPr>) -> Result<Vec<PullRequest>, FetchError> {
     for pr in &mut prs {
-        if pr.labels.page_info.has_next_page {
-            pr.labels.nodes =
-                super::pagination::node_nodes(&pr.id, "PullRequest", "labels", "name")?;
-        }
         if pr.latest_reviews.page_info.has_next_page {
             pr.latest_reviews.nodes = super::pagination::node_nodes(
                 &pr.id,
@@ -188,6 +181,27 @@ fn complete(mut prs: Vec<GhPr>) -> Result<Vec<PullRequest>, FetchError> {
     // Match the list's existing newest-first presentation.
     prs.sort_by_key(|pr| std::cmp::Reverse(pr.created_at));
     Ok(prs.into_iter().map(map_pr).collect())
+}
+
+/// The description and labels of one PR.
+pub fn fetch_info(pr: u64) -> Result<PrInfo, FetchError> {
+    #[derive(Deserialize)]
+    struct Fields {
+        id: String,
+        #[serde(default)]
+        body: Option<String>,
+        labels: Connection<GhLabel>,
+    }
+    let fields: Fields = super::run_pr_graphql(super::graphql::INFO, pr)?;
+    let labels = if fields.labels.page_info.has_next_page {
+        super::pagination::node_nodes(&fields.id, "PullRequest", "labels", "name")?
+    } else {
+        fields.labels.nodes
+    };
+    Ok(PrInfo {
+        description: fields.body,
+        labels: labels.into_iter().map(|label| label.name).collect(),
+    })
 }
 
 fn map_pr(gh: GhPr) -> PullRequest {
@@ -210,22 +224,20 @@ fn map_pr(gh: GhPr) -> PullRequest {
         url: gh.url,
         id: gh.number,
         title: gh.title,
-        description: gh.body,
+        description: None,
         author: User {
             username: gh.author.login,
         },
         ci: ci_state,
-        status: if gh.is_draft {
-            PrStatus::Draft
-        } else {
-            match gh.state.as_str() {
-                "MERGED" => PrStatus::Merged,
-                "CLOSED" => PrStatus::Declined,
-                _ => PrStatus::Open,
-            }
+        // Only an open PR is a draft: GitHub keeps the flag on a closed one.
+        status: match gh.state.as_str() {
+            "MERGED" => PrStatus::Merged,
+            "CLOSED" => PrStatus::Declined,
+            _ if gh.is_draft => PrStatus::Draft,
+            _ => PrStatus::Open,
         },
         reviewers,
-        labels: gh.labels.nodes.into_iter().map(|l| l.name).collect(),
+        labels: Vec::new(),
         comment_count,
         source_branch: gh.head_ref_name,
         target_branch: gh.base_ref_name,
@@ -327,8 +339,7 @@ mod link_tests {
             "headRefName": "feature", "baseRefName": "main",
             "createdAt": "2026-01-01T00:00:00Z", "updatedAt": "2026-01-01T00:00:00Z",
             "comments": {"totalCount": 0},
-            "latestReviews": {"nodes": [], "pageInfo": {"hasNextPage": false}},
-            "labels": {"nodes": [], "pageInfo": {"hasNextPage": false}}
+            "latestReviews": {"nodes": [], "pageInfo": {"hasNextPage": false}}
         });
         assert_eq!(
             map_pr(serde_json::from_value(json).unwrap()).url.as_deref(),

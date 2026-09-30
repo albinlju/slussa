@@ -27,7 +27,7 @@ use crate::domain::{
     ci::Build,
     commit::Commit,
     diff::Diff,
-    pr::{MergeStatus, MergeStrategy, PrBatch},
+    pr::{MergeStatus, MergeStrategy, PrBatch, PrGroup, PrInfo},
     review::{ReviewComment, ReviewVerdict},
 };
 
@@ -38,20 +38,13 @@ pub enum Provider {
 }
 
 impl Provider {
-    /// Every open PR and the most recent merged and declined ones.
-    pub fn fetch_prs(&self) -> Result<PrBatch, FetchError> {
+    /// One group of the repository's PRs: all the open ones, or a page of the
+    /// merged or declined ones starting after `after`. The batch's `more` is the
+    /// position to pass back for the next page, `None` when there is none.
+    pub fn fetch_prs(&self, group: PrGroup, after: Option<&str>) -> Result<PrBatch, FetchError> {
         match self {
-            Self::GitHub => github::fetch_prs(),
-            Self::BitbucketDc(c) => bitbucket_dc::fetch_prs(c),
-        }
-    }
-
-    /// The next older merged and declined PRs, continuing from the `more`
-    /// position an earlier `fetch_prs` or `fetch_older_prs` returned.
-    pub fn fetch_older_prs(&self, after: &str) -> Result<PrBatch, FetchError> {
-        match self {
-            Self::GitHub => github::fetch_older_prs(after),
-            Self::BitbucketDc(c) => bitbucket_dc::fetch_older_prs(c, after),
+            Self::GitHub => github::fetch_prs(group, after),
+            Self::BitbucketDc(c) => bitbucket_dc::fetch_prs(c, group, after),
         }
     }
 
@@ -97,6 +90,16 @@ impl Provider {
         }
     }
 
+    /// The description and labels of one PR, for a provider whose list omits them.
+    pub fn fetch_info(&self, pr_id: u64) -> Result<PrInfo, FetchError> {
+        match self {
+            Self::GitHub => github::fetch_info(pr_id),
+            Self::BitbucketDc(_) => Err(FetchError::InvalidInput(
+                "Bitbucket lists the description and labels with each PR.".into(),
+            )),
+        }
+    }
+
     pub fn merge(&self, pr_id: u64, strategy: MergeStrategy) -> Result<(), FetchError> {
         if !self.capabilities().merge_strategies.contains(&strategy) {
             return Err(FetchError::InvalidInput(
@@ -127,7 +130,7 @@ impl Provider {
 
     pub fn capabilities(&self) -> crate::domain::capabilities::Capabilities {
         use crate::domain::capabilities::{Capabilities, Feature, ReviewSubmission};
-        let features = [
+        let features: std::collections::HashSet<Feature> = [
             Feature::PrComments,
             Feature::InlineComments,
             Feature::Replies,
@@ -143,7 +146,7 @@ impl Provider {
         .collect();
         match self {
             Self::GitHub => Capabilities {
-                features,
+                features: features.into_iter().chain([Feature::PrInfo]).collect(),
                 review_verdicts: vec![
                     ReviewVerdict::Approve,
                     ReviewVerdict::RequestChanges,

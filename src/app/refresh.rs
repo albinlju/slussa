@@ -1,5 +1,6 @@
 use crate::{
     app::{App, navigation::Screen},
+    domain::pr::PrGroup,
     tui::screens::pr_detail::tabs::DetailTab,
 };
 use std::time::{Duration, Instant};
@@ -21,7 +22,7 @@ impl App {
         match self.state.screen {
             Screen::List => {
                 if full_due {
-                    self.spawn_load_prs();
+                    self.refresh_list();
                     self.full_refreshed = now;
                 }
             }
@@ -34,8 +35,9 @@ impl App {
                         self.refresh_detail_view(pr_id, tab);
                     }
                     self.spawn_load_mergeability(pr_id);
+                    self.spawn_load_info(pr_id);
                     // The reviewer/approval state in the sidebar comes from the list.
-                    self.spawn_load_prs();
+                    self.spawn_load_prs(PrGroup::Open, None);
                     self.full_refreshed = now;
                 }
             }
@@ -48,11 +50,12 @@ impl App {
             return;
         }
         match self.state.screen {
-            Screen::List => self.spawn_load_prs(),
+            Screen::List => self.refresh_list(),
             Screen::Detail { pr_id, tab } => {
                 self.refresh_detail_view(pr_id, tab);
                 self.spawn_load_mergeability(pr_id);
-                self.spawn_load_prs();
+                self.spawn_load_info(pr_id);
+                self.spawn_load_prs(PrGroup::Open, None);
             }
         }
         self.full_refreshed = Instant::now();
@@ -64,7 +67,7 @@ impl App {
             DetailTab::Diff => self.spawn_load_diff(pr_id),
             DetailTab::Commits => self.spawn_load_commits(pr_id),
             DetailTab::Builds => self.spawn_load_builds(pr_id),
-            // The description is the PR body; it rides along with the list refresh.
+            // The description and labels are read with `spawn_load_info` below.
             DetailTab::Description => {}
         }
     }

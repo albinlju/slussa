@@ -1,7 +1,11 @@
 use super::*;
 use crate::{
-    app::{navigation::Screen, state::AppState},
-    domain::user::User,
+    app::{
+        navigation::Screen,
+        state::AppState,
+        store::{FetchKey, OpenChain},
+    },
+    domain::{pr::PrGroup, user::User},
     tui::{component::Component, key_to_action, render},
 };
 use ratatui::{Terminal, backend::TestBackend, crossterm::event::KeyModifiers};
@@ -62,6 +66,11 @@ fn prs() -> LoadState<Vec<PullRequest>> {
     ])
 }
 
+/// Mark whether older PRs remain to be read in a group.
+fn set_more(state: &mut AppState, group: PrGroup, more: bool) {
+    state.store.groups.entry(group).or_default().more = more.then(|| "x".to_owned());
+}
+
 fn ids(list: &PrListScreen, prs: &LoadState<Vec<PullRequest>>, viewer: &str) -> Vec<u64> {
     list.filtered_prs(prs, viewer)
         .iter()
@@ -104,6 +113,39 @@ fn attention_order_puts_what_needs_you_first_and_keeps_provider_order_otherwise(
 }
 
 #[test]
+fn the_order_is_held_while_the_open_prs_are_read_and_applied_after() {
+    let mut list = PrListScreen {
+        hold_order: true,
+        ..PrListScreen::default()
+    };
+    assert_eq!(
+        ids(&list, &prs(), "me"),
+        [5, 4, 3, 2, 1],
+        "rows stay where they arrived"
+    );
+    list.hold_order = false;
+    assert_eq!(ids(&list, &prs(), "me"), [1, 3, 4, 5, 2]);
+}
+
+#[test]
+fn the_heading_says_more_is_coming_while_the_open_prs_are_read() {
+    let mut reading = state("me");
+    reading.store.open_chain = OpenChain::Appending;
+    let text = drawn(&mut reading, 100);
+    assert!(text.contains("loading more..."), "{text}");
+    assert!(
+        !text.contains("L: more"),
+        "L waits until the reading ends: {text}"
+    );
+
+    reading.store.open_chain = OpenChain::Idle;
+    set_more(&mut reading, PrGroup::Open, true);
+    let text = drawn(&mut reading, 100);
+    assert!(text.contains("Open, more unread"), "{text}");
+    assert!(text.contains("L: more"), "{text}");
+}
+
+#[test]
 fn recent_order_and_an_unknown_viewer_leave_the_provider_order_alone() {
     let recent = PrListScreen {
         sort: Sort::Recent,
@@ -143,7 +185,9 @@ fn toggling_the_sort_follows_the_highlighted_pr() {
         prs: &prs,
         refreshing: false,
         viewer: "me",
-        more_closed: false,
+        more: false,
+        loading_more: false,
+        view_loading: false,
     };
     let mut list = PrListScreen {
         selected: 2,
@@ -211,35 +255,33 @@ fn the_sort_setting_reads_config_and_falls_back_to_attention() {
 }
 
 #[test]
-fn views_of_closed_prs_say_recent_only_while_older_ones_remain() {
-    assert_eq!(StatusFilter::Open.title(true), "Open");
-    assert_eq!(StatusFilter::Draft.title(true), "Draft");
+fn headings_say_so_only_while_more_remain_unread() {
     for (filter, plain) in [
+        (StatusFilter::Open, "Open"),
+        (StatusFilter::Draft, "Draft"),
         (StatusFilter::Merged, "Merged"),
         (StatusFilter::Declined, "Declined"),
         (StatusFilter::All, "All"),
     ] {
         assert_eq!(filter.title(false), plain);
+        let more = filter.title(true);
         assert!(
-            filter.title(true).contains("recent"),
-            "{}",
-            filter.title(true)
+            more.contains("recent") || more.contains("more unread"),
+            "{more}"
         );
-        assert!(filter.shows_closed());
     }
-    assert!(!StatusFilter::Open.shows_closed() && !StatusFilter::Draft.shows_closed());
 
     let mut merged_view = state("me");
     merged_view.ui.list.filter = StatusFilter::Merged;
-    merged_view.store.older_cursor = Some("x".into());
+    set_more(&mut merged_view, PrGroup::Merged, true);
     let text = drawn(&mut merged_view, 100);
     assert!(text.contains("Merged, recent (0)"), "{text}");
-    assert!(text.contains("L: older"), "{text}");
+    assert!(text.contains("L: more"), "{text}");
 
-    merged_view.store.older_cursor = None;
+    set_more(&mut merged_view, PrGroup::Merged, false);
     let text = drawn(&mut merged_view, 100);
     assert!(text.contains("Merged (0)"), "{text}");
-    assert!(!text.contains("L: older"), "{text}");
+    assert!(!text.contains("L: more"), "{text}");
 }
 
 #[test]
@@ -249,17 +291,17 @@ fn l_loads_older_only_where_it_would_show_something() {
     };
     let mut merged = state("me");
     merged.ui.list.filter = StatusFilter::Merged;
-    merged.store.older_cursor = Some("x".into());
+    set_more(&mut merged, PrGroup::Merged, true);
     assert!(matches!(
         press(&merged),
         Some(Action::List(ListAction::LoadOlder))
     ));
 
     let mut open_view = state("me");
-    open_view.store.older_cursor = Some("x".into());
+    set_more(&mut open_view, PrGroup::Merged, true);
     assert!(
         press(&open_view).is_none(),
-        "the Open view shows no closed PRs"
+        "the Open view shows no closed PRs, so there is nothing for it to load"
     );
 
     let mut exhausted = state("me");
@@ -272,7 +314,7 @@ fn help_lists_load_older_only_when_it_applies() {
     let help = |older: bool| {
         let mut state = state("me");
         state.ui.list.filter = StatusFilter::All;
-        state.store.older_cursor = older.then(|| "x".to_owned());
+        set_more(&mut state, PrGroup::Merged, older);
         state.ui.list.help_open = true;
         let mut terminal = Terminal::new(TestBackend::new(100, 40)).unwrap();
         terminal.draw(|frame| render(frame, &mut state)).unwrap();
@@ -286,6 +328,67 @@ fn help_lists_load_older_only_when_it_applies() {
             .collect::<Vec<_>>()
             .join("\n")
     };
-    assert!(help(true).contains("load older"), "{}", help(true));
-    assert!(!help(false).contains("load older"), "{}", help(false));
+    assert!(help(true).contains("load more"), "{}", help(true));
+    assert!(!help(false).contains("load more"), "{}", help(false));
+}
+
+#[test]
+fn each_view_names_the_groups_it_shows() {
+    assert_eq!(StatusFilter::Open.groups(), [PrGroup::Open]);
+    assert_eq!(
+        StatusFilter::Draft.groups(),
+        [PrGroup::Open],
+        "drafts come with the open ones"
+    );
+    assert_eq!(StatusFilter::Merged.groups(), [PrGroup::Merged]);
+    assert_eq!(StatusFilter::Declined.groups(), [PrGroup::Declined]);
+    assert_eq!(StatusFilter::All.groups(), PrGroup::ALL);
+}
+
+#[test]
+fn a_view_still_being_read_says_so_rather_than_claiming_to_be_empty() {
+    let mut merged = state("me");
+    merged.ui.list.filter = StatusFilter::Merged;
+    let idle = drawn(&mut merged, 100);
+    assert!(idle.contains("No PRs in this view"), "{idle}");
+
+    merged.store.fetches.insert(FetchKey::Prs(PrGroup::Merged));
+    let loading = drawn(&mut merged, 100);
+    assert!(loading.contains("Loading merged PRs"), "{loading}");
+    assert!(!loading.contains("No PRs in this view"), "{loading}");
+
+    // Another group loading does not make this view look busy.
+    let mut merged = state("me");
+    merged.ui.list.filter = StatusFilter::Merged;
+    merged.store.fetches.insert(FetchKey::Prs(PrGroup::Open));
+    assert!(drawn(&mut merged, 100).contains("No PRs in this view"));
+}
+
+#[test]
+fn choosing_another_view_asks_the_app_to_read_it_and_choosing_the_same_one_does_not() {
+    let prs = prs();
+    let ctx = ListContext {
+        prs: &prs,
+        refreshing: false,
+        viewer: "me",
+        more: false,
+        loading_more: false,
+        view_loading: false,
+    };
+    let mut list = PrListScreen {
+        filter_picker_cursor: StatusFilter::CYCLE
+            .iter()
+            .position(|&filter| filter == StatusFilter::Merged)
+            .unwrap(),
+        ..PrListScreen::default()
+    };
+    let action = list.update(ListAction::ApplyFilter, &ctx);
+    assert!(matches!(
+        action,
+        Some(Action::List(ListAction::FilterChanged))
+    ));
+    assert_eq!(list.filter, StatusFilter::Merged);
+
+    let again = list.update(ListAction::ApplyFilter, &ctx);
+    assert!(again.is_none(), "an unchanged filter needs nothing read");
 }

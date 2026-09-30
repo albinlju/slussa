@@ -236,7 +236,6 @@ pub fn gh_pr(number: u64, created: &str) -> Value {
         "isDraft": false,
         "headRefName": "feature",
         "baseRefName": "main",
-        "body": "body",
         "createdAt": created,
         "updatedAt": created,
         "additions": 3,
@@ -247,7 +246,6 @@ pub fn gh_pr(number: u64, created: &str) -> Value {
             "nodes": [{"state": "APPROVED", "author": {"login": "bob"}}],
             "pageInfo": {"hasNextPage": false}
         },
-        "labels": {"nodes": [{"name": "bug"}], "pageInfo": {"hasNextPage": false}},
         "commits": {"nodes": [{"commit": {"statusCheckRollup": {"state": "SUCCESS"}}}]}
     })
 }

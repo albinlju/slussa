@@ -116,7 +116,13 @@ fn render_content(
         },
     };
     match tab {
-        DetailTab::Description => ui.description.render(frame, inset, &pr),
+        DetailTab::Description => super::tabs::description::render(
+            frame,
+            pr,
+            pr_data.map(|data| &data.info),
+            &mut ui.description,
+            inset,
+        ),
         DetailTab::Overview => ui.overview.render_with_scrollbar(
             frame,
             inset,

@@ -89,7 +89,7 @@ scope includes how users find and leave the interaction, not only the API action
 - [x] **PR list** with status filter (open / draft / merged / declined / all).
 - [x] **Reviewers / approvals in the list** — a state icon per reviewer.
 - [x] **Description tab**, rendered above the tab row.
-- [x] **Overview tab** — conversation timeline (comments + lifecycle events) with a sidebar (reviewers, builds summary, labels, details).
+- [x] **Overview tab** — conversation timeline (comments + lifecycle events) with a sidebar (reviewers, builds summary, labels, details). On GitHub the labels and the description are read when the PR is opened, not with the list; the Description tab shows a spinner until they arrive.
 - [x] **Diff tab** — file tree on the left, diff pane on the right, +/− row coloring, per-file +A/−D stats.
 - [x] **Inline review threads in the diff** — comments anchored to their line (new- and old-side), a comment-count badge per file in the tree, and a cursor that can focus a thread (accent border) as groundwork for replying.
 - [x] **Commits tab** — commit list with a per-commit diff drill-in (`enter` opens, `[`/`]` prev/next, `esc` back); reuses the Diff widget.
@@ -160,12 +160,17 @@ says so on the row.
 - [ ] **Labels in the list** — colored and filterable (shown in Overview today).
 - [ ] **Compact diff stats** (files / +/−) on list rows.
 - [x] **Pagination / load more** — *Done for merged and declined PRs.* Open PRs
-  are always read in full. Merged and closed ones come a batch at a time: the
-  latest 50 by update time on GitHub, the newest 25 merged and 25 declined on
-  Bitbucket (two streams, each with its own position). `L` reads the next older
-  batch in the views that show closed PRs, only while more exist; the heading
-  says "recent" until everything is loaded, and a refresh keeps what was
-  already loaded. **Open:** searching older PRs at the provider, and showing
+  are read a page at a time at start: the first page shows at once, later pages
+  are appended in arrival order and the attention order is applied once when the
+  reading ends. Up to 90 are read on their own (the whole list on most
+  repositories); past that the heading says "more unread" and `L` reads 90
+  more. Merged and declined ones are separate groups, read
+  only when their view is first opened (spinner meanwhile), a batch at a time:
+  30 by update time on GitHub, 25 per group on Bitbucket, each group with its
+  own position. The All view reads the groups still missing. `L` reads the next
+  older batch in the views that show closed PRs, only while more exist; the
+  heading says "recent" until everything is loaded. A refresh reads the open
+  group and the groups already opened, and keeps what was already loaded. **Open:** searching older PRs at the provider, and showing
   how many exist in total.
 - [ ] **Jump to PR by number** (`#123`).
 - [ ] **Status bar** — provider, repo, match count, loading spinner. Only if it

@@ -267,7 +267,11 @@ fn own_pr_review_gate_and_decline_cancel_are_preserved() {
 #[test]
 fn refresh_failure_preserves_visible_data() {
     let mut app = app();
-    app.apply(Action::Loaded(LoadedAction::Prs(Err("offline".into()))));
+    app.apply(Action::Loaded(LoadedAction::Prs {
+        group: crate::domain::pr::PrGroup::Open,
+        after: None,
+        result: Err("offline".into()),
+    }));
     assert!(matches!(&app.state.store.cache.prs, LoadState::Loaded(prs) if prs.len() == 1));
 }
 
@@ -436,9 +440,13 @@ async fn refresh_tracks_each_resource_and_refetches_after_mutation() {
     detail(&mut app, DetailTab::Overview);
     app.apply(Action::Refresh);
     app.apply(Action::Refresh);
-    assert_eq!(app.state.store.fetches.len(), 3);
+    assert_eq!(app.state.store.fetches.len(), 4);
     assert!(app.state.store.refreshing(app.state.screen));
-    app.apply(Action::Loaded(LoadedAction::Prs(Err("offline".into()))));
+    app.apply(Action::Loaded(LoadedAction::Prs {
+        group: crate::domain::pr::PrGroup::Open,
+        after: None,
+        result: Err("offline".into()),
+    }));
     assert!(app.state.store.refreshing(app.state.screen));
     app.state.store.operations.insert(42, Operation::Moderation);
     app.apply(Action::Loaded(LoadedAction::Commented(42, Ok(()))));
@@ -472,7 +480,15 @@ async fn refresh_tracks_each_resource_and_refetches_after_mutation() {
         42,
         Err("new response".into()),
     )));
-    app.apply(Action::Loaded(LoadedAction::Prs(Err("offline".into()))));
+    app.apply(Action::Loaded(LoadedAction::Prs {
+        group: crate::domain::pr::PrGroup::Open,
+        after: None,
+        result: Err("offline".into()),
+    }));
+    app.apply(Action::Loaded(LoadedAction::Info(
+        42,
+        Err("offline".into()),
+    )));
     assert!(!app.state.store.refreshing(app.state.screen));
     assert!(matches!(app.state.store.cache.prs, LoadState::Loaded(_)));
 }
@@ -1080,9 +1096,11 @@ fn refreshed_lists_keep_pr_and_commit_identity() {
     let mut new = prs[0].clone();
     new.id = 44;
     prs.insert(0, new);
-    app.apply(Action::Loaded(LoadedAction::Prs(Ok(
-        crate::domain::pr::PrBatch { prs, more: None },
-    ))));
+    app.apply(Action::Loaded(LoadedAction::Prs {
+        group: crate::domain::pr::PrGroup::Open,
+        after: None,
+        result: Ok(crate::domain::pr::PrBatch { prs, more: None }),
+    }));
     assert_eq!(app.state.ui.list.selected, 2);
     detail(&mut app, DetailTab::Commits);
     let data = app.state.store.cache.details.get_mut(&42).unwrap();
