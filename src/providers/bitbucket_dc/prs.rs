@@ -7,7 +7,7 @@ use crate::domain::{
     review::{Reviewer, ReviewerState},
     user::User,
 };
-use crate::providers::bitbucket_dc::http::get_all;
+use crate::providers::bitbucket_dc::http::{get_all, get_first_page};
 use crate::providers::error::FetchError;
 
 #[derive(Debug, Deserialize)]
@@ -72,12 +72,22 @@ struct BbReviewer {
     status: String,
 }
 
+/// How many merged and how many declined PRs the list keeps, newest first.
+/// Open PRs are always read in full; closed ones are history, so they are
+/// bounded to one page each.
+const RECENT_CLOSED_PER_STATE: u32 = 25;
+
 pub fn fetch_prs(config: &Config) -> Result<Vec<PullRequest>, FetchError> {
-    let path = format!(
-        "/rest/api/1.0/projects/{}/repos/{}/pull-requests?state=ALL&limit=50",
+    let list = format!(
+        "/rest/api/1.0/projects/{}/repos/{}/pull-requests",
         config.repo.project_key, config.repo.repo_slug
     );
-    let values: Vec<BbPr> = get_all(&config.repo.base_url, &path, &config.pat)?;
+    let (base_url, pat) = (&config.repo.base_url, &config.pat);
+    let mut values: Vec<BbPr> = get_all(base_url, &format!("{list}?state=OPEN&limit=50"), pat)?;
+    for state in ["MERGED", "DECLINED"] {
+        let path = format!("{list}?state={state}&limit={RECENT_CLOSED_PER_STATE}");
+        values.extend(get_first_page::<BbPr>(base_url, &path, pat)?);
+    }
     Ok(values.into_iter().map(map_pr).collect())
 }
 

@@ -60,22 +60,48 @@ pub(super) fn node_nodes_after<T: DeserializeOwned>(
     )
 }
 
+const REPO_CONNECTION_PATH: &[&str] = &["data", "repository", "connection"];
+
+/// Every page of a connection on this repository. `args` is empty or ends in a
+/// comma and a space, for example `states: OPEN, `.
 pub(super) fn repo_nodes<T: DeserializeOwned>(
     field: &str,
+    args: &str,
     selection: &str,
 ) -> Result<Vec<T>, FetchError> {
     nodes(
-        |cursor| {
-            graphql::fill(
-                graphql::REPO_CONNECTION,
-                &[
-                    ("field", field),
-                    ("cursor", cursor),
-                    ("selection", selection),
-                ],
-            )
-        },
-        &["data", "repository", "connection"],
+        |cursor| repo_query(field, args, selection, "100", cursor),
+        REPO_CONNECTION_PATH,
+    )
+}
+
+/// Only the first `first` nodes of a connection on this repository, never
+/// following a cursor: a bounded read of "the latest".
+pub(super) fn repo_first_page<T: DeserializeOwned>(
+    field: &str,
+    args: &str,
+    selection: &str,
+    first: u32,
+) -> Result<Vec<T>, FetchError> {
+    let first = first.to_string();
+    let (items, _more) = fetch_page(
+        &|cursor: &str| repo_query(field, args, selection, &first, cursor),
+        REPO_CONNECTION_PATH,
+        None,
+    )?;
+    Ok(items)
+}
+
+fn repo_query(field: &str, args: &str, selection: &str, first: &str, cursor: &str) -> String {
+    graphql::fill(
+        graphql::REPO_CONNECTION,
+        &[
+            ("field", field),
+            ("args", args),
+            ("first", first),
+            ("cursor", cursor),
+            ("selection", selection),
+        ],
     )
 }
 
@@ -98,33 +124,40 @@ fn nodes_after<T: DeserializeOwned>(
     path: &[&str],
     cursor: Option<&str>,
 ) -> Result<Vec<T>, FetchError> {
-    collect_from(cursor, |cursor| {
-        let cursor = serde_json::json!(cursor).to_string();
-        let query = graphql::compact(&query(&cursor));
-        let query_arg = format!("query={query}");
-        let mut args = vec!["api", "graphql"];
-        if query.contains("$owner") {
-            args.extend(["-F", "owner={owner}", "-F", "name={repo}"]);
-        }
-        args.extend(["-f", &query_arg]);
-        let mut value: Value = cli::run_gh_json(&args)?;
-        if value.get("errors").is_some() {
-            return Err(FetchError::InvalidInput(
-                "GitHub returned an incomplete GraphQL response.".into(),
-            ));
-        }
-        for key in path {
-            value = value
-                .get_mut(*key)
-                .map(Value::take)
-                .ok_or_else(|| FetchError::ParseFailed(format!("Missing {key}")))?;
-        }
-        let info = serde_json::from_value(value["pageInfo"].take())
-            .map_err(|e| FetchError::ParseFailed(e.to_string()))?;
-        let items = serde_json::from_value(value["nodes"].take())
-            .map_err(|e| FetchError::ParseFailed(e.to_string()))?;
-        Ok((items, info))
-    })
+    collect_from(cursor, |cursor| fetch_page(&query, path, cursor))
+}
+
+/// One request: the page that starts after `cursor`, and its paging info.
+fn fetch_page<T: DeserializeOwned>(
+    query: &impl Fn(&str) -> String,
+    path: &[&str],
+    cursor: Option<&str>,
+) -> Result<(Vec<T>, PageInfo), FetchError> {
+    let cursor = serde_json::json!(cursor).to_string();
+    let query = graphql::compact(&query(&cursor));
+    let query_arg = format!("query={query}");
+    let mut args = vec!["api", "graphql"];
+    if query.contains("$owner") {
+        args.extend(["-F", "owner={owner}", "-F", "name={repo}"]);
+    }
+    args.extend(["-f", &query_arg]);
+    let mut value: Value = cli::run_gh_json(&args)?;
+    if value.get("errors").is_some() {
+        return Err(FetchError::InvalidInput(
+            "GitHub returned an incomplete GraphQL response.".into(),
+        ));
+    }
+    for key in path {
+        value = value
+            .get_mut(*key)
+            .map(Value::take)
+            .ok_or_else(|| FetchError::ParseFailed(format!("Missing {key}")))?;
+    }
+    let info = serde_json::from_value(value["pageInfo"].take())
+        .map_err(|e| FetchError::ParseFailed(e.to_string()))?;
+    let items = serde_json::from_value(value["nodes"].take())
+        .map_err(|e| FetchError::ParseFailed(e.to_string()))?;
+    Ok((items, info))
 }
 
 #[cfg(test)]

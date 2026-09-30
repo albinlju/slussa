@@ -77,6 +77,11 @@ state (for example merging with conflicts) stay visible and say why.
 | `esc` | clear search | back |
 | `q` | quit | quit |
 
+The list loads every open PR and only the most recent closed ones: the latest
+50 merged or closed on GitHub, the newest 25 merged and 25 declined on
+Bitbucket. The Merged, Declined and All views say "recent" in their heading,
+and search covers the PRs that are loaded.
+
 The list opens sorted by what needs you. A "Needs you" column, shown at 90
 columns or wider and only when some row has a reason, says why:
 

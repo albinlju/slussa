@@ -108,7 +108,7 @@ fn pr_list_container(filter: StatusFilter, count_label: &str) -> Block<'static> 
         .borders(Borders::ALL)
         .border_style(Style::default().fg(theme.border))
         .title(Line::styled(
-            format!(" {} ({count_label}) ", filter.label()),
+            format!(" {} ({count_label}) ", filter.title()),
             Style::default()
                 .fg(theme.orange)
                 .add_modifier(Modifier::BOLD),
@@ -367,6 +367,19 @@ impl StatusFilter {
             Self::Merged => "Merged",
             Self::Declined => "Declined",
             Self::All => "All",
+        }
+    }
+
+    /// The list's heading. Only the most recent merged and declined PRs are
+    /// loaded, so the views that show them say so rather than imply the count
+    /// is the whole history.
+    pub const fn title(self) -> &'static str {
+        match self {
+            Self::Open => "Open",
+            Self::Draft => "Draft",
+            Self::Merged => "Merged, recent",
+            Self::Declined => "Declined, recent",
+            Self::All => "All, closed are recent",
         }
     }
 

@@ -252,6 +252,13 @@ pub fn gh_pr(number: u64, created: &str) -> Value {
     })
 }
 
+/// A PR as `gh_pr` builds it, in the given GitHub state (`MERGED` or `CLOSED`).
+pub fn gh_closed_pr(number: u64, created: &str, state: &str) -> Value {
+    let mut pr = gh_pr(number, created);
+    pr["state"] = json!(state);
+    pr
+}
+
 /// One page of `repository { connection { nodes pageInfo } }`.
 pub fn gh_list_page(nodes: &[Value], next: Option<&str>) -> String {
     json!({"data": {"repository": {"connection": {
