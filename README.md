@@ -24,9 +24,10 @@ tagged releases.
 | GitHub | the [`gh`](https://cli.github.com) CLI | uses your existing `gh auth login` |
 | Bitbucket Data Center | REST with a personal access token | stored in the OS keyring; **listing has been seen working on one real server; everything else is tested only against a mock of the documented API** |
 
-Bitbucket Cloud and GitLab are on the roadmap, not supported. A Bitbucket Data
-Center served over plain http, or under a context path such as
-`https://host/bitbucket`, is not recognised yet.
+Bitbucket Cloud and GitLab are on the roadmap, not supported. Atlassian ends
+Data Center licence sales on 2028-03-30 and support on 2029-03-28, so the
+Bitbucket Data Center provider is in maintenance: bugs are fixed, nothing new
+is added for it.
 
 The provider is detected from the `origin` remote of the repository you run
 tuipr in.

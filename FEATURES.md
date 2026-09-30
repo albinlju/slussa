@@ -40,8 +40,11 @@ What this rules in:
 - **Handoff to the coding agent.** A thread, a file or a whole PR can be sent to
   Claude Code (or a configured command) with context, and the outcome shows up
   back in tuipr on refresh.
-- **Providers others neglect.** Bitbucket Data Center support is a real gap in
-  the terminal-tooling space and stays a supported provider, not a port.
+- **Bitbucket Data Center is in maintenance.** Atlassian ends Data Center
+  licence sales and expansions on 2028-03-30 and end of life is 2029-03-28, so
+  the provider stays as it is: bugs that are found get fixed, nothing new is
+  built for it and no further verification is planned. New capability is
+  designed for GitHub first and added to Bitbucket only when it is cheap.
 
 What this rules out:
 
@@ -297,7 +300,6 @@ rank below the decision path.
 - [ ] **Binary / image files** — a clear "(binary file)" instead of a broken diff.
 - [ ] **Viewed-files tracking** — local "mark file reviewed", saved per PR.
 - [ ] **Branch ahead / behind base** info.
-- [ ] **Bitbucket "tasks"** — checkable to-do items on a PR.
 - [ ] **Assignees, milestones, projects** (reviewers + labels already shown).
 
 ### 6. Providers and platform
@@ -310,7 +312,8 @@ rank below the decision path.
   remote now gives the scheme, port and the context path in front of `scm/`;
   ssh remotes still assume `https://host`. Covered by unit tests only; the
   local Docker test (VERIFICATION.md, B1 to B10) exercises it for real.
-- [ ] **Bitbucket Cloud client.**
+- [ ] **Bitbucket Cloud client.** (Not a successor to Data Center in this tool
+  unless someone asks for it.)
 - [ ] **Unified cross-provider list** with a provider icon per row.
 - [ ] **Normalized "requirements to merge"** — GitLab approvals, Bitbucket
   default reviewers / merge checks, GitHub branch protection → one shared model.
