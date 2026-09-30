@@ -1,4 +1,10 @@
 //! Local recovery data. Never restores executable commands or authentication.
+//!
+//! Editor drafts and queued review comments are saved to one JSON file per
+//! scope (repository, provider and account). Saves are atomic, and a lock lets
+//! only one tuipr instance write a scope. A file that cannot be parsed, or that
+//! belongs to another scope or version, is left untouched and reported rather
+//! than overwritten.
 use super::{
     App,
     reviews::{CommentDraft, PendingReview},

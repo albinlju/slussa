@@ -1,3 +1,17 @@
+//! The provider boundary: one `Provider` per session, dispatching to GitHub
+//! (through `gh`) or Bitbucket Data Center (REST).
+//!
+//! - Every method blocks and returns `FetchError`. `app::fetchers` runs them
+//!   on `spawn_blocking`; nothing here touches UI state.
+//! - Each provider keeps its request and payload types private and maps them
+//!   to `domain` types.
+//! - `capabilities()` says what the connected provider supports, so screens
+//!   hide unsupported actions instead of letting them fail.
+//! - Writes are not exactly-once. A timeout or lost response can follow a
+//!   write the server accepted, and a Bitbucket review is several requests, so
+//!   a failure can be `FetchError::PartialReview`. Nothing retries
+//!   automatically.
+
 pub mod bitbucket_dc;
 pub mod error;
 pub mod github;

@@ -1,3 +1,15 @@
+//! The contract for interactive UI owners: screens, dialogs and the diff viewer.
+//!
+//! A component owns its local state. `handle_key` turns input into an `Action`
+//! and changes nothing. `update` applies a message to local state. `render`
+//! draws and may record layout-derived values such as the viewport size. The
+//! `Context` is borrowed data, never the mutable application. A returned
+//! `Action` asks the application for work; `None` means the component handled
+//! it locally.
+//!
+//! A key ignored by a modal must not fall through to what is behind it. Callers
+//! rely on the explicit modal and focus priority.
+
 use crate::app::action::Action;
 use ratatui::{Frame, crossterm::event::KeyEvent, layout::Rect};
 
