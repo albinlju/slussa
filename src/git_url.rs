@@ -10,6 +10,30 @@ pub fn split(url: &str) -> Option<(&str, &str)> {
         .split_once('/')
 }
 
+/// The web address a Bitbucket answers on, when the remote says so: the scheme,
+/// host and port of an http(s) remote, plus the context path in front of
+/// `scm/`. Ssh remotes carry no web address, so they give `None`.
+pub fn web_base(url: &str) -> Option<String> {
+    let (scheme, rest) = if let Some(rest) = url.strip_prefix("https://") {
+        ("https", rest)
+    } else {
+        ("http", url.strip_prefix("http://")?)
+    };
+    let (authority, path) = rest.split_once('/')?;
+    let authority = authority.rsplit('@').next().unwrap_or(authority);
+    let segments: Vec<&str> = path.split('/').filter(|p| !p.is_empty()).collect();
+    let context = segments
+        .iter()
+        .rposition(|s| *s == "scm")
+        .map_or(&segments[..0], |i| &segments[..i]);
+    let mut base = format!("{scheme}://{authority}");
+    for part in context {
+        base.push('/');
+        base.push_str(part);
+    }
+    Some(base)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -41,5 +65,18 @@ mod tests {
     #[test]
     fn rejects_garbage() {
         assert_eq!(split("not-a-url"), None);
+    }
+
+    #[test]
+    fn web_base_keeps_scheme_port_and_context() {
+        assert_eq!(
+            web_base("http://localhost:7990/scm/P/r.git").as_deref(),
+            Some("http://localhost:7990")
+        );
+        assert_eq!(
+            web_base("https://me@host/bitbucket/scm/P/r.git").as_deref(),
+            Some("https://host/bitbucket")
+        );
+        assert_eq!(web_base("git@host:P/r.git"), None);
     }
 }
