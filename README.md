@@ -11,7 +11,7 @@ The list opens sorted by what needs you, with the reason beside each PR, and a
 merge that cannot go through says why. It is not a replacement for the web UI,
 and it stays small on purpose.
 
-![slussa: the list sorted by what needs you, then an agent-written PR: its stated intent, the review conversation and the diff](docs/media/demo.gif)
+![slussa: the list sorted by what needs you, then an agent-written PR: its stated intent, the review conversation and the diff](https://raw.githubusercontent.com/albinlju/slussa/main/docs/media/demo.gif)
 
 **Where it is going.** Pull requests written by agents, and reviews written by
 AI, are becoming most of what a reviewer sees. The plan is to make them
@@ -51,11 +51,15 @@ downloaded in a browser may be blocked; remove the flag with
 `grep <target> SHA256SUMS | shasum -a 256 -c -`, for example
 `aarch64-apple-darwin`.
 
-slussa will be published through package managers later; for now it is the
-tarball or a build from source.
+**From crates.io.** With a recent Rust toolchain (1.95 or newer):
 
-**From source.** With a recent Rust toolchain (the repo pins 1.95 in
-`rust-toolchain.toml`, which `rustup` installs automatically):
+```sh
+cargo install slussa --locked
+```
+
+Run the same command again to update to a newer version.
+
+**From source.** To build the current `main` instead:
 
 ```sh
 cargo install --git https://github.com/albinlju/slussa

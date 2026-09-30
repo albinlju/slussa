@@ -1,13 +1,25 @@
 [package]
 name = "slussa"
-version = "0.1.0"
+version = "0.1.1"
 edition = "2024"
 rust-version = "1.95"
 description = "A terminal UI for pull requests on GitHub and Bitbucket Data Center"
 repository = "https://github.com/albinlju/slussa"
+homepage = "https://github.com/albinlju/slussa"
+readme = "README.md"
 license = "MIT"
-# Remove to publish to crates.io.
-publish = false
+keywords = ["tui", "pull-request", "code-review", "github", "bitbucket"]
+categories = ["command-line-utilities", "development-tools"]
+# What is only for working on the repository stays out of the published crate.
+exclude = [
+    ".github/",
+    ".coderabbit.yaml",
+    "AGENTS.md",
+    "CLAUDE.md",
+    "deny.toml",
+    "docs/media/",
+    "rust-toolchain.toml",
+]
 
 [lints.rust]
 unsafe_code = "warn"
