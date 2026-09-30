@@ -70,10 +70,6 @@ scope includes how users find and leave the interaction, not only the API action
 
 ## Done
 
-- [x] **Existing UI polish** — consistent dialog footers, compact PR headers,
-  adaptive Files/Code panels, contextual hints, scrollable errors and CI lists,
-  useful empty states and visible recovery from failed refreshes.
-
 - [x] **Open/copy PR links** — `o` opens the selected PR in the default browser;
   `y` copies its link. Both work in list and detail views, appear in help only
   when a URL is available, and show brief non-modal feedback.
@@ -84,10 +80,6 @@ scope includes how users find and leave the interaction, not only the API action
 - [x] **Persistent local drafts** — editor drafts and review queues survive
   restart, scoped by repo/provider/account. Atomic saves, one writer per scope,
   partial-review receipts and interrupted-request notices protect recovery.
-
-- [x] **Component architecture** — local UI state and behavior live with their
-  components; a shared Store holds provider data and review drafts keyed by PR.
-  Rendering snapshots and interaction regression tests protect existing flows.
 
 - [x] **PR list** with status filter (open / draft / merged / declined / all).
 - [x] **Reviewers / approvals in the list** — a state icon per reviewer.
@@ -126,10 +118,12 @@ scope includes how users find and leave the interaction, not only the API action
   in the diff, `d` removes one), then finish with a verdict that flushes them in one
   submission. GitHub sends one atomic call; Bitbucket posts the comments then flips status.
 - [x] **Merge** (`m`) — strategy picker (Merge / Squash / Rebase on GitHub, the repo
-  default on Bitbucket); gated on the mergeability status.
+  default on Bitbucket). Not offered for a conflicted or closed PR; a rule that
+  blocks the merge is listed in the dialog but does not forbid trying.
 - [x] **Decline / close** (`x`) — confirm, then decline (Bitbucket) / close (GitHub).
-- [x] **Mergeability status** — a header badge (mergeable / conflicts / unknown), fetched
-  lazily per PR; gates the merge action.
+- [x] **Mergeability status** — a header badge (mergeable / blocked / conflicts /
+  unknown), fetched lazily per PR. `blocked` comes with the provider's reasons in the
+  merge dialog; conflicts and a closed PR take the merge action away.
 - [x] **Disabled-with-affordance** — lifecycle actions stay visible in the footer but
   dimmed with their reason (e.g. `m: merge (conflicts)`) rather than being hidden.
 - [x] **Help overlay** (`?`) — lists the keybindings.
@@ -248,9 +242,11 @@ rounds, and a severity split where only evidenced findings block.
   required checks or rules), Bitbucket from the merge checks the server
   reports. It informs and does not forbid, since an administrator may still be
   allowed to merge. A merge the server refuses now shows Bitbucket's check
-  names too. **Open:** *N commits behind base*, naming which required check
-  failed on GitHub (it reports `BLOCKED` without saying), and tasks on
-  Bitbucket.
+  names too. Checked against a real GitHub ruleset on 2026-09-30: a missing
+  approval and a branch behind its base get specific reasons, a failing required
+  check only the general one. **Open:** *N commits behind base*, naming which
+  required check failed on GitHub (it reports `BLOCKED` without saying), and
+  tasks on Bitbucket.
 - [ ] **Update / sync branch** — merge or rebase base into the PR when behind.
 - [ ] **Repo-allowed merge strategies** — pre-filter the merge picker from repo
   settings instead of letting the server reject.
@@ -267,8 +263,8 @@ rounds, and a severity split where only evidenced findings block.
   to open, Bitbucket posts the PR version to its reopen endpoint. A merged PR
   cannot be reopened, and a refusal such as a deleted head branch shows the
   provider's own message. Tested at the provider, the app, the dialog, the key
-  and the footer; **not run against a real GitHub or Bitbucket**, because
-  reopening changes a real PR.
+  and the footer, and run against a real GitHub PR on 2026-09-30; not run
+  against a real Bitbucket.
 - [ ] **React to a comment** — add / remove your own emoji reaction.
 
 ### 4. Handoff to the coding agent

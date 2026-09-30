@@ -36,8 +36,8 @@ meets them.
   Text entry must clearly distinguish inserting a newline from sending text.
   Restore focus predictably and make sending, success and failure understandable.
 - **Protect continuity.** Preserve work and reading position across ordinary
-  interactions. Draft saving should happen automatically when implemented;
-  failures should leave the user's work available for recovery.
+  interactions. Drafts are saved automatically; failures leave the user's
+  work available for recovery.
 - **Respect platform support.** Show optional functions only when the adapter
   supports them. Distinguish unsupported features from supported actions blocked
   by the current PR's state, with a concise reason for the latter.
@@ -51,6 +51,11 @@ status; a longer editor can occupy space only while composing.
 
 ```text
 src/
+├── main.rs, cli.rs        Startup, logging and CLI dispatch (`auth login`, `-C`)
+├── config.rs              config.toml: theme and sort
+├── logging.rs             Log file in the data directory (`SLUSSA_LOG`)
+├── git_url.rs             Splits a git remote into host and path; web base URL
+├── test_support.rs        Test-only: `FakeGh` and `MockHttp`
 ├── app/
 │   ├── mod.rs             Event loop, task channel and effect dispatch
 │   ├── state.rs           AppState composition (Store, Ui, Screen)
@@ -69,6 +74,8 @@ src/
 ├── tui/
 │   ├── mod.rs             UI composition, screen dispatch and input priority
 │   ├── component.rs       Component contract and navigation helpers
+│   ├── theme.rs           The five palettes and theme lookup
+│   ├── icons.rs, layout.rs, format.rs   Glyphs, layout helpers and text formatting
 │   ├── components/
 │   │   ├── search_input.rs
 │   │   ├── help_dialog.rs   Scrollable help shared by list and detail
@@ -102,10 +109,14 @@ src/
 │   └── widgets/
 │       ├── mod.rs        Shared presentation primitives
 │       ├── comment.rs    Comments, threads, reactions and suggestions
+│       ├── dialog.rs     Shared dialog geometry and footer
 │       ├── markdown.rs
 │       └── table.rs
-├── domain/               Provider-independent data models
+├── domain/               Provider-independent data models and rules
 └── providers/            Provider requests and payload mapping
+    ├── github/           `gh` calls, GraphQL templates, pagination, threads
+    ├── bitbucket_dc/     REST client, auth (keyring), probe, diff and activity mapping
+    └── error.rs, unified_diff.rs
 ```
 
 ## Component contract
@@ -218,6 +229,13 @@ GitHub delegates authentication and requests to `gh`; Bitbucket DC uses a PAT
 from the OS keyring and blocking HTTP calls. `fetchers.rs` runs both providers
 through `spawn_blocking` and returns results through the action channel.
 
+The remote decides where a provider looks. An http(s) remote gives the web
+address (scheme, host, port and the context path before `scm/`), so a Bitbucket
+served over plain http or under `/bitbucket` works; an ssh remote carries no web
+address and assumes `https://host` (`git_url::web_base`,
+`bitbucket_dc::remote::base_url`). `github.com` and `bitbucket.org` are
+recognised by name and any other host is probed for a Bitbucket Data Center.
+
 Each provider keeps its DTOs and mapping private. `domain/` models what the UI
 needs without provider-specific serialization details. `DiffRevision` records the
 source/base of the displayed diff and travels with `CommentAnchor` (owned by
@@ -237,6 +255,17 @@ The active Builds view refreshes every 15 seconds; other active data and PR
 metadata refresh on a 60-second cadence. `F` requests an immediate refresh.
 Existing data remains visible if a reload fails. Initial loading uses
 `LoadState::{NotRequested, Loading, Loaded, Failed}`.
+
+The PR list is read per group (`PrGroup`: open, merged, declined), a page at a
+time, and a `PrBatch` carries the provider's opaque continuation (GitHub's end
+cursor, Bitbucket's offsets). The first page of open PRs is shown at once and
+later pages are appended in arrival order; the attention order is applied once
+when the reading ends. `OPEN_BATCH` (90) open PRs are read without being asked
+and `L` reads 90 more. Merged and declined PRs are read only when their view is
+first opened, a batch at a time, and `L` reads the next older batch. GitHub's
+list query leaves out the body and labels; `fetch_info` reads them when a PR
+opens (`Feature::PrInfo`, `FetchKey::Info`). A refresh re-reads the open group
+and the groups already opened, and keeps what was loaded.
 
 All fetch entry points register a resource key before spawning work and skip
 an already-running fetch of that resource. Completion removes only its own
