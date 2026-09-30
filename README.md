@@ -22,9 +22,11 @@ tagged releases.
 | Provider | How it connects | Notes |
 | --- | --- | --- |
 | GitHub | the [`gh`](https://cli.github.com) CLI | uses your existing `gh auth login` |
-| Bitbucket Data Center | REST with a personal access token | stored in the OS keyring |
+| Bitbucket Data Center | REST with a personal access token | stored in the OS keyring; **listing has been seen working on one real server; everything else is tested only against a mock of the documented API** |
 
-Bitbucket Cloud and GitLab are on the roadmap, not supported.
+Bitbucket Cloud and GitLab are on the roadmap, not supported. A Bitbucket Data
+Center served over plain http, or under a context path such as
+`https://host/bitbucket`, is not recognised yet.
 
 The provider is detected from the `origin` remote of the repository you run
 tuipr in.
