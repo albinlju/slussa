@@ -4,10 +4,19 @@ The product idea, what is planned in priority order, and how the code should get
 better. What exists today is described in the [README](../README.md); how it is
 built is in [ARCHITECTURE.md](ARCHITECTURE.md). History is in git.
 
-## Positioning
+## Where it stands today
 
-slussa is the **human approval surface for AI-generated pull requests**: the place
-where a reviewer decides, not the place where the code gets read line by line.
+A read-write PR client for GitHub (through `gh`) and Bitbucket Data Center (REST
+and a personal access token). The list opens sorted by what needs you, and the PR
+has its description, conversation, diff, commits and builds, with comment, review,
+merge, decline and reopen. The AI-specific parts below are not built yet; 0.1.0 is
+the base they will sit on.
+
+## Positioning: where it is going
+
+slussa is meant to be the **human approval surface for AI-generated pull
+requests**: the place where a reviewer decides, not the place where the code gets
+read line by line.
 
 The assumption behind the backlog: agents write more of the code and open more of
 the PRs, and AI reviewers do the line-level reading. What stays human is triage
@@ -25,19 +34,19 @@ screen, a dashboard or a sidebar of widgets. If a feature cannot be explained in
 one sentence and reached in one keypress, it is not ready. When in doubt, leave
 it out.
 
-What this rules in:
+What this rules in (each item says how far it is):
 
-- **The list is the inbox.** The PR list opens sorted by what needs the user —
+- **The list is the inbox** *(first version built)*. The PR list opens sorted by what needs the user —
   review requests, failed CI, new activity since last look — with a short reason
   on the row. No separate inbox screen; the plain list is the same view with the
   attention sort turned off.
-- **AI review is a first-class thread.** Comments from an AI reviewer (Copilot,
+- **AI review is a first-class thread** *(not built)*. Comments from an AI reviewer (Copilot,
   Claude, a team bot) are shown inline with their own marker and summarized in the
   header. Running a review from slussa and reading the result in place is a core
   action, not a plugin.
-- **Fast act-on-suggestion.** Suggestions get applied, not just displayed; the
+- **Fast act-on-suggestion** *(not built)*. Suggestions get applied, not just displayed; the
   approve → merge path is as short as the provider allows.
-- **Handoff to the coding agent.** A thread, a file or a whole PR can be sent to
+- **Handoff to the coding agent** *(not built)*. A thread, a file or a whole PR can be sent to
   Claude Code (or a configured command) with context, and the outcome shows up
   back in slussa on refresh.
 - **Bitbucket Data Center is in maintenance.** Atlassian ends Data Center

@@ -362,11 +362,11 @@ Run `cargo clippy --all-targets --locked -- -D warnings` alongside the tests.
 
 ## Provider flow verification
 
-Local regression coverage is supplemented by a GitHub live run against
-`albinlju/prtest`. See [PR_FLOW_VERIFICATION.md](PR_FLOW_VERIFICATION.md) for
-passed flows, defects fixed during the run, evidence and remaining checks.
-Bitbucket live verification is pending.
-The payload changes follow the [GitHub review-comment API](https://docs.github.com/en/rest/pulls/comments),
+GitHub writes (comment, review, resolve, merge, close, reopen) have been run
+live against a throwaway repository, and blocked merges against a real ruleset.
+Bitbucket Data Center has only been seen listing PRs on one real server; its
+writes are tested against a mock of the documented API. The payload changes
+follow the [GitHub review-comment API](https://docs.github.com/en/rest/pulls/comments),
 [GitHub review API](https://docs.github.com/en/rest/pulls/reviews) and
 [Bitbucket Data Center API](https://developer.atlassian.com/server/bitbucket/rest/v900/api-group-pull-requests/).
 
