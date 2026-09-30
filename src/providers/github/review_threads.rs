@@ -45,15 +45,23 @@ struct GqlComments {
     page_info: Option<super::pagination::PageInfo>,
 }
 
+/// A review thread with its first comments; `<<fields>>` is what to read of
+/// each comment.
+const THREAD_FIELDS: &str = r"
+    id isResolved isOutdated path line originalLine diffSide
+    comments(first: 20) {
+      nodes { <<fields>> }
+      pageInfo { hasNextPage endCursor }
+    }
+";
+
 pub fn fetch_review_threads(pr_number: u64) -> Result<Vec<CommentThread>, FetchError> {
     let fields = format!("{COMMENT_FIELDS} commit {{ oid }} originalCommit {{ oid }}");
     // Keep the nested page modest: a PR page can contain 100 review threads.
     let nodes: Vec<GqlThread> = super::pagination::pr_nodes(
         pr_number,
         "reviewThreads",
-        &format!(
-            "id isResolved isOutdated path line originalLine diffSide comments(first: 20) {{ nodes {{ {fields} }} pageInfo {{ hasNextPage endCursor }} }}"
-        ),
+        &super::graphql::fill(THREAD_FIELDS, &[("fields", &fields)]),
     )?;
     complete_threads(nodes, |id, cursor| {
         super::pagination::node_nodes_after(

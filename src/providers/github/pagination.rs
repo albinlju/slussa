@@ -1,4 +1,4 @@
-use super::cli;
+use super::{cli, graphql};
 use crate::providers::FetchError;
 use serde::{Deserialize, de::DeserializeOwned};
 use serde_json::Value;
@@ -8,10 +8,17 @@ pub(super) fn pr_nodes<T: DeserializeOwned>(
     field: &str,
     selection: &str,
 ) -> Result<Vec<T>, FetchError> {
+    let pr = pr.to_string();
     nodes(
         |cursor| {
-            format!(
-                "query($owner: String!, $name: String!) {{ repository(owner: $owner, name: $name) {{ item: pullRequest(number: {pr}) {{ connection: {field}(first: 100, after: {cursor}) {{ nodes {{ {selection} }} pageInfo {{ hasNextPage endCursor }} }} }} }} }}"
+            graphql::fill(
+                graphql::PR_CONNECTION,
+                &[
+                    ("pr", &pr),
+                    ("field", field),
+                    ("cursor", cursor),
+                    ("selection", selection),
+                ],
             )
         },
         &["data", "repository", "item", "connection"],
@@ -37,8 +44,15 @@ pub(super) fn node_nodes_after<T: DeserializeOwned>(
     let id = Value::String(id.to_owned()).to_string();
     nodes_after(
         |cursor| {
-            format!(
-                "query {{ item: node(id: {id}) {{ ... on {kind} {{ connection: {field}(first: 100, after: {cursor}) {{ nodes {{ {selection} }} pageInfo {{ hasNextPage endCursor }} }} }} }} }}"
+            graphql::fill(
+                graphql::NODE_CONNECTION,
+                &[
+                    ("id", &id),
+                    ("kind", kind),
+                    ("field", field),
+                    ("cursor", cursor),
+                    ("selection", selection),
+                ],
             )
         },
         &["data", "item", "connection"],
@@ -52,8 +66,13 @@ pub(super) fn repo_nodes<T: DeserializeOwned>(
 ) -> Result<Vec<T>, FetchError> {
     nodes(
         |cursor| {
-            format!(
-                "query($owner: String!, $name: String!) {{ repository(owner: $owner, name: $name) {{ connection: {field}(first: 100, after: {cursor}) {{ nodes {{ {selection} }} pageInfo {{ hasNextPage endCursor }} }} }} }}"
+            graphql::fill(
+                graphql::REPO_CONNECTION,
+                &[
+                    ("field", field),
+                    ("cursor", cursor),
+                    ("selection", selection),
+                ],
             )
         },
         &["data", "repository", "connection"],
@@ -81,7 +100,7 @@ fn nodes_after<T: DeserializeOwned>(
 ) -> Result<Vec<T>, FetchError> {
     collect_from(cursor, |cursor| {
         let cursor = serde_json::json!(cursor).to_string();
-        let query = query(&cursor);
+        let query = graphql::compact(&query(&cursor));
         let query_arg = format!("query={query}");
         let mut args = vec!["api", "graphql"];
         if query.contains("$owner") {
