@@ -167,18 +167,38 @@ says so on the row.
 The AI reviewer's output has to be as easy to read and act on as a human's, and
 easier to tell apart.
 
-- [ ] **AI-authored comments marked** *(refined)* — detect comments from bot /
-  app accounts (GitHub `isBot` / app login suffix; Bitbucket DC a configurable
-  account list) and render them with a distinct marker and a per-file badge count
-  separate from human threads. Filter in the Overview: humans / AI / all.
-- [ ] **Review summary in the header** — one line: latest AI verdict, number of
-  open flags, number resolved. Collapses to nothing when no AI review exists.
+The model below follows how real autonomous reviewers already behave (see
+IMPROVEMENTS.md, *From their AI reviewer*): one batched review per head SHA,
+a first-line marker on every comment, stable finding IDs carried across
+rounds, and a severity split where only evidenced findings block.
+
+- [ ] **AI-authored comments marked** *(refined)* — detect AI authorship by
+  *either* account (GitHub `isBot` / app login suffix; Bitbucket DC a
+  configurable account list) *or* a configurable first-line marker
+  (`> **gator-agent**`, `> **🏗️ build-from-issue-agent**`, …). Render with a
+  distinct marker and a per-file badge count separate from human threads.
+  Filter in the Overview: humans / AI / all.
+- [ ] **Review summary in the header** *(refined)* — one line:
+  `AI: 1 blocker · 3 suggestions · reviewed a1b2c3d (2 behind)`. Derived from
+  the latest AI review: severity counts where the review exposes them,
+  open/resolved counts otherwise, and the reviewed head SHA against the
+  current head so a stale review reads as stale rather than wrong. Collapses
+  to nothing when no AI review exists.
+- [ ] **Finding state per thread** — an AI thread is *open*, *fixed* (resolved
+  after a later commit, or resolved by a maintainer) or *waived* (an explicit
+  "won't fix" / "intentional" reply from a maintainer). Show the state on the
+  thread, keep the finding ID when the review provides one, and never
+  re-surface a waived thread as attention. Derivable from thread resolution +
+  resolver identity + the marker; no reviewer-specific API.
 - [ ] **Run a review from tuipr** *(refined)* — a key on the PR that runs a
   configured command (default `claude -p` with a review prompt and the PR
-  context: title, body, diff) and posts the result either as a review with line
-  comments or as a local-only overlay the user can promote to comments. Command
-  and prompt in `config.toml`; the command runs off the UI thread with the same
-  deadline rules as `gh`.
+  context: title, body, diff) and posts the result either as one batched
+  review with line comments or as a local-only overlay the user can promote
+  to comments. The default prompt asks for each concern as "Before this PR,
+  `<who>` experienced `<old>`. With this PR, `<new>`, so `<impact>`." with a
+  `Critical | Warning | Suggestion` severity, and the posted review names the
+  head SHA it reviewed. Command and prompt in `config.toml`; the command runs
+  off the UI thread with the same deadline rules as `gh`.
 - [ ] **AI authorship of the PR** — flag PRs opened by an agent account or with
   an agent trailer / label, so the reviewer knows to read for intent. `is:agent`
   filter and an inbox reason.
@@ -221,10 +241,13 @@ back on refresh.
 
 - [ ] **Send to agent** *(refined)* — from a thread, a file or the PR: run a
   configured command with a context payload (PR ref, thread body, file path and
-  line, or the whole diff). Default target `claude` in the repo directory. Two
-  modes: spawn in a new terminal pane / tmux window and return immediately, or run
-  headless (`-p`) and show the output in a dialog. Command per mode in
-  `config.toml`.
+  line, or the whole diff). Default target `claude` in the repo directory.
+  Three modes: *suspend* (tuipr leaves the alternate screen, the agent takes
+  the terminal, tuipr resumes and refreshes when it exits — the pattern in
+  IMPROVEMENTS.md, *Suspend / resume*), *detach* (spawn in a new tmux window /
+  terminal pane and return immediately), or *headless* (`-p`, output in a
+  dialog). Command per mode in `config.toml`; suspend is the default because
+  it needs no multiplexer.
 - [ ] **Check out PR locally** — precondition for most handoffs; also useful alone.
 - [ ] **Open focused file / line in editor** — `$EDITOR` at the anchored line
   (PR-level browser opening is implemented).
