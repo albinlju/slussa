@@ -186,6 +186,63 @@ list; see *Not borrowed* below.
 - [ ] **PR template** with Summary / Changes / Testing, and a rule that
   user-visible changes update FEATURES.md.
 
+### From their core crates (code, not tooling)
+
+Read after the tooling pass: `openshell-isolation-interface`, `openshell-sdk`,
+`openshell-policy`, `openshell-sandbox-backend`. tuipr is on par in most of
+it; these are the places where their code is clearly better and the pattern
+transfers.
+
+- [ ] **Error classification for the caller.** Their `BackendError` keeps
+  variant + message and adds `kind()` → `Invalid | Denied | Unavailable |
+  Unsupported | Failed | Terminated`; `SdkError::Auth` carries
+  `retryable: bool` and the original status boxed. tuipr's
+  `FetchError::user_message()` covers the human text; add
+  `FetchError::kind()` (`Retryable | NeedsAuth | Gone | Invalid | Unknown`)
+  so the error dialog decides whether to offer *retry*, *re-login* or just
+  *dismiss* from the classification instead of from prose in the message.
+  *Trigger:* next change to the error dialog or a new provider.
+- [ ] **Types that carry invariants.** `VerifiedBackendDescriptor` has no
+  public constructor and is minted only by the registry; lifecycle states are
+  consumed by value (`self: Box<Self>`) so a step cannot be skipped. tuipr
+  already does this for `CommentAnchor` + `DiffRevision`. Extend it to the
+  screen → app boundary: a `ResolvedCommand` that only
+  `pr_detail/interactions.rs` can construct, so `app/commands.rs` never
+  re-checks dialog state. Pairs with *Split `Action`* above.
+- [ ] **`//!` contract docs on the core modules.** Every module of theirs
+  opens with what it guarantees and what it does not, often with a small
+  state diagram. ARCHITECTURE.md has that content for tuipr but the modules
+  are silent. Add `//!` blocks to `app/store.rs` (resource keys, in-flight
+  dedup, reload-after-mutation), `app/reviews.rs` (anchors and revisions),
+  `app/drafts.rs` (scope, atomic save, one writer), `providers/mod.rs`
+  (capabilities, exactly-once caveats) and `tui/component.rs` (the
+  contract). Keep ARCHITECTURE.md as the map; the modules hold the details.
+- [ ] **Conformance test for the provider boundary.** Their
+  `backend_conformance.rs` runs one scenario set against two deliberately
+  different mock backends behind `dyn`, proving the abstraction holds with no
+  enum over concrete types. Do the same when the provider trait lands: one
+  `tests/provider_conformance.rs` over a fake GitHub and a fake Bitbucket,
+  covering list → open → comment → review → merge and the error paths.
+- [ ] **Mock the transport, not just the payload.** Their SDK tests dial an
+  in-process gRPC server whose `MockState` records what the mock observed and
+  what it replied. tuipr's provider tests stop at JSON mapping; nothing
+  exercises `run_gh` argument shapes, pagination loops or HTTP error bodies.
+  Add a fake `gh` script on `PATH` for GitHub tests and a minimal HTTP mock
+  (std `TcpListener` is enough) for Bitbucket DC. Ties into the *fake
+  provider for `App::run`* gap in Part A.
+- [ ] **`Pager<T>`.** A lazy pager built from a fetch closure and a token,
+  with `next_page()` and `collect_all()`, tested with a counting closure.
+  Cleaner than `github/pagination.rs` (219 lines) and the right shape for
+  *Pagination / load more* in FEATURES.md.
+- [ ] **Split large test modules by concern.** `src/runtime/tests/{flow_control,
+  network_recovery,…}.rs` with `use super::*`. Apply to
+  `tui/regression_tests.rs` when it passes ~500 lines.
+
+What not to copy from these crates: the 40-line `pub use` facades bridging two
+parallel type trees in `openshell-policy` (churn from a proto/schema split),
+and the twenty-field `Mutex<Option<…>>` mock-state bags, which are the same
+flag-bag pattern as their TUI `App`.
+
 ### From their AI reviewer ("gator")
 
 OpenShell runs an autonomous PR reviewer in a sandbox. None of its code is
