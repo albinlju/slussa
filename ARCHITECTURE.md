@@ -341,7 +341,7 @@ Run `cargo clippy --all-targets --locked -- -D warnings` alongside the tests.
 ## Provider flow verification
 
 Local regression coverage is supplemented by a GitHub live run against
-`albinlju/prtest`. See [PR_FLOW_VERIFICATION.md](PR_FLOW_VERIFICATION.md) for
+`albinlju/prtest`. See [PR_FLOW_VERIFICATION.md](docs/PR_FLOW_VERIFICATION.md) for
 passed flows, defects fixed during the run, evidence and remaining checks.
 Bitbucket live verification is pending.
 The payload changes follow the [GitHub review-comment API](https://docs.github.com/en/rest/pulls/comments),
@@ -484,11 +484,6 @@ edges, timeline connectors and reply selection use accent. File locations use
 link color separately from the surrounding metadata. Resolved fold status remains
 success-colored when focused or expanded; disclosure and metadata use focus color.
 Theme palettes and backgrounds remain unchanged.
-
-Variant A is preserved in `docs/ui-examples/reference/variant-a.patch`, relative
-to `6edd115`, with its tests and populated snapshot. The accompanying preview is
-available for layout comparison. The earlier experiment is preserved separately.
-Restore presentation changes selectively when comparing against later work.
 
 ### PR detail polish across tabs
 
