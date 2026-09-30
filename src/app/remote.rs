@@ -32,7 +32,7 @@ mod tests {
     #[test]
     fn parses_ssh_host() {
         assert_eq!(
-            parse_host("git@github.com:albinljung/tuipr.git").as_deref(),
+            parse_host("git@github.com:albinljung/slussa.git").as_deref(),
             Some("github.com")
         );
     }
@@ -40,7 +40,7 @@ mod tests {
     #[test]
     fn parses_https_host() {
         assert_eq!(
-            parse_host("https://github.com/albinljung/tuipr.git").as_deref(),
+            parse_host("https://github.com/albinljung/slussa.git").as_deref(),
             Some("github.com")
         );
     }
@@ -48,7 +48,7 @@ mod tests {
     #[test]
     fn parses_https_host_without_dot_git() {
         assert_eq!(
-            parse_host("https://github.com/albinljung/tuipr").as_deref(),
+            parse_host("https://github.com/albinljung/slussa").as_deref(),
             Some("github.com")
         );
     }

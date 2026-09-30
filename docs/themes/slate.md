@@ -1,14 +1,14 @@
 # Slate
 
-Ett förslag till tuiprs eget färgtema för mörka terminalbakgrunder.
+Ett förslag till slussas eget färgtema för mörka terminalbakgrunder.
 Standardbakgrunden i terminalen behålls. Appens layout och kortkommandon ändras inte.
 
 ```bash
-TUIPR_THEME=slate cargo run --release
+SLUSSA_THEME=slate cargo run --release
 ```
 
 För att välja det permanent kan den befintliga konfigurationen innehålla
-`theme = "slate"`. På macOS finns filen normalt i `~/.config/tuipr/config.toml`;
+`theme = "slate"`. På macOS finns filen normalt i `~/.config/slussa/config.toml`;
 `XDG_CONFIG_HOME` har företräde. Miljövariabeln har företräde över filen.
 
 [Öppna färgförhandsvisningen](slate-preview.html). Den visar illustrativa exempel,

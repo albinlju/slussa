@@ -1,6 +1,6 @@
 # Graphite
 
-Standardtemat i tuipr, med en neutral palett för mörka terminaler.
+Standardtemat i slussa, med en neutral palett för mörka terminaler.
 
 ```bash
 cargo run --release
@@ -27,6 +27,6 @@ Terminalens vanliga bakgrund behålls. Temat är avsett för mörka bakgrunder.
 | Ram | `#686B70` |
 | Markerad rad | `#343638` |
 
-Övriga teman finns kvar via `theme = "…"` i konfigurationen eller `TUIPR_THEME`.
-Exempelvis väljer `TUIPR_THEME=terminal` terminalens egen palett.
+Övriga teman finns kvar via `theme = "…"` i konfigurationen eller `SLUSSA_THEME`.
+Exempelvis väljer `SLUSSA_THEME=terminal` terminalens egen palett.
 Skillnaden ligger framför allt i att passivt innehåll inte använder fokusfärgen.

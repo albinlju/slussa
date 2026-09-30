@@ -1,4 +1,4 @@
-# Contributing to tuipr
+# Contributing to slussa
 
 Contributions are welcome, with a few rules that keep the project small and
 reviewable. The short version: **open an issue first**, follow the rules in
@@ -11,7 +11,7 @@ reviewable. The short version: **open an issue first**, follow the rules in
   request without an agreed issue may be closed without review.
 - **Small fixes need no issue:** a typo, an obvious bug with a test that shows
   it.
-- **Read what tuipr is for.** [docs/FEATURES.md](docs/FEATURES.md) has the
+- **Read what slussa is for.** [docs/FEATURES.md](docs/FEATURES.md) has the
   positioning and a list of what it rules out. The main one: there are two
   views, the PR list and the PR. A new capability appears as a better default,
   a column, a marker or one key inside those views, never as a new screen,
@@ -26,8 +26,8 @@ reviewable. The short version: **open an issue first**, follow the rules in
 You cannot push branches to this repository, so work from a fork:
 
 ```sh
-gh repo fork albinlju/tuipr --clone   # or fork on GitHub and clone your fork
-cd tuipr
+gh repo fork albinlju/slussa --clone   # or fork on GitHub and clone your fork
+cd slussa
 git switch -c fix/short-description
 ```
 
@@ -67,7 +67,7 @@ Make the change, then open a pull request against `main` from your fork.
 
 ## Reporting bugs and asking for features
 
-Use the issue templates. For a bug, include `tuipr --version`, the provider
+Use the issue templates. For a bug, include `slussa --version`, the provider
 (GitHub or Bitbucket Data Center), your operating system and terminal, and the
 steps that show it. Security problems go through
 [SECURITY.md](.github/SECURITY.md), not a public issue.

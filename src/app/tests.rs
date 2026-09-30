@@ -796,7 +796,7 @@ fn send_comment(app: &mut App) {
 
 fn recovery_root(name: &str) -> std::path::PathBuf {
     std::env::temp_dir().join(format!(
-        "tuipr-recovery-{name}-{}-{}",
+        "slussa-recovery-{name}-{}-{}",
         std::process::id(),
         std::time::SystemTime::now()
             .duration_since(std::time::UNIX_EPOCH)

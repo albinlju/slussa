@@ -1,4 +1,4 @@
-//! Test doubles for the two transports tuipr talks through: the `gh` CLI
+//! Test doubles for the two transports slussa talks through: the `gh` CLI
 //! (`FakeGh`) and Bitbucket's HTTP API (`MockHttp`). Tests built on them drive
 //! the real provider, fetcher and store code without a network.
 //!
@@ -31,7 +31,7 @@ impl TempDir {
     pub fn new(prefix: &str) -> Self {
         static NEXT: AtomicUsize = AtomicUsize::new(0);
         let path = std::env::temp_dir().join(format!(
-            "tuipr-{prefix}-{}-{}",
+            "slussa-{prefix}-{}-{}",
             std::process::id(),
             NEXT.fetch_add(1, Ordering::Relaxed)
         ));
@@ -76,7 +76,7 @@ pub fn gh_command() -> Option<Command> {
             command.arg(path);
             command
         }
-        GhOverride::Missing => Command::new("/nonexistent/tuipr-test-gh"),
+        GhOverride::Missing => Command::new("/nonexistent/slussa-test-gh"),
     })
 }
 

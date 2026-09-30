@@ -1,5 +1,5 @@
 //! Status glyphs — deliberately plain Unicode (geometric shapes, dingbats,
-//! arrows) so tuipr needs no Nerd Font. All are single-width and render in any
+//! arrows) so slussa needs no Nerd Font. All are single-width and render in any
 //! monospace font; meaning is reinforced by colour at each call site.
 
 pub const CHECK_CIRCLE: &str = "✓"; // U+2713  success / approved

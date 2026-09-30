@@ -1,4 +1,4 @@
-# tuipr
+# slussa
 
 A terminal UI for pull requests. Two views: the list of PRs, and the PR you
 opened. Read, comment, review, merge and decline without leaving the terminal,
@@ -8,7 +8,7 @@ The list opens sorted by what needs you, with the reason beside each PR, and a
 merge that cannot go through says why. It is not a replacement for the web UI,
 and it stays small on purpose.
 
-![tuipr: the list sorted by what needs you, then an agent-written PR: its stated intent, the review conversation and the diff](docs/media/demo.gif)
+![slussa: the list sorted by what needs you, then an agent-written PR: its stated intent, the review conversation and the diff](docs/media/demo.gif)
 
 The pull requests in the recording are from a small throwaway demo repository.
 
@@ -35,7 +35,7 @@ added for it. Bitbucket Cloud is a different product that this does not affect;
 it and GitLab are on the roadmap, not supported.
 
 The provider is detected from the `origin` remote of the repository you run
-tuipr in.
+slussa in.
 
 ## Install
 
@@ -45,21 +45,21 @@ paths, but nothing has run them.
 
 **Prebuilt binary.** Tagged releases attach tarballs for macOS and Linux
 (arm64 and x86_64) to GitHub Releases, with checksums. Unpack it and put
-`tuipr` on your `PATH`. On macOS you may need
-`xattr -d com.apple.quarantine tuipr` because the binary is not notarized yet.
+`slussa` on your `PATH`. On macOS you may need
+`xattr -d com.apple.quarantine slussa` because the binary is not notarized yet.
 
 **From source.** With a recent Rust toolchain (the repo pins 1.95 in
 `rust-toolchain.toml`, which `rustup` installs automatically):
 
 ```sh
-cargo install --git https://github.com/albinlju/tuipr
+cargo install --git https://github.com/albinlju/slussa
 ```
 
 or, from a clone:
 
 ```sh
-git clone https://github.com/albinlju/tuipr
-cd tuipr
+git clone https://github.com/albinlju/slussa
+cd slussa
 cargo install --path .
 ```
 
@@ -70,14 +70,14 @@ the host.
 
 ```sh
 cd path/to/a/repo
-tuipr                  # open the PR browser for this repo
-tuipr -C path/to/repo  # same, as if started in that directory
-tuipr auth login       # Bitbucket Data Center: store a personal access token
-tuipr --version
-tuipr --help
+slussa                  # open the PR browser for this repo
+slussa -C path/to/repo  # same, as if started in that directory
+slussa auth login       # Bitbucket Data Center: store a personal access token
+slussa --version
+slussa --help
 ```
 
-For Bitbucket Data Center, run `tuipr auth login` once per host. The token is
+For Bitbucket Data Center, run `slussa auth login` once per host. The token is
 kept in the OS keyring. For GitHub, run `gh auth login` instead.
 
 Press `?` in any view for the keys that are available right now. Actions the
@@ -136,21 +136,21 @@ Drafts (comment editor text and queued review comments) are saved locally and
 survive a restart.
 
 Copying a link uses the system clipboard helper (`pbcopy`, `wl-copy`, `xclip`,
-`xsel`, PowerShell). Over SSH, or when no helper works, tuipr asks the terminal
+`xsel`, PowerShell). Over SSH, or when no helper works, slussa asks the terminal
 to set the clipboard instead (OSC 52). The terminal cannot confirm that, so the
 message says "sent to terminal clipboard". Inside tmux this needs
 `set -g set-clipboard on`; some terminals disable OSC 52 by default.
 
 ## Configure
 
-`~/.config/tuipr/config.toml` (or `$XDG_CONFIG_HOME/tuipr/config.toml`):
+`~/.config/slussa/config.toml` (or `$XDG_CONFIG_HOME/slussa/config.toml`):
 
 ```toml
 theme = "graphite"   # graphite (default), slate, gruvbox, catppuccin, terminal
 sort = "attention"   # attention (default) or recent
 ```
 
-`TUIPR_THEME` overrides the file.
+`SLUSSA_THEME` overrides the file.
 
 ## Documentation
 

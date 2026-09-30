@@ -46,7 +46,7 @@ impl FetchError {
             }
             Self::Network(_) => "Couldn't reach the server.".to_owned(),
             Self::NotAuthenticated { host } => {
-                format!("Not logged in to {host} — run `tuipr auth login`.")
+                format!("Not logged in to {host} — run `slussa auth login`.")
             }
             Self::ParseFailed(_) => "Couldn't read the server response.".to_owned(),
         }
@@ -136,7 +136,7 @@ impl fmt::Display for FetchError {
             }
             Self::Network(msg) => write!(f, "network error: {msg}"),
             Self::NotAuthenticated { host } => {
-                write!(f, "not logged in to {host} — run `tuipr auth login`")
+                write!(f, "not logged in to {host} — run `slussa auth login`")
             }
             Self::ParseFailed(msg) => write!(f, "couldn't parse response: {msg}"),
         }

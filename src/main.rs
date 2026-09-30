@@ -16,7 +16,7 @@ use crate::providers::Provider;
 
 fn main() -> ExitCode {
     if let Err(err) = logging::init() {
-        eprintln!("tuipr: couldn't initialise logging: {err}");
+        eprintln!("slussa: couldn't initialise logging: {err}");
     }
 
     match cli::dispatch(std::env::args().collect()) {
@@ -32,7 +32,7 @@ fn run_tui(provider: Provider) -> ExitCode {
     {
         Ok(rt) => rt,
         Err(err) => {
-            eprintln!("tuipr: couldn't start runtime: {err}");
+            eprintln!("slussa: couldn't start runtime: {err}");
             return ExitCode::from(1);
         }
     };
@@ -44,7 +44,7 @@ fn run_tui(provider: Provider) -> ExitCode {
         app.state.ui.list.sort =
             tui::screens::pr_list::Sort::from_config(config::load().sort.as_deref());
         if let Err(err) = app.enable_drafts() {
-            eprintln!("tuipr: {err}");
+            eprintln!("slussa: {err}");
             return ExitCode::from(1);
         }
         let mut terminal = ratatui::init();
@@ -58,7 +58,7 @@ fn run_tui(provider: Provider) -> ExitCode {
         match result {
             Ok(()) => ExitCode::SUCCESS,
             Err(err) => {
-                eprintln!("tuipr: {err}");
+                eprintln!("slussa: {err}");
                 ExitCode::from(1)
             }
         }

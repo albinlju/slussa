@@ -2,7 +2,7 @@
 //!
 //! Editor drafts and queued review comments are saved to one JSON file per
 //! scope (repository, provider and account). Saves are atomic, and a lock lets
-//! only one tuipr instance write a scope. A file that cannot be parsed, or that
+//! only one slussa instance write a scope. A file that cannot be parsed, or that
 //! belongs to another scope or version, is left untouched and reported rather
 //! than overwritten.
 use super::{
@@ -153,7 +153,7 @@ impl App {
         ))?;
         let root = dirs::data_local_dir()
             .ok_or_else(|| io::Error::other("Cannot locate local data directory"))?
-            .join("tuipr/drafts");
+            .join("slussa/drafts");
         let (storage, snapshot) = DraftStorage::open(&root, scope)?;
         self.restore_drafts(storage, snapshot);
         Ok(())
@@ -240,7 +240,7 @@ mod tests {
     static NEXT: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
     pub(super) fn directory() -> PathBuf {
         std::env::temp_dir().join(format!(
-            "tuipr-drafts-{}-{}-{}",
+            "slussa-drafts-{}-{}-{}",
             std::process::id(),
             std::time::SystemTime::now()
                 .duration_since(std::time::UNIX_EPOCH)

@@ -15,14 +15,14 @@ labels: bug
 
 **Environment**
 
-- `tuipr --version`:
+- `slussa --version`:
 - Provider: GitHub / Bitbucket Data Center (self-hosted; the server version, if you know it)
 - Operating system:
 - Terminal (and multiplexer, if any):
 
 **Log (optional)**
 
-Run with `TUIPR_LOG=debug tuipr` and attach the relevant lines from the log file
-(`tuipr.log` in your platform's data directory, for example
-`~/Library/Application Support/tuipr/` on macOS or `~/.local/share/tuipr/` on
+Run with `SLUSSA_LOG=debug slussa` and attach the relevant lines from the log file
+(`slussa.log` in your platform's data directory, for example
+`~/Library/Application Support/slussa/` on macOS or `~/.local/share/slussa/` on
 Linux). Remove private repository or host names first.

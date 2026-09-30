@@ -1,4 +1,4 @@
-//! Drives the built `tuipr` binary as a subprocess. Every test runs in an
+//! Drives the built `slussa` binary as a subprocess. Every test runs in an
 //! isolated temporary directory with its own HOME and config, outside any git
 //! checkout, and none of them touch the network or start the TUI.
 
@@ -24,7 +24,7 @@ impl Sandbox {
     fn new() -> Self {
         static NEXT: AtomicUsize = AtomicUsize::new(0);
         let root = std::env::temp_dir().join(format!(
-            "tuipr-it-{}-{}",
+            "slussa-it-{}-{}",
             std::process::id(),
             NEXT.fetch_add(1, Ordering::Relaxed)
         ));
@@ -34,18 +34,18 @@ impl Sandbox {
     }
 
     fn command(&self) -> Command {
-        let mut command = Command::new(env!("CARGO_BIN_EXE_tuipr"));
+        let mut command = Command::new(env!("CARGO_BIN_EXE_slussa"));
         command
             .env("HOME", &self.root)
             .env("XDG_CONFIG_HOME", &self.root)
             .env("GIT_CEILING_DIRECTORIES", &self.root)
-            .env_remove("TUIPR_THEME")
+            .env_remove("SLUSSA_THEME")
             .stdin(Stdio::null());
         command
     }
 
     fn run(&self, args: &[&str]) -> Output {
-        let output = self.command().args(args).output().expect("run tuipr");
+        let output = self.command().args(args).output().expect("run slussa");
         Output {
             code: output.status.code().unwrap_or(-1),
             combined: format!(
@@ -85,7 +85,7 @@ impl Drop for Sandbox {
 fn help_lists_every_command() {
     let output = Sandbox::new().run(&["--help"]);
     assert_eq!(output.code, 0, "{}", output.combined);
-    for expected in ["tuipr", "-C <dir>", "auth login", "--version", "--help"] {
+    for expected in ["slussa", "-C <dir>", "auth login", "--version", "--help"] {
         assert!(
             output.combined.contains(expected),
             "missing {expected:?} in:\n{}",
@@ -111,7 +111,7 @@ fn version_prints_the_cargo_version_under_both_spellings() {
         assert_eq!(output.code, 0, "{flag}: {}", output.combined);
         assert_eq!(
             output.combined.trim(),
-            format!("tuipr {}", env!("CARGO_PKG_VERSION"))
+            format!("slussa {}", env!("CARGO_PKG_VERSION"))
         );
     }
 }
@@ -121,7 +121,7 @@ fn unknown_command_exits_with_usage_error() {
     let output = Sandbox::new().run(&["bogus"]);
     assert_eq!(output.code, 2);
     assert!(output.combined.contains("unknown command `bogus`"));
-    assert!(output.combined.contains("tuipr --help"));
+    assert!(output.combined.contains("slussa --help"));
 }
 
 #[test]

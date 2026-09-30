@@ -1,4 +1,4 @@
-# Feature backlog for tuipr
+# Feature backlog for slussa
 
 **Where it stands today:** a read-write PR client over two providers — GitHub
 (via the `gh` CLI) and Bitbucket Data Center (REST + PAT). You can read, comment,
@@ -6,7 +6,7 @@ review, merge, and decline.
 
 ## Positioning
 
-tuipr is the **human approval surface for AI-generated pull requests**: the place
+slussa is the **human approval surface for AI-generated pull requests**: the place
 where a reviewer decides, not the place where the code gets read line by line.
 
 The assumption behind the backlog: agents write more of the code and open more of
@@ -14,11 +14,11 @@ the PRs, and AI reviewers do the line-level reading. What stays human is triage
 ("what needs me?"), intent-checking ("did the agent do what was asked, and what did
 the AI review flag?"), and the sign-off itself (approve, merge, decline). Those are
 overview-and-decision tasks, and a keyboard-driven terminal UI is better at them
-than a web page. tuipr should be the missing piece in a terminal workflow next to
+than a web page. slussa should be the missing piece in a terminal workflow next to
 an editor, a git client and a coding agent — never a competitor to the provider's
 web UI.
 
-**Simplicity is the constraint everything else bends to.** tuipr has two views —
+**Simplicity is the constraint everything else bends to.** slussa has two views —
 the list and the PR — and stays that way. New capability shows up as a better
 default, a column, a marker or a single key inside those two views, not as a new
 screen, a dashboard or a sidebar of widgets. If a feature cannot be explained in
@@ -33,13 +33,13 @@ What this rules in:
   attention sort turned off.
 - **AI review is a first-class thread.** Comments from an AI reviewer (Copilot,
   Claude, a team bot) are shown inline with their own marker and summarized in the
-  header. Running a review from tuipr and reading the result in place is a core
+  header. Running a review from slussa and reading the result in place is a core
   action, not a plugin.
 - **Fast act-on-suggestion.** Suggestions get applied, not just displayed; the
   approve → merge path is as short as the provider allows.
 - **Handoff to the coding agent.** A thread, a file or a whole PR can be sent to
   Claude Code (or a configured command) with context, and the outcome shows up
-  back in tuipr on refresh.
+  back in slussa on refresh.
 - **Bitbucket Data Center is in maintenance.** Atlassian ends Data Center
   licence sales and expansions on 2028-03-30 and end of life is 2029-03-28, so
   the provider stays as it is: bugs that are found get fixed, nothing new is
@@ -50,11 +50,11 @@ What this rules out:
 
 - **Feature parity with the web UI.** Authoring, administration and metadata
   editing are not the job (see *Scope decision* below).
-- **Being a chat.** tuipr is deterministic and immediate. It shows state and takes
+- **Being a chat.** slussa is deterministic and immediate. It shows state and takes
   actions; it does not host a conversation with a model. The agent does the
-  analysis, tuipr is where the decision gets made.
+  analysis, slussa is where the decision gets made.
 - **Being a dashboard.** No third view, no configurable panes, no widget grid.
-  gh-dash already exists; tuipr wins by being the one you do not have to
+  gh-dash already exists; slussa wins by being the one you do not have to
   configure or learn.
 
 Priority order for anything new: attention signals in the list → AI-review
@@ -211,7 +211,7 @@ rounds, and a severity split where only evidenced findings block.
   thread, keep the finding ID when the review provides one, and never
   re-surface a waived thread as attention. Derivable from thread resolution +
   resolver identity + the marker; no reviewer-specific API.
-- [ ] **Run a review from tuipr** *(refined)* — a key on the PR that runs a
+- [ ] **Run a review from slussa** *(refined)* — a key on the PR that runs a
   configured command (default `claude -p` with a review prompt and the PR
   context: title, body, diff) and posts the result either as one batched
   review with line comments or as a local-only overlay the user can promote
@@ -273,14 +273,14 @@ rounds, and a severity split where only evidenced findings block.
 
 ### 4. Handoff to the coding agent
 
-tuipr never hosts the conversation; it hands context over and reads the result
+slussa never hosts the conversation; it hands context over and reads the result
 back on refresh.
 
 - [ ] **Send to agent** *(refined)* — from a thread, a file or the PR: run a
   configured command with a context payload (PR ref, thread body, file path and
   line, or the whole diff). Default target `claude` in the repo directory.
-  Three modes: *suspend* (tuipr leaves the alternate screen, the agent takes
-  the terminal, tuipr resumes and refreshes when it exits — the pattern in
+  Three modes: *suspend* (slussa leaves the alternate screen, the agent takes
+  the terminal, slussa resumes and refreshes when it exits — the pattern in
   IMPROVEMENTS.md, *Suspend / resume*), *detach* (spawn in a new tmux window /
   terminal pane and return immediately), or *headless* (`-p`, output in a
   dialog). Command per mode in `config.toml`; suspend is the default because
@@ -322,8 +322,8 @@ rank below the decision path.
 - [ ] **Normalized "requirements to merge"** — GitLab approvals, Bitbucket
   default reviewers / merge checks, GitHub branch protection → one shared model.
 - [ ] **Config** — repos / providers, default filters, keybindings, agent
-  commands. *(theme is done: `~/.config/tuipr/config.toml` `theme = "…"`,
-  overridden by `TUIPR_THEME`)*
+  commands. *(theme is done: `~/.config/slussa/config.toml` `theme = "…"`,
+  overridden by `SLUSSA_THEME`)*
 - [ ] **No-panic audit** — audit fetch/parse paths so a bad response never
   panics (use `LoadState::Failed` / the popup everywhere instead of
   `unwrap`/`unreachable!`).
@@ -331,12 +331,12 @@ rank below the decision path.
 - [ ] **Release** — *partly done:* README, MIT license and a tag-driven
   release workflow for four targets exist (see RELEASING.md). Still open: a
   demo gif in the README, the first real release, a Homebrew formula,
-  `cargo install tuipr` from crates.io, macOS notarization. Without a
+  `cargo install slussa` from crates.io, macOS notarization. Without a
   release the rest has no audience.
 
 ### Scope decision: authoring / management
 
-tuipr is review-and-act focused. Authoring and PR *administration* belong in the
+slussa is review-and-act focused. Authoring and PR *administration* belong in the
 editor, the coding agent or the web UI, and are explicitly out of scope unless
 a decision-path feature needs them:
 

@@ -4,7 +4,7 @@ use std::time::Duration;
 
 use super::{APP_PROPERTIES_PATH, http};
 
-pub(crate) const SERVICE: &str = "tuipr";
+pub(crate) const SERVICE: &str = "slussa";
 
 pub fn load_pat(host: &str) -> Option<String> {
     let entry = keyring::Entry::new(SERVICE, host).ok()?;

@@ -2,7 +2,7 @@
 
 GitHub live run: 2026-09-12, using public repository
 [albinlju/prtest](https://github.com/albinlju/prtest) and the authenticated
-`albinlju` account. Actions were performed through the compiled tuipr TUI in a
+`albinlju` account. Actions were performed through the compiled slussa TUI in a
 PTY. GitHub API reads independently confirmed the resulting writes.
 Bitbucket has not been live-verified.
 
@@ -22,7 +22,7 @@ Bitbucket has not been live-verified.
 | Own-PR gate | Passed: approve/request changes disabled in the picker | Pending |
 | Approve/request changes | Successful submission needs a PR authored by a different account | Pending |
 | Resolve | Passed: thread resolved, collapsed, then reopened | Pending |
-| Merge | Passed: PR #2 squash-merged through tuipr; server confirms MERGED | Pending |
+| Merge | Passed: PR #2 squash-merged through slussa; server confirms MERGED | Pending |
 | Close | Passed: cancel then confirm on PR #3; server confirms CLOSED | Pending |
 | Protected/conflicting merge | Not exercised live | Pending |
 | Partial review, timeout and navigation during writes | Local regression tests; no live fault injection | Pending |
@@ -31,11 +31,11 @@ Bitbucket has not been live-verified.
 
 - [PR #1: comments and reviews](https://github.com/albinlju/prtest/pull/1) remains open.
 - [Edited PR comment](https://github.com/albinlju/prtest/pull/1#issuecomment-5645638707):
-  `tuipr-live: PR comment original (edited)`.
+  `slussa-live: PR comment original (edited)`.
 - [Inline thread](https://github.com/albinlju/prtest/pull/1#discussion_r3996098597):
   reply id `3996109995` has `in_reply_to_id: 3996098597`.
 - [Comment review](https://github.com/albinlju/prtest/pull/1#pullrequestreview-5186327133):
-  state `COMMENTED`, body `tuipr-live: comment review summary`, with queued line 8.
+  state `COMMENTED`, body `slussa-live: comment review summary`, with queued line 8.
 - [Older-commit comment](https://github.com/albinlju/prtest/pull/1#discussion_r3996112676):
   server `commit_id` is `674510f6836e13519a95842e18c8830e0554e89a`, whereas PR
   HEAD was `2a3f69c79e4e43c547d0779b07a7265a93222ecf`. GitHub marks its current
@@ -45,14 +45,14 @@ Bitbucket has not been live-verified.
 - [PR #3: close](https://github.com/albinlju/prtest/pull/3): closed at
   `2026-09-12T11:50:33Z`.
 - [PR #4: pagination](https://github.com/albinlju/prtest/pull/4) remains open.
-  tuipr displayed `101/101`, opened `d8852b6` (`Pagination fixture 101/101`),
+  slussa displayed `101/101`, opened `d8852b6` (`Pagination fixture 101/101`),
   and rendered the change from test commit 100 to 101.
 
-Local fixture checkout: `/private/tmp/tuipr-prtest-20260912`.
-Run from the tuipr source checkout:
+Local fixture checkout: `/private/tmp/slussa-prtest-20260912`.
+Run from the slussa source checkout:
 
 ```sh
-cargo run --locked -- -C /private/tmp/tuipr-prtest-20260912
+cargo run --locked -- -C /private/tmp/slussa-prtest-20260912
 ```
 
 ## Defects found and fixed during the live run

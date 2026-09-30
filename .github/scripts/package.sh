@@ -1,9 +1,9 @@
 #!/usr/bin/env bash
-# Package a release build into dist/tuipr-<version>-<target>.tar.gz plus a
+# Package a release build into dist/slussa-<version>-<target>.tar.gz plus a
 # .sha256 file that `shasum -a 256 -c` accepts.
 #
 # Usage: package.sh <target-triple> <version>
-# Expects the binary at target/<target-triple>/release/tuipr.
+# Expects the binary at target/<target-triple>/release/slussa.
 set -euo pipefail
 
 if [[ $# -ne 2 ]]; then
@@ -12,8 +12,8 @@ if [[ $# -ne 2 ]]; then
 fi
 target=$1
 version=$2
-binary="target/${target}/release/tuipr"
-name="tuipr-${version}-${target}"
+binary="target/${target}/release/slussa"
+name="slussa-${version}-${target}"
 
 if [[ ! -x "$binary" ]]; then
     echo "missing binary: $binary" >&2

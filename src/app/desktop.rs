@@ -302,7 +302,7 @@ mod tests {
     #[test]
     fn helper_receives_literal_input_and_failures_and_timeouts_are_reported() {
         let path = std::env::temp_dir().join(format!(
-            "tuipr-link-{}-{}",
+            "slussa-link-{}-{}",
             std::process::id(),
             Instant::now().elapsed().as_nanos()
         ));

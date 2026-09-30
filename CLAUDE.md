@@ -1,4 +1,4 @@
-# tuipr
+# slussa
 
 A terminal UI for pull requests (Rust, ratatui). GitHub through the `gh` CLI,
 Bitbucket Data Center through REST. The product is the human approval surface

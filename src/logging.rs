@@ -10,7 +10,7 @@ pub fn init() -> std::io::Result<()> {
     }
     let file = File::create(&path)?;
 
-    let filter = EnvFilter::try_from_env("TUIPR_LOG").unwrap_or_else(|_| EnvFilter::new("warn"));
+    let filter = EnvFilter::try_from_env("SLUSSA_LOG").unwrap_or_else(|_| EnvFilter::new("warn"));
 
     fmt()
         .with_env_filter(filter)
@@ -24,6 +24,6 @@ pub fn init() -> std::io::Result<()> {
 
 pub fn log_path() -> PathBuf {
     dirs::data_dir()
-        .map_or_else(|| PathBuf::from("."), |d| d.join("tuipr"))
-        .join("tuipr.log")
+        .map_or_else(|| PathBuf::from("."), |d| d.join("slussa"))
+        .join("slussa.log")
 }

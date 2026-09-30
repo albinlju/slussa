@@ -9,7 +9,7 @@ use crate::providers::error::FetchError;
 pub(super) fn build_client(timeout: Duration) -> reqwest::Result<Client> {
     Client::builder()
         .timeout(timeout)
-        .user_agent(concat!("tuipr/", env!("CARGO_PKG_VERSION")))
+        .user_agent(concat!("slussa/", env!("CARGO_PKG_VERSION")))
         .build()
 }
 

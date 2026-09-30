@@ -1,6 +1,6 @@
 ---
 name: Feature request
-about: Suggest something tuipr should do
+about: Suggest something slussa should do
 labels: enhancement
 ---
 
@@ -8,7 +8,7 @@ labels: enhancement
 
 **What would you like to happen?**
 
-tuipr has two views, the PR list and the PR. Say where in those views this would
+slussa has two views, the PR list and the PR. Say where in those views this would
 show up: a better default, a column, a marker or one key. A new screen,
 dashboard or sidebar is out of scope.
 

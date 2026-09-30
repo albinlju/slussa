@@ -1,6 +1,6 @@
-# tuipr — architecture
+# slussa — architecture
 
-tuipr is a terminal pull-request client for GitHub (`gh`) and Bitbucket Data
+slussa is a terminal pull-request client for GitHub (`gh`) and Bitbucket Data
 Center (REST + PAT). It supports reading, commenting, reviewing, merging and
 closing/declining PRs.
 
@@ -10,7 +10,7 @@ ordinary rendering functions; they do not need the component interface.
 
 ## Product and interaction principles
 
-tuipr should remain minimalist, easy to understand and comfortable for daily
+slussa should remain minimalist, easy to understand and comfortable for daily
 use as its feature set grows. Polish comes from consistent behavior, clear
 hierarchy, restrained styling and reliable feedback. These principles guide
 future features and UI changes; they do not imply every current screen already
@@ -399,7 +399,7 @@ replaced when another comment action is selected.
 
 `app/drafts.rs` persists draft targets, their captured diff revisions, review
 queues and partial-submission receipts in the platform's local data directory
-under `tuipr/drafts/`. Files are versioned and scoped by provider, remote host,
+under `slussa/drafts/`. Files are versioned and scoped by provider, remote host,
 repository path and authenticated account; no tokens are included. The snapshot
 uses ordered maps, writes only when content changes, syncs a temporary file,
 and renames it over the previous version. Files use mode 0600 on Unix. A
@@ -520,7 +520,7 @@ with H/L; the footer advertises this only when needed. Code, links and tables re
 their full text. Resizing clamps horizontal and vertical scroll to valid bounds.
 
 Theme direction: Graphite is the default. Terminal, Gruvbox, Catppuccin and Slate
-remain available through configuration or TUIPR_THEME. There is no additional theme
+remain available through configuration or SLUSSA_THEME. There is no additional theme
 picker. Terminal remains an option for users who prefer their terminal's palette.
 Prioritize consistent semantic roles and default backgrounds across all views.
 Description now follows theme roles; conversation Markdown still starts from the

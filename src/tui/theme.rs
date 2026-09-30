@@ -194,7 +194,7 @@ fn named(name: &str) -> Option<&'static Theme> {
 pub fn current() -> &'static Theme {
     static SELECTED: OnceLock<&'static Theme> = OnceLock::new();
     SELECTED.get_or_init(|| {
-        let name = std::env::var("TUIPR_THEME")
+        let name = std::env::var("SLUSSA_THEME")
             .ok()
             .or_else(|| crate::config::load().theme);
         let Some(name) = name else {

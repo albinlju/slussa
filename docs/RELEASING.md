@@ -1,4 +1,4 @@
-# Releasing tuipr
+# Releasing slussa
 
 Releases are built by `.github/workflows/release.yml` when a version tag is
 pushed. The workflow builds four targets, packages each as a tarball with a
@@ -48,12 +48,12 @@ before the first real release and after any change to the workflow.
 ## Verify a download
 
 ```sh
-shasum -a 256 -c tuipr-0.2.0-aarch64-apple-darwin.tar.gz.sha256
+shasum -a 256 -c slussa-0.2.0-aarch64-apple-darwin.tar.gz.sha256
 ```
 
 ## Not automated yet
 
-- A Homebrew tap (needs a separate `homebrew-tuipr` repository).
+- A Homebrew tap (needs a separate `homebrew-slussa` repository).
 - Publishing to crates.io: remove `publish = false` from `Cargo.toml` first.
 - Signing and notarizing the macOS binaries. Downloaded binaries may need
-  `xattr -d com.apple.quarantine tuipr` until that exists.
+  `xattr -d com.apple.quarantine slussa` until that exists.

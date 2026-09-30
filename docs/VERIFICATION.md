@@ -1,6 +1,6 @@
 # What has not been verified, and how to check it off
 
-Everything in tuipr is tested, but mostly against doubles: a scripted `gh`, a
+Everything in slussa is tested, but mostly against doubles: a scripted `gh`, a
 loopback server that imitates Bitbucket, and fixtures. Those prove that the
 code does what it was written to do. They cannot prove that the real services
 behave the way the code assumes. This file lists each place where that gap
@@ -40,8 +40,8 @@ Decisions and the release procedure are in [RELEASING.md](RELEASING.md).
   is a prerelease (not a draft) with four archives and `SHA256SUMS`. All four
   checksums verified, and each binary has the right architecture: arm64 and
   x86_64 Mach-O for macOS, ARM aarch64 and x86-64 ELF for Linux. Each archive
-  holds `tuipr`, `LICENSE` and `README.md`. The Mac arm64 binary ran and printed
-  `tuipr 0.1.0-pre.1` (maintainer), and the x86_64 Mac binary did the same under
+  holds `slussa`, `LICENSE` and `README.md`. The Mac arm64 binary ran and printed
+  `slussa 0.1.0-pre.1` (maintainer), and the x86_64 Mac binary did the same under
   Rosetta. Cleaned up the same day: release, tag and branch are deleted and
   `main` is untouched at `0.1.0`.
   Deleting it removed the archives V2 and V3 use, so they need a release to
@@ -50,27 +50,27 @@ Decisions and the release procedure are in [RELEASING.md](RELEASING.md).
   `release-rehearsal`: all jobs succeeded, a prerelease (not a draft) with four
   archives and `SHA256SUMS`; all four checksums verified, architectures right
   (Mach-O arm64 and x86_64, ELF aarch64 and x86-64), each archive holds
-  `tuipr`, `LICENSE` and `README.md`, and the Mac arm64 binary printed
-  `tuipr 0.1.0-pre.2`. **Not yet cleaned up:** the release, tag and branch stay
+  `slussa`, `LICENSE` and `README.md`, and the Mac arm64 binary printed
+  `slussa 0.1.0-pre.2`. **Not yet cleaned up:** the release, tag and branch stay
   until V2 is done in a browser.
 
 - [x] **V2. Clean install.** Use an archive from that prerelease on a
-  machine *without Rust*, unpack it, run `./tuipr --version` and then `./tuipr`
+  machine *without Rust*, unpack it, run `./slussa --version` and then `./slussa`
   inside a repository. Note whether macOS blocks it and whether
-  `xattr -d com.apple.quarantine tuipr` is enough. Check the checksum with
+  `xattr -d com.apple.quarantine slussa` is enough. Check the checksum with
   `shasum -a 256 -c <file>.sha256`.
   Report: what happened, and the exact message if it was blocked.
   **Partly done 2026-09-30.** The Mac arm64 archive, fetched with `gh`, unpacked
   and ran. Still open: a machine without Rust, and above all the quarantine
   question, which only arises for a file downloaded in a browser (`gh` does not
   set the flag). Download an archive from the release page in a browser, then
-  run `xattr -l tuipr` and `./tuipr --version`.
+  run `xattr -l slussa` and `./slussa --version`.
   **Result 2026-09-30 (maintainer), browser download of the `0.1.0-pre.2` arm64
-  archive:** `./tuipr --version` printed `Killed: 9`, with the macOS message that
-  Apple could not verify that tuipr is free from malware. So Gatekeeper blocks a
+  archive:** `./slussa --version` printed `Killed: 9`, with the macOS message that
+  Apple could not verify that slussa is free from malware. So Gatekeeper blocks a
   browser-downloaded binary, as expected for a binary that is not signed with a
-  Developer ID and notarized. `xattr -d com.apple.quarantine tuipr`
-  is enough: afterwards `./tuipr --version` printed `tuipr 0.1.0-pre.2`. Run on
+  Developer ID and notarized. `xattr -d com.apple.quarantine slussa`
+  is enough: afterwards `./slussa --version` printed `slussa 0.1.0-pre.2`. Run on
   the maintainer's own Mac, which has Rust, not on a machine without it; the
   binary does not depend on Rust being installed. Accepted for now;
   a signed and notarized binary is to be arranged before going public.
@@ -84,9 +84,9 @@ Decisions and the release procedure are in [RELEASING.md](RELEASING.md).
     /t/tuipr-0.1.0-pre.1-aarch64-unknown-linux-gnu/tuipr --version
   ```
 
-  Expect `tuipr 0.1.0-pre.1`. Report: the output, or the error.
+  Expect `slussa 0.1.0-pre.1`. Report: the output, or the error.
   **Done 2026-09-30, pass (run by me).** From the `0.1.0-pre.2` archives: the
-  `aarch64-unknown-linux-gnu` binary printed `tuipr 0.1.0-pre.2` in
+  `aarch64-unknown-linux-gnu` binary printed `slussa 0.1.0-pre.2` in
   `ubuntu:22.04` on `linux/arm64`, and the `x86_64-unknown-linux-gnu` binary did
   the same under emulation on `linux/amd64`. Only `--version` was run, not the
   TUI.
@@ -98,12 +98,12 @@ Decisions and the release procedure are in [RELEASING.md](RELEASING.md).
   1. In a test repository, add a ruleset on the default branch that requires one
      approving review.
   2. Open a PR and leave it unapproved.
-  3. In tuipr open it, press `m`, and read the dialog; note the header badge.
+  3. In slussa open it, press `m`, and read the dialog; note the header badge.
   4. Repeat with a failing required check, and with the branch behind its base
      if "require branches to be up to date" is on.
   Report: the text of the merge dialog and the badge for each case.
   **Done 2026-09-30, run by me** in a throwaway public repository
-  (`albinlju/tuipr-v4-test`, a ruleset on `main`), driving the real tuipr
+  (`albinlju/slussa-v4-test`, a ruleset on `main`), driving the real slussa
   binary in a pseudo-terminal and reading the screen. In all three cases the
   header badge was `◷ blocked` and the dialog opened with `m` on the Overview
   tab (it does not open on Description).
@@ -124,30 +124,30 @@ Decisions and the release procedure are in [RELEASING.md](RELEASING.md).
   requested *your* review, which one account cannot create alone.
   1. Ask a teammate, or use a second account, to open a PR and request your
      review (a person, not a team).
-  2. Open tuipr as yourself.
+  2. Open slussa as yourself.
   3. Expect: that PR first in the list, with `review requested` in the
      "Needs you" column at 90 columns or wider.
   4. Approve it; expect the reason to disappear after the next refresh (`F`).
   Report: whether it appeared, and where it sorted.
 
 - [x] **V6. Reopen on a real PR.** This changes a real PR and notifies people,
-  so use a throwaway. PR #3 in `albinlju/tuipr` is closed and not merged.
+  so use a throwaway. PR #3 in `albinlju/slussa` is closed and not merged.
   1. In the list press `f`, choose Declined, open the PR, go to the Overview.
   2. Press `x`, confirm. Expect `PR #3 · reopened` and the status to change
      after the refresh.
   3. Press `x` again and confirm the decline, to put it back.
   4. A refused reopen: close a PR, delete its head branch on GitHub, try to
-     reopen it in tuipr. Expect GitHub's own message in the error dialog.
+     reopen it in slussa. Expect GitHub's own message in the error dialog.
   Report: anything that looked wrong, and the message in step 4.
   **Partly done 2026-09-30 (maintainer).** Reopening PR #3 was refused and the
   error dialog showed GitHub's own message, in full: "state cannot be changed.
   There is already an open pull request from feat/newtest to main." The refusal
-  is GitHub's rule of one open PR per branch pair, not a fault in tuipr, and the
+  is GitHub's rule of one open PR per branch pair, not a fault in slussa, and the
   message reached the user unaltered. Still open: a successful reopen and the
   decline that puts it back (steps 2 and 3), which needs the other open PR from
   `feat/newtest` closed first.
   Afterwards the maintainer reported that declining and reopening through
-  tuipr, that the `reopened` line appeared and that the status changed by
+  slussa, that the `reopened` line appeared and that the status changed by
   itself, without a manual refresh. **Done 2026-09-30, pass.** Not exercised:
   the refusal with a *deleted head branch* (step 4's exact case); the refusal
   seen was the one-open-PR-per-branch-pair rule, which shows the same path.
@@ -155,14 +155,14 @@ Decisions and the release procedure are in [RELEASING.md](RELEASING.md).
 - [x] **V7. A large repository.** The list used to read every PR ever opened.
   It now reads the open ones and a batch of closed ones. This has been checked
   against a tiny repository only.
-  1. `git clone --depth 1 https://github.com/cli/cli && cd cli && tuipr`.
+  1. `git clone --depth 1 https://github.com/cli/cli && cd cli && slussa`.
   2. Note how many seconds until the list appears, and whether `F` stays
      quick.
   3. Press `f`, choose Merged, press `L` a few times. Expect batches of 30 on GitHub and
      a footer that drops `L: older` only when the history ends.
   Report: the seconds, and anything that stalled or looked wrong.
   **Measured by me 2026-09-30 on `cli/cli`** (63 open, 3 256 merged, 1 352
-  closed; read-only `gh api graphql` with tuipr's real selection, 51
+  closed; read-only `gh api graphql` with slussa's real selection, 51
   rate-limit points in all, of 5 000 an hour). The interactive part above is still yours.
 
   | Query | Time | Cost |
@@ -181,9 +181,9 @@ Decisions and the release procedure are in [RELEASING.md](RELEASING.md).
   respond to your request in time" for a 100-PR page; the timing is noisy, but
   100 is at the edge and 30 to 50 is comfortably under. So the bounded list is a
   correctness fix on a big repository, not only a speed-up, and a page of 100
-  is still too large for tuipr's selection. See IMPROVEMENTS.md.
+  is still too large for slussa's selection. See IMPROVEMENTS.md.
 
-  **Re-measured after the fix, same day, with tuipr's own code** (`GH_REPO=cli/cli`,
+  **Re-measured after the fix, same day, with slussa's own code** (`GH_REPO=cli/cli`,
   a temporary test, not kept): a page size of 30 and the open and closed reads
   run together. The first load took 6.5 s for 93 PRs (63 open of which 30 are
   drafts, plus a page of closed ones), against about 10 s before, and the next
@@ -228,21 +228,21 @@ working on a real server and everything else is tested against a mock.
 ### Reported so far
 
 - **2026-09-30, a real Bitbucket Data Center server, reported by the maintainer:**
-  tuipr was run against a real repository there and lists its pull requests.
+  slussa was run against a real repository there and lists its pull requests.
   The version of that server and which tabs and actions were tried were not
   recorded. This is real evidence for connecting, authenticating with a token
   and reading the list, and for the remote being recognised. It is not evidence
   for any write. Fill in below what else was exercised.
   - Server version: **9.4.23**, from `version` in
     `https://<host>/rest/api/1.0/application-properties`, the same
-    unauthenticated call tuipr makes to recognise a Bitbucket host.
+    unauthenticated call slussa makes to recognise a Bitbucket host.
     How current that is, from Atlassian's release notes and Docker Hub on
     2026-09-30: the latest is 10.5 (29 September 2026), and 9.6 (18 March 2025)
     and 10.0 (8 September 2025) came after the 9.4 line. 9.4.24 exists, so the
     server is one patch behind on its line. Atlassian's support policy for 9.4
     was not checked.
   - Also tried: *(list the tabs and actions)*
-- This server evidently has no context path in its address, since tuipr would
+- This server evidently has no context path in its address, since slussa would
   otherwise have refused the remote; so P2 below is not a problem for this
   server, and P1 does not apply to it because it is served over https.
 
@@ -250,7 +250,7 @@ working on a real server and everything else is tested against a mock.
 
 Found by reading the code while planning this. Nothing has been changed.
 
-- [x] **P1. A local instance cannot be reached. Fixed, unit-tested only.** tuipr builds every Bitbucket
+- [x] **P1. A local instance cannot be reached. Fixed, unit-tested only.** slussa builds every Bitbucket
   address as `https://{host}` and probes that to recognise the server. It
   accepts an `http://` remote but drops the scheme. An instance at
   `http://localhost:7990` therefore fails at startup. Either honour the scheme
@@ -260,7 +260,7 @@ Found by reading the code while planning this. Nothing has been changed.
   `PROJECT/repo` or `scm/PROJECT/repo` are accepted. A Bitbucket served under a
   context path, such as `https://host/bitbucket/scm/PROJECT/repo.git`, is
   rejected as unparseable. That server works, so it has none, but
-  other installations may, and their users would see tuipr refuse the remote.
+  other installations may, and their users would see slussa refuse the remote.
   Not reproduced; it follows from reading the code. Tracked in FEATURES.md.
 
 ### What is known about the image
@@ -302,7 +302,7 @@ worth doing later, for the day it is upgraded.
 5. Create a project and a repository, push any repository with some history and
    a branch that conflicts with the main branch.
 6. Create a personal access token for the administrator with write access to
-   the repository, and store it with `tuipr auth login` once P1 is solved.
+   the repository, and store it with `slussa auth login` once P1 is solved.
 7. Create what the checks need:
    - an ordinary open PR, a draft PR if the version has drafts, and a PR with a
      merge conflict;
@@ -317,13 +317,13 @@ worth doing later, for the day it is upgraded.
 Run B1 to B10 below against the instance on `9.4.23-jdk17`. Writes are safe
 here, so every item can be done in full. Note the tag on each result line.
 
-Each assumption below is checked by doing the action in tuipr against the
+Each assumption below is checked by doing the action in slussa against the
 instance and seeing that it behaves. Note the version and the result on the
 line under the item.
 
 - [ ] **B1. Authentication.** *Partly confirmed 2026-09-30:* the real
   server accepted the token and the list loaded. Not recorded: that your own
-  PRs are recognised as yours. Run `tuipr auth login`, then `tuipr` in a clone of
+  PRs are recognised as yours. Run `slussa auth login`, then `slussa` in a clone of
   the repository. Expect the list to load and your own PRs to be recognised as
   yours: a personal access token as a `Bearer` header is accepted, and the
   `X-AUSERNAME` response header names the current user.

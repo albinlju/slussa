@@ -11,7 +11,7 @@ pub struct Config {
 }
 
 fn config_path() -> Option<PathBuf> {
-    config_root().map(|d| d.join("tuipr").join("config.toml"))
+    config_root().map(|d| d.join("slussa").join("config.toml"))
 }
 
 fn config_root() -> Option<PathBuf> {

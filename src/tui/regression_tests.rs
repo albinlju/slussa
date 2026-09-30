@@ -115,7 +115,7 @@ fn screens_preserve_rendered_output() {
         }
     }
     let path = concat!(env!("CARGO_MANIFEST_DIR"), "/src/tui/testdata/screens.txt");
-    if std::env::var_os("TUIPR_UPDATE_SNAPSHOTS").is_some() {
+    if std::env::var_os("SLUSSA_UPDATE_SNAPSHOTS").is_some() {
         std::fs::write(path, &output).unwrap();
     }
     assert_eq!(output, std::fs::read_to_string(path).unwrap());
@@ -379,7 +379,7 @@ fn timeline_keeps_thread_selection_and_sidebar_is_responsive() {
         env!("CARGO_MANIFEST_DIR"),
         "/src/tui/testdata/conversation.txt"
     );
-    if std::env::var_os("TUIPR_UPDATE_SNAPSHOTS").is_some() {
+    if std::env::var_os("SLUSSA_UPDATE_SNAPSHOTS").is_some() {
         std::fs::write(path, &preview).unwrap();
     }
     assert_eq!(preview, std::fs::read_to_string(path).unwrap());

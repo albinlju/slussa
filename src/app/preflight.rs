@@ -21,22 +21,22 @@ pub enum PreflightError {
     BitbucketCloudUnsupported,
     #[error(
         "the GitHub CLI (`gh`) is not installed.\n\
-         Install it from https://cli.github.com and re-run tuipr."
+         Install it from https://cli.github.com and re-run slussa."
     )]
     GhMissing,
     #[error(
         "the GitHub CLI (`gh`) is installed but not authenticated for {host}.\n\
-         Run `gh auth login` then re-run tuipr."
+         Run `gh auth login` then re-run slussa."
     )]
     GhNotAuthenticated { host: String },
     #[error(
         "couldn't reach `{host}` to detect the provider: {reason}.\n\
-         Check the host is reachable and re-run tuipr."
+         Check the host is reachable and re-run slussa."
     )]
     UnknownHost { host: String, reason: String },
     #[error(
         "not logged in to {host}.\n\
-         Run: tuipr auth login"
+         Run: slussa auth login"
     )]
     DcNotAuthenticated { host: String },
     #[error(

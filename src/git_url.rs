@@ -49,8 +49,8 @@ mod tests {
     #[test]
     fn scp_like() {
         assert_eq!(
-            split("git@github.com:albinljung/tuipr.git"),
-            Some(("github.com", "albinljung/tuipr.git"))
+            split("git@github.com:albinljung/slussa.git"),
+            Some(("github.com", "albinljung/slussa.git"))
         );
     }
 

@@ -1,4 +1,4 @@
-# Engineering improvements for tuipr
+# Engineering improvements for slussa
 
 Companion to [FEATURES.md](FEATURES.md) (what to build) and
 [ARCHITECTURE.md](ARCHITECTURE.md) (how it is built). This file tracks how the
@@ -13,13 +13,13 @@ PR except the items in *Now*.
 
 Part B was assembled by reading [NVIDIA/OpenShell](https://github.com/NVIDIA/openshell)
 (≈40 crates, agent-first Rust project with a ratatui TUI). What is borrowed is
-their engineering hygiene, not their TUI: tuipr's component/store design is
+their engineering hygiene, not their TUI: slussa's component/store design is
 already tighter than their `App` struct with 20 `pending_*` flags, and it
 stays.
 
 ---
 
-## Part A — from reviewing tuipr itself
+## Part A — from reviewing slussa itself
 
 ### Now (cheap, no feature needed)
 
@@ -75,7 +75,7 @@ stays.
   general.
 
 - [x] **A page of 100 PRs can hit GitHub's time limit.** *Fixed 2026-09-30.*
-  Measured on `cli/cli` (see VERIFICATION.md, V7): a 100-PR page with tuipr's
+  Measured on `cli/cli` (see VERIFICATION.md, V7): a 100-PR page with slussa's
   selection took 7 to 11 s and once failed with "We couldn't respond to your
   request in time", while 30 PRs took about 2 s. The list now reads 30 PRs per
   request (`PAGE` in `github/prs.rs`, passed through `repo_nodes`), and the open
@@ -90,7 +90,7 @@ stays.
   has no such limit and has not shown the problem.
 
 - [ ] **The first load is slow on a large repository.** Reported by the
-  maintainer after running tuipr on `cli/cli` (63 open PRs): "quite slow", even
+  maintainer after running slussa on `cli/cli` (63 open PRs): "quite slow", even
   after the page-size fix (first load 6.5 s in the provider, about 0.75 s more
   before the first frame for `git`, `gh --version`, `gh auth status` and
   `gh api user`). The open pages are a cursor chain and cannot run in parallel.
@@ -161,7 +161,7 @@ stays.
   background refreshes → pause the input reader → `LeaveAlternateScreen` +
   `disable_raw_mode` → run the child with inherited stdio on
   `spawn_blocking` → `enable_raw_mode` + `EnterAlternateScreen` → `clear` and
-  redraw → drain stale events → resume the reader → restart refreshes. tuipr
+  redraw → drain stale events → resume the reader → restart refreshes. slussa
   uses crossterm's `EventStream`, which has no pause; drop and recreate it
   around the child, or gate it with an `AtomicBool` the way they do. Put it in
   `app/desktop.rs` next to browser/clipboard as `run_in_terminal(cmd)`.
@@ -202,7 +202,7 @@ list; see *Not borrowed* below.
   `option_if_let_else` and `redundant_pub_crate`. Original note: OpenShell enables
   `clippy::{all, pedantic, nursery}` plus `rust::{unsafe_code,
   rust_2018_idioms, trivial_casts, trivial_numeric_casts, unused_lifetimes,
-  unused_qualifications}`, then allows the noisy ones by name. tuipr has
+  unused_qualifications}`, then allows the noisy ones by name. slussa has
   pedantic only. Add the `[lints.rust]` block and try `nursery` at `warn`;
   keep `too_many_lines = "allow"`. Run with `-D warnings` in CI, not locally.
 - [x] **`rust-toolchain.toml`** *Done (1.95.0, rustfmt + clippy +
@@ -222,7 +222,7 @@ list; see *Not borrowed* below.
   found RUSTSEC-2026-0285 in `rustls` 0.23.40 (TLS 1.3 handshake), fixed by
   `cargo update -p rustls` to 0.23.45. Licenses: allow-list plus
   `CDLA-Permissive-2.0`; `colored` and `option-ext` are MPL-2.0 and are named
-  exceptions. tuipr itself is MIT (2026-09-30, `LICENSE` and the `license` field).
+  exceptions. slussa itself is MIT (2026-09-30, `LICENSE` and the `license` field).
   `publish = false` stays in `Cargo.toml` until the first release.* Advisories, license allow-list,
   `unknown-registry = "deny"`. Cheap, and it is the only thing that will tell
   you when `keyring` or `reqwest` pulls in something unwanted.
@@ -246,7 +246,7 @@ list; see *Not borrowed* below.
   `aarch64-apple-darwin`, `x86_64-apple-darwin`, `x86_64-unknown-linux-gnu`,
   `aarch64-unknown-linux-gnu`; attach tarballs + `sha256` to a GitHub
   Release; generate the changelog from commits. Then a Homebrew tap and
-  `cargo install tuipr`. Their `release-tag.yml` computes versions once and
+  `cargo install slussa`. Their `release-tag.yml` computes versions once and
   fans out; copy the shape, not the size.
 - [x] **OSC 52 clipboard.** *Done.* Helper first, OSC 52 as fallback, and
   OSC 52 first when `SSH_CONNECTION` or `SSH_TTY` is set (the helper would fill
@@ -254,7 +254,7 @@ list; see *Not borrowed* below.
   because the terminal never confirms. Uses the `base64` crate; the escape
   goes to `/dev/tty`, not stdout. Original note: Their `clipboard.rs` writes
   `ESC ] 52 ; c ; <base64> BEL` straight to `/dev/tty`, so copy works over
-  SSH, tmux and mosh without `pbcopy`/`xclip`/`wl-copy`. tuipr's
+  SSH, tmux and mosh without `pbcopy`/`xclip`/`wl-copy`. slussa's
   `app/desktop.rs` shells out to platform helpers. Use OSC 52 first and keep
   the helpers as fallback (some terminals disable OSC 52 writes).
 - [x] **Auto light/dark theme.** *Dropped (2026-09-30).* All five themes are
@@ -262,7 +262,7 @@ list; see *Not borrowed* below.
   terminal, so detection would only choose between a dark palette and
   `terminal`. Revisit only if a light palette is added. Original note: They detect the terminal background with an
   OSC 11 query (`terminal-colorsaurus`) *before* entering raw mode, with
-  `auto | dark | light` as the config value. tuipr's `theme = "…"` picks a
+  `auto | dark | light` as the config value. slussa's `theme = "…"` picks a
   named palette; add `auto` that maps to a light or dark default. Detection
   must run before `ratatui::init()`.
 - [x] **Integration tests in `tests/`.** *Done for the CLI surface:*
@@ -274,15 +274,15 @@ list; see *Not borrowed* below.
   `cli_help_integration.rs`, `cli_color_integration.rs`). The helper is
   small: `run_isolated(args)` runs `env!("CARGO_BIN_EXE_openshell")` with
   `HOME` and `XDG_CONFIG_HOME` pointed at a `tempfile::tempdir()`, stdin
-  null, and returns `{stdout, combined, code}`. For tuipr: `tuipr --help`,
-  `tuipr auth` without `gh`, config parsing from a temp `XDG_CONFIG_HOME`,
+  null, and returns `{stdout, combined, code}`. For slussa: `slussa --help`,
+  `slussa auth` without `gh`, config parsing from a temp `XDG_CONFIG_HOME`,
   all driven through the built binary. For in-crate tests that touch env
   vars they use an `EnvVarGuard` (restores on drop) behind a global
-  `TEST_ENV_LOCK` mutex; tuipr's `config.rs` needs the same once it has tests.
+  `TEST_ENV_LOCK` mutex; slussa's `config.rs` needs the same once it has tests.
 - [ ] **`cargo nextest`** for the test run in CI (parallel, per-test timeouts,
   clearer failure output). Local `cargo test` stays fine.
 - [ ] **Structured errors with context.** They use `thiserror` for library
-  errors and `miette` for user-facing diagnostics. tuipr already has
+  errors and `miette` for user-facing diagnostics. slussa already has
   `FetchError::user_message()` which does the same job by hand; not worth
   switching, but the *split* between log message and user message is right
   and should be kept as new error variants are added.
@@ -294,7 +294,7 @@ list; see *Not borrowed* below.
   / test, and the blocking-I/O and two-views principles.
 - [x] **`AGENTS.md` / `CLAUDE.md`.** *Done: `CLAUDE.md` holds the non-negotiables, commands and pointers.*  They keep one file as the primary
   instruction surface for coding agents and point it at ARCHITECTURE and
-  CONTRIBUTING. tuipr's ARCHITECTURE.md already reads like one; a short
+  CONTRIBUTING. slussa's ARCHITECTURE.md already reads like one; a short
   `CLAUDE.md` that names the principles, the two-views rule, the I/O pattern
   and the test commands would make every agent session start on the same
   footing.
@@ -316,7 +316,7 @@ list; see *Not borrowed* below.
   month for private ones; the vendor's own pricing page was not checked, so
   check it first.
   1. **Install the app yourself.** It is a GitHub App: install it from GitHub
-     Marketplace and give it `albinlju/tuipr` only. Granting access is done in
+     Marketplace and give it `albinlju/slussa` only. Granting access is done in
      the browser and is not something an agent should do.
   2. **Add `.coderabbit.yaml` at the root.** Per its documentation the file sets
      `language`, `reviews.profile` (for example `chill`),
@@ -335,14 +335,14 @@ list; see *Not borrowed* below.
 ### From their core crates (code, not tooling)
 
 Read after the tooling pass: `openshell-isolation-interface`, `openshell-sdk`,
-`openshell-policy`, `openshell-sandbox-backend`. tuipr is on par in most of
+`openshell-policy`, `openshell-sandbox-backend`. slussa is on par in most of
 it; these are the places where their code is clearly better and the pattern
 transfers.
 
 - [ ] **Error classification for the caller.** Their `BackendError` keeps
   variant + message and adds `kind()` → `Invalid | Denied | Unavailable |
   Unsupported | Failed | Terminated`; `SdkError::Auth` carries
-  `retryable: bool` and the original status boxed. tuipr's
+  `retryable: bool` and the original status boxed. slussa's
   `FetchError::user_message()` covers the human text; add
   `FetchError::kind()` (`Retryable | NeedsAuth | Gone | Invalid | Unknown`)
   so the error dialog decides whether to offer *retry*, *re-login* or just
@@ -350,14 +350,14 @@ transfers.
   *Trigger:* next change to the error dialog or a new provider.
 - [ ] **Types that carry invariants.** `VerifiedBackendDescriptor` has no
   public constructor and is minted only by the registry; lifecycle states are
-  consumed by value (`self: Box<Self>`) so a step cannot be skipped. tuipr
+  consumed by value (`self: Box<Self>`) so a step cannot be skipped. slussa
   already does this for `CommentAnchor` + `DiffRevision`. Extend it to the
   screen → app boundary: a `ResolvedCommand` that only
   `pr_detail/interactions.rs` can construct, so `app/commands.rs` never
   re-checks dialog state. Pairs with *Split `Action`* above.
 - [x] **`//!` contract docs on the core modules.** *Done: added to `app/store.rs`, `app/reviews.rs`, `app/drafts.rs`, `providers/mod.rs` and `tui/component.rs`.*  Every module of theirs
   opens with what it guarantees and what it does not, often with a small
-  state diagram. ARCHITECTURE.md has that content for tuipr but the modules
+  state diagram. ARCHITECTURE.md has that content for slussa but the modules
   are silent. Add `//!` blocks to `app/store.rs` (resource keys, in-flight
   dedup, reload-after-mutation), `app/reviews.rs` (anchors and revisions),
   `app/drafts.rs` (scope, atomic save, one writer), `providers/mod.rs`
@@ -371,7 +371,7 @@ transfers.
   covering list → open → comment → review → merge and the error paths.
 - [x] **Mock the transport, not just the payload.** *Done: `src/test_support.rs` has `FakeGh` (a scripted `gh` run under `/bin/sh`, with ordered rules, once-only rules and a call and stdin log) and `MockHttp` (a loopback server with exact-route matching, sequenced answers and a request log). `src/providers/transport_tests.rs` has 18 tests through `Provider`: GraphQL cursors, truncated label pages, exit codes and stderr, missing `gh`, malformed output, exact argument shapes for merge, close and comment (including shell metacharacters passed literally), the atomic GitHub batch on stdin, refusal of mixed-revision batches, Bitbucket offsets, token and user-agent headers, 401, 500, unreachable server, non-advancing cursor, and the non-atomic Bitbucket review including `PartialReview` counts. The fake replaces `gh` process-wide, so gh-using tests take a lock and run one at a time.*  Their SDK tests dial an
   in-process gRPC server whose `MockState` records what the mock observed and
-  what it replied. tuipr's provider tests stop at JSON mapping; nothing
+  what it replied. slussa's provider tests stop at JSON mapping; nothing
   exercises `run_gh` argument shapes, pagination loops or HTTP error bodies.
   Add a fake `gh` script on `PATH` for GitHub tests and a minimal HTTP mock
   (std `TcpListener` is enough) for Bitbucket DC. Ties into the *fake
@@ -393,7 +393,7 @@ flag-bag pattern as their TUI `App`.
 
 A pass over the whole tree (38 crates, 521 Rust files). Their crate-level
 structure is disciplined and worth copying in principle; their file-level
-structure is worse than tuipr's and worth a written rule against.
+structure is worse than slussa's and worth a written rule against.
 
 **What they do well at crate level**
 
@@ -401,8 +401,8 @@ structure is worse than tuipr's and worth a written rule against.
   `openshell-<role>-<variant>`: `-driver-docker`, `-driver-podman`,
   `-supervisor-network`, `-supervisor-process`, `-prover-cli`,
   `-otel-test-support`, `-server-macros`. The crate list reads as the
-  architecture. If tuipr ever splits, name the pieces `tuipr-core`,
-  `tuipr-provider-github`, `tuipr-provider-bitbucket-dc`, `tuipr-tui`, not
+  architecture. If slussa ever splits, name the pieces `slussa-core`,
+  `slussa-provider-github`, `slussa-provider-bitbucket-dc`, `slussa-tui`, not
   `core`/`gh`/`bb`.
 - **Four recurring crate kinds.** `-interface` (trait + types, no impl),
   `-schema` (dependency-light serde types and parsing), `-core` (shared
@@ -411,7 +411,7 @@ structure is worse than tuipr's and worth a written rule against.
   interface ← driver, and the conformance test lives with the interface.
 - **Per-crate README about the runtime model,** not the API: what gets
   created, what runs as non-root, which volume carries what. 13 of 38 crates
-  have one. ARCHITECTURE.md already plays that role for tuipr.
+  have one. ARCHITECTURE.md already plays that role for slussa.
 
 - [ ] **Shape `providers/` as domain + trait + leaves.** When the provider
   trait lands: `domain/` and the trait in the middle, `github/` and
@@ -420,7 +420,7 @@ structure is worse than tuipr's and worth a written rule against.
   driver rule, inside one crate.
 - [x] **Shared test fixtures in one module.** *Done: `src/test_support.rs`, with the GitHub payload builders alongside the two doubles. `EnvVarGuard` is not needed yet.*  They keep `test_utils.rs` /
   `test_support.rs` per crate rather than `#[cfg(test)]` helpers scattered
-  through files. tuipr has `tui/testdata/` for snapshots; add
+  through files. slussa has `tui/testdata/` for snapshots; add
   `src/test_support.rs` for the fake provider, `EnvVarGuard` and any
   transport mocks when those arrive (see *Mock the transport*).
 
@@ -442,7 +442,7 @@ coexist (`tests.rs`, `<module>_tests.rs`, `src/**/tests/*.rs`), and `mod.rs`
 is often the main body rather than an index. The CLI's `main.rs` (242 KB) and
 `run.rs` (271 KB) hold the command logic while `commands/` has four files.
 
-tuipr is an order of magnitude smaller: its largest non-test files are
+slussa is an order of magnitude smaller: its largest non-test files are
 `widgets/comment.rs` (683 lines), `diff_viewer/pane.rs` (581), `pr_list/mod.rs`
 (552) and `timeline.rs` (520), and two test files pass 1 000 lines
 (`tui/regression_tests.rs` 1 308, `app/tests.rs` 1 154). `mod.rs` files
@@ -460,7 +460,7 @@ where the size rule is already broken.
 ### From their AI reviewer ("gator")
 
 OpenShell runs an autonomous PR reviewer in a sandbox. None of its code is
-reusable here, but the *contract* it enforces is exactly what tuipr will read
+reusable here, but the *contract* it enforces is exactly what slussa will read
 and display once AI reviews are first-class threads (FEATURES.md §2). Design
 the domain model against it:
 
@@ -470,7 +470,7 @@ the domain model against it:
   configurable list of first-line markers *and* account names, not one or the
   other.
 - [ ] **One disposition per head SHA.** A review is one batched GitHub review
-  (summary + inline comments) that names the head SHA it reviewed. tuipr
+  (summary + inline comments) that names the head SHA it reviewed. slussa
   should show *reviewed SHA vs. current head* on the AI summary line; a
   review of an older SHA is stale, not wrong.
 - [ ] **Stable finding IDs across rounds.** Findings carry
@@ -482,14 +482,14 @@ the domain model against it:
 - [ ] **Severity and evidence.** Findings are `Critical | Warning |
   Suggestion`, and only ones with a full evidence record (base behavior, head
   behavior, observable impact, reproducer, changed location) count as
-  blockers; the rest are "hypotheses". Suggestions never block. If tuipr's
+  blockers; the rest are "hypotheses". Suggestions never block. If slussa's
   own *run a review* command emits structured output, use this split: it
   gives the reviewer a defensible "N blockers, M suggestions" header instead
   of a wall of comments.
 - [ ] **Concern format for the review prompt.** Their `review-github-pr`
   skill requires every concern as "Before this PR, `<persona>` experienced
   `<old>`. With this PR, `<new>`, so `<impact>`." with file:line only as
-  evidence. That is a good default prompt for tuipr's run-a-review.
+  evidence. That is a good default prompt for slussa's run-a-review.
 - [ ] **Convergence rules worth copying into the display.** After three
   finding-bearing rounds the reviewer goes `critical_only`; rebase-equivalent
   patches (same patch-id) are not re-reviewed. Show the round count and
@@ -498,9 +498,9 @@ the domain model against it:
 
 ### Not borrowed (and why)
 
-- **Cargo workspace with many crates.** tuipr is 18 k lines with clear
+- **Cargo workspace with many crates.** slussa is 18 k lines with clear
   module boundaries; a workspace adds compile-unit overhead and manifest
-  churn without a consumer for the split crates. Revisit only if a `tuipr-core`
+  churn without a consumer for the split crates. Revisit only if a `slussa-core`
   becomes a dependency for something else (a Neovim plugin, an MCP server).
 - **mise / Nix toolchain management.** A `rust-toolchain.toml` plus a
   `justfile` (or `Makefile`) with `fmt`, `lint`, `test`, `ci` targets covers
@@ -508,10 +508,10 @@ the domain model against it:
 - **SPDX headers, CODEOWNERS, SECURITY.md, vouch system, DCO.** Corporate
   open-source process; nothing to gain until there are outside contributors.
 - **Their TUI structure.** Mouse capture, a splash screen, 20 `pending_*`
-  booleans polled after each key, ratatui 0.26. tuipr's typed
+  booleans polled after each key, ratatui 0.26. slussa's typed
   `Action`/`Component` design with `ratatui::init()` is the better pattern.
 - **OpenTelemetry / OCSF logging.** `tracing` + env-filter is enough for a
   local TUI.
 - **The gator agent itself** (sandboxed reviewer, label state machine,
-  ledger scripts). tuipr *displays* reviews; it does not run an autonomous
+  ledger scripts). slussa *displays* reviews; it does not run an autonomous
   reviewer. The contract above is what to read, not what to build.

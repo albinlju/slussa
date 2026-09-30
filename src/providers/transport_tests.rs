@@ -477,7 +477,7 @@ fn bitbucket_open_group_reads_every_page_with_drafts_and_nothing_closed() {
     for request in &requests {
         assert!(request.target.contains("state=OPEN"), "{}", request.target);
         assert_eq!(request.headers["authorization"], "Bearer secret-token");
-        assert!(request.headers["user-agent"].starts_with("tuipr/"));
+        assert!(request.headers["user-agent"].starts_with("slussa/"));
     }
 }
 

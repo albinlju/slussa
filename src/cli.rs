@@ -12,12 +12,12 @@ pub enum Dispatch {
 pub fn dispatch(mut args: Vec<String>) -> Dispatch {
     if let Some(pos) = args.iter().position(|a| a == "-C") {
         let Some(dir) = args.get(pos + 1).cloned() else {
-            eprintln!("tuipr: `-C` requires a directory argument.");
+            eprintln!("slussa: `-C` requires a directory argument.");
             return Dispatch::Done(ExitCode::from(2));
         };
         args.drain(pos..=pos + 1);
         if let Err(err) = std::env::set_current_dir(&dir) {
-            eprintln!("tuipr: couldn't chdir to {dir}: {err}");
+            eprintln!("slussa: couldn't chdir to {dir}: {err}");
             return Dispatch::Done(ExitCode::from(1));
         }
         tracing::info!("changed working directory to {dir}");
@@ -31,11 +31,11 @@ pub fn dispatch(mut args: Vec<String>) -> Dispatch {
             return Dispatch::Done(ExitCode::SUCCESS);
         }
         Some("--version" | "-V") => {
-            println!("tuipr {}", env!("CARGO_PKG_VERSION"));
+            println!("slussa {}", env!("CARGO_PKG_VERSION"));
             return Dispatch::Done(ExitCode::SUCCESS);
         }
         Some(other) => {
-            eprintln!("tuipr: unknown command `{other}`. Try `tuipr --help`.");
+            eprintln!("slussa: unknown command `{other}`. Try `slussa --help`.");
             return Dispatch::Done(ExitCode::from(2));
         }
         None => {}
@@ -48,7 +48,7 @@ pub fn dispatch(mut args: Vec<String>) -> Dispatch {
         }
         Err(err) => {
             tracing::error!("preflight failed: {err}");
-            eprintln!("tuipr: {err}");
+            eprintln!("slussa: {err}");
             Dispatch::Done(ExitCode::from(1))
         }
     }
@@ -56,13 +56,13 @@ pub fn dispatch(mut args: Vec<String>) -> Dispatch {
 
 fn print_help() {
     println!(
-        "tuipr — terminal UI for GitHub and Bitbucket Data Center pull requests\n\n\
+        "slussa — terminal UI for GitHub and Bitbucket Data Center pull requests\n\n\
          Usage:\n  \
-         tuipr                       Open the PR browser for the current repo.\n  \
-         tuipr -C <dir> [...]        Run as if started in <dir> (matches git/cargo -C).\n  \
-         tuipr auth login            Store a Bitbucket Data Center PAT for the current repo's host.\n  \
-         tuipr --version             Show the version.\n  \
-         tuipr --help                Show this message.\n"
+         slussa                       Open the PR browser for the current repo.\n  \
+         slussa -C <dir> [...]        Run as if started in <dir> (matches git/cargo -C).\n  \
+         slussa auth login            Store a Bitbucket Data Center PAT for the current repo's host.\n  \
+         slussa --version             Show the version.\n  \
+         slussa --help                Show this message.\n"
     );
 }
 
@@ -80,13 +80,13 @@ fn run_auth(args: &[String]) -> ExitCode {
             match result {
                 Ok(()) => ExitCode::SUCCESS,
                 Err(err) => {
-                    eprintln!("tuipr: {err}");
+                    eprintln!("slussa: {err}");
                     ExitCode::from(1)
                 }
             }
         }
         Some(other) => {
-            eprintln!("tuipr: unknown auth subcommand `{other}`. Try `tuipr auth login`.");
+            eprintln!("slussa: unknown auth subcommand `{other}`. Try `slussa auth login`.");
             ExitCode::from(2)
         }
     }
@@ -97,13 +97,13 @@ fn resolve_provider() -> Result<Provider, PreflightError> {
         Ok(provider) => Ok(provider),
         Err(PreflightError::GhNotAuthenticated { host }) => {
             eprintln!(
-                "tuipr: not logged in to {host}. Launching `gh auth login` — \
-                 follow the prompts and tuipr will continue afterwards.\n"
+                "slussa: not logged in to {host}. Launching `gh auth login` — \
+                 follow the prompts and slussa will continue afterwards.\n"
             );
             match github::auth::launch_login(&host) {
                 Ok(true) => preflight::run(),
                 Ok(false) => {
-                    eprintln!("tuipr: `gh auth login` was cancelled or failed.\n");
+                    eprintln!("slussa: `gh auth login` was cancelled or failed.\n");
                     Err(PreflightError::GhNotAuthenticated { host })
                 }
                 Err(_) => Err(PreflightError::GhMissing),
@@ -117,7 +117,7 @@ fn run_keyring_test() -> ExitCode {
     use crate::providers::bitbucket_dc::auth::SERVICE;
     use keyring::Entry;
 
-    const ACCOUNT: &str = "tuipr-keyring-test.localhost";
+    const ACCOUNT: &str = "slussa-keyring-test.localhost";
     const SECRET: &str = "test-token-12345";
 
     println!("Keyring test (service='{SERVICE}', account='{ACCOUNT}')");
