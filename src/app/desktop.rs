@@ -45,14 +45,7 @@ impl App {
         tokio::spawn(async move {
             let result = tokio::task::spawn_blocking(move || perform(kind, &url)).await;
             let result = match result {
-                Ok(Ok(())) => Ok(format!(
-                    "PR #{pr_id}: {}",
-                    if kind == LinkAction::Open {
-                        "opened in browser"
-                    } else {
-                        "link copied"
-                    }
-                )),
+                Ok(Ok(done)) => Ok(format!("PR #{pr_id}: {}", done.message())),
                 Ok(Err(error)) => Err(format!("PR #{pr_id}: {error}")),
                 Err(_) => Err(format!("PR #{pr_id}: desktop operation failed")),
             };
@@ -77,10 +70,29 @@ fn validate_url(value: &str) -> Result<(), String> {
     Ok(())
 }
 
-fn perform(kind: LinkAction, url: &str) -> Result<(), String> {
+/// What a desktop action achieved. The terminal never confirms an OSC 52
+/// write, so that outcome is reported as "sent", not "copied".
+#[derive(Debug, PartialEq, Eq, Clone, Copy)]
+enum Done {
+    Opened,
+    Copied,
+    SentToTerminal,
+}
+
+impl Done {
+    const fn message(self) -> &'static str {
+        match self {
+            Self::Opened => "opened in browser",
+            Self::Copied => "link copied",
+            Self::SentToTerminal => "link sent to terminal clipboard",
+        }
+    }
+}
+
+fn perform(kind: LinkAction, url: &str) -> Result<Done, String> {
     validate_url(url)?;
     let result = match kind {
-        LinkAction::Open => open_browser(url),
+        LinkAction::Open => open_browser(url).map(|()| Done::Opened),
         LinkAction::Copy => copy_link(url),
     };
     result.map_err(|error| {
@@ -133,12 +145,66 @@ fn run(command: &mut Command, input: &[u8], timeout: Duration) -> io::Result<()>
 }
 const TIMEOUT: Duration = Duration::from_secs(5);
 
+/// Copy with the platform helper, falling back to the terminal's clipboard
+/// (OSC 52). Over SSH the helper would fill the *remote* machine's clipboard,
+/// so the terminal goes first there.
+fn copy_link(url: &str) -> io::Result<Done> {
+    let remote = is_remote_session(
+        std::env::var_os("SSH_CONNECTION").as_deref(),
+        std::env::var_os("SSH_TTY").as_deref(),
+    );
+    if remote && write_osc52(url).is_ok() {
+        return Ok(Done::SentToTerminal);
+    }
+    match copy_with_helper(url) {
+        Ok(()) => Ok(Done::Copied),
+        Err(error) => write_osc52(url)
+            .map(|()| Done::SentToTerminal)
+            .map_err(|_| error),
+    }
+}
+
+fn is_remote_session(
+    ssh_connection: Option<&std::ffi::OsStr>,
+    ssh_tty: Option<&std::ffi::OsStr>,
+) -> bool {
+    [ssh_connection, ssh_tty]
+        .into_iter()
+        .flatten()
+        .any(|value| !value.is_empty())
+}
+
+/// `ESC ] 52 ; c ; <base64> BEL` asks the terminal to set its clipboard. It
+/// works through SSH and mosh, and through tmux with `set-clipboard on`.
+fn osc52_sequence(text: &str) -> String {
+    use base64::Engine;
+    let encoded = base64::engine::general_purpose::STANDARD.encode(text);
+    format!("\x1b]52;c;{encoded}\x07")
+}
+
+/// Written to the controlling terminal rather than stdout, because ratatui
+/// owns stdout. Fire and forget: terminals that disable OSC 52 ignore it.
+#[cfg(unix)]
+fn write_osc52(text: &str) -> io::Result<()> {
+    let mut tty = std::fs::OpenOptions::new().write(true).open("/dev/tty")?;
+    tty.write_all(osc52_sequence(text).as_bytes())?;
+    tty.flush()
+}
+
+#[cfg(not(unix))]
+fn write_osc52(_text: &str) -> io::Result<()> {
+    Err(io::Error::new(
+        io::ErrorKind::Unsupported,
+        "no controlling terminal device",
+    ))
+}
+
 #[cfg(target_os = "macos")]
 fn open_browser(url: &str) -> io::Result<()> {
     run(Command::new("open").arg(url), &[], TIMEOUT)
 }
 #[cfg(target_os = "macos")]
-fn copy_link(url: &str) -> io::Result<()> {
+fn copy_with_helper(url: &str) -> io::Result<()> {
     run(&mut Command::new("pbcopy"), url.as_bytes(), TIMEOUT)
 }
 
@@ -151,7 +217,7 @@ fn open_browser(url: &str) -> io::Result<()> {
     )
 }
 #[cfg(target_os = "windows")]
-fn copy_link(url: &str) -> io::Result<()> {
+fn copy_with_helper(url: &str) -> io::Result<()> {
     run(
         Command::new("powershell.exe").args([
             "-NoProfile",
@@ -169,7 +235,7 @@ fn open_browser(url: &str) -> io::Result<()> {
     run(Command::new("xdg-open").arg(url), &[], TIMEOUT)
 }
 #[cfg(not(any(target_os = "macos", target_os = "windows")))]
-fn copy_link(url: &str) -> io::Result<()> {
+fn copy_with_helper(url: &str) -> io::Result<()> {
     let helpers: &[(&str, &[&str])] = &[
         ("wl-copy", &[]),
         ("xclip", &["-selection", "clipboard"]),
@@ -207,6 +273,30 @@ mod tests {
         ] {
             assert!(validate_url(url).is_err(), "{url}");
         }
+    }
+    #[test]
+    fn osc52_sequence_wraps_base64_payload() {
+        assert_eq!(osc52_sequence("hello"), "\x1b]52;c;aGVsbG8=\x07");
+        assert_eq!(osc52_sequence(""), "\x1b]52;c;\x07");
+    }
+    #[test]
+    fn ssh_environment_selects_the_terminal_clipboard() {
+        use std::ffi::OsStr;
+        assert!(!is_remote_session(None, None));
+        assert!(!is_remote_session(Some(OsStr::new("")), None));
+        assert!(is_remote_session(
+            Some(OsStr::new("1.2.3.4 22 5.6.7.8 22")),
+            None
+        ));
+        assert!(is_remote_session(None, Some(OsStr::new("/dev/pts/3"))));
+    }
+    #[test]
+    fn outcomes_are_reported_honestly() {
+        assert_eq!(Done::Copied.message(), "link copied");
+        assert_eq!(
+            Done::SentToTerminal.message(),
+            "link sent to terminal clipboard"
+        );
     }
     #[cfg(unix)]
     #[test]
