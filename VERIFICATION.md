@@ -72,7 +72,7 @@ Decisions and the release procedure are in [RELEASING.md](RELEASING.md).
 
 ## B. GitHub against the real service
 
-- [ ] **V4. A genuinely blocked PR.** The wording for `BLOCKED` is derived from
+- [x] **V4. A genuinely blocked PR.** The wording for `BLOCKED` is derived from
   `reviewDecision` and may be too general.
   1. In a test repository, add a ruleset on the default branch that requires one
      approving review.
@@ -81,6 +81,23 @@ Decisions and the release procedure are in [RELEASING.md](RELEASING.md).
   4. Repeat with a failing required check, and with the branch behind its base
      if "require branches to be up to date" is on.
   Report: the text of the merge dialog and the badge for each case.
+  **Done 2026-09-30, run by me** in a throwaway public repository
+  (`albinlju/tuipr-v4-test`, a ruleset on `main`), driving the real tuipr
+  binary in a pseudo-terminal and reading the screen. In all three cases the
+  header badge was `◷ blocked` and the dialog opened with `m` on the Overview
+  tab (it does not open on Description).
+
+  | Case | GitHub reported | "Blocked by:" in the dialog |
+  | --- | --- | --- |
+  | one approving review required | `BLOCKED`, `REVIEW_REQUIRED` | An approving review is required. |
+  | required check `ci` failing | `BLOCKED`, no review decision | Required checks or branch rules are not satisfied. |
+  | branch behind base, strict checks | `BEHIND` | The branch is behind its base and must be updated. |
+
+  The wording is right in the first and third case. In the second it is
+  correct but does not say *which* check failed; the list showed `CI failed`
+  and the Builds panel the red check, so the information is nearby. That is the
+  already known open item in FEATURES.md. One account cannot approve its own PR,
+  so the path "approved, then mergeable" was not exercised here.
 
 - [ ] **V5. "Review requested" on a real PR.** This needs a PR where someone else
   requested *your* review, which one account cannot create alone.
