@@ -101,6 +101,16 @@ Decisions and the release procedure are in [RELEASING.md](RELEASING.md).
   4. A refused reopen: close a PR, delete its head branch on GitHub, try to
      reopen it in tuipr. Expect GitHub's own message in the error dialog.
   Report: anything that looked wrong, and the message in step 4.
+  **Partly done 2026-09-30 (maintainer).** Reopening PR #3 was refused and the
+  error dialog showed GitHub's own message, in full: "state cannot be changed.
+  There is already an open pull request from feat/newtest to main." The refusal
+  is GitHub's rule of one open PR per branch pair, not a fault in tuipr, and the
+  message reached the user unaltered. Still open: a successful reopen and the
+  decline that puts it back (steps 2 and 3), which needs the other open PR from
+  `feat/newtest` closed first.
+  Afterwards the maintainer reported that declining and reopening through
+  tuipr "seems to work"; no details (the `reopened` line, the status after the
+  refresh) were recorded, so the box stays unticked until they are.
 
 - [x] **V7. A large repository.** The list used to read every PR ever opened.
   It now reads the open ones and a batch of closed ones. This has been checked
