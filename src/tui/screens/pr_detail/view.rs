@@ -151,7 +151,7 @@ impl<'a> DetailView<'a> {
     }
 
     /// The thread the cursor is on, for resolve/unresolve (`R`).
-    pub fn focused_thread(&self) -> Option<&'a ThreadRef> {
+    pub const fn focused_thread(&self) -> Option<&'a ThreadRef> {
         let Screen::Detail { tab, .. } = self.screen else {
             return None;
         };

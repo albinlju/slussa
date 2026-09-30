@@ -21,7 +21,7 @@ use ratatui::{
 };
 
 pub(super) fn render(
-    frame: &mut Frame,
+    frame: &mut Frame<'_>,
     state: &DetailView<'_>,
     pr_data: Option<&PrData>,
     tab: DetailTab,

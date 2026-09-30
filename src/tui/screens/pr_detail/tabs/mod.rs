@@ -24,7 +24,7 @@ impl DetailTab {
 }
 
 impl DetailTab {
-    pub fn label(self) -> &'static str {
+    pub const fn label(self) -> &'static str {
         match self {
             Self::Description => "Description",
             Self::Overview => "Overview",

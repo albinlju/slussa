@@ -39,7 +39,7 @@ impl Component for HelpDialog {
         self.scroll = scroll(self.scroll, delta).min(self.max_scroll);
         None
     }
-    fn render(&mut self, frame: &mut Frame, area: Rect, entries: &Self::Context<'_>) {
+    fn render(&mut self, frame: &mut Frame<'_>, area: Rect, entries: &Self::Context<'_>) {
         let width = area.width.min(48);
         let height = area.height.min(entries.len() as u16 + 4);
         let popup = Rect::new(

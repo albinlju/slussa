@@ -12,7 +12,7 @@ use ratatui::{
     layout::Rect,
 };
 
-pub fn render(frame: &mut Frame, pr: &PullRequest, ui: &mut Description, area: Rect) {
+pub fn render(frame: &mut Frame<'_>, pr: &PullRequest, ui: &mut Description, area: Rect) {
     let lines = markdown::render(description_body(pr), area.width.saturating_sub(1));
     let content = Rect {
         width: area.width.saturating_sub(1),
@@ -96,7 +96,7 @@ impl Component for Description {
         }
         None
     }
-    fn render(&mut self, frame: &mut Frame, area: Rect, pr: &&PullRequest) {
+    fn render(&mut self, frame: &mut Frame<'_>, area: Rect, pr: &&PullRequest) {
         render(frame, pr, self, area);
     }
 }

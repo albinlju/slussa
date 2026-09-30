@@ -35,7 +35,7 @@ pub struct TimelineContext<'a> {
 }
 
 fn render_timeline(
-    frame: &mut Frame,
+    frame: &mut Frame<'_>,
     pr_data: Option<&PrData>,
     ui: &mut Timeline,
     author: &str,
@@ -278,7 +278,7 @@ fn build_blocks(
         match item {
             TimelineItem::Comment(c) => {
                 blocks.push(TimelineBlock {
-                    lines: crate::tui::widgets::comment::comment_box(c, width, now, active, author),
+                    lines: widgets::comment::comment_box(c, width, now, active, author),
                     selected_range: None,
                     node: theme.link,
                     border: if active { theme.accent } else { theme.divider },
@@ -295,11 +295,9 @@ fn build_blocks(
             TimelineItem::Review(t) => {
                 // Mark the sub-selected comment only on the focused thread.
                 let selected = active.then_some(sub);
-                if let Some((lines, selected_range)) =
-                    crate::tui::widgets::comment::comment_thread_box(
-                        t, diff, width, now, active, selected, author,
-                    )
-                {
+                if let Some((lines, selected_range)) = widgets::comment::comment_thread_box(
+                    t, diff, width, now, active, selected, author,
+                ) {
                     blocks.push(TimelineBlock {
                         lines,
                         selected_range,
@@ -458,7 +456,7 @@ impl Component for Timeline {
     fn handle_key(&self, key: KeyEvent, _: &Self::Context<'_>) -> Option<Action> {
         if key
             .modifiers
-            .contains(ratatui::crossterm::event::KeyModifiers::CONTROL)
+            .contains(crossterm::event::KeyModifiers::CONTROL)
         {
             match key.code {
                 KeyCode::Char('j') => {
@@ -516,7 +514,7 @@ impl Component for Timeline {
         }
         None
     }
-    fn render(&mut self, frame: &mut Frame, area: Rect, ctx: &Self::Context<'_>) {
+    fn render(&mut self, frame: &mut Frame<'_>, area: Rect, ctx: &Self::Context<'_>) {
         render_timeline(frame, ctx.data, self, ctx.author, area, ctx.scrollbar);
     }
 }

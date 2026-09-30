@@ -11,7 +11,7 @@ use ratatui::{
     text::{Line, Span},
 };
 
-fn render(frame: &mut Frame, pr_data: Option<&PrData>, ui: &mut Builds, area: Rect) {
+fn render(frame: &mut Frame<'_>, pr_data: Option<&PrData>, ui: &mut Builds, area: Rect) {
     let Some(builds) =
         widgets::loaded_or_placeholder(frame, pr_data.map(|d| &d.builds), "builds", area)
     else {
@@ -27,7 +27,7 @@ fn render(frame: &mut Frame, pr_data: Option<&PrData>, ui: &mut Builds, area: Re
     render_builds(frame, builds, ui, area);
 }
 
-fn render_builds(frame: &mut Frame, builds: &[Build], ui: &mut Builds, area: Rect) {
+fn render_builds(frame: &mut Frame<'_>, builds: &[Build], ui: &mut Builds, area: Rect) {
     let width = area.width.saturating_sub(1) as usize;
     let mut lines: Vec<Line<'static>> = Vec::with_capacity(builds.len() + 2);
     lines.push(status_summary(builds, width));
@@ -107,7 +107,7 @@ fn build_row(build: &Build, name_col: usize, width: usize) -> Line<'static> {
     widgets::fitted_row(left, right, width)
 }
 
-fn state_glyph(state: BuildState) -> (&'static str, &'static str) {
+const fn state_glyph(state: BuildState) -> (&'static str, &'static str) {
     match state {
         BuildState::Successful => (icons::CHECK_CIRCLE, "passing"),
         BuildState::Failed => (icons::TIMES_CIRCLE, "failed"),
@@ -137,7 +137,7 @@ impl crate::tui::component::Component for Builds {
     type Message = crate::app::action::DetailAction;
     fn handle_key(
         &self,
-        key: ratatui::crossterm::event::KeyEvent,
+        key: crossterm::event::KeyEvent,
         _: &Self::Context<'_>,
     ) -> Option<crate::app::action::Action> {
         use ratatui::crossterm::event::KeyCode;
@@ -162,7 +162,7 @@ impl crate::tui::component::Component for Builds {
         }
         None
     }
-    fn render(&mut self, frame: &mut Frame, area: Rect, data: &Self::Context<'_>) {
+    fn render(&mut self, frame: &mut Frame<'_>, area: Rect, data: &Self::Context<'_>) {
         render(frame, *data, self, area);
     }
 }

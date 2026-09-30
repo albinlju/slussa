@@ -41,7 +41,7 @@ pub fn submit_review(
 ) -> Result<(), FetchError> {
     // Bitbucket has no review body — post any summary as a PR comment first.
     if !body.is_empty() {
-        comments::post_pr_comment(config, pr_id, body)?;
+        post_pr_comment(config, pr_id, body)?;
     }
     let status = match verdict {
         ReviewVerdict::Approve => "APPROVED",
@@ -84,9 +84,7 @@ pub fn submit_full_review(
         })?;
     publish_steps(
         &with_revisions,
-        |&(c, revision)| {
-            comments::post_comment(config, pr_id, &c.path, c.line, c.removed, &c.body, revision)
-        },
+        |&(c, revision)| post_comment(config, pr_id, &c.path, c.line, c.removed, &c.body, revision),
         || submit_review(config, pr_id, verdict, body, user),
     )
 }

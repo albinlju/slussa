@@ -51,8 +51,8 @@ pub enum LoadState<T> {
 
 impl<T> LoadState<T> {
     pub fn start_loading(&mut self) -> bool {
-        if matches!(self, LoadState::NotRequested | LoadState::Failed(_)) {
-            *self = LoadState::Loading;
+        if matches!(self, Self::NotRequested | Self::Failed(_)) {
+            *self = Self::Loading;
             true
         } else {
             false
@@ -61,8 +61,8 @@ impl<T> LoadState<T> {
 
     pub fn from_result(result: Result<T, String>) -> Self {
         match result {
-            Ok(v) => LoadState::Loaded(v),
-            Err(e) => LoadState::Failed(e),
+            Ok(v) => Self::Loaded(v),
+            Err(e) => Self::Failed(e),
         }
     }
 
@@ -71,17 +71,17 @@ impl<T> LoadState<T> {
     /// than blanking it.
     pub fn reload(&mut self, result: Result<T, String>) {
         match result {
-            Ok(v) => *self = LoadState::Loaded(v),
+            Ok(v) => *self = Self::Loaded(v),
             Err(e) => {
-                if !matches!(self, LoadState::Loaded(_)) {
-                    *self = LoadState::Failed(e);
+                if !matches!(self, Self::Loaded(_)) {
+                    *self = Self::Failed(e);
                 }
             }
         }
     }
 
-    pub fn is_loading(&self) -> bool {
-        matches!(self, LoadState::Loading)
+    pub const fn is_loading(&self) -> bool {
+        matches!(self, Self::Loading)
     }
 }
 

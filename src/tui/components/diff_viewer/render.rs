@@ -14,7 +14,7 @@ use ratatui::{
 use std::collections::HashSet;
 
 pub(super) fn render(
-    frame: &mut Frame,
+    frame: &mut Frame<'_>,
     diff_state: Option<&LoadState<Diff>>,
     threads: &[CommentThread],
     pending: &[PendingComment],

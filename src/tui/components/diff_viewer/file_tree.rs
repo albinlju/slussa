@@ -33,12 +33,12 @@ pub fn build_visible_rows(
 struct Node {
     name: String,
     full_path: String,
-    children: Vec<Node>,
+    children: Vec<Self>,
     file_index: Option<usize>,
 }
 
 impl Node {
-    fn is_dir(&self) -> bool {
+    const fn is_dir(&self) -> bool {
         self.file_index.is_none()
     }
 }

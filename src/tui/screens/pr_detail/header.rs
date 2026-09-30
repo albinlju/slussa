@@ -35,7 +35,7 @@ fn mergeability_badge(state: &LoadState<Mergeability>) -> Option<Span<'static>> 
 }
 
 pub(super) fn render(
-    frame: &mut Frame,
+    frame: &mut Frame<'_>,
     pr: &PullRequest,
     mergeability: Option<&LoadState<Mergeability>>,
     area: Rect,

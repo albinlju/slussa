@@ -94,7 +94,7 @@ impl Component for DiffViewer {
         }
         None
     }
-    fn render(&mut self, frame: &mut Frame, area: Rect, ctx: &DiffContext<'_>) {
+    fn render(&mut self, frame: &mut Frame<'_>, area: Rect, ctx: &DiffContext<'_>) {
         render::render(
             frame,
             ctx.diff,
@@ -125,7 +125,7 @@ impl DiffViewer {
         }
     }
 
-    pub(crate) fn focus_file(&mut self, file_index: usize) {
+    pub(crate) const fn focus_file(&mut self, file_index: usize) {
         let view = &mut *self;
         if file_index != view.focused_file {
             view.focused_file = file_index;
@@ -222,7 +222,7 @@ impl DiffViewer {
 }
 
 impl DiffViewer {
-    pub fn active_search(&self) -> (&SearchInput, bool) {
+    pub const fn active_search(&self) -> (&SearchInput, bool) {
         match self.focus {
             DiffFocus::Tree => (&self.tree_search, false),
             DiffFocus::Pane => (&self.pane_search, true),

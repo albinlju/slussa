@@ -202,7 +202,7 @@ fn tab_select_key(code: KeyCode) -> Option<Action> {
     }
 }
 
-fn tab_bracket_key(code: KeyCode) -> Option<Action> {
+const fn tab_bracket_key(code: KeyCode) -> Option<Action> {
     match code {
         KeyCode::Char('[') => Some(Action::Detail(DetailAction::PrevTab)),
         KeyCode::Char(']') => Some(Action::Detail(DetailAction::NextTab)),
@@ -290,7 +290,7 @@ fn tab_key(
     }
 }
 
-fn tab_nav(code: KeyCode) -> Option<Action> {
+const fn tab_nav(code: KeyCode) -> Option<Action> {
     match code {
         KeyCode::Right | KeyCode::Char('l') => Some(Action::Detail(DetailAction::NextTab)),
         KeyCode::Left | KeyCode::Char('h') => Some(Action::Detail(DetailAction::PrevTab)),

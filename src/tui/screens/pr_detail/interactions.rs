@@ -62,7 +62,7 @@ impl PrDetailScreen {
         }
     }
 
-    fn view<'a>(&'a self, ctx: &'a DetailContext<'a>) -> DetailView<'a> {
+    const fn view<'a>(&'a self, ctx: &'a DetailContext<'a>) -> DetailView<'a> {
         DetailView {
             detail: self,
             store: ctx.store,

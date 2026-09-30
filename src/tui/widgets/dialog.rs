@@ -9,7 +9,7 @@ use ratatui::{
 };
 
 pub fn frame(
-    frame: &mut Frame,
+    frame: &mut Frame<'_>,
     area: Rect,
     title: &str,
     size: (u16, u16),
@@ -78,7 +78,7 @@ pub fn frame(
 }
 
 pub fn choices(
-    frame: &mut Frame,
+    frame: &mut Frame<'_>,
     area: Rect,
     title: &str,
     lines: Vec<Line<'static>>,
@@ -95,7 +95,7 @@ pub fn choices(
 }
 
 pub fn choices_with_hints(
-    frame: &mut Frame,
+    frame: &mut Frame<'_>,
     area: Rect,
     title: &str,
     lines: Vec<Line<'static>>,

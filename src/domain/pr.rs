@@ -1,7 +1,7 @@
 use super::{ci::CiSummary, review::Reviewer, user::User};
 use chrono::{DateTime, Utc};
 
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub enum PrStatus {
     Open,
     Draft,
@@ -10,12 +10,12 @@ pub enum PrStatus {
 }
 
 impl PrStatus {
-    pub fn label(&self) -> &str {
+    pub const fn label(&self) -> &str {
         match self {
-            PrStatus::Open => "Open",
-            PrStatus::Draft => "Draft",
-            PrStatus::Merged => "Merged",
-            PrStatus::Declined => "Declined",
+            Self::Open => "Open",
+            Self::Draft => "Draft",
+            Self::Merged => "Merged",
+            Self::Declined => "Declined",
         }
     }
 }
@@ -39,7 +39,7 @@ pub enum MergeStrategy {
 }
 
 impl MergeStrategy {
-    pub fn label(self) -> &'static str {
+    pub const fn label(self) -> &'static str {
         match self {
             Self::Merge => "Merge commit",
             Self::Squash => "Squash and merge",

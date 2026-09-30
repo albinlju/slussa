@@ -18,7 +18,7 @@ pub mod screens;
 pub mod theme;
 pub mod widgets;
 
-pub fn render(frame: &mut Frame, state: &mut AppState) {
+pub fn render(frame: &mut Frame<'_>, state: &mut AppState) {
     match state.screen {
         Screen::List => state.ui.list.render(
             frame,
@@ -166,8 +166,8 @@ fn active_search(state: &AppState) -> Option<(&SearchInput, bool)> {
 pub(crate) mod regression_tests;
 #[derive(Debug, Default)]
 pub struct Ui {
-    pub list: crate::tui::screens::pr_list::PrListScreen,
-    pub detail: crate::tui::screens::pr_detail::PrDetailScreen,
+    pub list: pr_list::PrListScreen,
+    pub detail: pr_detail::PrDetailScreen,
 }
 
 impl Ui {

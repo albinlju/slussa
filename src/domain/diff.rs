@@ -61,7 +61,7 @@ pub enum DiffLine {
 impl DiffLine {
     pub fn content(&self) -> &str {
         match self {
-            DiffLine::Added(c) | DiffLine::Removed(c) | DiffLine::Context(c) => c,
+            Self::Added(c) | Self::Removed(c) | Self::Context(c) => c,
         }
     }
 }

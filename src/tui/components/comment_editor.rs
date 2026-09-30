@@ -26,7 +26,7 @@ pub struct CommentEditor {
     pub discard_confirm: bool,
 }
 impl CommentEditor {
-    pub fn is_open(&self) -> bool {
+    pub const fn is_open(&self) -> bool {
         self.draft.is_some() && !self.suspended
     }
     fn position(&self) -> usize {
@@ -181,7 +181,7 @@ impl Component for CommentEditor {
         }
         None
     }
-    fn render(&mut self, frame: &mut Frame, area: Rect, sending: &bool) {
+    fn render(&mut self, frame: &mut Frame<'_>, area: Rect, sending: &bool) {
         self.render_with_review(frame, area, *sending, false);
     }
 }
@@ -189,7 +189,7 @@ impl Component for CommentEditor {
 impl CommentEditor {
     pub fn render_with_review(
         &mut self,
-        frame: &mut Frame,
+        frame: &mut Frame<'_>,
         area: Rect,
         sending: bool,
         review_active: bool,
@@ -251,7 +251,7 @@ impl CommentEditor {
             && let Some(context) = &self.target_context
         {
             let spans = crate::tui::widgets::truncate_to_width(
-                vec![ratatui::text::Span::styled(
+                vec![Span::styled(
                     context.clone(),
                     Style::default().fg(theme.muted),
                 )],

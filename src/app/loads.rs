@@ -63,13 +63,13 @@ impl App {
                 let filtered = self.state.ui.list.filtered_prs(&self.state.store.cache.prs);
                 self.state.ui.list.selected = selected_id
                     .and_then(|id| filtered.iter().position(|pr| pr.id == id))
-                    .unwrap_or(
+                    .unwrap_or_else(|| {
                         self.state
                             .ui
                             .list
                             .selected
-                            .min(filtered.len().saturating_sub(1)),
-                    );
+                            .min(filtered.len().saturating_sub(1))
+                    });
             }
             LoadedAction::Commits(pr_id, r) => {
                 log_outcome("commits", Some(pr_id), &r);
