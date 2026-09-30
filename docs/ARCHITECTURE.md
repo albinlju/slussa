@@ -314,7 +314,7 @@ choose its cadence in `app/refresh.rs`.
 ## Verification and adding behavior
 
 `cargo test --locked` covers provider projections, parsing, component workflows
-and rendering. The screen snapshots were captured before migration: all five
+and rendering. The screen snapshots (`src/tui/testdata/screens.txt`) cover all five
 detail tabs and the PR list at 100×30 and 40×12. They compare terminal text;
 interactive tests additionally exercise search, filters, diff focus and match
 wrapping, commit drilldown, review ownership, editor input and dialog priority.
@@ -370,23 +370,6 @@ visible but disabled with a reason (for example approving your own PR or
 merging a closed PR). Profiles currently describe implemented adapter support;
 repository permissions and server-version feature discovery are not probed.
 
-## First UI polish pass
-
-The PR list prioritizes the title and progressively omits secondary columns on
-narrow terminals; omitted data remains available in PR details. Footer hints
-are shown whole when they fit, with space reserved for `?: help`. Decorative
-donation/version text no longer occupies the working footer. Help is reachable
-from both screens, scrolls independently and closes without changing the
-underlying selection or layout. Compact detail tabs show the active tab and
-navigation hint when the complete tab bar will not fit. A pending review can
-be finished from every tab where its footer advertises that action.
-
-Further work remains: clearer merge requirements and build drilldown, and richer
-contextual action discovery. Multiline editing and durable drafts are now implemented.
-The subsequent polish pass below addresses compact headers and diff layouts.
-These changes establish a calmer baseline without replacing existing review,
-comment or lifecycle flows.
-
 ## Comment editing and local recovery
 
 The comment editor opens as a focused dialog. Enter inserts a newline; Ctrl+S
@@ -433,137 +416,54 @@ PR, and leaves the selection unchanged. HTTP(S) URLs are validated before use;
 helper processes receive argument arrays or stdin, not interpolated commands.
 
 macOS uses `open`/`pbcopy`; Windows uses the URL handler and PowerShell clipboard;
-Linux uses `xdg-open` and an available `wl-copy`, `xclip` or `xsel`. Clipboard
-helpers require an appropriate local graphical session. Failed helpers and
-timeouts are reported; there is no unverified terminal clipboard fallback.
-Each helper has a five-second deadline. Local tests cover URL mapping, input
+Linux uses `xdg-open` and an available `wl-copy`, `xclip` or `xsel`. Over SSH,
+or when no clipboard helper works, slussa writes an OSC 52 escape to the
+terminal instead; the terminal never confirms it, so the notice says "sent to
+terminal clipboard". Failed helpers and timeouts are reported. Each helper has
+a five-second deadline. Local tests cover URL mapping, input
 routing, missing support and helper success/failure/timeouts without launching
 a real browser or changing the user's clipboard. Linux and Windows desktop
 integration have not been exercised live. File/line links and copying commit
 SHAs or branch names remain separate future work.
 
-## Existing UI polish: dialogs, compact layouts and feedback
+## UI behaviour rules
 
-- Review, merge, confirmation and filter dialogs share geometry and a separated
-  keyboard footer through `widgets/dialog.rs`. Their selected option stays in
-  view on short terminals. Review queues show a count and a bounded preview so
-  a large queue cannot displace the verdict choices. Modal footers replace
-  unrelated screen hints while the dialog is open.
-- Compact PR details use two header rows, prioritize title/status/author and
-  reclaim unnecessary vertical spacing. Full branch metadata remains in the
-  roomy header. A compact tab bar advertises number keys, which actually select
-  tabs in every detail context. `h`/`l` change tab on every tab, the diff
-  included; there `enter`, `esc` and the arrow keys move between the file tree
-  and the code, and `[`/`]` step commits while one is open.
-- Diffs under 72 content columns show Files or Code according to focus, keeping
-  the selected file when switching back. Wider layouts retain both panels with
-  a bounded tree width. Panel titles and focused borders identify the active
-  area; the code footer exposes `h: files`. Small panels use a shorter header.
-- Context hints distinguish directories, code, replies, resolvable threads and
-  queued comments. Thread folding is advertised only for resolved threads, and
-  comment targets are cleared when their diff cannot be rendered. Optional
-  provider support still gates operations and hints.
-- Empty PR/file/commit searches explain how to clear the search or change a
-  filter. Initial failures wrap their message and advertise refresh; unrequested
-  data is distinct from an active load. Failed reloads retain cached data with
-  a scoped warning until the affected resource succeeds. Error dialogs scroll
-  long messages and close explicitly with Esc/Enter, preserving the underlying
-  editor and selection. The Builds component now owns scrolling so long CI
-  lists remain accessible.
+The rules the code relies on, kept short; the regression tests in
+`tui/regression_tests.rs` and `app/tests.rs` pin them.
 
-Regression coverage includes 24x8 dialogs, 40x12 diff focus switching, large
-review queues, long errors, empty searches, stale-target prevention, CI scrolling
-and resource-specific refresh recovery. No server writes are required for this
-polish verification.
-
-### Visual comparison: original layout with clearer colors
-
-The active presentation restores the original conversation layout from `6edd115`:
-frames, timeline rail, spacing, labels and sidebar breakpoint. Focused comment
-edges, timeline connectors and reply selection use accent. File locations use
-link color separately from the surrounding metadata. Resolved fold status remains
-success-colored when focused or expanded; disclosure and metadata use focus color.
-Theme palettes and backgrounds remain unchanged.
-
-### PR detail polish across tabs
-
-Commit rows prioritize the hash and title at compact widths, retain age at medium
-widths and show full metadata when there is room. The open-commit banner reserves
-space for navigation. Build rows reserve status before duration; the summary drops
-its progress bar in narrow views. Diff headers budget for the focused line as well
-as stats before shortening the file path, using terminal column widths.
-
-Overview comment rendering reports the selected comment's row range. Navigation
-reveals that range once, rather than repeatedly scrolling to the end of a whole
-thread. PageUp/PageDown (also Ctrl-u/Ctrl-d) scroll text independently; Ctrl-j/k
-select individual comments. Tall comments are revealed from their start.
-
-Description derives heading, link, quote and code colors from the app theme and
-keeps the terminal background. This is scoped to Description; conversation
-Markdown retains its existing presentation. Regression coverage includes narrow
-rows, Unicode paths, long conversations and Description in all three themes.
-
-### Stable reading positions and wide Description content
-
-Overview reconciles selection by comment ID and comment kind before rendering
-refreshed activity. It adjusts scroll by the selected comment's row displacement,
-keeping that comment at the same viewport height as earlier content changes.
-Explicit keyboard navigation clears the identity anchor; deletion falls back to
-a valid nearby block instead of retaining the deleted action target.
-
-CommitList owns its Ratatui ListState so opening a commit and returning preserves
-the viewport; changes to the search reset that state.
-
-Description renders pipe tables with enough width to retain cell contents, while
-ordinary prose still uses the viewport width. Wide rendered content can be panned
-with H/L; the footer advertises this only when needed. Code, links and tables retain
-their full text. Resizing clamps horizontal and vertical scroll to valid bounds.
-
-Theme direction: Graphite is the default. Terminal, Gruvbox, Catppuccin and Slate
-remain available through configuration or SLUSSA_THEME. There is no additional theme
-picker. Terminal remains an option for users who prefer their terminal's palette.
-Prioritize consistent semantic roles and default backgrounds across all views.
-Description now follows theme roles; conversation Markdown still starts from the
-renderer dark style and should be visually compared before any further color change.
-No palette was removed or changed in this pass.
-
-### Review draft clarity
-
-Editor submit hints derive from the actual target and whether the PR has an active
-review: line comments say `add to review`, direct PR comments say `post comment`,
-replies say `post reply`, edits say `save changes`, and verdict summaries say
-`submit review`. These labels do not change the publication semantics.
-
-The draft footer combines state, count and the next action as `v: finish draft (N)`.
-The verdict dialog distinguishes `Enter submit review` from `Enter continue` when
-a summary editor follows. Tab opens a scrollable preview of every queued comment,
-including full text and file locations. Enter in that preview does nothing; Tab
-returns to verdict selection and Esc closes the dialog without discarding work.
-
-Discarding a populated review opens a confirmation with `Keep reviewing` selected.
-An empty review can still be abandoned directly. Existing provider capability gates,
-submission checkpoints and partial-submission recovery remain in place.
-
-Regression tests cover editor labels, preview navigation through the last queued
-comment, no submission from the preview, safe discard defaults and compact dialogs.
-
-### Mutation context and session navigation
-
-Merge and close dialogs identify the PR and target branch. Merge places the target
-on its own line so a long source branch cannot hide it, and labels Enter as merge.
-Close defaults to No and explains that it closes without merging. Successful PR
-state changes report the operation and PR number through the transient footer notice.
-
-Comment lookup includes both ID and comment kind to distinguish PR comments from
-review comments. Reply/edit editors show author and original text when available;
-delete confirmation captures the selected comment preview. Reopened drafts are
-labelled as resumed and retain their original target and text.
-
-PR list and commit list refreshes reconcile selection by PR ID and commit OID,
-falling back to a valid nearby index when the selected item disappears. Both lists
-own their viewport state. PrDetailScreen retains tab components per PR for the
-session, preserving search, scroll and focus when returning to a PR. Dialogs remain
-transient; unfinished editors continue to use the existing draft persistence.
-
-Regression coverage includes colliding comment IDs, inserted list items, returning
-to a different PR, success feedback and dialog/editor context at compact widths.
+- **Dialogs.** Review, merge, confirmation and filter dialogs share geometry
+  and a keyboard footer through `widgets/dialog.rs`; the selected option stays
+  in view on short terminals and modal footers replace the screen's hints. A key
+  a modal ignores does not fall through to what is behind it. Merge and close
+  dialogs name the PR and the target branch, and close defaults to *No*.
+  Discarding a populated review asks first, with *Keep reviewing* selected.
+- **Editor labels follow the target.** A line comment says `add to review`, a
+  PR comment `post comment`, a reply `post reply`, an edit `save changes` and a
+  verdict summary `submit review`. The draft footer reads `v: finish draft (N)`,
+  and Tab in the verdict dialog previews every queued comment. The labels never
+  change what is published.
+- **Layout.** The list drops secondary columns as the terminal narrows; footer
+  hints show whole when they fit, with room for `?: help`. The compact PR header
+  uses two rows. A diff under 72 content columns shows Files or Code by focus,
+  and panel titles and focused borders say which is active. Description
+  renders pipe tables at full width and pans with `H`/`L`; a resize clamps the
+  scroll.
+- **Selection and scroll keep their identity.** Lists reconcile selection by PR
+  id and commit oid; Overview by comment id and kind (a PR comment and a review
+  comment can share an id), adjusting scroll so the selected comment keeps its
+  height in the viewport. `PrDetailScreen` keeps each PR's tab components for
+  the session, so search, scroll and focus survive leaving and returning;
+  dialogs are transient and editors use the draft persistence above.
+  `CommitList` owns its `ListState`, so opening a commit and returning keeps the
+  viewport.
+- **Empty and failed states.** An empty search says how to clear it; an initial
+  failure wraps and advertises refresh; a failed reload keeps the cached data
+  with a warning scoped to the resource until it succeeds. Error dialogs scroll
+  long messages and close with Esc or Enter, leaving the editor and selection
+  alone. The Builds tab owns its scrolling.
+- **Colour.** Graphite is the default; the other themes are chosen with
+  `theme` in the config or `SLUSSA_THEME`, and there is no theme picker.
+  Description takes heading, link, quote and code colours from the theme
+  (inline code uses `orange`) and keeps the terminal background. Conversation
+  Markdown still starts from the renderer's dark style; compare it visually
+  before changing colours.

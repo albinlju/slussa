@@ -2,7 +2,13 @@ name: Release
 
 # Push a tag like v0.2.0 (or v0.2.0-pre.1 for a prerelease) to build binaries
 # and publish a GitHub Release. Run the workflow manually for a dry run: it
-# builds and uploads the artifacts but publishes nothing.
+# builds and uploads the artifacts but publishes nothing; do that after any
+# change to this file.
+#
+# Before tagging: CI is green on main (this workflow does not re-run the tests)
+# and `version` in Cargo.toml, with Cargo.lock, equals the tag without the `v`.
+# The first job fails the run if they disagree. Each archive gets a `.sha256`
+# and the release a combined `SHA256SUMS`.
 on:
   push:
     tags:

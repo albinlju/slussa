@@ -43,7 +43,6 @@ CI runs all four on Linux and macOS. The toolchain is pinned in
 - `docs/FEATURES.md`: what exists and the priority order for what comes next.
 - `docs/IMPROVEMENTS.md`: engineering backlog; each refactor has a trigger, so do
   not do them ahead of the feature that needs them.
-- `docs/RELEASING.md`: how a release is cut.
 
 ## Working here
 

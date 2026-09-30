@@ -50,6 +50,7 @@ paths, but nothing has run them.
 (arm64 and x86_64) to GitHub Releases, with checksums. Unpack it and put
 `slussa` on your `PATH`. On macOS you may need
 `xattr -d com.apple.quarantine slussa` because the binary is not notarized yet.
+Check a download with `shasum -a 256 -c slussa-<version>-<target>.tar.gz.sha256`.
 
 **From source.** With a recent Rust toolchain (the repo pins 1.95 in
 `rust-toolchain.toml`, which `rustup` installs automatically):
@@ -160,7 +161,6 @@ sort = "attention"   # attention (default) or recent
 - [FEATURES.md](docs/FEATURES.md): what is built and where the product is going
 - [ARCHITECTURE.md](docs/ARCHITECTURE.md): how the code is organised and why
 - [IMPROVEMENTS.md](docs/IMPROVEMENTS.md): engineering and tooling backlog
-- [RELEASING.md](docs/RELEASING.md): how a release is cut
 
 ## Develop
 

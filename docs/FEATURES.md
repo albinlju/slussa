@@ -328,11 +328,15 @@ rank below the decision path.
   panics (use `LoadState::Failed` / the popup everywhere instead of
   `unwrap`/`unreachable!`).
 - [ ] **Empty / loading / error states** per view (use `LoadState` everywhere).
-- [ ] **Release** — *partly done:* README, MIT license and a tag-driven
-  release workflow for four targets exist (see RELEASING.md). Still open: a
-  demo gif in the README, the first real release, a Homebrew formula,
-  `cargo install slussa` from crates.io, macOS notarization. Without a
-  release the rest has no audience.
+- [ ] **Release** — *partly done:* README with a demo gif, MIT licence,
+  CONTRIBUTING and a tag-driven release workflow for four targets (dry-run
+  twice; see `.github/workflows/release.yml`) exist. Still open: deciding
+  whether the repository goes public (while it is private nobody else can
+  download a release), the first real release (the publish step has never run),
+  a Homebrew tap, `cargo install slussa` from crates.io and macOS
+  notarization. "Review requested" has only been seen against scripted `gh`
+  output and needs a second account to check; that can follow the release.
+  Without a release the rest has no audience.
 
 ### Scope decision: authoring / management
 
