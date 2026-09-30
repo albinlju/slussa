@@ -232,6 +232,21 @@ mod tests {
             NEXT.fetch_add(1, std::sync::atomic::Ordering::Relaxed)
         ))
     }
+    /// Reopen a scope after dropping its storage. A child process started by a
+    /// concurrent test can briefly hold a copy of the lock file descriptor
+    /// between fork and exec, so a release is not always visible at once.
+    fn reopen(root: &Path, scope: &str) -> io::Result<(DraftStorage, Snapshot)> {
+        let mut attempt = 0;
+        loop {
+            match DraftStorage::open(root, scope.into()) {
+                Err(error) if attempt < 100 && error.to_string().contains("already in use") => {
+                    attempt += 1;
+                    std::thread::sleep(std::time::Duration::from_millis(10));
+                }
+                result => return result,
+            }
+        }
+    }
     #[test]
     fn restart_retains_targets_revisions_receipts_and_account_isolation() {
         let root = directory();
@@ -282,7 +297,7 @@ mod tests {
         let (_, other) = DraftStorage::open(&root, "repo/account-b".into()).unwrap();
         assert!(other.editors.is_empty());
         drop(storage);
-        let (mut storage, restored) = DraftStorage::open(&root, "repo/account-a".into()).unwrap();
+        let (mut storage, restored) = reopen(&root, "repo/account-a").unwrap();
         assert_eq!(restored.editors[&1].text, "å\n🦀");
         assert!(matches!(
             restored.editors[&1].target,
@@ -304,7 +319,7 @@ mod tests {
         assert!(restored.interrupted.contains(&2));
         storage.save(Snapshot::default()).unwrap();
         drop(storage);
-        let (storage, cleared) = DraftStorage::open(&root, "repo/account-a".into()).unwrap();
+        let (storage, cleared) = reopen(&root, "repo/account-a").unwrap();
         assert!(cleared.editors.is_empty());
         drop(storage);
         fs::remove_dir_all(root).unwrap();
@@ -325,7 +340,7 @@ mod tests {
         fs::write(&storage.path, b"broken").unwrap();
         let path = storage.path.clone();
         drop(storage);
-        assert!(DraftStorage::open(&root, "scope".into()).is_err());
+        assert!(reopen(&root, "scope").is_err());
         assert_eq!(fs::read(path).unwrap(), b"broken");
         fs::remove_dir_all(root).unwrap();
     }
