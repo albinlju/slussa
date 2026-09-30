@@ -217,17 +217,17 @@ The README keeps saying that only listing has been seen working on a real
 server.
 
 Every Bitbucket path is tested only against a mock written from Atlassian's
-documentation. The customer's server cannot be used freely, so the real test is
+documentation. The one real server tried cannot be used freely, so the real test is
 a **local Bitbucket Data Center in Docker**. It is the only way to exercise the
-writes (comment, review, merge, decline, reopen) safely. A run against the
-customer's server, read-only and only with their consent, can add to it later.
+writes (comment, review, merge, decline, reopen) safely. A run against
+that server, read-only and only with its owner's consent, can add to it later.
 
 Until the checks below pass, the README says that only listing has been seen
 working on a real server and everything else is tested against a mock.
 
 ### Reported so far
 
-- **2026-09-30, customer's Bitbucket Data Center, reported by the maintainer:**
+- **2026-09-30, a real Bitbucket Data Center server, reported by the maintainer:**
   tuipr was run against a real repository there and lists its pull requests.
   The version of that server and which tabs and actions were tried were not
   recorded. This is real evidence for connecting, authenticating with a token
@@ -244,7 +244,7 @@ working on a real server and everything else is tested against a mock.
   - Also tried: *(list the tabs and actions)*
 - This server evidently has no context path in its address, since tuipr would
   otherwise have refused the remote; so P2 below is not a problem for this
-  customer, and P1 does not apply to it because it is served over https.
+  server, and P1 does not apply to it because it is served over https.
 
 ### Prerequisites that are not met yet
 
@@ -259,7 +259,7 @@ Found by reading the code while planning this. Nothing has been changed.
 - [x] **P2. A context path is not recognised. Fixed, unit-tested only.** Only repository paths shaped
   `PROJECT/repo` or `scm/PROJECT/repo` are accepted. A Bitbucket served under a
   context path, such as `https://host/bitbucket/scm/PROJECT/repo.git`, is
-  rejected as unparseable. The customer's server works, so it has none, but
+  rejected as unparseable. That server works, so it has none, but
   other installations may, and their users would see tuipr refuse the remote.
   Not reproduced; it follows from reading the code. Tracked in FEATURES.md.
 
@@ -269,7 +269,7 @@ Checked on 2026-09-30 against Docker Hub:
 
 - The image is `atlassian/bitbucket`, current version 10.5.0, with `amd64` and
   `arm64`, updated days ago. Older tags exist for `8.19.0`, `9.4.x` and `10.x`.
-  **`9.4.23-jdk17`, the customer's exact version, exists for both `amd64` and
+  **`9.4.23-jdk17`, the version of that server, exists for both `amd64` and
   `arm64`.**
 - Web on port 7990, git over ssh on 7999, about 2 GiB of memory recommended,
   and Docker 20.10.10 or newer. Bitbucket 10 has no embedded search server.
@@ -281,9 +281,9 @@ licence, and the current trial terms.
 
 ### Setting it up
 
-Use `9.4.23-jdk17`, the customer's exact version, so that any difference in
-fields and endpoints shows up as it would for them. A second run on `10.x` is
-worth doing later, for the day they upgrade.
+Use `9.4.23-jdk17`, the version of the real server, so that any difference in
+fields and endpoints shows up as it would there. A second run on `10.x` is
+worth doing later, for the day it is upgraded.
 
 1. Give the container runtime enough memory. On Colima: `colima start --cpu 2
    --memory 4`.
@@ -321,14 +321,14 @@ Each assumption below is checked by doing the action in tuipr against the
 instance and seeing that it behaves. Note the version and the result on the
 line under the item.
 
-- [ ] **B1. Authentication.** *Partly confirmed 2026-09-30:* the customer's
+- [ ] **B1. Authentication.** *Partly confirmed 2026-09-30:* the real
   server accepted the token and the list loaded. Not recorded: that your own
   PRs are recognised as yours. Run `tuipr auth login`, then `tuipr` in a clone of
   the repository. Expect the list to load and your own PRs to be recognised as
   yours: a personal access token as a `Bearer` header is accepted, and the
   `X-AUSERNAME` response header names the current user.
 - [ ] **B2. Listing.** *Partly confirmed 2026-09-30:* the list loads on the
-  customer's server. Not recorded: the Merged and Declined views, paging past 50
+  real server. Not recorded: the Merged and Declined views, paging past 50
   open PRs, and the page-size limits. Read the list; press `f`, choose Merged and Declined.
   Expect open PRs, then recent merged and declined ones, without a server error
   about the page size (`limit` 50 and 25), and correct paging on a repository

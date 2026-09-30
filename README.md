@@ -51,6 +51,14 @@ paths, but nothing has run them.
 `rust-toolchain.toml`, which `rustup` installs automatically):
 
 ```sh
+cargo install --git https://github.com/albinlju/tuipr
+```
+
+or, from a clone:
+
+```sh
+git clone https://github.com/albinlju/tuipr
+cd tuipr
 cargo install --path .
 ```
 
@@ -149,6 +157,7 @@ sort = "attention"   # attention (default) or recent
 - [ARCHITECTURE.md](docs/ARCHITECTURE.md): how the code is organised and why
 - [IMPROVEMENTS.md](docs/IMPROVEMENTS.md): engineering and tooling backlog
 - [RELEASING.md](docs/RELEASING.md): how a release is cut
+- [VERIFICATION.md](docs/VERIFICATION.md): what has been checked against the real services, and what has not
 
 ## Develop
 
