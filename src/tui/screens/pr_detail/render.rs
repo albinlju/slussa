@@ -8,6 +8,7 @@ use crate::{
     domain::{
         capabilities::{Capabilities, Feature},
         comment::CommentThread,
+        pr::Mergeability,
     },
     tui::{
         component::Component,
@@ -288,6 +289,12 @@ pub(super) fn render(
         dialog.pr_label = format!("PR #{} · {}", pr.id, pr.title);
         dialog.target_branch.clone_from(&pr.target_branch);
         dialog.source_branch.clone_from(&pr.source_branch);
+        dialog.blockers = match pr_data.map(|data| &data.mergeability) {
+            Some(LoadState::Loaded(status)) if status.state != Mergeability::Mergeable => {
+                status.blockers.clone()
+            }
+            _ => Vec::new(),
+        };
         dialog.render(
             frame,
             area,

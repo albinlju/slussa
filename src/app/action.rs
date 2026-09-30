@@ -4,7 +4,7 @@ use crate::{
         ci::Build,
         commit::Commit,
         diff::Diff,
-        pr::{Mergeability, PullRequest},
+        pr::{MergeStatus, PullRequest},
     },
     tui::screens::pr_detail::tabs::DetailTab,
 };
@@ -144,7 +144,7 @@ pub enum LoadedAction {
     Diff(u64, Result<Diff, String>),
     Builds(u64, Result<Vec<Build>, String>),
     Activity(u64, Result<Activity, String>),
-    Mergeability(u64, Result<Mergeability, String>),
+    Mergeability(u64, Result<MergeStatus, String>),
     Merged(u64, Result<(), String>),
     Declined(u64, Result<(), String>),
     CommitDiff(u64, String, Result<Diff, String>),

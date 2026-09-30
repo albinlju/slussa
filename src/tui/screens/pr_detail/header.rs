@@ -1,6 +1,6 @@
 use crate::{
     app::store::LoadState,
-    domain::pr::{Mergeability, PrStatus, PullRequest},
+    domain::pr::{MergeStatus, Mergeability, PrStatus, PullRequest},
     tui::{icons, theme, widgets},
 };
 use ratatui::{
@@ -13,19 +13,16 @@ use ratatui::{
 
 /// Header badge for a PR's mergeability — glyph + label, colour carrying the
 /// meaning. `None` while the fetch is unresolved so nothing flickers in.
-fn mergeability_badge(state: &LoadState<Mergeability>) -> Option<Span<'static>> {
+fn mergeability_badge(state: &LoadState<MergeStatus>) -> Option<Span<'static>> {
     let theme = theme::current();
     let (glyph, label, color) = match state {
         LoadState::Loading => (icons::ADJUST, "checking…", theme.muted),
-        LoadState::Loaded(Mergeability::Mergeable) => {
-            (icons::CHECK_CIRCLE, "mergeable", theme.success)
-        }
-        LoadState::Loaded(Mergeability::Conflicts) => {
-            (icons::TIMES_CIRCLE, "conflicts", theme.warning)
-        }
-        LoadState::Loaded(Mergeability::Unknown) => {
-            (icons::QUESTION_CIRCLE, "mergeability unknown", theme.muted)
-        }
+        LoadState::Loaded(status) => match status.state {
+            Mergeability::Mergeable => (icons::CHECK_CIRCLE, "mergeable", theme.success),
+            Mergeability::Conflicts => (icons::TIMES_CIRCLE, "conflicts", theme.warning),
+            Mergeability::Blocked => (icons::CLOCK, "blocked", theme.warning),
+            Mergeability::Unknown => (icons::QUESTION_CIRCLE, "mergeability unknown", theme.muted),
+        },
         LoadState::NotRequested | LoadState::Failed(_) => return None,
     };
     Some(Span::styled(
@@ -37,7 +34,7 @@ fn mergeability_badge(state: &LoadState<Mergeability>) -> Option<Span<'static>> 
 pub(super) fn render(
     frame: &mut Frame<'_>,
     pr: &PullRequest,
-    mergeability: Option<&LoadState<Mergeability>>,
+    mergeability: Option<&LoadState<MergeStatus>>,
     area: Rect,
 ) {
     let theme = theme::current();
@@ -96,4 +93,25 @@ pub(super) fn render(
     let paragraph =
         Paragraph::new(lines).block(Block::default().padding(Padding::horizontal(padding)));
     frame.render_widget(paragraph, area);
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn label(status: MergeStatus) -> String {
+        mergeability_badge(&LoadState::Loaded(status))
+            .unwrap()
+            .content
+            .into_owned()
+    }
+
+    #[test]
+    fn the_badge_tells_blocked_from_conflicts_and_unknown() {
+        assert!(label(MergeStatus::new(Mergeability::Blocked)).ends_with("blocked"));
+        assert!(label(MergeStatus::new(Mergeability::Conflicts)).ends_with("conflicts"));
+        assert!(label(MergeStatus::new(Mergeability::Mergeable)).ends_with("mergeable"));
+        assert!(label(MergeStatus::new(Mergeability::Unknown)).ends_with("unknown"));
+        assert!(mergeability_badge(&LoadState::NotRequested).is_none());
+    }
 }

@@ -70,7 +70,7 @@ state (for example merging with conflicts) stay visible and say why.
 | `h` / `l` | | tab, pane or fold |
 | `a` | | submit review verdict |
 | `v` | | start or finish a batched review |
-| `m` / `x` | | merge / close or decline |
+| `m` / `x` | | merge / close or decline; the merge dialog lists what blocks it |
 | `c` `r` `e` `d` `R` | | comment, reply, edit, delete, resolve thread |
 | `o` / `y` | open / copy link | open / copy link |
 | `F` | refresh | refresh |

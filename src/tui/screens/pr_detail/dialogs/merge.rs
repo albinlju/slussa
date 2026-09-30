@@ -54,6 +54,26 @@ fn render(
             ]),
         );
     }
+    if !dialog.blockers.is_empty() {
+        lines.push(Line::default());
+        lines.push(Line::styled(
+            "Blocked by:",
+            Style::default()
+                .fg(theme.warning)
+                .add_modifier(Modifier::BOLD),
+        ));
+        for reason in &dialog.blockers {
+            lines.push(Line::styled(
+                format!("  • {reason}"),
+                Style::default().fg(theme.warning),
+            ));
+        }
+        lines.push(Line::styled(
+            "You can still try; the server decides.",
+            normal,
+        ));
+        lines.push(Line::default());
+    }
     for (i, strategy) in strategies.iter().enumerate() {
         let marker = if i == dialog.cursor { "▶ " } else { "  " };
         let style = if i == dialog.cursor { selected } else { normal };
@@ -94,6 +114,9 @@ pub struct MergeDialog {
     pub pr_label: String,
     pub target_branch: String,
     pub source_branch: String,
+    /// Why the provider says this PR cannot be merged yet; empty when nothing
+    /// is known to stand in the way.
+    pub blockers: Vec<String>,
 }
 impl MergeDialog {
     pub fn selected(
@@ -121,5 +144,58 @@ impl Component for MergeDialog {
     }
     fn render(&mut self, frame: &mut Frame<'_>, area: Rect, ctx: &Self::Context<'_>) {
         render(frame, ctx, self, area);
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::domain::pr::MergeStrategy;
+    use ratatui::{Terminal, backend::TestBackend};
+
+    fn drawn(dialog: &mut MergeDialog) -> String {
+        let strategies = [MergeStrategy::Merge, MergeStrategy::Squash];
+        let mut terminal = Terminal::new(TestBackend::new(90, 28)).unwrap();
+        terminal
+            .draw(|frame| dialog.render(frame, frame.area(), &strategies.as_slice()))
+            .unwrap();
+        let buffer = terminal.backend().buffer();
+        (0..28)
+            .map(|y| (0..90).map(|x| buffer[(x, y)].symbol()).collect::<String>())
+            .collect::<Vec<_>>()
+            .join("\n")
+    }
+
+    #[test]
+    fn blockers_are_listed_above_the_choices_and_the_choices_stay_usable() {
+        let mut dialog = MergeDialog {
+            blockers: vec![
+                "An approving review is required.".into(),
+                "Required checks have not passed.".into(),
+            ],
+            ..MergeDialog::default()
+        };
+        let text = drawn(&mut dialog);
+
+        assert!(text.contains("Blocked by:"), "{text}");
+        assert!(
+            text.contains("• An approving review is required."),
+            "{text}"
+        );
+        assert!(
+            text.contains("• Required checks have not passed."),
+            "{text}"
+        );
+        assert!(text.contains("the server decides"), "{text}");
+        assert!(text.contains("Merge commit"), "{text}");
+        assert!(text.contains("Squash and merge"), "{text}");
+        assert!(text.contains("Enter"), "the footer stays visible: {text}");
+    }
+
+    #[test]
+    fn a_clean_merge_shows_no_blocker_section() {
+        let text = drawn(&mut MergeDialog::default());
+        assert!(!text.contains("Blocked by"), "{text}");
+        assert!(text.contains("Merge commit"), "{text}");
     }
 }

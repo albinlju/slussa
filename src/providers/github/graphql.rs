@@ -58,11 +58,11 @@ query($owner: String!, $name: String!) {
   }
 }";
 
-/// One field of a pull request, for the mergeability check.
+/// What decides whether a pull request can be merged.
 pub(super) const MERGEABILITY: &str = r"
 query($owner: String!, $name: String!, $pr: Int!) {
   repository(owner: $owner, name: $name) {
-    pullRequest(number: $pr) { mergeable }
+    pullRequest(number: $pr) { mergeable mergeStateStatus reviewDecision }
   }
 }";
 
@@ -142,7 +142,7 @@ mod tests {
         );
         assert_eq!(
             compact(MERGEABILITY),
-            "query($owner: String!, $name: String!, $pr: Int!) { repository(owner: $owner, name: $name) { pullRequest(number: $pr) { mergeable } } }"
+            "query($owner: String!, $name: String!, $pr: Int!) { repository(owner: $owner, name: $name) { pullRequest(number: $pr) { mergeable mergeStateStatus reviewDecision } } }"
         );
     }
 }

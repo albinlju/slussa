@@ -7,7 +7,7 @@ use crate::{
     },
     domain::{
         comment::Comment,
-        pr::{Mergeability, PrStatus},
+        pr::{MergeStatus, Mergeability, PrStatus},
         review::ReviewVerdict,
     },
     tui::{components::diff_viewer::DiffFocus, screens::pr_detail::tabs::DetailTab},
@@ -95,7 +95,10 @@ impl<'a> DetailView<'a> {
                     .details
                     .get(&pr_id)
                     .map(|d| &d.mergeability),
-                Some(LoadState::Loaded(Mergeability::Conflicts))
+                Some(LoadState::Loaded(MergeStatus {
+                    state: Mergeability::Conflicts,
+                    ..
+                }))
             ))
         .then_some("conflicts")
     }

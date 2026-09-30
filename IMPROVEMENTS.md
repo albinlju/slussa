@@ -60,6 +60,16 @@ stays.
   for closed ones. The new queries were also run against the real GitHub API.
   **Not measured:** how the old behaviour scaled on a large repository.
 
+- [x] **Explain why a merge is blocked.** *Done 2026-09-30.* A new
+  `Mergeability::Blocked` and a `MergeStatus` carrying reasons replace the
+  catch-all `Unknown` for provider rules. The header says `blocked`, the merge
+  dialog lists the reasons, and Bitbucket's `vetoes` are read both from the
+  merge status and from a refused merge. Tested against a fake `gh`, a
+  loopback Bitbucket and the dialog's rendering; the GitHub query was also
+  run against the real API. **Not exercised against a real blocked PR**, so
+  the wording for `BLOCKED` is derived from `reviewDecision` and may be too
+  general.
+
 ### With the next feature that touches the area
 
 - [ ] **Split `Action` into local and app-level.** Today one enum carries both
