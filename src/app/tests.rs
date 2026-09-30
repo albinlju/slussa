@@ -47,7 +47,7 @@ fn navigation_and_search_keep_the_same_keyboard_flow() {
         app.state
             .ui
             .list
-            .filtered_prs(&app.state.store.cache.prs)
+            .filtered_prs(&app.state.store.cache.prs, &app.state.store.current_user)
             .is_empty()
     );
     press(&mut app, KeyCode::Esc);

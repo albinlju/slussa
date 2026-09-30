@@ -139,15 +139,17 @@ Grouped by the priority order in *Positioning*. Within a group, items marked
 Still one list, still one PR view. The list just knows what needs the user and
 says so on the row.
 
-- [ ] **Attention sort with a reason column** *(refined)* — the list opens sorted
-  by attention: review requested of me, my PRs with failed CI, my PRs with new
-  comments or changes requested, threads where I'm mentioned, then everything
-  else by recent update. One short reason per row (`review requested`,
-  `CI failed`, `2 new`); blank when there is none. Enter opens the PR on the tab
-  the reason points at. A single key toggles back to the plain sort; the choice
-  persists. GitHub via search qualifiers + notifications; Bitbucket DC via the
-  dashboard/inbox endpoints. This replaces the earlier "Notifications inbox" and
-  "Mine quick views" items — neither becomes a screen.
+- [ ] **Attention sort with a reason column** — *first version built.* The
+  list opens sorted by what needs you, with a "Needs you" column (90 columns
+  or wider, only when a row has a reason). Reasons, most urgent first:
+  `changes requested` and `CI failed` on your own PRs, `review requested` on
+  someone else's, and `approved` on yours when every reviewer approved. Only
+  open PRs count. `s` toggles plain newest-first order for the session;
+  `sort = "recent"` in `config.toml` sets the default. GitHub gets review
+  requests from `reviewRequests` (people only, not teams); Bitbucket from
+  reviewer status. **Still open:** a reason for new comments and mentions (it
+  needs the local *Unread* state below), team review requests, opening the PR
+  on the tab its reason points at, and remembering the `s` choice between runs.
 - [ ] **Unread / updated** *(refined)* — remember per PR when it was last opened
   and flag rows with activity since then. Local state, scoped like drafts.
 - [ ] **Structured filters** — `author:`, `label:`, `review:approved`, `is:draft`,

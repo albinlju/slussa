@@ -26,6 +26,7 @@ pub fn render(frame: &mut Frame<'_>, state: &mut AppState) {
             &pr_list::ListContext {
                 prs: &state.store.cache.prs,
                 refreshing: state.store.refreshing(state.screen),
+                viewer: &state.store.current_user,
             },
         ),
         Screen::Detail { .. } => state.ui.detail.render(
@@ -129,6 +130,7 @@ pub fn key_to_action(state: &AppState, key: KeyEvent) -> Option<Action> {
             &pr_list::ListContext {
                 prs: &state.store.cache.prs,
                 refreshing: state.store.refreshing(state.screen),
+                viewer: &state.store.current_user,
             },
         ),
         Screen::Detail { .. } => state.ui.detail.handle_key(
@@ -217,6 +219,7 @@ impl Ui {
                 &pr_list::ListContext {
                     prs: &store.cache.prs,
                     refreshing: store.refreshing(screen),
+                    viewer: &store.current_user,
                 },
             ),
             Action::Search(action) if screen == Screen::List => {

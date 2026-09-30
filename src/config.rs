@@ -6,6 +6,8 @@ use serde::Deserialize;
 #[derive(Debug, Default, Deserialize)]
 pub struct Config {
     pub theme: Option<String>,
+    /// `"attention"` (default) or `"recent"`: how the PR list is ordered.
+    pub sort: Option<String>,
 }
 
 fn config_path() -> Option<PathBuf> {

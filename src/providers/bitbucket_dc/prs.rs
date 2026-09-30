@@ -121,7 +121,8 @@ fn map_reviewer(r: BbReviewer) -> Reviewer {
     let state = match r.status.as_str() {
         "APPROVED" => ReviewerState::Approved,
         "NEEDS_WORK" => ReviewerState::ChangesRequested,
-        _ => ReviewerState::Commented,
+        // UNAPPROVED: a listed reviewer who has not reviewed.
+        _ => ReviewerState::Requested,
     };
     Reviewer {
         author: map_user(r.user),

@@ -56,11 +56,15 @@ impl App {
                     .state
                     .ui
                     .list
-                    .filtered_prs(&self.state.store.cache.prs)
+                    .filtered_prs(&self.state.store.cache.prs, &self.state.store.current_user)
                     .get(self.state.ui.list.selected)
                     .map(|pr| pr.id);
                 self.state.store.cache.prs.reload(r);
-                let filtered = self.state.ui.list.filtered_prs(&self.state.store.cache.prs);
+                let filtered = self
+                    .state
+                    .ui
+                    .list
+                    .filtered_prs(&self.state.store.cache.prs, &self.state.store.current_user);
                 self.state.ui.list.selected = selected_id
                     .and_then(|id| filtered.iter().position(|pr| pr.id == id))
                     .unwrap_or_else(|| {

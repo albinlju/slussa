@@ -41,6 +41,8 @@ fn run_tui(provider: Provider) -> ExitCode {
 
     let result = rt.block_on(async move {
         let mut app = App::new(provider, current_user);
+        app.state.ui.list.sort =
+            tui::screens::pr_list::Sort::from_config(config::load().sort.as_deref());
         if let Err(err) = app.enable_drafts() {
             eprintln!("tuipr: {err}");
             return ExitCode::from(1);

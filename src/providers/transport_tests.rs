@@ -16,7 +16,7 @@ use crate::{
     domain::{
         diff::DiffRevision,
         pr::MergeStrategy,
-        review::{ReviewComment, ReviewVerdict},
+        review::{ReviewComment, ReviewVerdict, ReviewerState},
     },
     test_support::{FakeGh, InstalledGh, MockHttp, Route, gh_list_page, gh_pr},
 };
@@ -60,6 +60,37 @@ fn github_list_follows_cursors_and_lists_newest_first() {
     assert!(calls[0].starts_with("api graphql -F owner={owner} -F name={repo} -f query="));
     assert!(calls[0].contains("pullRequests(first: 100, after: null)"));
     assert!(calls[1].contains("after: \"c1\""));
+}
+
+#[test]
+fn github_review_requests_become_pending_reviewers_and_replace_an_earlier_review() {
+    let mut node = gh_pr(1, "2026-09-01T10:00:00Z");
+    node["latestReviews"]["nodes"] = json!([
+        {"state": "APPROVED", "author": {"login": "me"}},
+        {"state": "APPROVED", "author": {"login": "bob"}}
+    ]);
+    // `me` is asked again; the team request and the null have no login.
+    node["reviewRequests"] = json!({"nodes": [
+        {"requestedReviewer": {"login": "me"}},
+        {"requestedReviewer": {}},
+        {"requestedReviewer": null}
+    ]});
+    let (result, installed) =
+        fetch_prs_with(FakeGh::new().on("pullRequests(", &gh_list_page(&[node], None)));
+
+    let reviewers = &result.unwrap()[0].reviewers;
+    let summary: Vec<_> = reviewers
+        .iter()
+        .map(|r| (r.author.username.as_str(), r.state.clone()))
+        .collect();
+    assert_eq!(
+        summary,
+        [
+            ("bob", ReviewerState::Approved),
+            ("me", ReviewerState::Requested)
+        ]
+    );
+    assert!(installed.calls()[0].contains("reviewRequests(first: 100)"));
 }
 
 #[test]
@@ -431,5 +462,32 @@ fn bitbucket_review_reports_how_many_comments_landed_before_a_failure() {
     assert!(
         requests.iter().all(|r| r.method == "POST"),
         "no verdict is sent"
+    );
+}
+
+#[test]
+fn bitbucket_reviewers_without_a_verdict_are_pending_requests() {
+    let mut pr = bb_pr(1);
+    pr["reviewers"] = json!([
+        {"user": {"name": "me"}, "status": "UNAPPROVED"},
+        {"user": {"name": "bob"}, "status": "APPROVED"},
+        {"user": {"name": "carol"}, "status": "NEEDS_WORK"}
+    ]);
+    let page = json!({"values": [pr], "isLastPage": true});
+    let server = MockHttp::start(vec![Route::get(
+        &format!("{PR_LIST}&start=0"),
+        200,
+        &page.to_string(),
+    )]);
+    let prs = bitbucket(&server).fetch_prs().unwrap();
+
+    let states: Vec<_> = prs[0].reviewers.iter().map(|r| r.state.clone()).collect();
+    assert_eq!(
+        states,
+        [
+            ReviewerState::Requested,
+            ReviewerState::Approved,
+            ReviewerState::ChangesRequested
+        ]
     );
 }

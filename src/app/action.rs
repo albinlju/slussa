@@ -50,6 +50,7 @@ pub enum SearchAction {
 #[derive(Debug, Clone, Copy)]
 pub enum ListAction {
     ToggleHelp,
+    ToggleSort,
     MoveSelection(i16),
     OpenPr(u64),
     OpenFilterPicker,

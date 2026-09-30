@@ -5,6 +5,8 @@ pub enum ReviewerState {
     Approved,
     ChangesRequested,
     Commented,
+    /// Asked to review and has not yet; also a re-request after an earlier review.
+    Requested,
 }
 
 #[derive(Debug, Clone)]
