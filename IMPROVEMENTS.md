@@ -128,8 +128,8 @@ list; see *Not borrowed* below.
   `cargo` refuses old toolchains with a clear message.
 - [x] **CI on GitHub Actions** *Done, `.github/workflows/ci.yml`: fmt,
   clippy and test on ubuntu + macOS, cargo-deny; all actions pinned by SHA.
-  **Not yet run on GitHub** (nothing pushed); the Linux test run in
-  particular is unverified since all tests so far ran on macOS only.*
+  First run on GitHub (2026-09-30) passed all six jobs, including the Linux
+  tests.*
   Modeled on their `branch-checks.yml` but
   trimmed to four jobs: `cargo fmt --check`, `cargo clippy --locked
   --all-targets -- -D warnings`, `cargo test --locked`, and `cargo deny
