@@ -95,7 +95,7 @@ stays.
 
 - [x] `domain/` has 3 tests; *Done: `domain/comment.rs` now has 10 tests (suggestion parsing edge cases, revision matching, resolution). Thread assembly has not moved there yet, so assembly tests wait for that refactor.*  `comment.rs` (109 lines of thread logic) deserves
   direct tests once thread assembly moves there.
-- [ ] No test drives the full `App::run` loop with a fake provider. A
+- [x] No test drives the full `App::run` loop with a fake provider. *Done: no fake provider variant was needed; `src/app/flow_tests.rs` runs the real `App`, fetchers and provider against `FakeGh` and applies results as they return. Six tests: list load and in-flight deduplication, a failed refresh keeping stale data and then recovering, a failed first load, a comment followed by refetches of activity, list and mergeability, a failed comment with no refetch, and a second write ignored while one is pending. **Not covered:** `App::run` itself (it takes a real terminal type), and Bitbucket through the `App` (only at provider level).*  A
   `Provider::Fake(FakeConfig)` behind `#[cfg(test)]` would let the
   regression tests cover refresh, in-flight dedup and mutation-then-refetch
   end to end instead of via `App::apply` only.
@@ -268,7 +268,7 @@ transfers.
   enum over concrete types. Do the same when the provider trait lands: one
   `tests/provider_conformance.rs` over a fake GitHub and a fake Bitbucket,
   covering list → open → comment → review → merge and the error paths.
-- [ ] **Mock the transport, not just the payload.** Their SDK tests dial an
+- [x] **Mock the transport, not just the payload.** *Done: `src/test_support.rs` has `FakeGh` (a scripted `gh` run under `/bin/sh`, with ordered rules, once-only rules and a call and stdin log) and `MockHttp` (a loopback server with exact-route matching, sequenced answers and a request log). `src/providers/transport_tests.rs` has 18 tests through `Provider`: GraphQL cursors, truncated label pages, exit codes and stderr, missing `gh`, malformed output, exact argument shapes for merge, close and comment (including shell metacharacters passed literally), the atomic GitHub batch on stdin, refusal of mixed-revision batches, Bitbucket offsets, token and user-agent headers, 401, 500, unreachable server, non-advancing cursor, and the non-atomic Bitbucket review including `PartialReview` counts. The fake replaces `gh` process-wide, so gh-using tests take a lock and run one at a time.*  Their SDK tests dial an
   in-process gRPC server whose `MockState` records what the mock observed and
   what it replied. tuipr's provider tests stop at JSON mapping; nothing
   exercises `run_gh` argument shapes, pagination loops or HTTP error bodies.
@@ -317,7 +317,7 @@ structure is worse than tuipr's and worth a written rule against.
   `bitbucket_dc/` as leaves that depend on it, never on each other, and the
   conformance test next to the trait. Same as their server → interface ←
   driver rule, inside one crate.
-- [ ] **Shared test fixtures in one module.** They keep `test_utils.rs` /
+- [x] **Shared test fixtures in one module.** *Done: `src/test_support.rs`, with the GitHub payload builders alongside the two doubles. `EnvVarGuard` is not needed yet.*  They keep `test_utils.rs` /
   `test_support.rs` per crate rather than `#[cfg(test)]` helpers scattered
   through files. tuipr has `tui/testdata/` for snapshots; add
   `src/test_support.rs` for the fake provider, `EnvVarGuard` and any

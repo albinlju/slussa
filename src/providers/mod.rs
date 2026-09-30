@@ -19,6 +19,9 @@ mod unified_diff;
 
 pub use error::FetchError;
 
+#[cfg(test)]
+mod transport_tests;
+
 use crate::domain::{
     activity::Activity,
     ci::Build,

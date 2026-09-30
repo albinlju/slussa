@@ -5,6 +5,8 @@ mod domain;
 mod git_url;
 mod logging;
 mod providers;
+#[cfg(test)]
+mod test_support;
 mod tui;
 
 use std::process::ExitCode;
