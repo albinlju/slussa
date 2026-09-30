@@ -1,3 +1,103 @@
 # tuipr
 
-test
+A terminal UI for pull requests. Two views: the list of PRs, and the PR you
+opened. Read, comment, review, merge and decline without leaving the terminal,
+next to your editor, git client and coding agent.
+
+tuipr is built for the moment after an agent (or a teammate) opened the PR:
+see what needs you, check that the change matches the intent, and make the
+call. It is not a replacement for the web UI, and it stays small on purpose.
+
+**Status:** early and unreleased. It is used daily by its author, has no
+published builds yet and no license has been chosen.
+
+## Providers
+
+| Provider | How it connects | Notes |
+| --- | --- | --- |
+| GitHub | the [`gh`](https://cli.github.com) CLI | uses your existing `gh auth login` |
+| Bitbucket Data Center | REST with a personal access token | stored in the OS keyring |
+
+Bitbucket Cloud and GitLab are on the roadmap, not supported.
+
+The provider is detected from the `origin` remote of the repository you run
+tuipr in.
+
+## Install
+
+From a checkout, with a recent Rust toolchain (the repo pins 1.95 in
+`rust-toolchain.toml`, which `rustup` installs automatically):
+
+```sh
+cargo install --path .
+```
+
+Requirements at runtime: `git`, and for GitHub the `gh` CLI, authenticated for
+the host.
+
+## Use
+
+```sh
+cd path/to/a/repo
+tuipr                  # open the PR browser for this repo
+tuipr -C path/to/repo  # same, as if started in that directory
+tuipr auth login       # Bitbucket Data Center: store a personal access token
+tuipr --help
+```
+
+For Bitbucket Data Center, run `tuipr auth login` once per host. The token is
+kept in the OS keyring. For GitHub, run `gh auth login` instead.
+
+Press `?` in any view for the keys that are available right now. Actions the
+connected provider does not support are hidden; actions blocked by the PR's
+state (for example merging with conflicts) stay visible and say why.
+
+### Keys
+
+| Key | List | PR |
+| --- | --- | --- |
+| `j` / `k` | move | scroll |
+| `enter` | open PR | open / view |
+| `/` | search title and author | search (diff, commits) |
+| `f` | filter by status | |
+| `1`-`5` | | select tab |
+| `h` / `l` | | tab, pane or fold |
+| `a` | | submit review verdict |
+| `v` | | start or finish a batched review |
+| `m` / `x` | | merge / close or decline |
+| `c` `r` `e` `d` `R` | | comment, reply, edit, delete, resolve thread |
+| `o` / `y` | open / copy link | open / copy link |
+| `F` | refresh | refresh |
+| `esc` | clear search | back |
+| `q` | quit | quit |
+
+Drafts (comment editor text and queued review comments) are saved locally and
+survive a restart.
+
+## Configure
+
+`~/.config/tuipr/config.toml` (or `$XDG_CONFIG_HOME/tuipr/config.toml`):
+
+```toml
+theme = "graphite"   # graphite (default), slate, gruvbox, catppuccin, terminal
+```
+
+`TUIPR_THEME` overrides the file.
+
+## Documentation
+
+- [FEATURES.md](FEATURES.md): what is built and where the product is going
+- [ARCHITECTURE.md](ARCHITECTURE.md): how the code is organised and why
+- [IMPROVEMENTS.md](IMPROVEMENTS.md): engineering and tooling backlog
+
+## Develop
+
+```sh
+cargo fmt --all -- --check
+cargo clippy --locked --all-targets -- -D warnings
+cargo test --locked
+cargo deny check        # cargo install cargo-deny --locked
+```
+
+CI runs the same four checks. `target/` grows quickly (several GB); `cargo
+clean` is always safe.
