@@ -25,7 +25,12 @@ tuipr in.
 
 ## Install
 
-From a checkout, with a recent Rust toolchain (the repo pins 1.95 in
+**Prebuilt binary.** Tagged releases attach tarballs for macOS and Linux
+(arm64 and x86_64) to GitHub Releases, with checksums. Unpack it and put
+`tuipr` on your `PATH`. On macOS you may need
+`xattr -d com.apple.quarantine tuipr` because the binary is not notarized yet.
+
+**From source.** With a recent Rust toolchain (the repo pins 1.95 in
 `rust-toolchain.toml`, which `rustup` installs automatically):
 
 ```sh
@@ -95,6 +100,7 @@ theme = "graphite"   # graphite (default), slate, gruvbox, catppuccin, terminal
 - [FEATURES.md](FEATURES.md): what is built and where the product is going
 - [ARCHITECTURE.md](ARCHITECTURE.md): how the code is organised and why
 - [IMPROVEMENTS.md](IMPROVEMENTS.md): engineering and tooling backlog
+- [RELEASING.md](RELEASING.md): how a release is cut
 
 ## Develop
 

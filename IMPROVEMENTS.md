@@ -151,7 +151,14 @@ list; see *Not borrowed* below.
 
 ### Soon
 
-- [ ] **Tag-driven release workflow.** On `v*.*.*`: build for
+- [x] **Tag-driven release workflow.** *Built, not yet run on GitHub.*
+  `.github/workflows/release.yml` + `.github/scripts/package.sh`, described in
+  RELEASING.md. The packaging script, the tag/version check and both macOS
+  builds were tested locally; the two Linux builds (the aarch64 one is
+  cross-compiled with gcc) and the publish step are **unverified until a
+  manual dry run**. Left out on purpose: Homebrew tap (needs its own repo),
+  crates.io (remove `publish = false` first), macOS signing/notarization.
+  Original note: On `v*.*.*`: build for
   `aarch64-apple-darwin`, `x86_64-apple-darwin`, `x86_64-unknown-linux-gnu`,
   `aarch64-unknown-linux-gnu`; attach tarballs + `sha256` to a GitHub
   Release; generate the changelog from commits. Then a Homebrew tap and
