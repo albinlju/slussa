@@ -341,7 +341,7 @@ Run `cargo clippy --all-targets --locked -- -D warnings` alongside the tests.
 ## Provider flow verification
 
 Local regression coverage is supplemented by a GitHub live run against
-`albinlju/prtest`. See [PR_FLOW_VERIFICATION.md](docs/PR_FLOW_VERIFICATION.md) for
+`albinlju/prtest`. See [PR_FLOW_VERIFICATION.md](PR_FLOW_VERIFICATION.md) for
 passed flows, defects fixed during the run, evidence and remaining checks.
 Bitbucket live verification is pending.
 The payload changes follow the [GitHub review-comment API](https://docs.github.com/en/rest/pulls/comments),
