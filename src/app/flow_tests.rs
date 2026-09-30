@@ -396,3 +396,72 @@ async fn a_failed_older_read_keeps_the_list_says_so_and_can_be_retried() {
     assert_eq!(loaded_ids(&app), vec![1, 3, 2]);
     assert_eq!(older_reads(&gh.calls()), 2);
 }
+
+// ---------------------------------------------------------------------------
+// Reopening a PR
+// ---------------------------------------------------------------------------
+
+fn reopen(app: &mut App, pr_id: u64) {
+    app.apply(Action::Command {
+        pr_id,
+        command: Command::Reopen,
+    });
+}
+
+#[tokio::test]
+async fn reopening_is_sent_once_reported_and_followed_by_a_refetch() {
+    let gh = FakeGh::new()
+        .on("pulls/1 -f state=open", "{}")
+        .on(OPEN_QUERY, &one_pr_page())
+        .on(CLOSED_QUERY, &no_closed_prs())
+        .on("graphql", &any_connection())
+        .install();
+    let mut app = app();
+
+    reopen(&mut app, 1);
+    assert!(
+        app.state.store.operations.contains_key(&1),
+        "pending until the provider answers"
+    );
+    settle(&mut app).await;
+
+    let calls = gh.calls();
+    assert_eq!(
+        calls[0],
+        "api --method PATCH repos/{owner}/{repo}/pulls/1 -f state=open"
+    );
+    assert_eq!(calls.iter().filter(|c| c.contains("state=open")).count(), 1);
+    assert!(
+        calls.iter().any(|c| c.contains(OPEN_QUERY)),
+        "the list is refetched so the PR shows as open: {calls:?}"
+    );
+    assert_eq!(
+        app.state.store.notice.as_ref().map(|n| n.message.as_str()),
+        Some("PR #1 · reopened")
+    );
+    assert!(app.state.store.errors.is_empty());
+    assert!(app.state.store.operations.is_empty());
+}
+
+#[tokio::test]
+async fn a_refused_reopen_is_reported_on_its_pr_without_a_refetch() {
+    let gh = FakeGh::new()
+        .fail(
+            "pulls/1 -f state=open",
+            1,
+            "gh: Validation Failed: the head branch was deleted (HTTP 422)",
+        )
+        .install();
+    let mut app = app();
+
+    reopen(&mut app, 1);
+    settle(&mut app).await;
+
+    assert_eq!(gh.calls().len(), 1, "no refetch after a failed write");
+    assert!(
+        app.state.store.errors[&1].contains("head branch was deleted"),
+        "{:?}",
+        app.state.store.errors
+    );
+    assert!(app.state.store.operations.is_empty());
+}

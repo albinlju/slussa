@@ -864,3 +864,87 @@ fn bitbucket_rejects_an_unreadable_older_position_without_a_request() {
     }
     assert!(server.requests().is_empty());
 }
+
+// ---------------------------------------------------------------------------
+// Reopening a closed PR
+// ---------------------------------------------------------------------------
+
+#[test]
+fn github_reopen_sets_the_state_back_to_open() {
+    let installed = FakeGh::new().on("api", "{}").install();
+    Provider::GitHub.reopen(7).unwrap();
+
+    assert_eq!(
+        installed.calls(),
+        vec!["api --method PATCH repos/{owner}/{repo}/pulls/7 -f state=open"]
+    );
+}
+
+#[test]
+fn github_refusing_a_reopen_reaches_the_user_in_githubs_words() {
+    let _installed = FakeGh::new()
+        .fail(
+            "api",
+            1,
+            "gh: Validation Failed: the head branch was deleted (HTTP 422)",
+        )
+        .install();
+    let error = Provider::GitHub.reopen(7).unwrap_err();
+
+    assert!(matches!(error, FetchError::GhFailed { .. }), "{error:?}");
+    assert!(
+        error.user_message().contains("head branch was deleted"),
+        "{}",
+        error.user_message()
+    );
+}
+
+#[test]
+fn bitbucket_reopen_reads_the_version_then_posts_it() {
+    let server = MockHttp::start(vec![
+        Route::get(
+            &format!("{PR_BASE}/9"),
+            200,
+            &json!({"version": 3}).to_string(),
+        ),
+        Route::post(&format!("{PR_BASE}/9/reopen?version=3"), 200, "{}"),
+    ]);
+    bitbucket(&server).reopen(9).unwrap();
+
+    let requests = server.requests();
+    let sent: Vec<_> = requests
+        .iter()
+        .map(|r| format!("{} {}", r.method, r.target))
+        .collect();
+    assert_eq!(
+        sent,
+        [
+            format!("GET {PR_BASE}/9"),
+            format!("POST {PR_BASE}/9/reopen?version=3")
+        ]
+    );
+    assert_eq!(requests[1].headers["authorization"], "Bearer secret-token");
+}
+
+#[test]
+fn bitbucket_refusing_a_reopen_shows_the_servers_reason() {
+    let refusal = json!({"errors": [{"message": "Only declined pull requests can be reopened"}]});
+    let server = MockHttp::start(vec![
+        Route::get(
+            &format!("{PR_BASE}/9"),
+            200,
+            &json!({"version": 3}).to_string(),
+        ),
+        Route::post(
+            &format!("{PR_BASE}/9/reopen?version=3"),
+            409,
+            &refusal.to_string(),
+        ),
+    ]);
+    let error = bitbucket(&server).reopen(9).unwrap_err();
+
+    assert_eq!(
+        error.user_message(),
+        "Only declined pull requests can be reopened"
+    );
+}

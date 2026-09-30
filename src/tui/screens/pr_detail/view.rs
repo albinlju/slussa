@@ -103,6 +103,11 @@ impl<'a> DetailView<'a> {
         .then_some("conflicts")
     }
 
+    /// Whether the PR was closed without merging, so `x` reopens it.
+    pub fn pr_is_declined(&self, pr_id: u64) -> bool {
+        matches!(self.pr_status(pr_id), Some(PrStatus::Declined))
+    }
+
     /// Why declining is unavailable, for the dimmed footer hint — `None` when open.
     pub fn decline_blocked_reason(&self, pr_id: u64) -> Option<&'static str> {
         match self.pr_status(pr_id) {
@@ -306,6 +311,7 @@ impl DetailView<'_> {
             | A::RemovePendingComment => caps.reviews(),
             A::OpenMergePicker | A::MergeSelect => !caps.merge_strategies.is_empty(),
             A::OpenDecline => caps.supports(F::ClosePr),
+            A::OpenReopen => caps.supports(F::ReopenPr),
             A::OpenComment => self.detail.editor.draft.is_some() || self.comment_target().is_some(),
             A::OpenReply => self.reply_target().is_some(),
             A::EditComment => caps.supports(F::EditComments),

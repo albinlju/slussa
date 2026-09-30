@@ -244,6 +244,9 @@ impl Component for PrDetailScreen {
             DetailAction::OpenDecline => {
                 self.confirm = Some(dialogs::confirm::ConfirmDialog::new(ConfirmKind::Decline));
             }
+            DetailAction::OpenReopen => {
+                self.confirm = Some(dialogs::confirm::ConfirmDialog::new(ConfirmKind::Reopen));
+            }
             DetailAction::CommentType(_)
             | DetailAction::CommentDelete
             | DetailAction::CommentMove(_)
@@ -328,3 +331,6 @@ impl PrDetailScreen {
         }
     }
 }
+
+#[cfg(test)]
+mod tests;

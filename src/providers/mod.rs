@@ -117,6 +117,14 @@ impl Provider {
         }
     }
 
+    /// Reopen a PR that was closed or declined without being merged.
+    pub fn reopen(&self, pr_id: u64) -> Result<(), FetchError> {
+        match self {
+            Self::GitHub => github::reopen(pr_id),
+            Self::BitbucketDc(c) => bitbucket_dc::reopen(c, pr_id),
+        }
+    }
+
     pub fn capabilities(&self) -> crate::domain::capabilities::Capabilities {
         use crate::domain::capabilities::{Capabilities, Feature, ReviewSubmission};
         let features = [
@@ -129,6 +137,7 @@ impl Provider {
             Feature::Builds,
             Feature::Mergeability,
             Feature::ClosePr,
+            Feature::ReopenPr,
         ]
         .into_iter()
         .collect();

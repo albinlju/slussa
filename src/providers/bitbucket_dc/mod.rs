@@ -200,6 +200,20 @@ pub fn merge(config: &Config, pr_id: u64) -> Result<(), FetchError> {
     )
 }
 
+pub fn reopen(config: &Config, pr_id: u64) -> Result<(), FetchError> {
+    let version = pr_version(config, pr_id)?;
+    let endpoint = format!(
+        "/rest/api/1.0/projects/{}/repos/{}/pull-requests/{pr_id}/reopen?version={version}",
+        config.repo.project_key, config.repo.repo_slug,
+    );
+    http::post_json(
+        &config.repo.base_url,
+        &endpoint,
+        &config.pat,
+        &serde_json::json!({}),
+    )
+}
+
 pub fn decline(config: &Config, pr_id: u64) -> Result<(), FetchError> {
     let version = pr_version(config, pr_id)?;
     let endpoint = format!(

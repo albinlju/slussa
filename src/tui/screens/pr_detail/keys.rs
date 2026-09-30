@@ -103,10 +103,15 @@ pub(in crate::tui) fn key_to_action(
     if plain && code == KeyCode::Char('m') && tab == DetailTab::Overview && state.can_merge(pr_id) {
         return Some(Action::Detail(DetailAction::OpenMergePicker));
     }
-    // `x` declines/closes the PR (with a confirm) while it's still open.
-    if plain && code == KeyCode::Char('x') && tab == DetailTab::Overview && state.pr_is_open(pr_id)
-    {
-        return Some(Action::Detail(DetailAction::OpenDecline));
+    // `x` declines/closes the PR (with a confirm) while it's still open, and
+    // reopens it (with a confirm) once it has been declined.
+    if plain && code == KeyCode::Char('x') && tab == DetailTab::Overview {
+        if state.pr_is_open(pr_id) {
+            return Some(Action::Detail(DetailAction::OpenDecline));
+        }
+        if state.pr_is_declined(pr_id) && state.supports_action(DetailAction::OpenReopen) {
+            return Some(Action::Detail(DetailAction::OpenReopen));
+        }
     }
     if plain && code == KeyCode::Char('c') {
         return Some(Action::Detail(DetailAction::OpenComment));

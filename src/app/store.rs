@@ -136,6 +136,7 @@ pub enum Operation {
     Review,
     Merge,
     Decline,
+    Reopen,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]

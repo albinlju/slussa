@@ -248,7 +248,15 @@ rounds, and a severity split where only evidenced findings block.
   decision*: it is part of the merge path, not administration.
 - [ ] **Enable auto-merge** (GitHub) — same reasoning: "merge when green" is a
   decision, not admin.
-- [ ] **Reopen a closed PR.**
+- [x] **Reopen a closed PR.** *Done.* `x` on a declined PR in the Overview
+  asks "Reopen this PR?" (Yes is preselected, since it is routine and easy to
+  undo) and reopens it; the footer shows `x: reopen` only there and only where
+  the provider supports it (`Feature::ReopenPr`). GitHub sets the state back
+  to open, Bitbucket posts the PR version to its reopen endpoint. A merged PR
+  cannot be reopened, and a refusal such as a deleted head branch shows the
+  provider's own message. Tested at the provider, the app, the dialog, the key
+  and the footer; **not run against a real GitHub or Bitbucket**, because
+  reopening changes a real PR.
 - [ ] **React to a comment** — add / remove your own emoji reaction.
 
 ### 4. Handoff to the coding agent
