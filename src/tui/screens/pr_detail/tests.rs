@@ -75,14 +75,51 @@ fn x_does_not_reopen_where_the_provider_cannot() {
     assert!(x(&state).is_none());
 }
 
+fn on_tab(mut state: AppState, tab: DetailTab) -> AppState {
+    state.screen = Screen::Detail { pr_id: 42, tab };
+    state
+}
+
+fn key(state: &AppState, c: char) -> Option<Action> {
+    key_to_action(state, KeyEvent::new(KeyCode::Char(c), KeyModifiers::NONE))
+}
+
 #[test]
-fn x_only_acts_on_the_overview() {
-    let mut state = overview_of(PrStatus::Declined);
-    state.screen = Screen::Detail {
-        pr_id: 42,
-        tab: DetailTab::Description,
-    };
-    assert!(x(&state).is_none());
+fn the_pr_level_actions_work_from_the_description_too() {
+    let state = on_tab(overview_of(PrStatus::Open), DetailTab::Description);
+    assert!(matches!(
+        key(&state, 'x'),
+        Some(Action::Detail(DetailAction::OpenDecline))
+    ));
+    assert!(matches!(
+        key(&state, 'a'),
+        Some(Action::Detail(DetailAction::OpenReviewPicker))
+    ));
+    assert!(matches!(
+        key(&state, 'v'),
+        Some(Action::Detail(DetailAction::StartReview))
+    ));
+    let declined = on_tab(overview_of(PrStatus::Declined), DetailTab::Description);
+    assert!(matches!(
+        key(&declined, 'x'),
+        Some(Action::Detail(DetailAction::OpenReopen))
+    ));
+}
+
+#[test]
+fn the_pr_level_actions_stay_off_the_builds_tab() {
+    let state = on_tab(overview_of(PrStatus::Open), DetailTab::Builds);
+    assert!(key(&state, 'x').is_none());
+    assert!(key(&state, 'a').is_none());
+}
+
+#[test]
+fn the_description_footer_lists_the_pr_actions() {
+    let mut state = on_tab(overview_of(PrStatus::Open), DetailTab::Description);
+    let text = footer_of(&mut state);
+    assert!(text.contains("a: submit review"), "{text}");
+    assert!(text.contains("x: decline"), "{text}");
+    assert!(text.contains("j/k: scroll"), "{text}");
 }
 
 #[test]

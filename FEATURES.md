@@ -92,7 +92,7 @@ scope includes how users find and leave the interaction, not only the API action
 - [x] **PR list** with status filter (open / draft / merged / declined / all).
 - [x] **Reviewers / approvals in the list** — a state icon per reviewer.
 - [x] **Description tab**, rendered above the tab row.
-- [x] **Overview tab** — conversation timeline (comments + lifecycle events) with a sidebar (reviewers, builds summary, labels, details). On GitHub the labels and the description are read when the PR is opened, not with the list; the Description tab shows a spinner until they arrive.
+- [x] **Overview tab** — conversation timeline (comments + lifecycle events) with a sidebar (reviewers, builds summary, labels, details). On GitHub the labels and the description are read when the PR is opened, not with the list; the Description tab shows a spinner until they arrive. The PR-level actions (`a`, `v`, `m`, `x`) work from both Description and Overview, so a PR can be approved or merged straight after reading what it claims to do; thread keys stay on Overview.
 - [x] **Diff tab** — file tree on the left, diff pane on the right, +/− row coloring, per-file +A/−D stats.
 - [x] **Inline review threads in the diff** — comments anchored to their line (new- and old-side), a comment-count badge per file in the tree, and a cursor that can focus a thread (accent border) as groundwork for replying.
 - [x] **Commits tab** — commit list with a per-commit diff drill-in (`enter` opens, `[`/`]` prev/next, `esc` back); reuses the Diff widget.
