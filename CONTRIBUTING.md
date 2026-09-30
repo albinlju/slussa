@@ -11,7 +11,7 @@ reviewable. The short version: **open an issue first**, follow the rules in
   request without an agreed issue may be closed without review.
 - **Small fixes need no issue:** a typo, an obvious bug with a test that shows
   it.
-- **Read what slussa is for.** [docs/FEATURES.md](docs/FEATURES.md) has the
+- **Read what slussa is for.** [docs/ROADMAP.md](docs/ROADMAP.md) has the
   positioning and a list of what it rules out. The main one: there are two
   views, the PR list and the PR. A new capability appears as a better default,
   a column, a marker or one key inside those views, never as a new screen,
@@ -54,7 +54,8 @@ Make the change, then open a pull request against `main` from your fork.
 4. **Add a test for behaviour you can observe**, especially for navigation and
    asynchronous state. Tests never call a real service: use `FakeGh` and
    `MockHttp` from `src/test_support.rs`.
-5. **Update [docs/FEATURES.md](docs/FEATURES.md)** when behaviour changes, and
+5. **Update the README** (keys, usage) **and the matching item in
+   [docs/ROADMAP.md](docs/ROADMAP.md)** when behaviour changes, and
    say in the pull request when a test double stands in for behaviour you could
    not check against the real service. Read [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) before
    you change app-level code; it has checklists for adding a provider write or

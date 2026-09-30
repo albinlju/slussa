@@ -11,7 +11,7 @@ ordinary rendering functions; they do not need the component interface.
 ## Product and interaction principles
 
 What slussa is for, what it rules out and the two-views rule are in
-[FEATURES.md](FEATURES.md) (*Positioning*) and the non-negotiables in
+[ROADMAP.md](ROADMAP.md) (*Positioning*) and the non-negotiables in
 `CLAUDE.md`. The interaction principles below guide UI changes; they do not imply
 every current screen already meets them.
 
@@ -289,7 +289,7 @@ Provider-side limits and server/version compatibility still require live checks.
   an `Action`; `App` decides whether work starts.
 - **A child process that needs the terminal** (an editor, an agent) cannot use
   this path. It needs the suspend and resume sequence described in
-  IMPROVEMENTS.md, which is not built yet.
+  ROADMAP.md (*Suspend / resume*), which is not built yet.
 
 ## Lifecycle: a read
 
@@ -386,6 +386,10 @@ for an atomic review; Bitbucket submits sequentially with partial-progress
 recovery. Unapprove is offered by the Bitbucket adapter only. Components use
 capabilities rather than branching on the provider enum. New adapters can
 expose their supported subset without adopting GitHub's complete feature set.
+
+The Comments column counts conversation comments plus review threads on GitHub
+and uses the server's `commentCount` on Bitbucket, which has not been checked
+against a real server to include inline comments.
 
 Support is distinct from permission or PR state: a supported action can remain
 visible but disabled with a reason (for example approving your own PR or

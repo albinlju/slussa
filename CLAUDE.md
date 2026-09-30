@@ -40,13 +40,14 @@ CI runs all four on Linux and macOS. The toolchain is pinned in
 - `docs/ARCHITECTURE.md`: code map, state ownership, read and write lifecycles, and
   checklists for adding a provider write or a read resource. Read it before
   changing app-level code.
-- `docs/FEATURES.md`: what exists and the priority order for what comes next.
-- `docs/IMPROVEMENTS.md`: engineering backlog; each refactor has a trigger, so do
-  not do them ahead of the feature that needs them.
+- `docs/ROADMAP.md`: the positioning, what to build next in priority order, and
+  the engineering backlog; each refactor has a trigger, so do not do them ahead
+  of the feature that needs them.
 
 ## Working here
 
-- Repo docs are in English. Update `docs/FEATURES.md` when behaviour changes.
+- Repo docs are in English. Update the README (keys, usage) and the matching item in
+  `docs/ROADMAP.md` when behaviour changes.
 - Add a regression test for observable behaviour, especially when navigation or
   asynchronous state is involved. Tests never call a real provider: use
   `FakeGh` and `MockHttp` from `src/test_support.rs`. A test that installs

@@ -12,7 +12,7 @@ the list".
 - [ ] `cargo fmt --all`, `cargo clippy --locked --all-targets -- -D warnings`,
       `cargo test --locked` and `cargo deny check` pass
 - [ ] Observable behaviour has a test, using `FakeGh` / `MockHttp`
-- [ ] `docs/FEATURES.md` is updated if behaviour changed
+- [ ] The README and `docs/ROADMAP.md` are updated if behaviour changed
 - [ ] It follows the rules in `CLAUDE.md` (two views, no async HTTP, no new
       `unwrap`/`expect`, modules under about 500 lines)
 - [ ] I read my own diff and can explain every change

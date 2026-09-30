@@ -125,7 +125,7 @@ struct GhPr {
 
 /// What the list needs of each pull request. The description and the labels
 /// are left out: the list shows neither, and they made a page about twice as
-/// slow (IMPROVEMENTS.md); `fetch_info` reads them when a PR is opened.
+/// slow (ROADMAP.md); `fetch_info` reads them when a PR is opened.
 /// Connections nested here are capped at 100; `fetch_prs` refetches the ones
 /// that report more.
 const PR_FIELDS: &str = r"

@@ -18,8 +18,8 @@ The pull requests in the recording are from a small throwaway demo repository.
 **Where it is going.** Pull requests written by agents, and reviews written by
 AI, are becoming most of what a reviewer sees. The plan is to make them
 first-class: marked as AI, summarized in the header, and handed back to a
-coding agent. None of that is built yet; [FEATURES.md](docs/FEATURES.md) has the
-plan and what exists.
+coding agent. None of that is built yet; [ROADMAP.md](docs/ROADMAP.md) has the
+plan.
 
 **Status:** early. It is used daily by its author. Prebuilt binaries come with
 tagged releases.
@@ -151,9 +151,8 @@ sort = "attention"   # attention (default) or recent
 
 ## Documentation
 
-- [FEATURES.md](docs/FEATURES.md): what is built and where the product is going
+- [ROADMAP.md](docs/ROADMAP.md): the product idea, what is planned and the engineering backlog
 - [ARCHITECTURE.md](docs/ARCHITECTURE.md): how the code is organised and why
-- [IMPROVEMENTS.md](docs/IMPROVEMENTS.md): engineering and tooling backlog
 
 ## Develop
 
