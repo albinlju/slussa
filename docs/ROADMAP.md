@@ -253,8 +253,9 @@ rank below the decision path.
   twice; see `.github/workflows/release.yml`) exist. Still open: deciding
   whether the repository goes public (while it is private nobody else can
   download a release), the first real release (the publish step has never run),
-  a Homebrew tap, `cargo install slussa` from crates.io and macOS
-  notarization. "Review requested" has only been seen against scripted `gh`
+  a Homebrew tap and `cargo install slussa` from crates.io. The macOS binary
+  stays unsigned and unnotarized; the README gives the `xattr` command.
+  "Review requested" has only been seen against scripted `gh`
   output and needs a second account to check; that can follow the release.
   Without a release the rest has no audience.
 

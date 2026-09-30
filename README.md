@@ -41,13 +41,17 @@ slussa in.
 ## Install
 
 **Platforms.** macOS and Linux, on arm64 and x86_64, are built and tested in
-CI. Windows is not built or tested.
+CI. Windows is not built or tested yet.
 
 **Prebuilt binary.** Tagged releases attach tarballs for macOS and Linux
 (arm64 and x86_64) to GitHub Releases, with checksums. Unpack it and put
-`slussa` on your `PATH`. On macOS you may need
-`xattr -d com.apple.quarantine slussa` because the binary is not notarized yet.
-Check a download with `shasum -a 256 -c slussa-<version>-<target>.tar.gz.sha256`.
+`slussa` on your `PATH`. The macOS binary is not signed or notarized, so a file
+downloaded in a browser may be blocked; remove the flag with
+`xattr -d com.apple.quarantine slussa`. Check a download with
+`shasum -a 256 -c slussa-<version>-<target>.tar.gz.sha256`.
+
+slussa is not on Homebrew or crates.io yet, so for now it is the tarball or a
+build from source.
 
 **From source.** With a recent Rust toolchain (the repo pins 1.95 in
 `rust-toolchain.toml`, which `rustup` installs automatically):
