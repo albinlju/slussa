@@ -574,7 +574,7 @@ fn diff_snippet(
         return (Vec::new(), None);
     };
 
-    let mut rows: Vec<Row> = Vec::new();
+    let mut rows: Vec<Row<'_>> = Vec::new();
     for (hunk_idx, hunk) in file.hunks.iter().enumerate() {
         for (dl, new_no, old_no) in hunk.numbered_lines() {
             rows.push(Row {

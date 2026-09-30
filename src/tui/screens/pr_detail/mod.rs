@@ -62,7 +62,7 @@ impl PrDetailScreen {
             position.commits.reconcile(old, new);
         }
     }
-    pub fn modal_open(&self) -> bool {
+    pub const fn modal_open(&self) -> bool {
         self.confirm.is_some()
             || self.review_picker.is_some()
             || self.merge_picker.is_some()
@@ -70,7 +70,7 @@ impl PrDetailScreen {
             || self.editor.is_open()
     }
 
-    pub fn active_diff_view(&self) -> &DiffViewer {
+    pub const fn active_diff_view(&self) -> &DiffViewer {
         if self.commits.open_commit.is_some() {
             &self.commits.diff
         } else {
@@ -78,7 +78,7 @@ impl PrDetailScreen {
         }
     }
 
-    pub fn active_diff_view_mut(&mut self) -> &mut DiffViewer {
+    pub const fn active_diff_view_mut(&mut self) -> &mut DiffViewer {
         if self.commits.open_commit.is_some() {
             &mut self.commits.diff
         } else {
@@ -92,7 +92,7 @@ impl Component for PrDetailScreen {
     type Message = crate::app::action::DetailAction;
     fn handle_key(
         &self,
-        key: ratatui::crossterm::event::KeyEvent,
+        key: crossterm::event::KeyEvent,
         ctx: &DetailContext<'_>,
     ) -> Option<crate::app::action::Action> {
         let view = DetailView {
@@ -107,7 +107,7 @@ impl Component for PrDetailScreen {
         })
     }
 
-    fn render(&mut self, frame: &mut Frame, area: Rect, ctx: &DetailContext<'_>) {
+    fn render(&mut self, frame: &mut Frame<'_>, area: Rect, ctx: &DetailContext<'_>) {
         render::render(self, frame, area, ctx);
     }
     fn update(
@@ -188,7 +188,7 @@ impl Component for PrDetailScreen {
                         _ => {
                             self.overview.update(
                                 action,
-                                &crate::tui::screens::pr_detail::tabs::overview::OverviewContext {
+                                &tabs::overview::OverviewContext {
                                     pr,
                                     data: ctx.store.cache.details.get(&pr_id),
                                     capabilities: &ctx.store.capabilities,
@@ -264,7 +264,7 @@ impl Component for PrDetailScreen {
 }
 
 impl PrDetailScreen {
-    pub fn active_search(
+    pub const fn active_search(
         &self,
         tab: tabs::DetailTab,
     ) -> Option<(&crate::tui::components::search_input::SearchInput, bool)> {

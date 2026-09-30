@@ -74,7 +74,7 @@ struct BbComment {
     #[serde(default)]
     thread_resolved: bool,
     #[serde(default)]
-    comments: Vec<BbComment>,
+    comments: Vec<Self>,
     #[serde(default)]
     properties: BbProperties,
 }

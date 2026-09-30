@@ -29,7 +29,7 @@ use ratatui::{
 };
 
 fn render_tabs_and_content(
-    frame: &mut Frame,
+    frame: &mut Frame<'_>,
     overview: &super::tabs::overview::OverviewContext<'_>,
     ui: &mut PrDetailScreen,
     pending: &[PendingComment],
@@ -94,7 +94,7 @@ fn tab_bar(tab: DetailTab, caps: &Capabilities, width: u16) -> Line<'static> {
 }
 
 fn render_content(
-    frame: &mut Frame,
+    frame: &mut Frame<'_>,
     overview: &super::tabs::overview::OverviewContext<'_>,
     ui: &mut PrDetailScreen,
     pending: &[PendingComment],
@@ -167,7 +167,7 @@ fn activity_threads(pr_data: Option<&PrData>) -> &[CommentThread] {
 
 pub(super) fn render(
     ui: &mut PrDetailScreen,
-    frame: &mut Frame,
+    frame: &mut Frame<'_>,
     area: Rect,
     ctx: &DetailContext<'_>,
 ) {

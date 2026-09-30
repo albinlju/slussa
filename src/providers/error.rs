@@ -8,7 +8,7 @@ pub enum FetchError {
     PartialReview {
         posted_comments: usize,
         summary_posted: bool,
-        source: Box<FetchError>,
+        source: Box<Self>,
     },
     GhFailed {
         code: Option<i32>,

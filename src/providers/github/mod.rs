@@ -84,7 +84,7 @@ pub fn decline(pr_number: u64) -> Result<(), FetchError> {
 
 /// GitHub review event for a verdict, or `None` where it has no GitHub
 /// equivalent (`Unapprove` — reviews are immutable, so there's no "undo").
-fn review_event(verdict: ReviewVerdict) -> Option<&'static str> {
+const fn review_event(verdict: ReviewVerdict) -> Option<&'static str> {
     match verdict {
         ReviewVerdict::Approve => Some("APPROVE"),
         ReviewVerdict::RequestChanges => Some("REQUEST_CHANGES"),

@@ -34,7 +34,7 @@ pub struct Overview {
 impl Overview {
     pub fn render_with_scrollbar(
         &mut self,
-        frame: &mut Frame,
+        frame: &mut Frame<'_>,
         area: Rect,
         ctx: &OverviewContext<'_>,
         scrollbar: Rect,
@@ -65,13 +65,13 @@ impl Component for Overview {
             },
         )
     }
-    fn render(&mut self, frame: &mut Frame, area: Rect, ctx: &Self::Context<'_>) {
+    fn render(&mut self, frame: &mut Frame<'_>, area: Rect, ctx: &Self::Context<'_>) {
         self.render_with_scrollbar(frame, area, ctx, layout::scrollbar_area(area));
     }
 }
 
 fn render(
-    frame: &mut Frame,
+    frame: &mut Frame<'_>,
     ctx: &OverviewContext<'_>,
     ui: &mut Overview,
     area: Rect,

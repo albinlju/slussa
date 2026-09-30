@@ -14,7 +14,7 @@ use ratatui::{
 };
 
 fn render(
-    frame: &mut Frame,
+    frame: &mut Frame<'_>,
     strategies: &[crate::domain::pr::MergeStrategy],
     dialog: &MergeDialog,
     area: Rect,
@@ -74,7 +74,7 @@ fn render(
     );
 }
 
-fn key_to_action(code: KeyCode) -> Option<Action> {
+const fn key_to_action(code: KeyCode) -> Option<Action> {
     match code {
         KeyCode::Left | KeyCode::Up | KeyCode::Char('h' | 'k') => {
             Some(Action::Detail(DetailAction::MergeMove(-1)))
@@ -119,7 +119,7 @@ impl Component for MergeDialog {
             other => Some(Action::Detail(other)),
         }
     }
-    fn render(&mut self, frame: &mut Frame, area: Rect, ctx: &Self::Context<'_>) {
+    fn render(&mut self, frame: &mut Frame<'_>, area: Rect, ctx: &Self::Context<'_>) {
         render(frame, ctx, self, area);
     }
 }

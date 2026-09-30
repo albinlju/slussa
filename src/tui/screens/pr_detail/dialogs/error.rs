@@ -10,7 +10,7 @@ pub struct ErrorDialog {
     pub max_scroll: u16,
 }
 impl ErrorDialog {
-    pub fn render(&mut self, frame: &mut Frame, message: &str, area: Rect) {
+    pub fn render(&mut self, frame: &mut Frame<'_>, message: &str, area: Rect) {
         let width = area.width.min(64);
         let lines = widgets::wrap_text(message, width.saturating_sub(4).max(1) as usize);
         let body = widgets::dialog::frame(
@@ -34,11 +34,7 @@ impl ErrorDialog {
 impl Component for ErrorDialog {
     type Context<'a> = &'a str;
     type Message = DetailAction;
-    fn handle_key(
-        &self,
-        key: ratatui::crossterm::event::KeyEvent,
-        _: &Self::Context<'_>,
-    ) -> Option<Action> {
+    fn handle_key(&self, key: crossterm::event::KeyEvent, _: &Self::Context<'_>) -> Option<Action> {
         use ratatui::crossterm::event::KeyCode;
         let action = match key.code {
             KeyCode::Esc | KeyCode::Enter => DetailAction::DismissError,
@@ -58,7 +54,7 @@ impl Component for ErrorDialog {
             Some(Action::Detail(action))
         }
     }
-    fn render(&mut self, frame: &mut Frame, area: Rect, message: &Self::Context<'_>) {
+    fn render(&mut self, frame: &mut Frame<'_>, area: Rect, message: &Self::Context<'_>) {
         self.render(frame, message, area);
     }
 }

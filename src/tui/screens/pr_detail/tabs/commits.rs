@@ -24,7 +24,7 @@ use ratatui::{
     widgets::{Block, Borders, List, ListItem, ListState, Paragraph},
 };
 
-pub fn render(frame: &mut Frame, pr_data: Option<&PrData>, cv: &mut CommitList, area: Rect) {
+pub fn render(frame: &mut Frame<'_>, pr_data: Option<&PrData>, cv: &mut CommitList, area: Rect) {
     let theme = theme::current();
     let Some(commits) =
         widgets::loaded_or_placeholder(frame, pr_data.map(|d| &d.commits), "commits", area)
@@ -48,7 +48,7 @@ pub fn render(frame: &mut Frame, pr_data: Option<&PrData>, cv: &mut CommitList, 
         return;
     }
     let last_idx = filtered.len().saturating_sub(1);
-    let items: Vec<ListItem> = filtered
+    let items: Vec<ListItem<'_>> = filtered
         .iter()
         .enumerate()
         .map(|(i, commit)| ListItem::new(commit_row(commit, i == last_idx, now, width)))
@@ -65,27 +65,27 @@ fn commit_row(commit: &Commit, is_last: bool, now: DateTime<Utc>, width: usize) 
     let graph = if is_last { "└─ " } else { "├─ " };
     let age = format::relative_age(commit.authored_at, now);
 
-    let mut right = vec![
-        Span::styled(commit.author_name.clone(), Style::default().fg(theme.info)),
-        Span::raw("  "),
-        Span::styled(
-            format!("+{}", commit.additions),
-            Style::default().fg(theme.diff_added),
-        ),
-        Span::raw(" "),
-        Span::styled(
-            format!("-{}", commit.deletions),
-            Style::default().fg(theme.diff_removed),
-        ),
-        Span::styled("  · ", Style::default().fg(theme.muted)),
-        Span::styled(age.clone(), Style::default().fg(theme.muted)),
-    ];
-    if width < 80 {
-        right = vec![Span::styled(age, Style::default().fg(theme.muted))];
-    }
-    if width < 45 {
-        right.clear();
-    }
+    let right = if width < 45 {
+        Vec::new()
+    } else if width < 80 {
+        vec![Span::styled(age, Style::default().fg(theme.muted))]
+    } else {
+        vec![
+            Span::styled(commit.author_name.clone(), Style::default().fg(theme.info)),
+            Span::raw("  "),
+            Span::styled(
+                format!("+{}", commit.additions),
+                Style::default().fg(theme.diff_added),
+            ),
+            Span::raw(" "),
+            Span::styled(
+                format!("-{}", commit.deletions),
+                Style::default().fg(theme.diff_removed),
+            ),
+            Span::styled("  · ", Style::default().fg(theme.muted)),
+            Span::styled(age, Style::default().fg(theme.muted)),
+        ]
+    };
     let oid_cell = format!("{}  ", short_oid(&commit.oid));
     let headline = commit.headline.clone();
 
@@ -98,7 +98,7 @@ fn commit_row(commit: &Commit, is_last: bool, now: DateTime<Utc>, width: usize) 
 }
 
 pub fn render_commit_diff(
-    frame: &mut Frame,
+    frame: &mut Frame<'_>,
     pr_data: Option<&PrData>,
     threads: &[CommentThread],
     pending: &[PendingComment],
@@ -130,7 +130,7 @@ pub fn render_commit_diff(
     );
 }
 
-fn render_commit_banner(frame: &mut Frame, pr_data: Option<&PrData>, oid: &str, area: Rect) {
+fn render_commit_banner(frame: &mut Frame<'_>, pr_data: Option<&PrData>, oid: &str, area: Rect) {
     let theme = theme::current();
     let block = Block::default()
         .borders(Borders::BOTTOM)
@@ -251,7 +251,7 @@ impl Component for CommitList {
             oid,
         })
     }
-    fn render(&mut self, frame: &mut Frame, area: Rect, ctx: &CommitContext<'_>) {
+    fn render(&mut self, frame: &mut Frame<'_>, area: Rect, ctx: &CommitContext<'_>) {
         if self.open_commit.is_some() {
             let threads = match ctx.data.map(|d| &d.activity) {
                 Some(LoadState::Loaded(a)) => a.threads.as_slice(),
@@ -282,7 +282,7 @@ impl CommitList {
         let filtered = self.search.filter_commits(new);
         self.selected = id
             .and_then(|id| filtered.iter().position(|commit| commit.oid == id))
-            .unwrap_or(self.selected.min(filtered.len().saturating_sub(1)));
+            .unwrap_or_else(|| self.selected.min(filtered.len().saturating_sub(1)));
     }
     pub fn update_search(&mut self, action: crate::app::action::SearchAction) {
         use crate::app::action::SearchAction;

@@ -23,7 +23,7 @@ fn truncate_cols(s: &str, max: usize) -> String {
     format!("{head}…")
 }
 
-fn render(frame: &mut Frame, ctx: &ReviewContext<'_>, dialog: &mut ReviewDialog, area: Rect) {
+fn render(frame: &mut Frame<'_>, ctx: &ReviewContext<'_>, dialog: &mut ReviewDialog, area: Rect) {
     let cursor = dialog.cursor;
     if dialog.preview {
         let body = crate::tui::widgets::dialog::frame(
@@ -162,7 +162,7 @@ fn render(frame: &mut Frame, ctx: &ReviewContext<'_>, dialog: &mut ReviewDialog,
     );
 }
 
-fn key_to_action(code: KeyCode) -> Option<Action> {
+const fn key_to_action(code: KeyCode) -> Option<Action> {
     match code {
         KeyCode::Left | KeyCode::Up | KeyCode::Char('h' | 'k') => {
             Some(Action::Detail(DetailAction::ReviewMove(-1)))
@@ -207,7 +207,7 @@ impl ReviewDialog {
             .map(|(verdict, _)| *verdict)
     }
     #[cfg(test)]
-    pub fn cursor(&self) -> usize {
+    pub const fn cursor(&self) -> usize {
         self.cursor
     }
 }
@@ -241,7 +241,7 @@ impl Component for ReviewDialog {
             other => Some(Action::Detail(other)),
         }
     }
-    fn render(&mut self, frame: &mut Frame, area: Rect, ctx: &ReviewContext<'_>) {
+    fn render(&mut self, frame: &mut Frame<'_>, area: Rect, ctx: &ReviewContext<'_>) {
         render(frame, ctx, self, area);
     }
 }

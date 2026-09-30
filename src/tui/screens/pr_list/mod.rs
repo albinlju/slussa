@@ -46,7 +46,7 @@ const HELP_KEYS: &[(&str, &str)] = &[
 ];
 
 // Reserve space for the title first; secondary details remain in the PR view.
-fn visible_columns(width: u16) -> &'static [usize] {
+const fn visible_columns(width: u16) -> &'static [usize] {
     match width {
         0..=59 => &[0, 3],
         60..=89 => &[0, 3, 2, 4],
@@ -107,7 +107,7 @@ fn pr_list_container(filter: StatusFilter, count_label: &str) -> Block<'static> 
         ))
 }
 
-fn render_table_header(frame: &mut Frame, table: &table::Table, area: Rect) {
+fn render_table_header(frame: &mut Frame<'_>, table: &table::Table<'_>, area: Rect) {
     let mut header = table.header();
     header
         .spans
@@ -116,15 +116,15 @@ fn render_table_header(frame: &mut Frame, table: &table::Table, area: Rect) {
 }
 
 fn render_table_body(
-    frame: &mut Frame,
-    table: &table::Table,
+    frame: &mut Frame<'_>,
+    table: &table::Table<'_>,
     prs: &[&PullRequest],
     list_state: &mut ListState,
     area: Rect,
     columns: &[usize],
 ) {
     let theme = theme::current();
-    let items: Vec<ListItem> = prs
+    let items: Vec<ListItem<'_>> = prs
         .iter()
         .map(|pr| {
             let cells = row_cells(pr);
@@ -149,7 +149,7 @@ fn render_table_body(
 }
 
 fn render_footer(
-    frame: &mut Frame,
+    frame: &mut Frame<'_>,
     search: &SearchInput,
     match_count: usize,
     refreshing: bool,
@@ -167,7 +167,7 @@ fn render_footer(
     frame.render_widget(Paragraph::new(line), area);
 }
 
-fn render_filter_picker(frame: &mut Frame, state: &PrListScreen, area: Rect) {
+fn render_filter_picker(frame: &mut Frame<'_>, state: &PrListScreen, area: Rect) {
     let theme = theme::current();
     let list_area = widgets::dialog::frame(
         frame,
@@ -176,7 +176,7 @@ fn render_filter_picker(frame: &mut Frame, state: &PrListScreen, area: Rect) {
         (44, StatusFilter::CYCLE.len() as u16),
         &[("j/k", "move"), ("Enter", "select"), ("Esc", "cancel")],
     );
-    let items: Vec<ListItem> = StatusFilter::CYCLE
+    let items: Vec<ListItem<'_>> = StatusFilter::CYCLE
         .iter()
         .map(|f| ListItem::new(Line::raw(f.label())))
         .collect();
@@ -304,7 +304,7 @@ impl StatusFilter {
         Self::All,
     ];
 
-    pub fn label(self) -> &'static str {
+    pub const fn label(self) -> &'static str {
         match self {
             Self::Open => "Open",
             Self::Draft => "Draft",
@@ -314,7 +314,7 @@ impl StatusFilter {
         }
     }
 
-    pub fn matches(self, status: &PrStatus) -> bool {
+    pub const fn matches(self, status: &PrStatus) -> bool {
         matches!(
             (self, status),
             (Self::All, _)
@@ -334,7 +334,7 @@ pub struct ListContext<'a> {
 impl Component for PrListScreen {
     type Context<'a> = ListContext<'a>;
     type Message = ListAction;
-    fn render(&mut self, frame: &mut Frame, area: Rect, ctx: &ListContext<'_>) {
+    fn render(&mut self, frame: &mut Frame<'_>, area: Rect, ctx: &ListContext<'_>) {
         self.viewport = area.height.saturating_sub(4);
 
         let [body_area, footer_area] = layout::split(
@@ -507,7 +507,7 @@ impl PrListScreen {
         self.filter_picker_open = true;
     }
 
-    fn close_filter_picker(&mut self) {
+    const fn close_filter_picker(&mut self) {
         self.filter_picker_open = false;
     }
 
@@ -516,7 +516,7 @@ impl PrListScreen {
         self.filter_picker_cursor = (self.filter_picker_cursor + 1).min(last);
     }
 
-    fn filter_picker_prev(&mut self) {
+    const fn filter_picker_prev(&mut self) {
         self.filter_picker_cursor = self.filter_picker_cursor.saturating_sub(1);
     }
 

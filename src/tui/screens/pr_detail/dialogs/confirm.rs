@@ -21,7 +21,7 @@ pub enum ConfirmKind {
 }
 
 impl ConfirmKind {
-    pub fn prompt(self) -> &'static str {
+    pub const fn prompt(self) -> &'static str {
         match self {
             Self::DeleteComment { .. } => "Delete this comment?",
             Self::Decline => "Close / decline this PR?",
@@ -33,7 +33,7 @@ impl ConfirmKind {
 const CONFIRM_OPTIONS: [&str; 2] = ["Yes", "No"];
 
 fn render(
-    frame: &mut Frame,
+    frame: &mut Frame<'_>,
     kind: ConfirmKind,
     cursor: usize,
     context: &str,
@@ -92,7 +92,7 @@ fn render(
     crate::tui::widgets::dialog::choices(frame, area, "Confirm", lines, selected_line);
 }
 
-fn key_to_action(code: KeyCode) -> Option<Action> {
+const fn key_to_action(code: KeyCode) -> Option<Action> {
     match code {
         KeyCode::Left | KeyCode::Up | KeyCode::Char('h' | 'k') => {
             Some(Action::Detail(DetailAction::ConfirmMove(-1)))
@@ -139,7 +139,7 @@ impl ConfirmDialog {
         (self.cursor == 0).then_some(self.kind)
     }
     #[cfg(test)]
-    pub fn kind(&self) -> ConfirmKind {
+    pub const fn kind(&self) -> ConfirmKind {
         self.kind
     }
 }
@@ -159,7 +159,7 @@ impl Component for ConfirmDialog {
             other => Some(Action::Detail(other)),
         }
     }
-    fn render(&mut self, frame: &mut Frame, area: Rect, (): &()) {
+    fn render(&mut self, frame: &mut Frame<'_>, area: Rect, (): &()) {
         render(
             frame,
             self.kind,

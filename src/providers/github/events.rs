@@ -104,6 +104,6 @@ fn review_kind(state: &str) -> Option<EventKind> {
     }
 }
 
-fn login_user(login: String) -> User {
+const fn login_user(login: String) -> User {
     User { username: login }
 }

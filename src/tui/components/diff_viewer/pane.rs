@@ -27,7 +27,7 @@ const DIFF_GUTTER_COLS: u16 = 2;
 
 #[allow(clippy::too_many_arguments)]
 pub(super) fn render(
-    frame: &mut Frame,
+    frame: &mut Frame<'_>,
     diff: &Diff,
     ui_diff: &mut DiffViewer,
     file_stats: &[(u32, u32)],
@@ -154,7 +154,7 @@ struct NavItem {
 }
 
 impl NavItem {
-    fn anchor(&self) -> (usize, bool) {
+    const fn anchor(&self) -> (usize, bool) {
         match self.kind {
             NavKind::Line { line, removed }
             | NavKind::Thread { line, removed, .. }
@@ -162,14 +162,14 @@ impl NavItem {
         }
     }
 
-    fn reply_to(&self) -> Option<u64> {
+    const fn reply_to(&self) -> Option<u64> {
         match self.kind {
             NavKind::Thread { reply_to, .. } => reply_to,
             NavKind::Line { .. } | NavKind::Pending { .. } => None,
         }
     }
 
-    fn pending_index(&self) -> Option<usize> {
+    const fn pending_index(&self) -> Option<usize> {
         match self.kind {
             NavKind::Pending { index, .. } => Some(index),
             NavKind::Line { .. } | NavKind::Thread { .. } => None,
@@ -212,7 +212,7 @@ fn build_diff_body(
     expanded: &HashSet<u64>,
 ) -> DiffBody {
     let theme = theme::current();
-    let mut lines: Vec<Line> = Vec::new();
+    let mut lines: Vec<Line<'_>> = Vec::new();
     let mut nav_items: Vec<NavItem> = Vec::new();
     let mut matches: Vec<usize> = Vec::new();
     let query_lower = query.to_lowercase();
@@ -329,8 +329,8 @@ fn index_comments<'a>(
     path: &str,
     revision: Option<&crate::domain::diff::DiffRevision>,
 ) -> (CommentIndex<'a>, CommentIndex<'a>) {
-    let mut by_new: CommentIndex = HashMap::new();
-    let mut by_old: CommentIndex = HashMap::new();
+    let mut by_new: CommentIndex<'_> = HashMap::new();
+    let mut by_old: CommentIndex<'_> = HashMap::new();
     // Only anchored (code-review) threads land in the diff; general discussion
     // has no path/line and is skipped.
     for thread in threads {
@@ -358,8 +358,8 @@ fn index_pending<'a>(
     path: &str,
     revision: Option<&crate::domain::diff::DiffRevision>,
 ) -> (PendingIndex<'a>, PendingIndex<'a>) {
-    let mut by_new: PendingIndex = HashMap::new();
-    let mut by_old: PendingIndex = HashMap::new();
+    let mut by_new: PendingIndex<'_> = HashMap::new();
+    let mut by_old: PendingIndex<'_> = HashMap::new();
     for (i, pc) in pending.iter().enumerate() {
         if pc.anchor.path != path || pc.anchor.revision.as_ref() != revision {
             continue;
@@ -451,7 +451,7 @@ fn push_thread_lines(
 }
 
 fn render_pane_header(
-    frame: &mut Frame,
+    frame: &mut Frame<'_>,
     path: &str,
     adds: u32,
     dels: u32,

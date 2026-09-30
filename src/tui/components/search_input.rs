@@ -73,7 +73,7 @@ impl Component for SearchInput {
         }
         None
     }
-    fn render(&mut self, frame: &mut Frame, area: Rect, ctx: &SearchContext) {
+    fn render(&mut self, frame: &mut Frame<'_>, area: Rect, ctx: &SearchContext) {
         frame.render_widget(
             Paragraph::new(widgets::search_prompt(&self.query, ctx.matches, area.width)),
             area,

@@ -1030,7 +1030,7 @@ fn comment_lookup_keeps_review_and_pr_ids_separate() {
         }],
     });
     app.state.ui.detail.overview.timeline.selected =
-        Some(crate::tui::screens::pr_detail::view::CommentRef {
+        Some(tui::screens::pr_detail::view::CommentRef {
             id: Some(7),
             review: true,
         });
@@ -1044,7 +1044,7 @@ fn comment_lookup_keeps_review_and_pr_ids_separate() {
             review: true
         }
     ));
-    app.state.ui.detail.editor = crate::tui::components::comment_editor::CommentEditor::default();
+    app.state.ui.detail.editor = tui::components::comment_editor::CommentEditor::default();
     press(&mut app, KeyCode::Char('d'));
     assert_eq!(
         app.state.ui.detail.confirm.as_ref().unwrap().kind(),
@@ -1109,7 +1109,7 @@ fn returning_to_a_pr_restores_its_tab_focus_and_search() {
     app.state.ui.detail.diff.pane_scroll = 12;
     app.state.ui.detail.diff.pane_cursor = 5;
     app.state.ui.detail.overview.timeline.scroll = 7;
-    let mut other = crate::tui::regression_tests::fixture();
+    let mut other = tui::regression_tests::fixture();
     app.state
         .store
         .cache

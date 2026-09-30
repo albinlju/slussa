@@ -1,6 +1,6 @@
 use super::user::User;
 
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub enum ReviewerState {
     Approved,
     ChangesRequested,
@@ -24,7 +24,7 @@ pub enum ReviewVerdict {
 }
 
 impl ReviewVerdict {
-    pub fn label(self) -> &'static str {
+    pub const fn label(self) -> &'static str {
         match self {
             Self::Approve => "Approve",
             Self::RequestChanges => "Request changes",
@@ -34,7 +34,7 @@ impl ReviewVerdict {
     }
 
     /// Verdicts carrying a summary body (required by GitHub for these two).
-    pub fn needs_body(self) -> bool {
+    pub const fn needs_body(self) -> bool {
         matches!(self, Self::RequestChanges | Self::Comment)
     }
 }

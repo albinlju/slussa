@@ -17,7 +17,7 @@ use ratatui::{
 };
 
 pub(super) fn render(
-    frame: &mut Frame,
+    frame: &mut Frame<'_>,
     diff: &Diff,
     ui_diff: &mut DiffViewer,
     file_stats: &[(u32, u32)],
@@ -48,7 +48,7 @@ pub(super) fn render(
         return;
     }
     let row_width = body.width as usize;
-    let items: Vec<ListItem> = rows
+    let items: Vec<ListItem<'_>> = rows
         .iter()
         .map(|row| ListItem::new(tree_row(row, file_stats, comment_counts, row_width)))
         .collect();

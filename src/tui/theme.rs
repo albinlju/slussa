@@ -166,7 +166,7 @@ pub const TERMINAL: Theme = Theme {
 };
 
 impl Theme {
-    pub fn status_color(&self, status: &PrStatus) -> Color {
+    pub const fn status_color(&self, status: &PrStatus) -> Color {
         match status {
             PrStatus::Open => self.status_open,
             PrStatus::Draft => self.status_draft,

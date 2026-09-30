@@ -44,7 +44,7 @@ pub(super) enum OverallState {
 }
 
 impl OverallState {
-    pub(super) fn of(stats: &BuildStats) -> Self {
+    pub(super) const fn of(stats: &BuildStats) -> Self {
         if stats.any_running {
             Self::Running
         } else if stats.any_failed {

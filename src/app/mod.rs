@@ -105,7 +105,7 @@ impl App {
 
     /// Apply input before translating the next key; commands must target the
     /// selection/dialog state produced by all preceding input.
-    fn handle_key(&mut self, key: ratatui::crossterm::event::KeyEvent) -> bool {
+    fn handle_key(&mut self, key: crossterm::event::KeyEvent) -> bool {
         match key_to_action(&self.state, key) {
             Some(Action::Quit) => self.save_drafts(),
             Some(action) => {
@@ -151,7 +151,7 @@ impl App {
                     Err(message) => store::Notice::new(message, true),
                 });
             }
-            Action::List(crate::app::action::ListAction::OpenPr(id)) => self.open_pr(id),
+            Action::List(action::ListAction::OpenPr(id)) => self.open_pr(id),
             Action::Command { pr_id, command } => self.execute(pr_id, command),
             Action::LoadCommitDiff { pr_id, oid } => self.ensure_commit_diff(pr_id, oid),
             Action::Loaded(a) => self.loaded_actions(a),

@@ -29,7 +29,7 @@ pub(super) fn author_line(
 }
 
 pub(super) fn framed_panel(
-    frame: &mut Frame,
+    frame: &mut Frame<'_>,
     area: Rect,
     title: &str,
     focused: bool,
@@ -72,7 +72,7 @@ pub(super) fn empty_state(text: &str) -> Paragraph<'static> {
 }
 
 pub(super) fn loaded_or_placeholder<'a, T>(
-    frame: &mut Frame,
+    frame: &mut Frame<'_>,
     state: Option<&'a LoadState<T>>,
     noun: &str,
     area: Rect,
@@ -97,7 +97,7 @@ pub(super) fn loaded_or_placeholder<'a, T>(
 }
 
 pub(super) fn scrolled_paragraph(
-    frame: &mut Frame,
+    frame: &mut Frame<'_>,
     lines: Vec<Line<'static>>,
     scroll: &mut u16,
     viewport: &mut u16,
