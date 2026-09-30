@@ -25,7 +25,7 @@ use serde::Deserialize;
 use serde::de::DeserializeOwned;
 
 use crate::domain::comment::{Comment, Reaction};
-use crate::domain::pr::{MergeStrategy, Mergeability};
+use crate::domain::pr::{MergeStatus, MergeStrategy, Mergeability};
 use crate::domain::review::{ReviewComment, ReviewVerdict};
 use crate::domain::user::User;
 use crate::providers::error::FetchError;
@@ -35,19 +35,50 @@ pub fn current_user() -> Result<String, FetchError> {
     Ok(String::from_utf8_lossy(&out).trim().to_owned())
 }
 
-pub fn fetch_mergeability(pr_number: u64) -> Result<Mergeability, FetchError> {
+pub fn fetch_mergeability(pr_number: u64) -> Result<MergeStatus, FetchError> {
     #[derive(Deserialize)]
-    struct Mergeable {
+    #[serde(rename_all = "camelCase")]
+    struct MergeFields {
         mergeable: String,
+        #[serde(default)]
+        merge_state_status: String,
+        #[serde(default)]
+        review_decision: Option<String>,
     }
-    let pr: Mergeable = run_pr_graphql(graphql::MERGEABILITY, pr_number)?;
-    // GitHub computes this asynchronously, so a fresh PR can answer UNKNOWN
-    // until it settles — a later refresh picks up the real verdict.
-    Ok(match pr.mergeable.as_str() {
-        "MERGEABLE" => Mergeability::Mergeable,
-        "CONFLICTING" => Mergeability::Conflicts,
-        _ => Mergeability::Unknown,
-    })
+    let pr: MergeFields = run_pr_graphql(graphql::MERGEABILITY, pr_number)?;
+    Ok(merge_status(
+        &pr.mergeable,
+        &pr.merge_state_status,
+        pr.review_decision.as_deref(),
+    ))
+}
+
+/// Read GitHub's merge fields. GitHub computes them asynchronously, so a fresh
+/// PR can answer `UNKNOWN` until it settles; a later refresh picks up the real
+/// verdict. `BLOCKED` covers several rules and GitHub does not say which, so
+/// the reason comes from the review decision when that explains it and is
+/// otherwise general. An administrator may still be able to merge a `Blocked`
+/// PR, which is why the state informs and does not forbid.
+fn merge_status(mergeable: &str, state: &str, review_decision: Option<&str>) -> MergeStatus {
+    let blocked = |reason: &str| MergeStatus::with(Mergeability::Blocked, vec![reason.to_owned()]);
+    match (mergeable, state) {
+        ("CONFLICTING", _) | (_, "DIRTY") => MergeStatus::with(
+            Mergeability::Conflicts,
+            vec!["It conflicts with the base branch.".into()],
+        ),
+        (_, "DRAFT") => blocked("It is a draft."),
+        (_, "BEHIND") => blocked("The branch is behind its base and must be updated."),
+        (_, "BLOCKED") => blocked(match review_decision {
+            Some("REVIEW_REQUIRED") => "An approving review is required.",
+            Some("CHANGES_REQUESTED") => "A reviewer requested changes.",
+            _ => "Required checks or branch rules are not satisfied.",
+        }),
+        // `UNSTABLE` means failing checks that are not required; GitHub still merges.
+        ("MERGEABLE", "CLEAN" | "HAS_HOOKS" | "UNSTABLE") => {
+            MergeStatus::new(Mergeability::Mergeable)
+        }
+        _ => MergeStatus::new(Mergeability::Unknown),
+    }
 }
 
 pub fn merge(pr_number: u64, strategy: MergeStrategy) -> Result<(), FetchError> {

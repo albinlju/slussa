@@ -78,7 +78,7 @@ pub(crate) fn fixture() -> AppState {
                 threads: vec![],
             }),
             builds: LoadState::Loaded(vec![]),
-            mergeability: LoadState::Loaded(Mergeability::Mergeable),
+            mergeability: LoadState::Loaded(MergeStatus::new(Mergeability::Mergeable)),
             ..PrData::default()
         },
     );

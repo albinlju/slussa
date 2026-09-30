@@ -22,7 +22,7 @@ use crate::domain::{
     ci::Build,
     commit::Commit,
     diff::Diff,
-    pr::{Mergeability, PullRequest},
+    pr::{MergeStatus, PullRequest},
 };
 use std::collections::{HashMap, HashSet};
 
@@ -55,7 +55,7 @@ pub struct PrData {
     pub diff: LoadState<Diff>,
     pub builds: LoadState<Vec<Build>>,
     pub activity: LoadState<Activity>,
-    pub mergeability: LoadState<Mergeability>,
+    pub mergeability: LoadState<MergeStatus>,
     pub commit_diffs: HashMap<String, LoadState<Diff>>,
 }
 

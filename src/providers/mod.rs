@@ -27,7 +27,7 @@ use crate::domain::{
     ci::Build,
     commit::Commit,
     diff::Diff,
-    pr::{MergeStrategy, Mergeability, PullRequest},
+    pr::{MergeStatus, MergeStrategy, PullRequest},
     review::{ReviewComment, ReviewVerdict},
 };
 
@@ -80,7 +80,7 @@ impl Provider {
         }
     }
 
-    pub fn fetch_mergeability(&self, pr_id: u64) -> Result<Mergeability, FetchError> {
+    pub fn fetch_mergeability(&self, pr_id: u64) -> Result<MergeStatus, FetchError> {
         match self {
             Self::GitHub => github::fetch_mergeability(pr_id),
             Self::BitbucketDc(c) => bitbucket_dc::fetch_mergeability(c, pr_id),

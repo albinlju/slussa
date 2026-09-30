@@ -20,13 +20,36 @@ impl PrStatus {
     }
 }
 
-/// Whether a PR can be merged into its target. Coarse on purpose — provider
-/// specifics (behind target, blocked on approvals) collapse to `Unknown` for now.
+/// Whether a PR can be merged into its target.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Mergeability {
     Mergeable,
     Conflicts,
+    /// A provider rule stops the merge for a reason other than a conflict:
+    /// missing approvals, required checks, a draft, a branch behind its base.
+    Blocked,
     Unknown,
+}
+
+/// `Mergeability` plus, when something stands in the way, why in words the
+/// provider gave or that were derived from its status fields.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct MergeStatus {
+    pub state: Mergeability,
+    pub blockers: Vec<String>,
+}
+
+impl MergeStatus {
+    pub const fn new(state: Mergeability) -> Self {
+        Self {
+            state,
+            blockers: Vec::new(),
+        }
+    }
+
+    pub const fn with(state: Mergeability, blockers: Vec<String>) -> Self {
+        Self { state, blockers }
+    }
 }
 
 /// How to integrate a PR. Which ones are offered depends on the provider — see

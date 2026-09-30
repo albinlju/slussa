@@ -227,8 +227,16 @@ rounds, and a severity split where only evidenced findings block.
   (`b` is unused).
 - [ ] **Multi-line (range) comments** — the anchor model carries one line today;
   needed for both range comments and multi-line suggestions.
-- [ ] **Mergeability detail** — *N commits behind base* and *required-checks
-  gating* (both currently collapse to `Unknown`).
+- [ ] **Mergeability detail** — *partly done.* A PR the provider will not merge
+  yet, for a reason other than a conflict, shows `blocked` in the header, and
+  the merge dialog lists why: GitHub from `mergeStateStatus` and
+  `reviewDecision` (draft, behind base, review required, changes requested,
+  required checks or rules), Bitbucket from the merge checks the server
+  reports. It informs and does not forbid, since an administrator may still be
+  allowed to merge. A merge the server refuses now shows Bitbucket's check
+  names too. **Open:** *N commits behind base*, naming which required check
+  failed on GitHub (it reports `BLOCKED` without saying), and tasks on
+  Bitbucket.
 - [ ] **Update / sync branch** — merge or rebase base into the PR when behind.
 - [ ] **Repo-allowed merge strategies** — pre-filter the merge picker from repo
   settings instead of letting the server reject.

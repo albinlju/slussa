@@ -12,7 +12,7 @@ pub mod remote;
 
 use chrono::{DateTime, TimeZone, Utc};
 
-use crate::domain::pr::Mergeability;
+use crate::domain::pr::{MergeStatus, Mergeability};
 use crate::domain::review::{ReviewComment, ReviewVerdict};
 use crate::providers::error::FetchError;
 
@@ -121,26 +121,52 @@ fn publish_steps<T>(
     })
 }
 
-pub fn fetch_mergeability(config: &Config, pr_id: u64) -> Result<Mergeability, FetchError> {
+pub fn fetch_mergeability(config: &Config, pr_id: u64) -> Result<MergeStatus, FetchError> {
     #[derive(serde::Deserialize)]
     #[serde(rename_all = "camelCase")]
-    struct MergeStatus {
+    struct Status {
         can_merge: bool,
         conflicted: bool,
+        #[serde(default)]
+        vetoes: Vec<Veto>,
+    }
+    #[derive(serde::Deserialize)]
+    #[serde(rename_all = "camelCase")]
+    struct Veto {
+        #[serde(default)]
+        summary_message: String,
     }
     let endpoint = format!(
         "/rest/api/1.0/projects/{}/repos/{}/pull-requests/{pr_id}/merge",
         config.repo.project_key, config.repo.repo_slug,
     );
-    let status: MergeStatus = http::get_json(&config.repo.base_url, &endpoint, &config.pat)?;
-    // A veto without a conflict (e.g. missing approvals) is "can't merge yet" but
-    // not a conflict — coarse `Unknown` covers it until we model it explicitly.
+    let status: Status = http::get_json(&config.repo.base_url, &endpoint, &config.pat)?;
+    let reasons: Vec<String> = status
+        .vetoes
+        .into_iter()
+        .map(|veto| veto.summary_message)
+        .filter(|message| !message.is_empty())
+        .collect();
+    let or_default = |default: &str| {
+        if reasons.is_empty() {
+            vec![default.to_owned()]
+        } else {
+            reasons.clone()
+        }
+    };
+    // A veto without a conflict is a merge check: approvals, builds, tasks.
     Ok(if status.conflicted {
-        Mergeability::Conflicts
+        MergeStatus::with(
+            Mergeability::Conflicts,
+            or_default("It has merge conflicts."),
+        )
     } else if status.can_merge {
-        Mergeability::Mergeable
+        MergeStatus::new(Mergeability::Mergeable)
     } else {
-        Mergeability::Unknown
+        MergeStatus::with(
+            Mergeability::Blocked,
+            or_default("Merge checks have not passed."),
+        )
     })
 }
 

@@ -62,9 +62,13 @@ fn api_message(raw: &str) -> Option<String> {
         let msgs: Vec<String> = errors
             .iter()
             .filter_map(|e| {
-                e.as_str()
-                    .or_else(|| e.get("message").and_then(serde_json::Value::as_str))
-                    .map(str::to_owned)
+                let message = e
+                    .as_str()
+                    .or_else(|| e.get("message").and_then(serde_json::Value::as_str))?;
+                Some(match veto_reasons(e) {
+                    reasons if reasons.is_empty() => message.to_owned(),
+                    reasons => format!("{message}: {}", reasons.join("; ")),
+                })
             })
             .collect();
         if !msgs.is_empty() {
@@ -77,6 +81,20 @@ fn api_message(raw: &str) -> Option<String> {
 }
 
 /// Strip `gh:` noise and a trailing `(HTTP nnn)` when there's no JSON body.
+/// Bitbucket explains a refused merge in `vetoes`, each with a short summary,
+/// beside a generic "Merging is vetoed" message.
+fn veto_reasons(error: &serde_json::Value) -> Vec<String> {
+    error
+        .get("vetoes")
+        .and_then(serde_json::Value::as_array)
+        .into_iter()
+        .flatten()
+        .filter_map(|veto| veto.get("summaryMessage")?.as_str())
+        .filter(|summary| !summary.is_empty())
+        .map(str::to_owned)
+        .collect()
+}
+
 fn clean_gh(stderr: &str) -> String {
     let s = stderr.trim().strip_prefix("gh:").unwrap_or(stderr).trim();
     match s.find("(HTTP") {
@@ -127,6 +145,17 @@ impl fmt::Display for FetchError {
 
 #[cfg(test)]
 mod tests {
+    #[test]
+    fn a_veto_list_is_appended_to_the_generic_message() {
+        let body = r#"{"errors":[{"message":"Merging is vetoed","vetoes":[{"summaryMessage":"Builds failing"},{"summaryMessage":""},{"detailedMessage":"no summary"}]}]}"#;
+        assert_eq!(
+            api_message(body).as_deref(),
+            Some("Merging is vetoed: Builds failing")
+        );
+        let plain = r#"{"errors":[{"message":"Not found"}]}"#;
+        assert_eq!(api_message(plain).as_deref(), Some("Not found"));
+    }
+
     use super::*;
 
     #[test]
