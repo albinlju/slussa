@@ -391,19 +391,10 @@ tighter than their `App` struct with 20 `pending_*` flags, and it stays.
   1. **Install the app yourself.** It is a GitHub App: install it from GitHub
      Marketplace and give it `albinlju/slussa` only. Granting access is done in
      the browser and is not something an agent should do.
-  2. **Add `.coderabbit.yaml` at the root.** Per its documentation the file sets
-     `language`, `reviews.profile` (for example `chill`), `reviews.auto_review`
-     (`enabled`, `drafts`), `request_changes_workflow` and `path_instructions`.
-     Only a short excerpt of the schema was read, so verify the keys against its
-     configuration reference before writing it.
-  3. **Put the project rules in `path_instructions`**, taken from `AGENTS.md`:
-     two views only; provider and process calls block and run off the UI thread
-     through `App::spawn_fetch`, with no async HTTP and no ad hoc threads; no new
-     `unwrap`, `expect` or `unreachable!` in non-test code; modules stay under
-     about 500 lines and tests live inline or in one sibling `tests.rs`; show
-     only what the provider supports. Keep drafts out of automatic review.
-  4. Decide how it sits beside `/code-review` and CONTRIBUTING.md: it reviews
-     every PR, `/code-review` is run by hand.
+  2. **`.coderabbit.yaml` is in the root** (keys checked against its
+     configuration reference on 2026-10-01). Keep it in step with AGENTS.md.
+  3. It reviews pull requests, not direct pushes to `main`. `/code-review` is
+     run by hand; the two cover different moments.
 
 ### From OpenShell's AI reviewer ("gator"), for the AI features
 

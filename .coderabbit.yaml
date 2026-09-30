@@ -1,0 +1,50 @@
+# CodeRabbit reviews pull requests. The rules below are the project's own, from
+# AGENTS.md; keep the two in step.
+language: en-US
+tone_instructions: "Short and specific. Point at a broken project rule or a real bug; do not restate the diff or praise."
+
+reviews:
+  profile: chill
+  request_changes_workflow: false
+  high_level_summary: true
+  poem: false
+  sequence_diagrams: false
+  auto_review:
+    enabled: true
+    drafts: false
+  path_filters:
+    - "!Cargo.lock"
+    - "!docs/media/**"
+    - "!src/tui/testdata/**"
+  path_instructions:
+    - path: "src/**/*.rs"
+      instructions: |
+        Check the change against the project rules in AGENTS.md.
+        - Provider and process calls block and run off the UI thread through
+          `App::spawn_fetch`. Flag async HTTP, ad hoc threads, and anything that
+          starts I/O from rendering or key handling.
+        - Flag new `unwrap`, `expect` or `unreachable!` in non-test code.
+        - Two views only (the PR list and the PR). Flag a new screen, dashboard
+          or sidebar; new capability is a default, a column, a marker or a key.
+        - Show only what the provider supports: unsupported actions are hidden,
+          actions blocked by the PR's state stay visible with a reason.
+        - Modules stay under about 500 lines and `mod.rs` composes rather than
+          implements; tests live inline or in one sibling `tests.rs`.
+    - path: "src/providers/**"
+      instructions: |
+        Writes are not exactly-once: an ambiguous failure may follow a successful
+        server write, so check retry and partial-failure handling. Bitbucket Data
+        Center is in maintenance, so new features there are out of scope and
+        bug fixes are welcome.
+    - path: "**/*tests*.rs"
+      instructions: |
+        Tests never call a real provider; they use `FakeGh` and `MockHttp` from
+        `src/test_support.rs`. Observable behaviour, especially navigation and
+        asynchronous state, needs a regression test.
+    - path: "{README.md,CONTRIBUTING.md,docs/**/*.md}"
+      instructions: |
+        Docs are in English. A change in behaviour should update the README,
+        docs/KEYS.md and the matching item in docs/ROADMAP.md.
+
+chat:
+  auto_reply: true
