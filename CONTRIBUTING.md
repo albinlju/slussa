@@ -2,7 +2,7 @@
 
 Contributions are welcome, with a few rules that keep the project small and
 reviewable. The short version: **open an issue first**, follow the rules in
-[CLAUDE.md](CLAUDE.md), and be able to explain every line you submit.
+[AGENTS.md](AGENTS.md), and be able to explain every line you submit.
 
 ## Before you start
 
@@ -37,7 +37,7 @@ Make the change, then open a pull request against `main` from your fork.
 
 1. **One thing per pull request.** The title is an imperative sentence that
    reads as a line in release notes: "Show the review count in the list".
-2. **Follow [CLAUDE.md](CLAUDE.md).** It applies to people as much as to
+2. **Follow [AGENTS.md](AGENTS.md).** It applies to people as much as to
    agents: two views only; provider and process calls block and run off the UI
    thread through `App::spawn_fetch`, with no async HTTP and no ad hoc
    threads; no new `unwrap`, `expect` or `unreachable!` in non-test code;

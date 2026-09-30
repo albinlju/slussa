@@ -395,7 +395,7 @@ tighter than their `App` struct with 20 `pending_*` flags, and it stays.
      (`enabled`, `drafts`), `request_changes_workflow` and `path_instructions`.
      Only a short excerpt of the schema was read, so verify the keys against its
      configuration reference before writing it.
-  3. **Put the project rules in `path_instructions`**, taken from `CLAUDE.md`:
+  3. **Put the project rules in `path_instructions`**, taken from `AGENTS.md`:
      two views only; provider and process calls block and run off the UI thread
      through `App::spawn_fetch`, with no async HTTP and no ad hoc threads; no new
      `unwrap`, `expect` or `unreachable!` in non-test code; modules stay under
@@ -458,7 +458,7 @@ Kept as one line each; the detail is in git history.
 - **GitHub's time limit:** a page of 100 PRs took 7 to 11 s on `cli/cli` and
   once failed; the list reads 30 per request.
 - **Blocking-I/O rule** written down (ARCHITECTURE.md *Rules for I/O and
-  effects*, CLAUDE.md) so agent handoff follows the same pattern.
+  effects*, AGENTS.md) so agent handoff follows the same pattern.
 - **Tests:** domain thread logic (10 tests), the full app loop against `FakeGh`
   (`app/flow_tests.rs`), the transport doubles `FakeGh` and `MockHttp` and their
   18 transport tests, shared fixtures in `src/test_support.rs`, and CLI
@@ -474,9 +474,9 @@ Kept as one line each; the detail is in git history.
 - **Release workflow** (`release.yml` + `package.sh`), dry-run twice on GitHub;
   the publish step has still never run.
 - **OSC 52 clipboard:** helper first, OSC 52 as fallback, and first over SSH.
-- **Process docs:** CLAUDE.md as the agent instruction surface, ARCHITECTURE.md
+- **Process docs:** AGENTS.md as the agent instruction surface (CLAUDE.md only imports it), ARCHITECTURE.md
   lifecycles and checklists instead of a separate skill, `//!` contract docs on
-  the core modules, the file-size rule in CLAUDE.md, CONTRIBUTING.md,
+  the core modules, the file-size rule in AGENTS.md, CONTRIBUTING.md,
   SECURITY.md and the PR and issue templates.
 - **Dropped:** automatic light/dark theme. All five themes are dark and
   `terminal` already follows a light terminal; revisit only if a light palette

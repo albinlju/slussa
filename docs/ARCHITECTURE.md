@@ -12,7 +12,7 @@ ordinary rendering functions; they do not need the component interface.
 
 What slussa is for, what it rules out and the two-views rule are in
 [ROADMAP.md](ROADMAP.md) (*Positioning*) and the non-negotiables in
-`CLAUDE.md`. The interaction principles below guide UI changes; they do not imply
+`AGENTS.md`. The interaction principles below guide UI changes; they do not imply
 every current screen already meets them.
 
 - **Content first.** Give code, diffs and conversations the most space. Keep

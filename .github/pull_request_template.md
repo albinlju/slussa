@@ -13,7 +13,7 @@ the list".
       `cargo test --locked` and `cargo deny check` pass
 - [ ] Observable behaviour has a test, using `FakeGh` / `MockHttp`
 - [ ] The README and `docs/ROADMAP.md` are updated if behaviour changed
-- [ ] It follows the rules in `CLAUDE.md` (two views, no async HTTP, no new
+- [ ] It follows the rules in `AGENTS.md` (two views, no async HTTP, no new
       `unwrap`/`expect`, modules under about 500 lines)
 - [ ] I read my own diff and can explain every change
 - [ ] An AI tool was involved in this change: yes / no
