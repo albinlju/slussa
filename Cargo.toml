@@ -3,6 +3,8 @@ name = "tuipr"
 version = "0.1.0"
 edition = "2024"
 rust-version = "1.95"
+description = "A terminal UI for pull requests on GitHub and Bitbucket Data Center"
+repository = "https://github.com/albinlju/tuipr"
 license = "MIT"
 # Remove to publish to crates.io.
 publish = false

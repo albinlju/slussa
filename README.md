@@ -4,12 +4,18 @@ A terminal UI for pull requests. Two views: the list of PRs, and the PR you
 opened. Read, comment, review, merge and decline without leaving the terminal,
 next to your editor, git client and coding agent.
 
-tuipr is built for the moment after an agent (or a teammate) opened the PR:
-see what needs you, check that the change matches the intent, and make the
-call. It is not a replacement for the web UI, and it stays small on purpose.
+The list opens sorted by what needs you, with the reason beside each PR, and a
+merge that cannot go through says why. It is not a replacement for the web UI,
+and it stays small on purpose.
 
-**Status:** early and unreleased. It is used daily by its author and has no
-published builds yet.
+**Where it is going.** Pull requests written by agents, and reviews written by
+AI, are becoming most of what a reviewer sees. The plan is to make them
+first-class: marked as AI, summarized in the header, and handed back to a
+coding agent. None of that is built yet; [FEATURES.md](FEATURES.md) has the
+plan and what exists.
+
+**Status:** early. It is used daily by its author. Prebuilt binaries come with
+tagged releases.
 
 ## Providers
 
@@ -24,6 +30,10 @@ The provider is detected from the `origin` remote of the repository you run
 tuipr in.
 
 ## Install
+
+**Platforms.** macOS and Linux, on arm64 and x86_64, are built and tested in
+CI. Windows is not built or tested: the browser and clipboard code has Windows
+paths, but nothing has run them.
 
 **Prebuilt binary.** Tagged releases attach tarballs for macOS and Linux
 (arm64 and x86_64) to GitHub Releases, with checksums. Unpack it and put
@@ -47,6 +57,7 @@ cd path/to/a/repo
 tuipr                  # open the PR browser for this repo
 tuipr -C path/to/repo  # same, as if started in that directory
 tuipr auth login       # Bitbucket Data Center: store a personal access token
+tuipr --version
 tuipr --help
 ```
 
