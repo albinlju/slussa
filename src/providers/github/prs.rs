@@ -2,7 +2,7 @@ use chrono::{DateTime, Utc};
 use serde::Deserialize;
 
 use crate::domain::ci::CiSummary;
-use crate::domain::pr::{PrStatus, PullRequest};
+use crate::domain::pr::{PrBatch, PrStatus, PullRequest};
 use crate::domain::review::{Reviewer, ReviewerState};
 use crate::domain::user::User;
 use crate::providers::error::FetchError;
@@ -136,20 +136,41 @@ const PR_FIELDS: &str = r"
     commits(last: 1) { nodes { commit { statusCheckRollup { state } } } }
 ";
 
-/// How many merged and closed PRs the list keeps, most recently updated first.
-/// Open PRs are always read in full; closed ones are history, so they are
-/// bounded to one page.
+/// How many merged and closed PRs one read returns, most recently updated
+/// first. Open PRs are always read in full; closed ones are history, so they
+/// come a page at a time.
 const RECENT_CLOSED: u32 = 50;
+const CLOSED_ARGS: &str =
+    "states: [MERGED, CLOSED], orderBy: {field: UPDATED_AT, direction: DESC}, ";
 
-pub fn fetch_prs() -> Result<Vec<PullRequest>, FetchError> {
+/// Every open PR and the first page of closed ones.
+pub fn fetch_prs() -> Result<PrBatch, FetchError> {
     let mut prs: Vec<GhPr> =
         super::pagination::repo_nodes("pullRequests", "states: OPEN, ", PR_FIELDS)?;
-    prs.extend(super::pagination::repo_first_page::<GhPr>(
-        "pullRequests",
-        "states: [MERGED, CLOSED], orderBy: {field: UPDATED_AT, direction: DESC}, ",
-        PR_FIELDS,
-        RECENT_CLOSED,
-    )?);
+    let (closed, more) = closed_page(None)?;
+    prs.extend(closed);
+    Ok(PrBatch {
+        prs: complete(prs)?,
+        more,
+    })
+}
+
+/// The page of closed PRs after the position an earlier read returned.
+pub fn fetch_older_prs(after: &str) -> Result<PrBatch, FetchError> {
+    let (closed, more) = closed_page(Some(after))?;
+    Ok(PrBatch {
+        prs: complete(closed)?,
+        more,
+    })
+}
+
+fn closed_page(after: Option<&str>) -> Result<(Vec<GhPr>, Option<String>), FetchError> {
+    super::pagination::repo_page("pullRequests", CLOSED_ARGS, PR_FIELDS, RECENT_CLOSED, after)
+}
+
+/// Read the nested connections the list query capped at 100, order newest
+/// first and map to the domain.
+fn complete(mut prs: Vec<GhPr>) -> Result<Vec<PullRequest>, FetchError> {
     for pr in &mut prs {
         if pr.labels.page_info.has_next_page {
             pr.labels.nodes =

@@ -54,11 +54,15 @@ stays.
 
 - [x] **Bound the PR list.** *Done 2026-09-30.* Both providers used to read
   every PR ever opened, on startup and again every minute. Now open PRs are
-  read in full and closed ones as one page (`pagination::repo_first_page` on
-  GitHub, `http::get_first_page` on Bitbucket). Tests assert that the closed
-  cursor is never followed and that a failing open read does not go on to ask
-  for closed ones. The new queries were also run against the real GitHub API.
-  **Not measured:** how the old behaviour scaled on a large repository.
+  read in full and closed ones a batch at a time (`pagination::repo_page` on
+  GitHub, `http::get_page_from` on Bitbucket), and `L` reads older batches on
+  request. A `PrBatch` carries an opaque continuation: GitHub's end cursor, or
+  Bitbucket's two offsets written `merged|declined`. Tests assert that no
+  cursor is followed on its own, that a failing open read does not go on to
+  ask for closed ones, that a repeat press makes one request, and that a
+  refresh keeps what was loaded. Cursor paging and the new queries were also
+  run against the real GitHub API. **Not measured:** how the old behaviour
+  scaled on a large repository, and Bitbucket is only tested against a mock.
 
 - [x] **Explain why a merge is blocked.** *Done 2026-09-30.* A new
   `Mergeability::Blocked` and a `MergeStatus` carrying reasons replace the

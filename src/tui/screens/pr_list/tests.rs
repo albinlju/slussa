@@ -143,6 +143,7 @@ fn toggling_the_sort_follows_the_highlighted_pr() {
         prs: &prs,
         refreshing: false,
         viewer: "me",
+        more_closed: false,
     };
     let mut list = PrListScreen {
         selected: 2,
@@ -210,19 +211,81 @@ fn the_sort_setting_reads_config_and_falls_back_to_attention() {
 }
 
 #[test]
-fn views_of_closed_prs_say_they_show_only_recent_ones() {
-    assert_eq!(StatusFilter::Open.title(), "Open");
-    assert_eq!(StatusFilter::Draft.title(), "Draft");
-    for filter in [
-        StatusFilter::Merged,
-        StatusFilter::Declined,
-        StatusFilter::All,
+fn views_of_closed_prs_say_recent_only_while_older_ones_remain() {
+    assert_eq!(StatusFilter::Open.title(true), "Open");
+    assert_eq!(StatusFilter::Draft.title(true), "Draft");
+    for (filter, plain) in [
+        (StatusFilter::Merged, "Merged"),
+        (StatusFilter::Declined, "Declined"),
+        (StatusFilter::All, "All"),
     ] {
-        assert!(filter.title().contains("recent"), "{}", filter.title());
+        assert_eq!(filter.title(false), plain);
+        assert!(
+            filter.title(true).contains("recent"),
+            "{}",
+            filter.title(true)
+        );
+        assert!(filter.shows_closed());
     }
+    assert!(!StatusFilter::Open.shows_closed() && !StatusFilter::Draft.shows_closed());
 
     let mut merged_view = state("me");
     merged_view.ui.list.filter = StatusFilter::Merged;
+    merged_view.store.older_cursor = Some("x".into());
     let text = drawn(&mut merged_view, 100);
     assert!(text.contains("Merged, recent (0)"), "{text}");
+    assert!(text.contains("L: older"), "{text}");
+
+    merged_view.store.older_cursor = None;
+    let text = drawn(&mut merged_view, 100);
+    assert!(text.contains("Merged (0)"), "{text}");
+    assert!(!text.contains("L: older"), "{text}");
+}
+
+#[test]
+fn l_loads_older_only_where_it_would_show_something() {
+    let press = |state: &AppState| {
+        key_to_action(state, KeyEvent::new(KeyCode::Char('L'), KeyModifiers::NONE))
+    };
+    let mut merged = state("me");
+    merged.ui.list.filter = StatusFilter::Merged;
+    merged.store.older_cursor = Some("x".into());
+    assert!(matches!(
+        press(&merged),
+        Some(Action::List(ListAction::LoadOlder))
+    ));
+
+    let mut open_view = state("me");
+    open_view.store.older_cursor = Some("x".into());
+    assert!(
+        press(&open_view).is_none(),
+        "the Open view shows no closed PRs"
+    );
+
+    let mut exhausted = state("me");
+    exhausted.ui.list.filter = StatusFilter::All;
+    assert!(press(&exhausted).is_none(), "nothing older is left");
+}
+
+#[test]
+fn help_lists_load_older_only_when_it_applies() {
+    let help = |older: bool| {
+        let mut state = state("me");
+        state.ui.list.filter = StatusFilter::All;
+        state.store.older_cursor = older.then(|| "x".to_owned());
+        state.ui.list.help_open = true;
+        let mut terminal = Terminal::new(TestBackend::new(100, 40)).unwrap();
+        terminal.draw(|frame| render(frame, &mut state)).unwrap();
+        let buffer = terminal.backend().buffer();
+        (0..40)
+            .map(|y| {
+                (0..100)
+                    .map(|x| buffer[(x, y)].symbol())
+                    .collect::<String>()
+            })
+            .collect::<Vec<_>>()
+            .join("\n")
+    };
+    assert!(help(true).contains("load older"), "{}", help(true));
+    assert!(!help(false).contains("load older"), "{}", help(false));
 }

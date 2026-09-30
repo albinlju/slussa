@@ -66,6 +66,7 @@ state (for example merging with conflicts) stay visible and say why.
 | `/` | search title and author | search (diff, commits) |
 | `f` | filter by status | |
 | `s` | sort: needs you first / newest first | |
+| `L` | load older merged and declined PRs, in the Merged, Declined and All views while more exist | |
 | `1`-`5` | | select tab |
 | `h` / `l` | | tab, pane or fold |
 | `a` | | submit review verdict |
@@ -79,8 +80,10 @@ state (for example merging with conflicts) stay visible and say why.
 
 The list loads every open PR and only the most recent closed ones: the latest
 50 merged or closed on GitHub, the newest 25 merged and 25 declined on
-Bitbucket. The Merged, Declined and All views say "recent" in their heading,
-and search covers the PRs that are loaded.
+Bitbucket. In the Merged, Declined and All views, `L` reads the next older
+batch for as long as there is one; the footer shows `L: older` only then, and
+the heading says "recent" until everything is loaded. A refresh keeps the older
+PRs you have already loaded. Search covers the PRs that are loaded.
 
 The list opens sorted by what needs you. A "Needs you" column, shown at 90
 columns or wider and only when some row has a reason, says why:

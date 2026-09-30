@@ -41,6 +41,7 @@ const HELP_KEYS: &[(&str, &str)] = &[
     ("esc", "clear search"),
     ("f", "filter status"),
     ("s", "sort: needs you first / newest first"),
+    ("L", "load older merged and declined PRs"),
     ("^d/^u", "half-page"),
     ("F", "refresh"),
     ("? / esc", "close help"),
@@ -102,13 +103,13 @@ const COLS: &[Column] = &[
     },
 ];
 
-fn pr_list_container(filter: StatusFilter, count_label: &str) -> Block<'static> {
+fn pr_list_container(filter: StatusFilter, count_label: &str, more_closed: bool) -> Block<'static> {
     let theme = theme::current();
     Block::default()
         .borders(Borders::ALL)
         .border_style(Style::default().fg(theme.border))
         .title(Line::styled(
-            format!(" {} ({count_label}) ", filter.title()),
+            format!(" {} ({count_label}) ", filter.title(more_closed)),
             Style::default()
                 .fg(theme.orange)
                 .add_modifier(Modifier::BOLD),
@@ -162,16 +163,18 @@ fn render_footer(
     search: &SearchInput,
     match_count: usize,
     refreshing: bool,
+    load_older: bool,
     area: Rect,
 ) {
+    let hints = if load_older {
+        "enter: open  /: search  f: filter  L: older"
+    } else {
+        "enter: open  /: search  f: filter"
+    };
     let line = if search.open {
         widgets::search_prompt(&search.query, match_count, area.width)
     } else {
-        widgets::footer(
-            area.width,
-            &widgets::hints_on("enter: open  /: search  f: filter"),
-            refreshing,
-        )
+        widgets::footer(area.width, &widgets::hints_on(hints), refreshing)
     };
     frame.render_widget(Paragraph::new(line), area);
 }
@@ -370,16 +373,24 @@ impl StatusFilter {
         }
     }
 
-    /// The list's heading. Only the most recent merged and declined PRs are
-    /// loaded, so the views that show them say so rather than imply the count
-    /// is the whole history.
-    pub const fn title(self) -> &'static str {
-        match self {
-            Self::Open => "Open",
-            Self::Draft => "Draft",
-            Self::Merged => "Merged, recent",
-            Self::Declined => "Declined, recent",
-            Self::All => "All, closed are recent",
+    /// Whether this view lists merged or declined PRs.
+    pub const fn shows_closed(self) -> bool {
+        matches!(self, Self::Merged | Self::Declined | Self::All)
+    }
+
+    /// The list's heading. Merged and declined PRs are read a batch at a time,
+    /// so while older ones remain unread the views that show them say "recent"
+    /// rather than imply the count is the whole history.
+    pub const fn title(self, more_closed: bool) -> &'static str {
+        match (self, more_closed) {
+            (Self::Open, _) => "Open",
+            (Self::Draft, _) => "Draft",
+            (Self::Merged, false) => "Merged",
+            (Self::Merged, true) => "Merged, recent",
+            (Self::Declined, false) => "Declined",
+            (Self::Declined, true) => "Declined, recent",
+            (Self::All, false) => "All",
+            (Self::All, true) => "All, closed are recent",
         }
     }
 
@@ -400,6 +411,8 @@ pub struct ListContext<'a> {
     pub refreshing: bool,
     /// Who is looking, for the attention column and order.
     pub viewer: &'a str,
+    /// Older merged and declined PRs exist that have not been loaded.
+    pub more_closed: bool,
 }
 
 impl Component for PrListScreen {
@@ -422,7 +435,7 @@ impl Component for PrListScreen {
             _ => "…".to_string(),
         };
 
-        let container = pr_list_container(self.filter, &count_label);
+        let container = pr_list_container(self.filter, &count_label, ctx.more_closed);
         let inner = container.inner(body_area);
         frame.render_widget(container, body_area);
 
@@ -481,6 +494,7 @@ impl Component for PrListScreen {
             &self.search,
             match_count,
             ctx.refreshing,
+            self.can_load_older(ctx),
             footer_area,
         );
 
@@ -489,10 +503,12 @@ impl Component for PrListScreen {
                 .filtered_prs(ctx.prs, ctx.viewer)
                 .get(self.selected)
                 .is_some_and(|pr| pr.url.is_some());
+            let can_load_older = self.can_load_older(ctx);
             let entries: Vec<_> = HELP_KEYS
                 .iter()
                 .copied()
                 .filter(|(key, _)| has_link || !matches!(*key, "o" | "y"))
+                .filter(|(key, _)| can_load_older || *key != "L")
                 .collect();
             self.help.render(frame, area, &entries.as_slice());
         }
@@ -546,6 +562,9 @@ impl Component for PrListScreen {
             KeyCode::Char('F') => Some(Action::Refresh),
             KeyCode::Char('f') => Some(Action::List(ListAction::OpenFilterPicker)),
             KeyCode::Char('s') => Some(Action::List(ListAction::ToggleSort)),
+            KeyCode::Char('L') if self.can_load_older(ctx) => {
+                Some(Action::List(ListAction::LoadOlder))
+            }
             KeyCode::Down | KeyCode::Char('j') => Some(Action::List(ListAction::MoveSelection(1))),
             KeyCode::Up | KeyCode::Char('k') => Some(Action::List(ListAction::MoveSelection(-1))),
             KeyCode::PageDown => Some(Action::List(ListAction::MoveSelection(half))),
@@ -586,6 +605,7 @@ impl Component for PrListScreen {
                 );
             }
             ListAction::OpenPr(id) => return Some(Action::List(ListAction::OpenPr(id))),
+            ListAction::LoadOlder => return Some(Action::List(ListAction::LoadOlder)),
             ListAction::OpenFilterPicker => self.open_filter_picker(),
             ListAction::CloseFilterPicker => self.close_filter_picker(),
             ListAction::FilterPickerNext => self.filter_picker_next(),
@@ -596,6 +616,12 @@ impl Component for PrListScreen {
     }
 }
 impl PrListScreen {
+    /// `L` is offered only where it would show something: a view that lists
+    /// closed PRs, while older ones remain.
+    const fn can_load_older(&self, ctx: &ListContext<'_>) -> bool {
+        ctx.more_closed && self.filter.shows_closed()
+    }
+
     /// The rows to show, filtered and ordered. With the attention order the
     /// PRs that need `viewer` come first, most urgent first; the sort is stable,
     /// so the provider's order holds within each group.

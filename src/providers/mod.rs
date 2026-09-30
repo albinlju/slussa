@@ -27,7 +27,7 @@ use crate::domain::{
     ci::Build,
     commit::Commit,
     diff::Diff,
-    pr::{MergeStatus, MergeStrategy, PullRequest},
+    pr::{MergeStatus, MergeStrategy, PrBatch},
     review::{ReviewComment, ReviewVerdict},
 };
 
@@ -38,10 +38,20 @@ pub enum Provider {
 }
 
 impl Provider {
-    pub fn fetch_prs(&self) -> Result<Vec<PullRequest>, FetchError> {
+    /// Every open PR and the most recent merged and declined ones.
+    pub fn fetch_prs(&self) -> Result<PrBatch, FetchError> {
         match self {
             Self::GitHub => github::fetch_prs(),
             Self::BitbucketDc(c) => bitbucket_dc::fetch_prs(c),
+        }
+    }
+
+    /// The next older merged and declined PRs, continuing from the `more`
+    /// position an earlier `fetch_prs` or `fetch_older_prs` returned.
+    pub fn fetch_older_prs(&self, after: &str) -> Result<PrBatch, FetchError> {
+        match self {
+            Self::GitHub => github::fetch_older_prs(after),
+            Self::BitbucketDc(c) => bitbucket_dc::fetch_older_prs(c, after),
         }
     }
 

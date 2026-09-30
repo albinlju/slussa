@@ -18,7 +18,7 @@ pub use comments::{
 };
 pub use commits::fetch_commits;
 pub use diff::{fetch_commit_diff, fetch_diff};
-pub use prs::fetch_prs;
+pub use prs::{fetch_older_prs, fetch_prs};
 
 use chrono::{DateTime, Utc};
 use serde::Deserialize;

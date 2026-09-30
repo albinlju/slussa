@@ -4,7 +4,7 @@ use crate::{
         ci::Build,
         commit::Commit,
         diff::Diff,
-        pr::{MergeStatus, PullRequest},
+        pr::{MergeStatus, PrBatch},
     },
     tui::screens::pr_detail::tabs::DetailTab,
 };
@@ -51,6 +51,8 @@ pub enum SearchAction {
 pub enum ListAction {
     ToggleHelp,
     ToggleSort,
+    /// Read the next older merged and declined PRs.
+    LoadOlder,
     MoveSelection(i16),
     OpenPr(u64),
     OpenFilterPicker,
@@ -139,7 +141,9 @@ pub enum LoadedAction {
         submitted_summary: Option<String>,
         message: String,
     },
-    Prs(Result<Vec<PullRequest>, String>),
+    Prs(Result<PrBatch, String>),
+    /// The next older merged and declined PRs, read on request.
+    OlderPrs(Result<PrBatch, String>),
     Commits(u64, Result<Vec<Commit>, String>),
     Diff(u64, Result<Diff, String>),
     Builds(u64, Result<Vec<Build>, String>),

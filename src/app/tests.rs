@@ -1080,7 +1080,9 @@ fn refreshed_lists_keep_pr_and_commit_identity() {
     let mut new = prs[0].clone();
     new.id = 44;
     prs.insert(0, new);
-    app.apply(Action::Loaded(LoadedAction::Prs(Ok(prs))));
+    app.apply(Action::Loaded(LoadedAction::Prs(Ok(
+        crate::domain::pr::PrBatch { prs, more: None },
+    ))));
     assert_eq!(app.state.ui.list.selected, 2);
     detail(&mut app, DetailTab::Commits);
     let data = app.state.store.cache.details.get_mut(&42).unwrap();
