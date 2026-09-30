@@ -37,20 +37,20 @@ CI runs all four on Linux and macOS. The toolchain is pinned in
 
 ## Where to look
 
-- `ARCHITECTURE.md`: code map, state ownership, read and write lifecycles, and
+- `docs/ARCHITECTURE.md`: code map, state ownership, read and write lifecycles, and
   checklists for adding a provider write or a read resource. Read it before
   changing app-level code.
-- `FEATURES.md`: what exists and the priority order for what comes next.
-- `IMPROVEMENTS.md`: engineering backlog; each refactor has a trigger, so do
+- `docs/FEATURES.md`: what exists and the priority order for what comes next.
+- `docs/IMPROVEMENTS.md`: engineering backlog; each refactor has a trigger, so do
   not do them ahead of the feature that needs them.
-- `RELEASING.md`: how a release is cut.
-- `VERIFICATION.md`: what has only been tested against doubles, and how to
+- `docs/RELEASING.md`: how a release is cut.
+- `docs/VERIFICATION.md`: what has only been tested against doubles, and how to
   check it against the real service. Keep it current when a double stands in
   for something new.
 
 ## Working here
 
-- Repo docs are in English. Update `FEATURES.md` when behaviour changes.
+- Repo docs are in English. Update `docs/FEATURES.md` when behaviour changes.
 - Add a regression test for observable behaviour, especially when navigation or
   asynchronous state is involved. Tests never call a real provider: use
   `FakeGh` and `MockHttp` from `src/test_support.rs`. A test that installs
