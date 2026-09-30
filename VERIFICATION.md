@@ -46,6 +46,13 @@ Decisions and the release procedure are in [RELEASING.md](RELEASING.md).
   `main` is untouched at `0.1.0`.
   Deleting it removed the archives V2 and V3 use, so they need a release to
   download from: repeat V1 to get one, or do them on the real `0.1.0`.
+  **Repeated 2026-09-30, pass.** Tag `v0.1.0-pre.2` from branch
+  `release-rehearsal`: all jobs succeeded, a prerelease (not a draft) with four
+  archives and `SHA256SUMS`; all four checksums verified, architectures right
+  (Mach-O arm64 and x86_64, ELF aarch64 and x86-64), each archive holds
+  `tuipr`, `LICENSE` and `README.md`, and the Mac arm64 binary printed
+  `tuipr 0.1.0-pre.2`. **Not yet cleaned up:** the release, tag and branch stay
+  until V2 is done in a browser.
 
 - [ ] **V2. Clean install.** Use an archive from that prerelease on a
   machine *without Rust*, unpack it, run `./tuipr --version` and then `./tuipr`
@@ -59,7 +66,7 @@ Decisions and the release procedure are in [RELEASING.md](RELEASING.md).
   set the flag). Download an archive from the release page in a browser, then
   run `xattr -l tuipr` and `./tuipr --version`.
 
-- [ ] **V3. The Linux ARM binary runs.** It is cross-compiled and has never been
+- [x] **V3. The Linux ARM binary runs.** It is cross-compiled and has never been
   executed. On a Mac with Docker:
 
   ```sh
@@ -69,6 +76,11 @@ Decisions and the release procedure are in [RELEASING.md](RELEASING.md).
   ```
 
   Expect `tuipr 0.1.0-pre.1`. Report: the output, or the error.
+  **Done 2026-09-30, pass (run by me).** From the `0.1.0-pre.2` archives: the
+  `aarch64-unknown-linux-gnu` binary printed `tuipr 0.1.0-pre.2` in
+  `ubuntu:22.04` on `linux/arm64`, and the `x86_64-unknown-linux-gnu` binary did
+  the same under emulation on `linux/amd64`. Only `--version` was run, not the
+  TUI.
 
 ## B. GitHub against the real service
 
