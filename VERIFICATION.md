@@ -365,8 +365,14 @@ line under the item.
 
 - [ ] **D1. Repository visibility.** While it is private, nobody else can
   download a release. Decide whether `0.1.0` makes it public.
-- [ ] **D2. Screenshot or gif** in the README, recorded against a real
+- [x] **D2. Screenshot or gif** in the README, recorded against a real
   repository.
+  **Done 2026-09-30.** A gif and two screenshots (`list.png`, `pr.png`) in `docs/media/`, recorded
+  from the real binary against a throwaway public repository
+  (`albinlju/tuipr-demo`, 13 PRs, real CI) that can be deleted afterwards; the
+  README does not link to it. The gif shows the list, an agent-written PR with its stated
+  intent, the review conversation and the diff; the screenshots are the list and that PR's
+  Overview, one per view, for places that cannot play a gif.
 
 ## E. What I can do myself when told to
 
