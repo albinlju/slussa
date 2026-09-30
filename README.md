@@ -48,7 +48,8 @@ CI. Windows is not built or tested yet.
 `slussa` on your `PATH`. The macOS binary is not signed or notarized, so a file
 downloaded in a browser may be blocked; remove the flag with
 `xattr -d com.apple.quarantine slussa`. Check a download with
-`shasum -a 256 -c slussa-<version>-<target>.tar.gz.sha256`.
+`grep <target> SHA256SUMS | shasum -a 256 -c -`, for example
+`aarch64-apple-darwin`.
 
 slussa will be published through package managers later; for now it is the
 tarball or a build from source.
