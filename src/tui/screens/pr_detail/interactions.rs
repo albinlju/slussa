@@ -197,6 +197,7 @@ impl PrDetailScreen {
             ),
             DetailAction::SubmitConfirm => match self.confirm.take()?.accepted()? {
                 ConfirmKind::Decline => Command::Decline,
+                ConfirmKind::Reopen => Command::Reopen,
                 ConfirmKind::DiscardReview => Command::AbandonReview,
                 ConfirmKind::DeleteComment { id, review } => Command::DeleteComment { id, review },
             },

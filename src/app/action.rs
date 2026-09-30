@@ -91,6 +91,7 @@ pub enum DetailAction {
     MergeSelect,
     CloseMergePicker,
     OpenDecline,
+    OpenReopen,
     OpenComment,
     OpenReply,
     OverviewSubMove(i16),
@@ -151,6 +152,7 @@ pub enum LoadedAction {
     Mergeability(u64, Result<MergeStatus, String>),
     Merged(u64, Result<(), String>),
     Declined(u64, Result<(), String>),
+    Reopened(u64, Result<(), String>),
     CommitDiff(u64, String, Result<Diff, String>),
     Commented(u64, Result<(), String>),
 }
@@ -171,6 +173,7 @@ pub enum Command {
     },
     Merge(crate::domain::pr::MergeStrategy),
     Decline,
+    Reopen,
     DeleteComment {
         id: u64,
         review: bool,
@@ -201,6 +204,7 @@ impl Command {
             },
             Self::Merge(strategy) => caps.merge_strategies.contains(strategy),
             Self::Decline => caps.supports(Feature::ClosePr),
+            Self::Reopen => caps.supports(Feature::ReopenPr),
             Self::DeleteComment { .. } => caps.supports(Feature::DeleteComments),
             Self::ResolveThread { .. } => caps.supports(Feature::ResolveThreads),
         }

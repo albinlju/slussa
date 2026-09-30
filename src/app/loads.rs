@@ -117,6 +117,7 @@ impl App {
             }
             LoadedAction::Merged(pr_id, r) => self.pr_state_changed("merge", pr_id, r),
             LoadedAction::Declined(pr_id, r) => self.pr_state_changed("decline", pr_id, r),
+            LoadedAction::Reopened(pr_id, r) => self.pr_state_changed("reopen", pr_id, r),
             LoadedAction::CommitDiff(pr_id, oid, r) => {
                 log_outcome("commit-diff", Some(pr_id), &r);
                 self.pr_data_mut(pr_id)
@@ -145,6 +146,7 @@ impl App {
                 let label = match operation {
                     Operation::Merge => "merged",
                     Operation::Decline => "closed / declined",
+                    Operation::Reopen => "reopened",
                     Operation::Review => "review submitted",
                     Operation::Comment => "comment saved",
                     Operation::Moderation => "comment / thread updated",

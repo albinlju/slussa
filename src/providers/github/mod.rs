@@ -98,6 +98,20 @@ pub fn merge(pr_number: u64, strategy: MergeStrategy) -> Result<(), FetchError> 
     Ok(())
 }
 
+/// Reopen a closed PR. GitHub refuses when the head branch is gone or the PR
+/// was merged; that message reaches the user as it is.
+pub fn reopen(pr_number: u64) -> Result<(), FetchError> {
+    cli::run_gh(&[
+        "api",
+        "--method",
+        "PATCH",
+        &format!("repos/{{owner}}/{{repo}}/pulls/{pr_number}"),
+        "-f",
+        "state=open",
+    ])?;
+    Ok(())
+}
+
 pub fn decline(pr_number: u64) -> Result<(), FetchError> {
     // GitHub has no "decline" — closing the PR is the equivalent.
     cli::run_gh(&[

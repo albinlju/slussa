@@ -83,6 +83,13 @@ impl App {
                 }
                 self.spawn_decline(pr_id);
             }
+            Command::Reopen => {
+                self.state.store.operations.insert(pr_id, Operation::Reopen);
+                if !self.checkpoint_submission(pr_id) {
+                    return;
+                }
+                self.spawn_reopen(pr_id);
+            }
             Command::DeleteComment { id, review } => {
                 self.state
                     .store

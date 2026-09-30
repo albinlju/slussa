@@ -18,7 +18,7 @@ const HELP_KEYS: &[(&str, &str)] = &[
     ("v", "start/finish review draft"),
     ("V", "discard review"),
     ("m", "merge (Overview)"),
-    ("x", "close / decline (Overview)"),
+    ("x", "close / decline, or reopen a declined PR (Overview)"),
     ("c", "comment"),
     ("r", "reply"),
     ("^j/^k", "step comment"),
@@ -41,7 +41,7 @@ pub(in crate::tui::screens::pr_detail) fn entries(
             "o" | "y" => has_pr_link,
             "a" | "v" | "V" => caps.reviews(),
             "m" => !caps.merge_strategies.is_empty(),
-            "x" => caps.supports(Feature::ClosePr),
+            "x" => caps.supports(Feature::ClosePr) || caps.supports(Feature::ReopenPr),
             "c" => {
                 caps.supports(Feature::PrComments)
                     || caps.supports(Feature::InlineComments)

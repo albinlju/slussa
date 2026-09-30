@@ -115,7 +115,9 @@ fn footer_actions(state: &DetailView<'_>, tab: DetailTab) -> Vec<Hint> {
                     Some(reason) => Hint::off(format!("m: merge ({reason})")),
                 });
             }
-            if state.store.capabilities.supports(Feature::ClosePr) {
+            if state.pr_is_declined(pr_id) && state.store.capabilities.supports(Feature::ReopenPr) {
+                parts.push(Hint::on("x: reopen"));
+            } else if state.store.capabilities.supports(Feature::ClosePr) {
                 parts.push(match state.decline_blocked_reason(pr_id) {
                     None => Hint::on("x: decline"),
                     Some(reason) => Hint::off(format!("x: decline ({reason})")),

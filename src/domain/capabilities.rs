@@ -14,6 +14,7 @@ pub enum Feature {
     Builds,
     Mergeability,
     ClosePr,
+    ReopenPr,
 }
 
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]

@@ -141,6 +141,14 @@ impl App {
         );
     }
 
+    pub(super) fn spawn_reopen(&self, pr_id: u64) {
+        let provider = self.provider.clone();
+        self.spawn_fetch(
+            move || provider.reopen(pr_id),
+            move |r| Action::Loaded(LoadedAction::Reopened(pr_id, r)),
+        );
+    }
+
     pub(super) fn spawn_load_mergeability(&mut self, pr_id: u64) {
         if !self
             .state

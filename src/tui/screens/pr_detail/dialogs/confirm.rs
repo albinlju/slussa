@@ -15,8 +15,13 @@ use ratatui::{
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum ConfirmKind {
-    DeleteComment { id: u64, review: bool },
+    DeleteComment {
+        id: u64,
+        review: bool,
+    },
     Decline,
+    /// Reopen a PR that was closed without merging.
+    Reopen,
     DiscardReview,
 }
 
@@ -25,6 +30,7 @@ impl ConfirmKind {
         match self {
             Self::DeleteComment { .. } => "Delete this comment?",
             Self::Decline => "Close / decline this PR?",
+            Self::Reopen => "Reopen this PR?",
             Self::DiscardReview => "Discard this review draft?",
         }
     }
@@ -130,9 +136,14 @@ impl ConfirmDialog {
         self
     }
     pub fn set_pr_context(&mut self, context: String, target_branch: &str) {
-        if self.kind == ConfirmKind::Decline {
-            self.context = context;
-            self.target_branch = Some(target_branch.to_owned());
+        match self.kind {
+            ConfirmKind::Decline => {
+                self.context = context;
+                self.target_branch = Some(target_branch.to_owned());
+            }
+            // Reopening states no target: nothing is lost or merged by it.
+            ConfirmKind::Reopen => self.context = context,
+            ConfirmKind::DeleteComment { .. } | ConfirmKind::DiscardReview => {}
         }
     }
     pub fn accepted(&self) -> Option<ConfirmKind> {
@@ -168,5 +179,63 @@ impl Component for ConfirmDialog {
             self.target_branch.as_deref(),
             area,
         );
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn reopening_defaults_to_yes_and_closing_defaults_to_no() {
+        assert_eq!(
+            ConfirmDialog::new(ConfirmKind::Reopen).accepted(),
+            Some(ConfirmKind::Reopen),
+            "reopening is routine and easy to undo"
+        );
+        assert_eq!(ConfirmDialog::new(ConfirmKind::Decline).accepted(), None);
+        assert_eq!(
+            ConfirmDialog::new(ConfirmKind::DiscardReview).accepted(),
+            None
+        );
+    }
+
+    fn drawn(dialog: &mut ConfirmDialog) -> String {
+        use ratatui::{Terminal, backend::TestBackend};
+        let mut terminal = Terminal::new(TestBackend::new(70, 20)).unwrap();
+        terminal
+            .draw(|frame| dialog.render(frame, frame.area(), &()))
+            .unwrap();
+        let buffer = terminal.backend().buffer();
+        (0..20)
+            .map(|y| (0..70).map(|x| buffer[(x, y)].symbol()).collect::<String>())
+            .collect::<Vec<_>>()
+            .join("\n")
+    }
+
+    #[test]
+    fn the_reopen_dialog_names_the_pr_and_does_not_talk_about_closing() {
+        let mut dialog = ConfirmDialog::new(ConfirmKind::Reopen);
+        dialog.set_pr_context("PR #7 · Fix it".into(), "main");
+        let text = drawn(&mut dialog);
+
+        assert!(text.contains("Reopen this PR?"), "{text}");
+        assert!(text.contains("PR #7 · Fix it"), "{text}");
+        assert!(text.contains("Yes") && text.contains("No"), "{text}");
+        assert!(!text.contains("Closes without merging"), "{text}");
+        assert!(!text.contains("Target:"), "{text}");
+    }
+
+    #[test]
+    fn reopening_shows_the_pr_but_no_closing_target() {
+        let mut dialog = ConfirmDialog::new(ConfirmKind::Reopen);
+        dialog.set_pr_context("PR #7 · Fix it".into(), "main");
+        assert_eq!(dialog.context, "PR #7 · Fix it");
+        assert_eq!(dialog.target_branch, None);
+
+        let mut decline = ConfirmDialog::new(ConfirmKind::Decline);
+        decline.set_pr_context("PR #7 · Fix it".into(), "main");
+        assert_eq!(decline.target_branch.as_deref(), Some("main"));
+        assert_eq!(ConfirmKind::Reopen.prompt(), "Reopen this PR?");
     }
 }
