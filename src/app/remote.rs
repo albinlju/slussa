@@ -2,12 +2,7 @@ use std::process::Command;
 
 use super::preflight::PreflightError;
 
-pub(crate) fn origin_host() -> Result<String, PreflightError> {
-    let url = origin_url()?;
-    parse_host(&url).ok_or(PreflightError::UnparseableRemote { remote: url })
-}
-
-pub(super) fn origin_url() -> Result<String, PreflightError> {
+pub(crate) fn origin_url() -> Result<String, PreflightError> {
     let output = Command::new("git")
         .args(["remote", "get-url", "origin"])
         .output()
@@ -18,9 +13,14 @@ pub(super) fn origin_url() -> Result<String, PreflightError> {
     Ok(String::from_utf8_lossy(&output.stdout).trim().to_string())
 }
 
-pub(super) fn parse_host(url: &str) -> Option<String> {
+pub(crate) fn parse_host(url: &str) -> Option<String> {
     let (authority, _) = crate::git_url::split(url)?;
     let host_port = authority.rsplit('@').next().unwrap_or(authority);
+    // The port of an http(s) remote is the web port, so it is part of the
+    // host. The port of an ssh remote is the git port and is dropped.
+    if url.starts_with("http://") || url.starts_with("https://") {
+        return Some(host_port.to_string());
+    }
     let host = host_port.split(':').next().unwrap_or(host_port);
     Some(host.to_string())
 }
@@ -58,6 +58,14 @@ mod tests {
         assert_eq!(
             parse_host("ssh://git@bitbucket.customer.com:7999/PLAT/payments.git").as_deref(),
             Some("bitbucket.customer.com")
+        );
+    }
+
+    #[test]
+    fn keeps_the_port_of_an_http_remote() {
+        assert_eq!(
+            parse_host("http://localhost:7990/scm/P/r.git").as_deref(),
+            Some("localhost:7990")
         );
     }
 

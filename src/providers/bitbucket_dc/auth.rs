@@ -23,8 +23,8 @@ fn save_pat(host: &str, pat: &str) -> Result<(), String> {
     entry.set_password(pat).map_err(|e| e.to_string())
 }
 
-pub fn login(host: &str) -> Result<(), String> {
-    println!("Detected host: {host}\n\n{}\n", token_setup_hint(host));
+pub fn login(host: &str, base_url: &str) -> Result<(), String> {
+    println!("Detected host: {host}\n\n{}\n", token_setup_hint(base_url));
 
     print!("HTTP access token: ");
     std::io::stdout().flush().ok();
@@ -35,7 +35,7 @@ pub fn login(host: &str) -> Result<(), String> {
     }
 
     println!("Validating...");
-    validate_pat(host, pat).map_err(|e| e.to_string())?;
+    validate_pat(base_url, pat).map_err(|e| e.to_string())?;
     save_pat(host, pat)?;
     println!("Logged in. Token stored in system keyring.");
     Ok(())
@@ -64,16 +64,16 @@ impl fmt::Display for PatError {
     }
 }
 
-fn token_setup_hint(host: &str) -> String {
+fn token_setup_hint(base_url: &str) -> String {
     format!(
         "1. Generate a HTTP access token:\n   \
-            https://{host}/plugins/servlet/access-tokens/users/{{username}}/manage\n\
+            {base_url}/plugins/servlet/access-tokens/users/{{username}}/manage\n\
          2. Required permissions: PROJECT_READ, REPO_READ"
     )
 }
 
-fn validate_pat(host: &str, pat: &str) -> Result<(), PatError> {
-    let url = format!("https://{host}{APP_PROPERTIES_PATH}");
+fn validate_pat(base_url: &str, pat: &str) -> Result<(), PatError> {
+    let url = format!("{base_url}{APP_PROPERTIES_PATH}");
     let response = http::build_client(Duration::from_secs(10))
         .map_err(|e| PatError::Unreachable(e.to_string()))?
         .get(&url)

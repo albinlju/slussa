@@ -2,8 +2,8 @@ use std::time::Duration;
 
 use crate::providers::bitbucket_dc::{APP_PROPERTIES_PATH, http};
 
-pub fn is_instance(host: &str) -> Result<bool, String> {
-    let url = format!("https://{host}{APP_PROPERTIES_PATH}");
+pub fn is_instance(base_url: &str) -> Result<bool, String> {
+    let url = format!("{base_url}{APP_PROPERTIES_PATH}");
     tracing::debug!("probing {url} for bitbucket dc instance");
     let response = http::build_client(Duration::from_secs(5))
         .map_err(|e| e.to_string())?

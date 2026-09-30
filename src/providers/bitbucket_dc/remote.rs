@@ -1,17 +1,23 @@
 use super::RepoLocation;
 
+/// Where the web and REST address of the server is: what an http(s) remote
+/// says, otherwise https on the remote's host.
+pub fn base_url(remote: &str, host: &str) -> String {
+    crate::git_url::web_base(remote).unwrap_or_else(|| format!("https://{host}"))
+}
+
 pub fn locate(remote: &str, host: &str) -> Option<RepoLocation> {
     let (_authority, path) = crate::git_url::split(remote)?;
     let parts: Vec<&str> = path.split('/').filter(|p| !p.is_empty()).collect();
 
     let (project, repo) = match parts.as_slice() {
-        [proj, repo] | ["scm", proj, repo] => (*proj, *repo),
+        [proj, repo] | [.., "scm", proj, repo] => (*proj, *repo),
         _ => return None,
     };
 
     let repo_slug = repo.strip_suffix(".git").unwrap_or(repo).to_string();
     Some(RepoLocation {
-        base_url: format!("https://{host}"),
+        base_url: base_url(remote, host),
         project_key: project.to_string(),
         repo_slug,
     })
@@ -53,6 +59,21 @@ mod tests {
         .unwrap();
         assert_eq!(repo.project_key, "PLAT");
         assert_eq!(repo.repo_slug, "payments-api");
+    }
+
+    #[test]
+    fn http_with_port_keeps_scheme_and_port() {
+        let repo = locate("http://localhost:7990/scm/PLAT/api.git", "localhost:7990").unwrap();
+        assert_eq!(repo.base_url, "http://localhost:7990");
+        assert_eq!(repo.project_key, "PLAT");
+    }
+
+    #[test]
+    fn context_path_is_part_of_the_base_url() {
+        let repo = locate("https://host.se/bitbucket/scm/PLAT/api.git", "host.se").unwrap();
+        assert_eq!(repo.base_url, "https://host.se/bitbucket");
+        assert_eq!(repo.project_key, "PLAT");
+        assert_eq!(repo.repo_slug, "api");
     }
 
     #[test]

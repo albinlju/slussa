@@ -54,7 +54,7 @@ pub fn run() -> Result<Provider, PreflightError> {
     })?;
     tracing::info!("detected git remote host: {host}");
 
-    match classify_host(&host)? {
+    match classify_host(&host, &remote)? {
         HostKind::GitHub => {
             if !github::auth::is_installed() {
                 return Err(PreflightError::GhMissing);
@@ -92,18 +92,18 @@ enum HostKind {
     BitbucketDc,
 }
 
-fn classify_host(host: &str) -> Result<HostKind, PreflightError> {
+fn classify_host(host: &str, remote: &str) -> Result<HostKind, PreflightError> {
     if host == "github.com" {
         return Ok(HostKind::GitHub);
     }
-    classify_bitbucket(host)
+    classify_bitbucket(host, remote)
 }
 
-fn classify_bitbucket(host: &str) -> Result<HostKind, PreflightError> {
+fn classify_bitbucket(host: &str, remote: &str) -> Result<HostKind, PreflightError> {
     if host == "bitbucket.org" {
         return Ok(HostKind::BitbucketCloud);
     }
-    match bitbucket_dc::is_instance(host) {
+    match bitbucket_dc::is_instance(&bitbucket_dc::remote::base_url(remote, host)) {
         Ok(true) => Ok(HostKind::BitbucketDc),
         Ok(false) => Err(PreflightError::UnsupportedHost {
             host: host.to_string(),

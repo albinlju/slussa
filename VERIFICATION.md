@@ -187,13 +187,13 @@ working on a real server and everything else is tested against a mock.
 
 Found by reading the code while planning this. Nothing has been changed.
 
-- [ ] **P1. A local instance cannot be reached.** tuipr builds every Bitbucket
+- [x] **P1. A local instance cannot be reached. Fixed, unit-tested only.** tuipr builds every Bitbucket
   address as `https://{host}` and probes that to recognise the server. It
   accepts an `http://` remote but drops the scheme. An instance at
   `http://localhost:7990` therefore fails at startup. Either honour the scheme
   of the remote, or put a TLS proxy the tool trusts in front of the container.
   Whether an explicit port in an `https` remote survives is unchecked.
-- [ ] **P2. A context path is not recognised.** Only repository paths shaped
+- [x] **P2. A context path is not recognised. Fixed, unit-tested only.** Only repository paths shaped
   `PROJECT/repo` or `scm/PROJECT/repo` are accepted. A Bitbucket served under a
   context path, such as `https://host/bitbucket/scm/PROJECT/repo.git`, is
   rejected as unparseable. The customer's server works, so it has none, but

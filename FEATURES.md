@@ -306,14 +306,10 @@ rank below the decision path.
 - [ ] **Windows support** — the browser and clipboard code has Windows paths,
   but CI builds only macOS and Linux and nothing has run them. Either add a
   Windows CI job and release target, or keep it stated as unsupported.
-- [ ] **Bitbucket on plain http and under a context path** — remote detection
-  builds every address as `https://{host}` and accepts only repository paths
-  shaped `PROJECT/repo` or `scm/PROJECT/repo`. A server reached over http, or
-  installed under a context path such as `https://host/bitbucket/scm/…`, is
-  not recognised. Found by reading the code while planning a local test
-  instance, not reproduced. It blocks a local http test instance, and affects
-  any real install under a context path; the one real server tried has none.
-  Whether an explicit port in an `https` remote is kept is unchecked.
+- [x] **Bitbucket on plain http and under a context path** — an http(s)
+  remote now gives the scheme, port and the context path in front of `scm/`;
+  ssh remotes still assume `https://host`. Covered by unit tests only; the
+  local Docker test (VERIFICATION.md, B1 to B10) exercises it for real.
 - [ ] **Bitbucket Cloud client.**
 - [ ] **Unified cross-provider list** with a provider icon per row.
 - [ ] **Normalized "requirements to merge"** — GitLab approvals, Bitbucket
