@@ -8,6 +8,10 @@ The list opens sorted by what needs you, with the reason beside each PR, and a
 merge that cannot go through says why. It is not a replacement for the web UI,
 and it stays small on purpose.
 
+![tuipr: the list sorted by what needs you, then an agent-written PR: its stated intent, the review conversation and the diff](docs/media/demo.gif)
+
+The pull requests in the recording are from a small throwaway demo repository.
+
 **Where it is going.** Pull requests written by agents, and reviews written by
 AI, are becoming most of what a reviewer sees. The plan is to make them
 first-class: marked as AI, summarized in the header, and handed back to a
