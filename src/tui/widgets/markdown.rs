@@ -152,7 +152,11 @@ fn description_style(theme: &crate::tui::theme::Theme) -> glamour::StyleConfig {
         block.style.background_color = None;
         block.style.bold = Some(true);
     }
-    style.code.style.color = ansi_color(theme.info);
+    // The style pads inline code with a space on each side for a background chip;
+    // with no background the padding is only a gap in the sentence.
+    style.code.style.prefix = String::new();
+    style.code.style.suffix = String::new();
+    style.code.style.color = ansi_color(theme.orange);
     style.code.style.background_color = None;
     style.block_quote.style.color = ansi_color(theme.muted);
     style.horizontal_rule.color = ansi_color(theme.divider);
@@ -236,5 +240,25 @@ mod tests {
                 }
             }
         }
+    }
+
+    #[test]
+    fn inline_code_has_no_padding_and_is_told_apart_by_colour() {
+        for theme in [&TERMINAL, &GRUVBOX, &CATPPUCCIN, &SLATE, &GRAPHITE] {
+            let lines = render_glamour("Write (`48h`) or `d`.", 100, description_style(theme));
+            let rendered = lines
+                .iter()
+                .map(ToString::to_string)
+                .collect::<Vec<_>>()
+                .join("\n");
+            assert!(rendered.contains("Write (48h) or d."), "{rendered:?}");
+        }
+        let lines = render_glamour("Use `d`.", 100, description_style(&GRAPHITE));
+        let code = lines
+            .iter()
+            .flat_map(|line| &line.spans)
+            .find(|span| span.content == "d")
+            .map(|span| span.style.fg);
+        assert_eq!(code, Some(Some(GRAPHITE.orange)));
     }
 }
