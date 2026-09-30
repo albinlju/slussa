@@ -8,7 +8,8 @@ name: Release
 # Before tagging: CI is green on main (this workflow does not re-run the tests)
 # and `version` in Cargo.toml, with Cargo.lock, equals the tag without the `v`.
 # The first job fails the run if they disagree. Each archive gets a `.sha256`
-# and the release a combined `SHA256SUMS`.
+# and the release a combined `SHA256SUMS`. The crate is published by hand with
+# `cargo publish` from the same tag, after this workflow has succeeded.
 on:
   push:
     tags:

@@ -248,11 +248,13 @@ rank below the decision path.
   panics (use `LoadState::Failed` / the popup everywhere instead of
   `unwrap`/`unreachable!`).
 - [ ] **Empty / loading / error states** per view (use `LoadState` everywhere).
-- [ ] **Release** — *0.1.0 is out* (2026-10-01): the repository is public, the
-  tag-driven workflow published four archives with `SHA256SUMS`, and a download
-  was checked. Still open: a Homebrew tap and `cargo install slussa` from
-  crates.io. The macOS binary stays unsigned and unnotarized; the README gives
-  the `xattr` command. "Review requested" has only been seen against scripted
+- [ ] **Release** — *released:* 0.1.0 (2026-10-01), then 0.1.1, which is also on
+  crates.io (`cargo install slussa --locked`). The repository is public, the
+  tag-driven workflow publishes four archives with `SHA256SUMS`, and downloads
+  and the crates.io install were checked. Still open: a Homebrew tap, and
+  publishing to crates.io from the release workflow (today `cargo publish` is run
+  by hand from the tag, which needs a token). The macOS binary stays unsigned and
+  unnotarized; the README gives the `xattr` command. "Review requested" has only been seen against scripted
   `gh` output and needs a second account to check.
 
 ### Scope decision: authoring / management
