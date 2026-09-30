@@ -67,6 +67,17 @@ stays.
   event list into threads, replies and reactions. Move the assembly into
   `domain/` and have each provider produce flat `domain` events. *Trigger:*
   outdated-comment detection or review grouping, which need the same logic.
+- [ ] **Suspend / resume for child processes.** Agent handoff and *open in
+  `$EDITOR`* both need to hand the terminal to a child and take it back.
+  OpenShell's `handle_shell_connect` is the reference sequence: cancel
+  background refreshes → pause the input reader → `LeaveAlternateScreen` +
+  `disable_raw_mode` → run the child with inherited stdio on
+  `spawn_blocking` → `enable_raw_mode` + `EnterAlternateScreen` → `clear` and
+  redraw → drain stale events → resume the reader → restart refreshes. tuipr
+  uses crossterm's `EventStream`, which has no pause; drop and recreate it
+  around the child, or gate it with an `AtomicBool` the way they do. Put it in
+  `app/desktop.rs` next to browser/clipboard as `run_in_terminal(cmd)`.
+  *Trigger:* send-to-agent or open-in-editor.
 - [ ] **Write down the blocking-I/O rule.** GitHub spawns `gh`, Bitbucket uses
   `reqwest::blocking`, both via `spawn_blocking` with a 60 s deadline. That
   is a deliberate design; add it to ARCHITECTURE.md so agent handoff and
@@ -135,9 +146,14 @@ list; see *Not borrowed* below.
   must run before `ratatui::init()`.
 - [ ] **Integration tests in `tests/`.** Their crates keep unit tests inline
   and put subprocess-level tests in `tests/*_integration.rs` (for the CLI:
-  `cli_help_integration.rs`, `cli_color_integration.rs`). For tuipr: `tuipr
-  --help`, `tuipr auth` without `gh`, config parsing from a temp
-  `XDG_CONFIG_HOME`, all driven through the built binary.
+  `cli_help_integration.rs`, `cli_color_integration.rs`). The helper is
+  small: `run_isolated(args)` runs `env!("CARGO_BIN_EXE_openshell")` with
+  `HOME` and `XDG_CONFIG_HOME` pointed at a `tempfile::tempdir()`, stdin
+  null, and returns `{stdout, combined, code}`. For tuipr: `tuipr --help`,
+  `tuipr auth` without `gh`, config parsing from a temp `XDG_CONFIG_HOME`,
+  all driven through the built binary. For in-crate tests that touch env
+  vars they use an `EnvVarGuard` (restores on drop) behind a global
+  `TEST_ENV_LOCK` mutex; tuipr's `config.rs` needs the same once it has tests.
 - [ ] **`cargo nextest`** for the test run in CI (parallel, per-test timeouts,
   clearer failure output). Local `cargo test` stays fine.
 - [ ] **Structured errors with context.** They use `thiserror` for library
@@ -157,8 +173,57 @@ list; see *Not borrowed* below.
   `CLAUDE.md` that names the principles, the two-views rule, the I/O pattern
   and the test commands would make every agent session start on the same
   footing.
+- [ ] **A `tui-development` skill, or the same content in ARCHITECTURE.md.**
+  Their internal skill for the TUI crate is the most useful agent doc in the
+  repo. Worth copying the *shape*, not the text: a domain-object hierarchy;
+  numbered "adding a new screen / event variant / RPC" checklists; one
+  *lifecycle* section per async flow (start → flag → spawn → event → state →
+  cancel) so an agent can see the whole path; a keybinding table per
+  screen/focus; and UX conventions as rules ("destructive actions confirm",
+  "truncate in list, full text in popup", "scrolling up pauses follow").
+  ARCHITECTURE.md has the first and last already; the lifecycle sections and
+  the add-a-thing checklists are missing.
 - [ ] **PR template** with Summary / Changes / Testing, and a rule that
   user-visible changes update FEATURES.md.
+
+### From their AI reviewer ("gator")
+
+OpenShell runs an autonomous PR reviewer in a sandbox. None of its code is
+reusable here, but the *contract* it enforces is exactly what tuipr will read
+and display once AI reviews are first-class threads (FEATURES.md §2). Design
+the domain model against it:
+
+- [ ] **Marker-based AI detection, not just bot accounts.** Every gator
+  comment starts with a first-line marker (`> **gator-agent**`); other skills
+  use their own (`🔒 security-review-agent`). Detecting AI authorship needs a
+  configurable list of first-line markers *and* account names, not one or the
+  other.
+- [ ] **One disposition per head SHA.** A review is one batched GitHub review
+  (summary + inline comments) that names the head SHA it reviewed. tuipr
+  should show *reviewed SHA vs. current head* on the AI summary line; a
+  review of an older SHA is stale, not wrong.
+- [ ] **Stable finding IDs across rounds.** Findings carry
+  `GATOR-<sha8>-<nn>` and are carried, resolved or waived across later
+  commits; a maintainer's "won't fix" reply is a waiver, an author's "fixed"
+  is a claim to verify. The open/fixed/waived state per finding is what a
+  reviewer wants on a glance, and it is derivable from thread resolution +
+  resolver identity + the marker.
+- [ ] **Severity and evidence.** Findings are `Critical | Warning |
+  Suggestion`, and only ones with a full evidence record (base behavior, head
+  behavior, observable impact, reproducer, changed location) count as
+  blockers; the rest are "hypotheses". Suggestions never block. If tuipr's
+  own *run a review* command emits structured output, use this split: it
+  gives the reviewer a defensible "N blockers, M suggestions" header instead
+  of a wall of comments.
+- [ ] **Concern format for the review prompt.** Their `review-github-pr`
+  skill requires every concern as "Before this PR, `<persona>` experienced
+  `<old>`. With this PR, `<new>`, so `<impact>`." with file:line only as
+  evidence. That is a good default prompt for tuipr's run-a-review.
+- [ ] **Convergence rules worth copying into the display.** After three
+  finding-bearing rounds the reviewer goes `critical_only`; rebase-equivalent
+  patches (same patch-id) are not re-reviewed. Show the round count and
+  "unchanged since last review" so a human knows when the AI has stopped
+  adding value.
 
 ### Not borrowed (and why)
 
@@ -176,3 +241,6 @@ list; see *Not borrowed* below.
   `Action`/`Component` design with `ratatui::init()` is the better pattern.
 - **OpenTelemetry / OCSF logging.** `tracing` + env-filter is enough for a
   local TUI.
+- **The gator agent itself** (sandboxed reviewer, label state machine,
+  ledger scripts). tuipr *displays* reviews; it does not run an autonomous
+  reviewer. The contract above is what to read, not what to build.
