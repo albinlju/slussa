@@ -789,8 +789,7 @@ fn recovery_root(name: &str) -> std::path::PathBuf {
     ))
 }
 fn attach_recovery(app: &mut App, root: &std::path::Path) {
-    let (storage, snapshot) =
-        super::drafts::DraftStorage::open(root, "test-repo/reviewer".into()).unwrap();
+    let (storage, snapshot) = super::drafts::reopen(root, "test-repo/reviewer").unwrap();
     app.restore_drafts(storage, snapshot);
 }
 

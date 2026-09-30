@@ -216,6 +216,23 @@ impl App {
 }
 
 #[cfg(test)]
+/// Reopen a scope after dropping its storage. A child process started by a
+/// concurrent test can briefly hold a copy of the lock file descriptor
+/// between fork and exec, so a release is not always visible at once.
+pub(super) fn reopen(root: &Path, scope: &str) -> io::Result<(DraftStorage, Snapshot)> {
+    let mut attempt = 0;
+    loop {
+        match DraftStorage::open(root, scope.into()) {
+            Err(error) if attempt < 100 && error.to_string().contains("already in use") => {
+                attempt += 1;
+                std::thread::sleep(std::time::Duration::from_millis(10));
+            }
+            result => return result,
+        }
+    }
+}
+
+#[cfg(test)]
 mod tests {
     use super::*;
     use crate::app::reviews::{CommentAnchor, CommentTarget, PendingComment};
@@ -231,21 +248,6 @@ mod tests {
                 .as_nanos(),
             NEXT.fetch_add(1, std::sync::atomic::Ordering::Relaxed)
         ))
-    }
-    /// Reopen a scope after dropping its storage. A child process started by a
-    /// concurrent test can briefly hold a copy of the lock file descriptor
-    /// between fork and exec, so a release is not always visible at once.
-    fn reopen(root: &Path, scope: &str) -> io::Result<(DraftStorage, Snapshot)> {
-        let mut attempt = 0;
-        loop {
-            match DraftStorage::open(root, scope.into()) {
-                Err(error) if attempt < 100 && error.to_string().contains("already in use") => {
-                    attempt += 1;
-                    std::thread::sleep(std::time::Duration::from_millis(10));
-                }
-                result => return result,
-            }
-        }
     }
     #[test]
     fn restart_retains_targets_revisions_receipts_and_account_isolation() {
