@@ -59,7 +59,7 @@
 │                                                                                                  │
 │                                                                                                  │
 └──────────────────────────────────────────────────────────────────────────────────────────────────┘
-  h/l: tabs  j/k: scroll                                                                    ?: help
+  h/l: tabs  j/k: scroll  a: submit review  v: start review  m: merge  x: decline           ?: help
 100x30 Detail { pr_id: 42, tab: Overview }
 ┌──────────────────────────────────────────────────────────────────────────────────────────────────┐
 │  #42 Component migration                                                                         │

@@ -39,6 +39,33 @@ pub(super) fn render(
     frame.render_widget(Paragraph::new(line), area);
 }
 
+/// Review, merge and decline hints: they act on the whole PR, so they are
+/// shown wherever the keys work (Overview and Description).
+fn pr_action_hints(state: &DetailView<'_>) -> Vec<Hint> {
+    let mut parts = vec![];
+    if state.store.capabilities.reviews() {
+        parts.push(Hint::on("a: submit review"));
+        parts.push(Hint::on("v: start review"));
+    }
+    if let Screen::Detail { pr_id, .. } = state.screen {
+        if !state.store.capabilities.merge_strategies.is_empty() {
+            parts.push(match state.merge_blocked_reason(pr_id) {
+                None => Hint::on("m: merge"),
+                Some(reason) => Hint::off(format!("m: merge ({reason})")),
+            });
+        }
+        if state.pr_is_declined(pr_id) && state.store.capabilities.supports(Feature::ReopenPr) {
+            parts.push(Hint::on("x: reopen"));
+        } else if state.store.capabilities.supports(Feature::ClosePr) {
+            parts.push(match state.decline_blocked_reason(pr_id) {
+                None => Hint::on("x: decline"),
+                Some(reason) => Hint::off(format!("x: decline ({reason})")),
+            });
+        }
+    }
+    parts
+}
+
 fn footer_actions(state: &DetailView<'_>, tab: DetailTab) -> Vec<Hint> {
     if state.detail.editor.draft.is_some() {
         return widgets::hints_on("c: resume draft");
@@ -104,26 +131,7 @@ fn footer_actions(state: &DetailView<'_>, tab: DetailTab) -> Vec<Hint> {
                 "R: resolve thread"
             }));
         }
-        if state.store.capabilities.reviews() {
-            parts.push(Hint::on("a: submit review"));
-            parts.push(Hint::on("v: start review"));
-        }
-        if let Screen::Detail { pr_id, .. } = state.screen {
-            if !state.store.capabilities.merge_strategies.is_empty() {
-                parts.push(match state.merge_blocked_reason(pr_id) {
-                    None => Hint::on("m: merge"),
-                    Some(reason) => Hint::off(format!("m: merge ({reason})")),
-                });
-            }
-            if state.pr_is_declined(pr_id) && state.store.capabilities.supports(Feature::ReopenPr) {
-                parts.push(Hint::on("x: reopen"));
-            } else if state.store.capabilities.supports(Feature::ClosePr) {
-                parts.push(match state.decline_blocked_reason(pr_id) {
-                    None => Hint::on("x: decline"),
-                    Some(reason) => Hint::off(format!("x: decline ({reason})")),
-                });
-            }
-        }
+        parts.extend(pr_action_hints(state));
         return parts;
     }
     if tab == DetailTab::Diff
@@ -188,10 +196,15 @@ fn footer_actions(state: &DetailView<'_>, tab: DetailTab) -> Vec<Hint> {
         return hints;
     }
     match tab {
-        DetailTab::Description if state.detail.description.max_horizontal > 0 => {
-            widgets::hints_on("H/L: pan  j/k: scroll  h/l: tabs")
+        DetailTab::Description => {
+            let mut hints = widgets::hints_on(if state.detail.description.max_horizontal > 0 {
+                "H/L: pan  j/k: scroll  h/l: tabs"
+            } else {
+                "h/l: tabs  j/k: scroll"
+            });
+            hints.extend(pr_action_hints(state));
+            hints
         }
-        DetailTab::Description => widgets::hints_on("h/l: tabs  j/k: scroll"),
         DetailTab::Commits => widgets::hints_on("enter: open  /: search"),
         DetailTab::Builds => widgets::hints_on("j/k: scroll  h/l: tabs"),
         _ => Vec::new(),

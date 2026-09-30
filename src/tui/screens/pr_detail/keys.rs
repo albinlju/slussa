@@ -74,9 +74,12 @@ pub(in crate::tui) fn key_to_action(
             return Some(Action::PrLink { pr_id, kind });
         }
     }
+    // The PR-level actions (`a`, `v`, `m`, `x`) work on the tabs that read the PR
+    // itself, so a PR can be acted on straight from its description.
+    let acts_on_pr = matches!(tab, DetailTab::Overview | DetailTab::Description);
     // `a` opens the review-verdict menu. Always available — even on your own PR
     // you can leave a comment review; the picker dims the verdicts you can't use.
-    if plain && code == KeyCode::Char('a') && tab == DetailTab::Overview {
+    if plain && code == KeyCode::Char('a') && acts_on_pr {
         return Some(Action::Detail(DetailAction::OpenReviewPicker));
     }
     // `v` runs the batched review: it starts a review the first time, then finishes
@@ -84,9 +87,7 @@ pub(in crate::tui) fn key_to_action(
     // while it's open queue into the review instead of posting.
     if plain
         && code == KeyCode::Char('v')
-        && (state.pending_review().is_some()
-            || tab == DetailTab::Overview
-            || tab == DetailTab::Diff)
+        && (state.pending_review().is_some() || acts_on_pr || tab == DetailTab::Diff)
     {
         return Some(Action::Detail(if state.pending_review().is_some() {
             DetailAction::FinishReview
@@ -100,12 +101,12 @@ pub(in crate::tui) fn key_to_action(
     }
     // `m` opens the merge-strategy menu — only when the PR is mergeable. You can
     // merge your own PR, so (unlike `a`) there's no own-PR gate.
-    if plain && code == KeyCode::Char('m') && tab == DetailTab::Overview && state.can_merge(pr_id) {
+    if plain && code == KeyCode::Char('m') && acts_on_pr && state.can_merge(pr_id) {
         return Some(Action::Detail(DetailAction::OpenMergePicker));
     }
     // `x` declines/closes the PR (with a confirm) while it's still open, and
     // reopens it (with a confirm) once it has been declined.
-    if plain && code == KeyCode::Char('x') && tab == DetailTab::Overview {
+    if plain && code == KeyCode::Char('x') && acts_on_pr {
         if state.pr_is_open(pr_id) {
             return Some(Action::Detail(DetailAction::OpenDecline));
         }
