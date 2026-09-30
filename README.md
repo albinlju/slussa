@@ -1,5 +1,8 @@
 # slussa
 
+> *slussa* (Swedish): to pass a boat through a lock. The *slussvakt* is the lock
+> keeper who decides what gets through.
+
 A terminal UI for pull requests. Two views: the list of PRs, and the PR you
 opened. Read, comment, review, merge and decline without leaving the terminal,
 next to your editor, git client and coding agent.
