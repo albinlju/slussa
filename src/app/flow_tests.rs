@@ -15,13 +15,13 @@ use serde_json::json;
 
 use super::{
     App,
-    action::{Action, Command},
+    action::{Action, Command, ListAction},
     reviews::CommentTarget,
     store::{FetchKey, LoadState},
 };
 use crate::{
     providers::Provider,
-    test_support::{FakeGh, gh_list_page, gh_pr},
+    test_support::{FakeGh, gh_closed_pr, gh_list_page, gh_pr},
 };
 
 fn app() -> App {
@@ -249,4 +249,150 @@ async fn a_second_write_to_the_same_pr_is_ignored_while_one_is_pending() {
         .collect();
     assert_eq!(posts.len(), 1, "{posts:?}");
     assert!(posts[0].ends_with("body=first"));
+}
+
+// ---------------------------------------------------------------------------
+// Older merged and declined PRs
+// ---------------------------------------------------------------------------
+
+const FIRST_CLOSED: &str = "first: 50, after: null";
+
+/// A fake whose closed PRs span three reads: the first page (with a cursor),
+/// then `after: "x"` (with another), then `after: "y"` (the end).
+fn history() -> FakeGh {
+    FakeGh::new()
+        .on(OPEN_QUERY, &one_pr_page())
+        .on(
+            FIRST_CLOSED,
+            &gh_list_page(
+                &[gh_closed_pr(3, "2026-08-01T10:00:00Z", "MERGED")],
+                Some("x"),
+            ),
+        )
+        .on(
+            "after: \"x\"",
+            &gh_list_page(
+                &[gh_closed_pr(2, "2026-07-01T10:00:00Z", "CLOSED")],
+                Some("y"),
+            ),
+        )
+        .on(
+            "after: \"y\"",
+            &gh_list_page(&[gh_closed_pr(4, "2026-06-01T10:00:00Z", "MERGED")], None),
+        )
+}
+
+fn older_reads(calls: &[String]) -> usize {
+    calls
+        .iter()
+        .filter(|call| call.contains("after: \"x\"") || call.contains("after: \"y\""))
+        .count()
+}
+
+async fn load_first_page(app: &mut App) {
+    app.spawn_load_prs();
+    settle(app).await;
+}
+
+#[tokio::test]
+async fn older_prs_are_appended_until_the_history_ends() {
+    let gh = history().install();
+    let mut app = app();
+    load_first_page(&mut app).await;
+    assert_eq!(loaded_ids(&app), vec![1, 3]);
+    assert_eq!(app.state.store.older_cursor.as_deref(), Some("x"));
+
+    app.apply(Action::List(ListAction::LoadOlder));
+    settle(&mut app).await;
+    assert_eq!(loaded_ids(&app), vec![1, 3, 2]);
+    assert_eq!(app.state.store.older_cursor.as_deref(), Some("y"));
+    assert_eq!(
+        app.state.store.notice.as_ref().map(|n| n.message.as_str()),
+        Some("Loaded 1 older PR")
+    );
+
+    app.apply(Action::List(ListAction::LoadOlder));
+    settle(&mut app).await;
+    assert_eq!(loaded_ids(&app), vec![1, 3, 2, 4]);
+    assert_eq!(app.state.store.older_cursor, None, "the history has ended");
+
+    let reads = older_reads(&gh.calls());
+    app.apply(Action::List(ListAction::LoadOlder));
+    settle(&mut app).await;
+    assert_eq!(
+        older_reads(&gh.calls()),
+        reads,
+        "nothing is asked for once it ends"
+    );
+}
+
+#[tokio::test]
+async fn pressing_load_older_twice_makes_one_request() {
+    let gh = history().install();
+    let mut app = app();
+    load_first_page(&mut app).await;
+
+    app.apply(Action::List(ListAction::LoadOlder));
+    app.apply(Action::List(ListAction::LoadOlder));
+    settle(&mut app).await;
+
+    assert_eq!(older_reads(&gh.calls()), 1, "{:?}", gh.calls());
+    assert_eq!(loaded_ids(&app), vec![1, 3, 2]);
+}
+
+#[tokio::test]
+async fn a_refresh_keeps_the_older_prs_already_loaded_and_the_place_reached() {
+    let _gh = history().install();
+    let mut app = app();
+    load_first_page(&mut app).await;
+    app.apply(Action::List(ListAction::LoadOlder));
+    settle(&mut app).await;
+    assert_eq!(loaded_ids(&app), vec![1, 3, 2]);
+
+    // The minute-by-minute refresh reads the first page again.
+    load_first_page(&mut app).await;
+
+    assert_eq!(loaded_ids(&app), vec![1, 3, 2], "PR 2 is not thrown away");
+    assert_eq!(
+        app.state.store.older_cursor.as_deref(),
+        Some("y"),
+        "and the place reached is kept, not reset to the first page's"
+    );
+}
+
+#[tokio::test]
+async fn a_failed_older_read_keeps_the_list_says_so_and_can_be_retried() {
+    let gh = FakeGh::new()
+        .on(OPEN_QUERY, &one_pr_page())
+        .on(
+            FIRST_CLOSED,
+            &gh_list_page(
+                &[gh_closed_pr(3, "2026-08-01T10:00:00Z", "MERGED")],
+                Some("x"),
+            ),
+        )
+        .fail_once("after: \"x\"", 1, "gh: HTTP 502: Bad Gateway")
+        .on(
+            "after: \"x\"",
+            &gh_list_page(&[gh_closed_pr(2, "2026-07-01T10:00:00Z", "CLOSED")], None),
+        )
+        .install();
+    let mut app = app();
+    load_first_page(&mut app).await;
+
+    app.apply(Action::List(ListAction::LoadOlder));
+    settle(&mut app).await;
+    assert_eq!(loaded_ids(&app), vec![1, 3], "the list is untouched");
+    assert_eq!(app.state.store.older_cursor.as_deref(), Some("x"));
+    let notice = app.state.store.notice.as_ref().unwrap();
+    assert!(notice.error && notice.message.contains("Couldn't load older PRs"));
+    assert!(
+        app.state.store.refresh_failures.is_empty(),
+        "a failed older read is not a refresh failure"
+    );
+
+    app.apply(Action::List(ListAction::LoadOlder));
+    settle(&mut app).await;
+    assert_eq!(loaded_ids(&app), vec![1, 3, 2]);
+    assert_eq!(older_reads(&gh.calls()), 2);
 }

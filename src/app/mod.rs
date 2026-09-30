@@ -154,6 +154,7 @@ impl App {
                 });
             }
             Action::List(action::ListAction::OpenPr(id)) => self.open_pr(id),
+            Action::List(action::ListAction::LoadOlder) => self.load_older_prs(),
             Action::Command { pr_id, command } => self.execute(pr_id, command),
             Action::LoadCommitDiff { pr_id, oid } => self.ensure_commit_diff(pr_id, oid),
             Action::Loaded(a) => self.loaded_actions(a),

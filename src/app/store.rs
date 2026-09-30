@@ -39,6 +39,11 @@ pub struct Store {
     pub reload_after_fetch: HashSet<FetchKey>,
     pub reviews: HashMap<u64, crate::app::reviews::PendingReview>,
     pub cache: Cache,
+    /// Where to continue reading older merged and declined PRs; `None` when
+    /// there are none left (or nothing has loaded yet).
+    pub older_cursor: Option<String>,
+    /// Whether the user has read older PRs, which a refresh must then keep.
+    pub older_loaded: bool,
     pub current_user: String,
     pub capabilities: crate::domain::capabilities::Capabilities,
 }
@@ -136,6 +141,8 @@ pub enum Operation {
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub enum FetchKey {
     Prs,
+    /// The next batch of older closed PRs.
+    OlderPrs,
     Commits(u64),
     Diff(u64),
     Builds(u64),
@@ -148,7 +155,7 @@ impl Store {
     pub fn refreshing(&self, screen: crate::app::navigation::Screen) -> bool {
         use crate::app::navigation::Screen;
         self.fetches.iter().any(|key| match (screen, key) {
-            (_, FetchKey::Prs) => true,
+            (_, FetchKey::Prs | FetchKey::OlderPrs) => true,
             (
                 Screen::Detail { pr_id, .. },
                 FetchKey::Commits(id)
@@ -186,6 +193,8 @@ impl Store {
     pub fn has_cached_data(&self, key: &FetchKey) -> bool {
         let id = match key {
             FetchKey::Prs => return matches!(self.cache.prs, LoadState::Loaded(_)),
+            // A failed batch is reported once, not kept as a refresh failure.
+            FetchKey::OlderPrs => return false,
             FetchKey::Commits(id)
             | FetchKey::Diff(id)
             | FetchKey::Builds(id)
@@ -197,7 +206,7 @@ impl Store {
             return false;
         };
         match key {
-            FetchKey::Prs => false,
+            FetchKey::Prs | FetchKey::OlderPrs => false,
             FetchKey::Commits(_) => matches!(data.commits, LoadState::Loaded(_)),
             FetchKey::Diff(_) => matches!(data.diff, LoadState::Loaded(_)),
             FetchKey::Builds(_) => matches!(data.builds, LoadState::Loaded(_)),

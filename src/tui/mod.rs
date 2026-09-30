@@ -27,6 +27,7 @@ pub fn render(frame: &mut Frame<'_>, state: &mut AppState) {
                 prs: &state.store.cache.prs,
                 refreshing: state.store.refreshing(state.screen),
                 viewer: &state.store.current_user,
+                more_closed: state.store.older_cursor.is_some(),
             },
         ),
         Screen::Detail { .. } => state.ui.detail.render(
@@ -131,6 +132,7 @@ pub fn key_to_action(state: &AppState, key: KeyEvent) -> Option<Action> {
                 prs: &state.store.cache.prs,
                 refreshing: state.store.refreshing(state.screen),
                 viewer: &state.store.current_user,
+                more_closed: state.store.older_cursor.is_some(),
             },
         ),
         Screen::Detail { .. } => state.ui.detail.handle_key(
@@ -220,6 +222,7 @@ impl Ui {
                     prs: &store.cache.prs,
                     refreshing: store.refreshing(screen),
                     viewer: &store.current_user,
+                    more_closed: store.older_cursor.is_some(),
                 },
             ),
             Action::Search(action) if screen == Screen::List => {

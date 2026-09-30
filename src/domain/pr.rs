@@ -20,6 +20,15 @@ impl PrStatus {
     }
 }
 
+/// PRs read in one go, plus where to continue for older merged and declined
+/// ones. `more` is opaque to everything but the provider that made it, and is
+/// `None` when nothing older is left to read.
+#[derive(Debug, Clone, Default)]
+pub struct PrBatch {
+    pub prs: Vec<PullRequest>,
+    pub more: Option<String>,
+}
+
 /// Whether a PR can be merged into its target.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Mergeability {

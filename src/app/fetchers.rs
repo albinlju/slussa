@@ -41,6 +41,21 @@ impl App {
         );
     }
 
+    /// Read the next older batch, if one is known and none is in flight.
+    pub(super) fn load_older_prs(&mut self) {
+        let Some(after) = self.state.store.older_cursor.clone() else {
+            return;
+        };
+        if !self.state.store.fetches.insert(FetchKey::OlderPrs) {
+            return;
+        }
+        let provider = self.provider.clone();
+        self.spawn_fetch(
+            move || provider.fetch_older_prs(&after),
+            |r| Action::Loaded(LoadedAction::OlderPrs(r)),
+        );
+    }
+
     pub(super) fn spawn_load_commits(&mut self, pr_id: u64) {
         if !self.state.store.fetches.insert(FetchKey::Commits(pr_id)) {
             return;
@@ -264,6 +279,7 @@ impl App {
     pub(super) fn load_resource(&mut self, key: FetchKey) {
         match key {
             FetchKey::Prs => self.spawn_load_prs(),
+            FetchKey::OlderPrs => self.load_older_prs(),
             FetchKey::Commits(id) => self.spawn_load_commits(id),
             FetchKey::Diff(id) => self.spawn_load_diff(id),
             FetchKey::Builds(id) => self.spawn_load_builds(id),

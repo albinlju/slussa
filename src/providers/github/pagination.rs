@@ -75,21 +75,26 @@ pub(super) fn repo_nodes<T: DeserializeOwned>(
     )
 }
 
-/// Only the first `first` nodes of a connection on this repository, never
-/// following a cursor: a bounded read of "the latest".
-pub(super) fn repo_first_page<T: DeserializeOwned>(
+/// One page of `first` nodes of a connection on this repository, starting
+/// after `after`, and the cursor to continue from (`None` at the end). It never
+/// follows the cursor itself: the caller decides whether to read more.
+pub(super) fn repo_page<T: DeserializeOwned>(
     field: &str,
     args: &str,
     selection: &str,
     first: u32,
-) -> Result<Vec<T>, FetchError> {
+    after: Option<&str>,
+) -> Result<(Vec<T>, Option<String>), FetchError> {
     let first = first.to_string();
-    let (items, _more) = fetch_page(
+    let (items, info) = fetch_page(
         &|cursor: &str| repo_query(field, args, selection, &first, cursor),
         REPO_CONNECTION_PATH,
-        None,
+        after,
     )?;
-    Ok(items)
+    Ok((
+        items,
+        info.has_next_page.then_some(info.end_cursor).flatten(),
+    ))
 }
 
 fn repo_query(field: &str, args: &str, selection: &str, first: &str, cursor: &str) -> String {

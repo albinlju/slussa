@@ -1,13 +1,17 @@
-use crate::app::{
-    App,
-    action::LoadedAction,
-    store::{FetchKey, LoadState, Operation, PrData},
+use crate::{
+    app::{
+        App,
+        action::LoadedAction,
+        store::{FetchKey, LoadState, Notice, Operation, PrData},
+    },
+    domain::pr::{PrBatch, PrStatus, PullRequest},
 };
 
 impl App {
     pub(super) fn loaded_actions(&mut self, action: LoadedAction) {
         let key = match &action {
             LoadedAction::Prs(_) => Some(FetchKey::Prs),
+            LoadedAction::OlderPrs(_) => Some(FetchKey::OlderPrs),
             LoadedAction::Commits(id, _) => Some(FetchKey::Commits(*id)),
             LoadedAction::Diff(id, _) => Some(FetchKey::Diff(*id)),
             LoadedAction::Builds(id, _) => Some(FetchKey::Builds(*id)),
@@ -18,7 +22,7 @@ impl App {
         };
         if let Some(key) = &key {
             let failed = match &action {
-                LoadedAction::Prs(r) => r.is_err(),
+                LoadedAction::Prs(r) | LoadedAction::OlderPrs(r) => r.is_err(),
                 LoadedAction::Commits(_, r) => r.is_err(),
                 LoadedAction::Diff(_, r) | LoadedAction::CommitDiff(_, _, r) => r.is_err(),
                 LoadedAction::Builds(_, r) => r.is_err(),
@@ -50,8 +54,10 @@ impl App {
                 self.pr_state_changed("review", pr_id, Err(message));
                 self.reload_after_mutation(pr_id);
             }
+            LoadedAction::OlderPrs(r) => self.older_prs_loaded(r),
             LoadedAction::Prs(r) => {
                 log_outcome("prs", None, &r);
+                let r = r.map(|batch| self.adopt_first_read(batch));
                 let selected_id = self
                     .state
                     .ui
@@ -143,10 +149,8 @@ impl App {
                     Operation::Comment => "comment saved",
                     Operation::Moderation => "comment / thread updated",
                 };
-                self.state.store.notice = Some(crate::app::store::Notice::new(
-                    format!("PR #{pr_id} · {label}"),
-                    false,
-                ));
+                self.state.store.notice =
+                    Some(Notice::new(format!("PR #{pr_id} · {label}"), false));
                 self.state.store.uncertain_submissions.remove(&pr_id);
                 self.state.store.errors.remove(&pr_id);
                 if matches!(operation, Operation::Review) {
@@ -159,6 +163,54 @@ impl App {
                 self.state.store.errors.insert(pr_id, msg);
             }
         }
+    }
+
+    /// A fresh first read becomes the list. Older closed PRs the user has
+    /// already loaded stay, and so does the position to continue from; without
+    /// that a refresh every minute would throw them away.
+    fn adopt_first_read(&mut self, batch: PrBatch) -> Vec<PullRequest> {
+        let mut prs = batch.prs;
+        if !self.state.store.older_loaded {
+            self.state.store.older_cursor = batch.more;
+            return prs;
+        }
+        if let LoadState::Loaded(previous) = &self.state.store.cache.prs {
+            let closed =
+                |pr: &&PullRequest| matches!(pr.status, PrStatus::Merged | PrStatus::Declined);
+            for old in previous.iter().filter(closed) {
+                if !prs.iter().any(|pr| pr.id == old.id) {
+                    prs.push(old.clone());
+                }
+            }
+        }
+        prs
+    }
+
+    fn older_prs_loaded(&mut self, result: Result<PrBatch, String>) {
+        log_outcome("older-prs", None, &result);
+        let notice = match result {
+            Ok(batch) => {
+                let mut added = 0;
+                if let LoadState::Loaded(prs) = &mut self.state.store.cache.prs {
+                    for pr in batch.prs {
+                        if !prs.iter().any(|existing| existing.id == pr.id) {
+                            prs.push(pr);
+                            added += 1;
+                        }
+                    }
+                }
+                self.state.store.older_cursor = batch.more;
+                self.state.store.older_loaded = true;
+                let message = match (added, self.state.store.older_cursor.is_some()) {
+                    (0, _) => "No older PRs".to_owned(),
+                    (1, _) => "Loaded 1 older PR".to_owned(),
+                    (n, _) => format!("Loaded {n} older PRs"),
+                };
+                Notice::new(message, false)
+            }
+            Err(message) => Notice::new(format!("Couldn't load older PRs: {message}"), true),
+        };
+        self.state.store.notice = Some(notice);
     }
 
     fn pr_data_mut(&mut self, pr_id: u64) -> &mut PrData {
