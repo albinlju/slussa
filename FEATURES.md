@@ -284,8 +284,11 @@ rank below the decision path.
   panics (use `LoadState::Failed` / the popup everywhere instead of
   `unwrap`/`unreachable!`).
 - [ ] **Empty / loading / error states** per view (use `LoadState` everywhere).
-- [ ] **Release** — a real README with a demo, `cargo install`, a Homebrew
-  formula, tagged builds. Without this the rest has no audience.
+- [ ] **Release** — *partly done:* README, MIT license and a tag-driven
+  release workflow for four targets exist (see RELEASING.md). Still open: a
+  demo gif in the README, the first real release, a Homebrew formula,
+  `cargo install tuipr` from crates.io, macOS notarization. Without a
+  release the rest has no audience.
 
 ### Scope decision: authoring / management
 
