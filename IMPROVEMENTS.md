@@ -139,8 +139,8 @@ list; see *Not borrowed* below.
   found RUSTSEC-2026-0285 in `rustls` 0.23.40 (TLS 1.3 handshake), fixed by
   `cargo update -p rustls` to 0.23.45. Licenses: allow-list plus
   `CDLA-Permissive-2.0`; `colored` and `option-ext` are MPL-2.0 and are named
-  exceptions. `publish = false` is set in `Cargo.toml` because tuipr has no
-  license field; remove it and add a license when releasing.* Advisories, license allow-list,
+  exceptions. tuipr itself is MIT (2026-09-30, `LICENSE` and the `license` field).
+  `publish = false` stays in `Cargo.toml` until the first release.* Advisories, license allow-list,
   `unknown-registry = "deny"`. Cheap, and it is the only thing that will tell
   you when `keyring` or `reqwest` pulls in something unwanted.
 - [x] **Dependabot for GitHub Actions** *Done (weekly, plus monthly grouped

@@ -3,7 +3,8 @@ name = "tuipr"
 version = "0.1.0"
 edition = "2024"
 rust-version = "1.95"
-# Remove when publishing; add a `license` field at the same time.
+license = "MIT"
+# Remove to publish to crates.io.
 publish = false
 
 [lints.rust]
