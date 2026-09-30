@@ -54,7 +54,7 @@ Decisions and the release procedure are in [RELEASING.md](RELEASING.md).
   `tuipr 0.1.0-pre.2`. **Not yet cleaned up:** the release, tag and branch stay
   until V2 is done in a browser.
 
-- [ ] **V2. Clean install.** Use an archive from that prerelease on a
+- [x] **V2. Clean install.** Use an archive from that prerelease on a
   machine *without Rust*, unpack it, run `./tuipr --version` and then `./tuipr`
   inside a repository. Note whether macOS blocks it and whether
   `xattr -d com.apple.quarantine tuipr` is enough. Check the checksum with
@@ -65,6 +65,15 @@ Decisions and the release procedure are in [RELEASING.md](RELEASING.md).
   question, which only arises for a file downloaded in a browser (`gh` does not
   set the flag). Download an archive from the release page in a browser, then
   run `xattr -l tuipr` and `./tuipr --version`.
+  **Result 2026-09-30 (maintainer), browser download of the `0.1.0-pre.2` arm64
+  archive:** `./tuipr --version` printed `Killed: 9`, with the macOS message that
+  Apple could not verify that tuipr is free from malware. So Gatekeeper blocks a
+  browser-downloaded binary, as expected for a binary that is not signed with a
+  Developer ID and notarized. `xattr -d com.apple.quarantine tuipr`
+  is enough: afterwards `./tuipr --version` printed `tuipr 0.1.0-pre.2`. Run on
+  the maintainer's own Mac, which has Rust, not on a machine without it; the
+  binary does not depend on Rust being installed. Accepted for now;
+  a signed and notarized binary is to be arranged before going public.
 
 - [x] **V3. The Linux ARM binary runs.** It is cross-compiled and has never been
   executed. On a Mac with Docker:
