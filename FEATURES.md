@@ -298,6 +298,9 @@ rank below the decision path.
 ### 6. Providers and platform
 
 - [ ] **GitLab MR support** via `glab` (mirrors `gh` well).
+- [ ] **Windows support** — the browser and clipboard code has Windows paths,
+  but CI builds only macOS and Linux and nothing has run them. Either add a
+  Windows CI job and release target, or keep it stated as unsupported.
 - [ ] **Bitbucket Cloud client.**
 - [ ] **Unified cross-provider list** with a provider icon per row.
 - [ ] **Normalized "requirements to merge"** — GitLab approvals, Bitbucket
