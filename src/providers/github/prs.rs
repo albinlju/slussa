@@ -103,10 +103,23 @@ struct GhPr {
     labels: Connection<GhLabel>,
 }
 
+/// What the list needs of each pull request. Connections nested here are
+/// capped at 100; `fetch_prs` refetches the ones that report more.
+const PR_FIELDS: &str = r"
+    id url title number
+    author { login }
+    state isDraft headRefName baseRefName body createdAt updatedAt
+    additions deletions changedFiles
+    comments { totalCount }
+    latestReviews(first: 100) { nodes { state author { login } } pageInfo { hasNextPage } }
+    labels(first: 100) { nodes { name } pageInfo { hasNextPage } }
+    commits(last: 1) { nodes { commit { statusCheckRollup { state } } } }
+";
+
 pub fn fetch_prs() -> Result<Vec<PullRequest>, FetchError> {
     let mut prs: Vec<GhPr> = super::pagination::repo_nodes(
         "pullRequests",
-        "id url title number author { login } state isDraft headRefName baseRefName body createdAt updatedAt additions deletions changedFiles comments { totalCount } latestReviews(first: 100) { nodes { state author { login } } pageInfo { hasNextPage } } labels(first: 100) { nodes { name } pageInfo { hasNextPage } } commits(last: 1) { nodes { commit { statusCheckRollup { state } } } }",
+        PR_FIELDS,
     )?;
     for pr in &mut prs {
         if pr.labels.page_info.has_next_page {

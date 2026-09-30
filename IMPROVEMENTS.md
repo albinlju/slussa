@@ -42,6 +42,16 @@ stays.
   use placeholder data and are not representative. Install instructions are
   source-only until a release exists.
 
+- [x] **Readable GraphQL.** *Done 2026-09-30.* Queries live in
+  `providers/github/graphql.rs` as multi-line GraphQL with `<<name>>`
+  placeholders (no doubled braces), and are compacted to one line when sent, so
+  the wire format is unchanged; a test pins the compacted output to the
+  single-line queries sent before. The long field selections are multi-line
+  constants next to their use (`PR_FIELDS`, `THREAD_FIELDS`). **Possible next
+  step:** move the templates into `.graphql` files pulled in with
+  `include_str!`, which gives editors syntax highlighting and GraphQL
+  tooling. Not done because it splits each query from the code that fills it.
+
 ### With the next feature that touches the area
 
 - [ ] **Split `Action` into local and app-level.** Today one enum carries both

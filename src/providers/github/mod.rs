@@ -6,6 +6,7 @@ mod comments;
 mod commits;
 mod diff;
 mod events;
+mod graphql;
 mod pagination;
 mod prs;
 mod review_threads;
@@ -39,10 +40,7 @@ pub fn fetch_mergeability(pr_number: u64) -> Result<Mergeability, FetchError> {
     struct Mergeable {
         mergeable: String,
     }
-    let query = "query($owner: String!, $name: String!, $pr: Int!) { \
-        repository(owner: $owner, name: $name) { \
-          pullRequest(number: $pr) { mergeable } } }";
-    let pr: Mergeable = run_pr_graphql(query, pr_number)?;
+    let pr: Mergeable = run_pr_graphql(graphql::MERGEABILITY, pr_number)?;
     // GitHub computes this asynchronously, so a fresh PR can answer UNKNOWN
     // until it settles — a later refresh picks up the real verdict.
     Ok(match pr.mergeable.as_str() {
@@ -191,7 +189,7 @@ pub(super) fn run_pr_graphql<P: DeserializeOwned>(
         "-F",
         &format!("pr={pr_number}"),
         "-f",
-        &format!("query={query}"),
+        &format!("query={}", graphql::compact(query)),
     ])?;
     Ok(resp.data.repository.pull_request)
 }
