@@ -50,8 +50,8 @@ downloaded in a browser may be blocked; remove the flag with
 `xattr -d com.apple.quarantine slussa`. Check a download with
 `shasum -a 256 -c slussa-<version>-<target>.tar.gz.sha256`.
 
-slussa is not on Homebrew or crates.io yet, so for now it is the tarball or a
-build from source.
+slussa will be published through package managers later; for now it is the
+tarball or a build from source.
 
 **From source.** With a recent Rust toolchain (the repo pins 1.95 in
 `rust-toolchain.toml`, which `rustup` installs automatically):
@@ -77,10 +77,9 @@ slussa --help
 For Bitbucket Data Center, run `slussa auth login` once per host. For GitHub,
 run `gh auth login` instead.
 
-Press `?` in any view for the keys that are available right now. To start with:
-`j`/`k` move, `enter` opens, `/` searches, `f` filters by status, `s` switches
-the sort, `L` loads more PRs when the heading says more are unread, `o` opens the
-PR in the browser, `y` copies its link, `F` refreshes and `q` quits. Actions the
+Press `?` in any view for the keys that are available right now; the full list
+is in [KEYS.md](docs/KEYS.md). To start with: `j`/`k` move, `enter` opens, `/`
+searches, `f` filters by status, `s` switches the sort and `q` quits. Actions the
 connected provider does not support are hidden; actions blocked by the PR's
 state (for example merging with conflicts) stay visible and say why.
 
@@ -106,6 +105,7 @@ sort = "attention"   # attention (default) or recent
 
 ## Documentation
 
+- [KEYS.md](docs/KEYS.md): every key, for the list and for a PR
 - [ROADMAP.md](docs/ROADMAP.md): the product idea, what is planned and the engineering backlog
 - [ARCHITECTURE.md](docs/ARCHITECTURE.md): how the code is organised and why
 

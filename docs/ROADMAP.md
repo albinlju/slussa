@@ -1,7 +1,7 @@
 # Roadmap for slussa
 
 The product idea, what is planned in priority order, and how the code should get
-better. What exists today is described in the [README](../README.md); how it is
+better. What exists today is described in the [README](../README.md) and [KEYS.md](KEYS.md); how it is
 built is in [ARCHITECTURE.md](ARCHITECTURE.md). History is in git.
 
 ## Where it stands today

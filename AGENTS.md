@@ -46,7 +46,7 @@ CI runs all four on Linux and macOS. The toolchain is pinned in
 
 ## Working here
 
-- Repo docs are in English. Update the README (keys, usage) and the matching item in
+- Repo docs are in English. Update the README, `docs/KEYS.md` (keys) and the matching item in
   `docs/ROADMAP.md` when behaviour changes.
 - Add a regression test for observable behaviour, especially when navigation or
   asynchronous state is involved. Tests never call a real provider: use
