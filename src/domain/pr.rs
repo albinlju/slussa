@@ -20,6 +20,51 @@ impl PrStatus {
     }
 }
 
+/// A slice of a repository's PRs that can be read on its own. `Open` holds open
+/// and draft PRs together, since a provider does not separate them when asked
+/// for the open ones.
+/// What a provider leaves out of the list because it is costly to read for
+/// every PR, and gives for one PR when it is opened.
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub struct PrInfo {
+    pub description: Option<String>,
+    pub labels: Vec<String>,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
+pub enum PrGroup {
+    Open,
+    Merged,
+    Declined,
+}
+
+impl PrGroup {
+    pub const ALL: [Self; 3] = [Self::Open, Self::Merged, Self::Declined];
+
+    /// The group a PR belongs to, by its status.
+    pub const fn of(status: &PrStatus) -> Self {
+        match status {
+            PrStatus::Open | PrStatus::Draft => Self::Open,
+            PrStatus::Merged => Self::Merged,
+            PrStatus::Declined => Self::Declined,
+        }
+    }
+
+    pub const fn label(self) -> &'static str {
+        match self {
+            Self::Open => "open",
+            Self::Merged => "merged",
+            Self::Declined => "declined",
+        }
+    }
+
+    /// Open PRs are always read in full. Closed ones are history, so they are
+    /// read a page at a time, newest first.
+    pub const fn is_paged(self) -> bool {
+        !matches!(self, Self::Open)
+    }
+}
+
 /// PRs read in one go, plus where to continue for older merged and declined
 /// ones. `more` is opaque to everything but the provider that made it, and is
 /// `None` when nothing older is left to read.

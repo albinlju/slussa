@@ -2,35 +2,43 @@ use crate::{
     app::{
         App,
         action::LoadedAction,
-        store::{FetchKey, LoadState, Notice, Operation, PrData},
+        navigation::Screen,
+        store::{FetchKey, LoadState, Notice, OpenChain, Operation, PrData},
     },
-    domain::pr::{PrBatch, PrStatus, PullRequest},
+    domain::pr::{PrBatch, PrGroup, PrStatus},
 };
 
 impl App {
     pub(super) fn loaded_actions(&mut self, action: LoadedAction) {
         let key = match &action {
-            LoadedAction::Prs(_) => Some(FetchKey::Prs),
-            LoadedAction::OlderPrs(_) => Some(FetchKey::OlderPrs),
+            LoadedAction::Prs { group, .. } => Some(FetchKey::Prs(*group)),
             LoadedAction::Commits(id, _) => Some(FetchKey::Commits(*id)),
             LoadedAction::Diff(id, _) => Some(FetchKey::Diff(*id)),
             LoadedAction::Builds(id, _) => Some(FetchKey::Builds(*id)),
             LoadedAction::Activity(id, _) => Some(FetchKey::Activity(*id)),
             LoadedAction::Mergeability(id, _) => Some(FetchKey::Mergeability(*id)),
+            LoadedAction::Info(id, _) => Some(FetchKey::Info(*id)),
             LoadedAction::CommitDiff(id, oid, _) => Some(FetchKey::CommitDiff(*id, oid.clone())),
             _ => None,
         };
         if let Some(key) = &key {
             let failed = match &action {
-                LoadedAction::Prs(r) | LoadedAction::OlderPrs(r) => r.is_err(),
+                LoadedAction::Prs { result, .. } => result.is_err(),
                 LoadedAction::Commits(_, r) => r.is_err(),
                 LoadedAction::Diff(_, r) | LoadedAction::CommitDiff(_, _, r) => r.is_err(),
                 LoadedAction::Builds(_, r) => r.is_err(),
                 LoadedAction::Activity(_, r) => r.is_err(),
                 LoadedAction::Mergeability(_, r) => r.is_err(),
+                LoadedAction::Info(_, r) => r.is_err(),
                 _ => false,
             };
-            if failed && self.state.store.has_cached_data(key) {
+            // A failed read of an older page says so in its own notice and
+            // is not a stale list.
+            let older_page = matches!(
+                &action,
+                LoadedAction::Prs { group, after: Some(_), .. } if group.is_paged()
+            );
+            if failed && !older_page && self.state.store.has_cached_data(key) {
                 self.state.store.refresh_failures.insert(key.clone());
             } else if !failed {
                 self.state.store.refresh_failures.remove(key);
@@ -54,33 +62,11 @@ impl App {
                 self.pr_state_changed("review", pr_id, Err(message));
                 self.reload_after_mutation(pr_id);
             }
-            LoadedAction::OlderPrs(r) => self.older_prs_loaded(r),
-            LoadedAction::Prs(r) => {
-                log_outcome("prs", None, &r);
-                let r = r.map(|batch| self.adopt_first_read(batch));
-                let selected_id = self
-                    .state
-                    .ui
-                    .list
-                    .filtered_prs(&self.state.store.cache.prs, &self.state.store.current_user)
-                    .get(self.state.ui.list.selected)
-                    .map(|pr| pr.id);
-                self.state.store.cache.prs.reload(r);
-                let filtered = self
-                    .state
-                    .ui
-                    .list
-                    .filtered_prs(&self.state.store.cache.prs, &self.state.store.current_user);
-                self.state.ui.list.selected = selected_id
-                    .and_then(|id| filtered.iter().position(|pr| pr.id == id))
-                    .unwrap_or_else(|| {
-                        self.state
-                            .ui
-                            .list
-                            .selected
-                            .min(filtered.len().saturating_sub(1))
-                    });
-            }
+            LoadedAction::Prs {
+                group,
+                after,
+                result,
+            } => self.prs_loaded(group, after.is_some(), result),
             LoadedAction::Commits(pr_id, r) => {
                 log_outcome("commits", Some(pr_id), &r);
                 if let Ok(new) = &r {
@@ -114,6 +100,10 @@ impl App {
             LoadedAction::Mergeability(pr_id, r) => {
                 log_outcome("mergeability", Some(pr_id), &r);
                 self.pr_data_mut(pr_id).mergeability.reload(r);
+            }
+            LoadedAction::Info(pr_id, r) => {
+                log_outcome("info", Some(pr_id), &r);
+                self.pr_data_mut(pr_id).info.reload(r);
             }
             LoadedAction::Merged(pr_id, r) => self.pr_state_changed("merge", pr_id, r),
             LoadedAction::Declined(pr_id, r) => self.pr_state_changed("decline", pr_id, r),
@@ -155,6 +145,21 @@ impl App {
                     Some(Notice::new(format!("PR #{pr_id} · {label}"), false));
                 self.state.store.uncertain_submissions.remove(&pr_id);
                 self.state.store.errors.remove(&pr_id);
+                // Show the new status at once; the refetch below confirms it.
+                // Without this the PR would vanish from the list until the
+                // group it moved to is read.
+                let moved_to = match operation {
+                    Operation::Merge => Some(PrStatus::Merged),
+                    Operation::Decline => Some(PrStatus::Declined),
+                    Operation::Reopen => Some(PrStatus::Open),
+                    _ => None,
+                };
+                if let Some(status) = moved_to
+                    && let LoadState::Loaded(prs) = &mut self.state.store.cache.prs
+                    && let Some(pr) = prs.iter_mut().find(|pr| pr.id == pr_id)
+                {
+                    pr.status = status;
+                }
                 if matches!(operation, Operation::Review) {
                     self.state.store.reviews.remove(&pr_id);
                 }
@@ -167,52 +172,185 @@ impl App {
         }
     }
 
-    /// A fresh first read becomes the list. Older closed PRs the user has
-    /// already loaded stay, and so does the position to continue from; without
-    /// that a refresh every minute would throw them away.
-    fn adopt_first_read(&mut self, batch: PrBatch) -> Vec<PullRequest> {
-        let mut prs = batch.prs;
-        if !self.state.store.older_loaded {
-            self.state.store.older_cursor = batch.more;
-            return prs;
+    fn prs_loaded(&mut self, group: PrGroup, continuation: bool, result: Result<PrBatch, String>) {
+        let older = continuation && group.is_paged();
+        log_outcome("prs", None, &result);
+        let rows = |app: &Self| {
+            app.state
+                .ui
+                .list
+                .filtered_prs(&app.state.store.cache.prs, &app.state.store.current_user)
+                .get(app.state.ui.list.selected)
+                .map(|pr| pr.id)
+        };
+        let selected_id = rows(self);
+        if group == PrGroup::Open && result.is_err() {
+            self.state.store.open_chain = OpenChain::Idle;
+            self.state.ui.list.hold_order = false;
         }
-        if let LoadState::Loaded(previous) = &self.state.store.cache.prs {
-            let closed =
-                |pr: &&PullRequest| matches!(pr.status, PrStatus::Merged | PrStatus::Declined);
-            for old in previous.iter().filter(closed) {
-                if !prs.iter().any(|pr| pr.id == old.id) {
-                    prs.push(old.clone());
-                }
+        match result {
+            Ok(batch) if group == PrGroup::Open => self.adopt_open_page(continuation, batch),
+            Ok(batch) => self.adopt_group(group, older, batch),
+            Err(message) if older => {
+                self.state.store.notice = Some(Notice::new(
+                    format!("Couldn't load older PRs: {message}"),
+                    true,
+                ));
             }
+            // The open group is the list itself: a first failure shows as a
+            // failed list, a failed refresh keeps what is there.
+            Err(message) if group == PrGroup::Open => {
+                self.state.store.cache.prs.reload(Err(message));
+            }
+            // A closed group never read before has no data to keep, so say so.
+            Err(message) if !self.state.store.group_loaded(group) => {
+                self.state.store.notice = Some(Notice::new(
+                    format!("Couldn't load {} PRs: {message}", group.label()),
+                    true,
+                ));
+            }
+            // A failed refresh of a group already read is recorded in
+            // `refresh_failures` above.
+            Err(_) => {}
         }
-        prs
+        let filtered = self
+            .state
+            .ui
+            .list
+            .filtered_prs(&self.state.store.cache.prs, &self.state.store.current_user);
+        self.state.ui.list.selected = selected_id
+            .and_then(|id| filtered.iter().position(|pr| pr.id == id))
+            .unwrap_or_else(|| {
+                self.state
+                    .ui
+                    .list
+                    .selected
+                    .min(filtered.len().saturating_sub(1))
+            });
     }
 
-    fn older_prs_loaded(&mut self, result: Result<PrBatch, String>) {
-        log_outcome("older-prs", None, &result);
-        let notice = match result {
-            Ok(batch) => {
-                let mut added = 0;
-                if let LoadState::Loaded(prs) = &mut self.state.store.cache.prs {
+    /// Take a group's read into the list. A first read replaces the group's
+    /// PRs; older closed PRs already loaded stay, and so does the position
+    /// reached, or a refresh every minute would throw them away. An older page
+    /// goes after what is there. The PR open in the detail screen is never
+    /// dropped, so a merge by someone else does not blank the screen.
+    /// One page of the open group. A first reading shows each page as it
+    /// arrives, in arrival order. A refresh holds the pages and swaps them in
+    /// after the last one. Either way the next page is asked for until there is
+    /// none or the limit is reached, and then the list takes its order.
+    fn adopt_open_page(&mut self, continuation: bool, batch: PrBatch) {
+        let more = batch.more.clone();
+        let store = &mut self.state.store;
+        let chain = match (continuation, std::mem::take(&mut store.open_chain)) {
+            (false, _) if matches!(store.cache.prs, LoadState::Loaded(_)) => {
+                OpenChain::Collecting(batch.prs)
+            }
+            (false, _) => {
+                self.adopt_group(PrGroup::Open, false, batch);
+                OpenChain::Appending
+            }
+            (true, OpenChain::Appending) => {
+                if let LoadState::Loaded(prs) = &mut store.cache.prs {
                     for pr in batch.prs {
-                        if !prs.iter().any(|existing| existing.id == pr.id) {
+                        if !prs.iter().any(|known| known.id == pr.id) {
                             prs.push(pr);
-                            added += 1;
                         }
                     }
+                    prs.sort_by_key(|pr| PrGroup::of(&pr.status));
                 }
-                self.state.store.older_cursor = batch.more;
-                self.state.store.older_loaded = true;
-                let message = match (added, self.state.store.older_cursor.is_some()) {
-                    (0, _) => "No older PRs".to_owned(),
-                    (1, _) => "Loaded 1 older PR".to_owned(),
-                    (n, _) => format!("Loaded {n} older PRs"),
-                };
-                Notice::new(message, false)
+                OpenChain::Appending
             }
-            Err(message) => Notice::new(format!("Couldn't load older PRs: {message}"), true),
+            (true, OpenChain::Collecting(mut held)) => {
+                held.extend(batch.prs);
+                OpenChain::Collecting(held)
+            }
+            // A page that belongs to a reading that has already ended.
+            (true, OpenChain::Idle) => return,
         };
-        self.state.store.notice = Some(notice);
+        let store = &mut self.state.store;
+        let read = match &chain {
+            OpenChain::Collecting(held) => held.len(),
+            _ => match &store.cache.prs {
+                LoadState::Loaded(prs) => prs
+                    .iter()
+                    .filter(|pr| PrGroup::of(&pr.status) == PrGroup::Open)
+                    .count(),
+                _ => 0,
+            },
+        };
+        let next = more.clone().filter(|_| read < store.open_limit());
+        // Where `L` continues from, if the reading stops with more left.
+        store
+            .groups
+            .entry(PrGroup::Open)
+            .or_default()
+            .more
+            .clone_from(&more);
+        if let Some(after) = next {
+            self.state.ui.list.hold_order = matches!(chain, OpenChain::Appending);
+            self.state.store.open_chain = chain;
+            self.spawn_load_prs(PrGroup::Open, Some(after));
+            return;
+        }
+        if let OpenChain::Collecting(held) = chain {
+            self.adopt_group(PrGroup::Open, false, PrBatch { prs: held, more });
+        }
+        self.state.ui.list.hold_order = false;
+    }
+
+    fn adopt_group(&mut self, group: PrGroup, older: bool, batch: PrBatch) {
+        let viewing = match self.state.screen {
+            Screen::Detail { pr_id, .. } => Some(pr_id),
+            Screen::List => None,
+        };
+        let store = &mut self.state.store;
+        let existing = match &mut store.cache.prs {
+            LoadState::Loaded(prs) => std::mem::take(prs),
+            _ => Vec::new(),
+        };
+        let state = store.groups.entry(group).or_default();
+        let mut notice = None;
+        let mut prs = if older {
+            let mut prs = existing;
+            let mut added = 0;
+            for pr in batch.prs {
+                if !prs.iter().any(|known| known.id == pr.id) {
+                    prs.push(pr);
+                    added += 1;
+                }
+            }
+            state.more = batch.more;
+            state.older_loaded = true;
+            notice = Some(match added {
+                0 => "No older PRs".to_owned(),
+                1 => "Loaded 1 older PR".to_owned(),
+                n => format!("Loaded {n} older PRs"),
+            });
+            prs
+        } else {
+            let keep_older = state.older_loaded && group.is_paged();
+            let mut prs = batch.prs;
+            for old in existing {
+                if prs.iter().any(|fresh| fresh.id == old.id) {
+                    continue;
+                }
+                let in_group = PrGroup::of(&old.status) == group;
+                if !in_group || keep_older || Some(old.id) == viewing {
+                    prs.push(old);
+                }
+            }
+            if !state.older_loaded {
+                state.more = batch.more;
+            }
+            prs
+        };
+        state.loaded = true;
+        // Providers give each group newest first; keep the groups in a fixed order.
+        prs.sort_by_key(|pr| PrGroup::of(&pr.status));
+        store.cache.prs = LoadState::Loaded(prs);
+        if let Some(message) = notice {
+            store.notice = Some(Notice::new(message, false));
+        }
     }
 
     fn pr_data_mut(&mut self, pr_id: u64) -> &mut PrData {

@@ -108,11 +108,48 @@ Decisions and the release procedure are in [RELEASING.md](RELEASING.md).
   1. `git clone --depth 1 https://github.com/cli/cli && cd cli && tuipr`.
   2. Note how many seconds until the list appears, and whether `F` stays
      quick.
-  3. Press `f`, choose Merged, press `L` a few times. Expect batches of 50 and
+  3. Press `f`, choose Merged, press `L` a few times. Expect batches of 30 on GitHub and
      a footer that drops `L: older` only when the history ends.
   Report: the seconds, and anything that stalled or looked wrong.
-  (*Me*, instead: I can time the same queries with `gh api graphql`, read-only,
-  against a public repository, at a cost of some of your rate limit. Say go.)
+  **Measured by me 2026-09-30 on `cli/cli`** (63 open, 3 256 merged, 1 352
+  closed; read-only `gh api graphql` with tuipr's real selection, 51
+  rate-limit points in all, of 5 000 an hour). The interactive part above is still yours.
+
+  | Query | Time | Cost |
+  | --- | --- | --- |
+  | open PRs, first 100 (63 exist) | 5.8 s | 4 |
+  | closed PRs, first 50 by update | 4.6 s | 2 |
+  | closed PRs, first 25 | 2.9 s | 1 |
+  | any state, first 100 (how it read before) | 11.2 s **failed** | |
+  | any state, first 100, repeated | 6.9 s and 8.0 s passed | 4 |
+  | any state, first 50 | 2.5 to 6.2 s | 2 |
+  | any state, first 30 | 2.0 s | 1 |
+
+  What it shows: the new first load costs 6 points and about 10 s end to end
+  (the two reads run one after the other), where the old way needed 47 pages and
+  could not even get its first page through. GitHub answered "We couldn't
+  respond to your request in time" for a 100-PR page; the timing is noisy, but
+  100 is at the edge and 30 to 50 is comfortably under. So the bounded list is a
+  correctness fix on a big repository, not only a speed-up, and a page of 100
+  is still too large for tuipr's selection. See IMPROVEMENTS.md.
+
+  **Re-measured after the fix, same day, with tuipr's own code** (`GH_REPO=cli/cli`,
+  a temporary test, not kept): a page size of 30 and the open and closed reads
+  run together. The first load took 6.5 s for 93 PRs (63 open of which 30 are
+  drafts, plus a page of closed ones), against about 10 s before, and the next
+  three older batches took 2.3, 3.4 and 4.5 s. Nothing failed. Still the
+  maintainer's: running the TUI itself and pressing `L` (steps above).
+
+  **Changed afterwards:** merged and declined PRs are read per view, only when
+  that view is first opened. The start now reads the open group alone. This has
+  been tested against the scripted `gh` but not yet timed on a real repository.
+
+  **Changed again, same day:** the list query no longer reads the body and the
+  labels (read per PR when it is opened), and the open group is read a page at
+  a time with the first page shown at once. Measured live on `cli/cli`, three
+  runs of one page of 30 open PRs as now queried: 2.7, 2.2 and 2.0 s. The
+  maintainer's part: open a PR on a real repository and check that the
+  description and labels appear, and that the list appears with its first page.
 
 ## C. Bitbucket Data Center
 

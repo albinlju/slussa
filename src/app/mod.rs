@@ -1,5 +1,6 @@
 use crate::{
     app::{action::Action, state::AppState, store::LoadState},
+    domain::pr::PrGroup,
     providers::Provider,
     tui::{key_to_action, render},
 };
@@ -61,7 +62,7 @@ impl App {
 
     pub async fn run(mut self, terminal: &mut DefaultTerminal) -> std::io::Result<()> {
         self.state.store.cache.prs = LoadState::Loading;
-        self.spawn_load_prs();
+        self.spawn_load_prs(PrGroup::Open, None);
 
         let mut events = EventStream::new();
         let start = time::Instant::now() + refresh::BUILDS_INTERVAL;
@@ -155,6 +156,7 @@ impl App {
             }
             Action::List(action::ListAction::OpenPr(id)) => self.open_pr(id),
             Action::List(action::ListAction::LoadOlder) => self.load_older_prs(),
+            Action::List(action::ListAction::FilterChanged) => self.ensure_view_loaded(),
             Action::Command { pr_id, command } => self.execute(pr_id, command),
             Action::LoadCommitDiff { pr_id, oid } => self.ensure_commit_diff(pr_id, oid),
             Action::Loaded(a) => self.loaded_actions(a),

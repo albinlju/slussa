@@ -62,19 +62,6 @@ pub(super) fn node_nodes_after<T: DeserializeOwned>(
 
 const REPO_CONNECTION_PATH: &[&str] = &["data", "repository", "connection"];
 
-/// Every page of a connection on this repository. `args` is empty or ends in a
-/// comma and a space, for example `states: OPEN, `.
-pub(super) fn repo_nodes<T: DeserializeOwned>(
-    field: &str,
-    args: &str,
-    selection: &str,
-) -> Result<Vec<T>, FetchError> {
-    nodes(
-        |cursor| repo_query(field, args, selection, "100", cursor),
-        REPO_CONNECTION_PATH,
-    )
-}
-
 /// One page of `first` nodes of a connection on this repository, starting
 /// after `after`, and the cursor to continue from (`None` at the end). It never
 /// follows the cursor itself: the caller decides whether to read more.

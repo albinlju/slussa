@@ -23,12 +23,7 @@ pub fn render(frame: &mut Frame<'_>, state: &mut AppState) {
         Screen::List => state.ui.list.render(
             frame,
             frame.area(),
-            &pr_list::ListContext {
-                prs: &state.store.cache.prs,
-                refreshing: state.store.refreshing(state.screen),
-                viewer: &state.store.current_user,
-                more_closed: state.store.older_cursor.is_some(),
-            },
+            &pr_list::ListContext::from_store(&state.store, state.ui.list.filter, state.screen),
         ),
         Screen::Detail { .. } => state.ui.detail.render(
             frame,
@@ -128,12 +123,7 @@ pub fn key_to_action(state: &AppState, key: KeyEvent) -> Option<Action> {
     match state.screen {
         Screen::List => state.ui.list.handle_key(
             key,
-            &pr_list::ListContext {
-                prs: &state.store.cache.prs,
-                refreshing: state.store.refreshing(state.screen),
-                viewer: &state.store.current_user,
-                more_closed: state.store.older_cursor.is_some(),
-            },
+            &pr_list::ListContext::from_store(&state.store, state.ui.list.filter, state.screen),
         ),
         Screen::Detail { .. } => state.ui.detail.handle_key(
             key,
@@ -218,12 +208,7 @@ impl Ui {
             }
             Action::List(action) => self.list.update(
                 action,
-                &pr_list::ListContext {
-                    prs: &store.cache.prs,
-                    refreshing: store.refreshing(screen),
-                    viewer: &store.current_user,
-                    more_closed: store.older_cursor.is_some(),
-                },
+                &pr_list::ListContext::from_store(store, self.list.filter, screen),
             ),
             Action::Search(action) if screen == Screen::List => {
                 if !self.list.filter_picker_open {

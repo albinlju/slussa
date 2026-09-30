@@ -17,6 +17,12 @@ impl App {
             .capabilities
             .supports(crate::domain::capabilities::Feature::Builds)
             && pr_data.builds.start_loading();
+        let load_info = self
+            .state
+            .store
+            .capabilities
+            .supports(crate::domain::capabilities::Feature::PrInfo)
+            && pr_data.info.start_loading();
         let load_activity = pr_data.activity.start_loading();
         let load_mergeability = self
             .state
@@ -35,6 +41,9 @@ impl App {
         }
         if load_activity {
             self.spawn_load_activity(pr_id);
+        }
+        if load_info {
+            self.spawn_load_info(pr_id);
         }
         if load_mergeability {
             self.spawn_load_mergeability(pr_id);

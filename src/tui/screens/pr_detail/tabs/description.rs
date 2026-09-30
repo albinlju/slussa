@@ -1,6 +1,9 @@
 use crate::{
-    app::action::{Action, DetailAction},
-    domain::pr::PullRequest,
+    app::{
+        action::{Action, DetailAction},
+        store::LoadState,
+    },
+    domain::pr::{PrInfo, PullRequest},
     tui::{
         component::{Component, scroll},
         widgets::{self, markdown},
@@ -12,8 +15,37 @@ use ratatui::{
     layout::Rect,
 };
 
-pub fn render(frame: &mut Frame<'_>, pr: &PullRequest, ui: &mut Description, area: Rect) {
-    let lines = markdown::render(description_body(pr), area.width.saturating_sub(1));
+/// `info` holds the description for a provider whose list leaves it out. Until
+/// it arrives there is nothing to show but that it is loading.
+pub fn render(
+    frame: &mut Frame<'_>,
+    pr: &PullRequest,
+    info: Option<&LoadState<PrInfo>>,
+    ui: &mut Description,
+    area: Rect,
+) {
+    let body = match info {
+        Some(LoadState::Loaded(info)) => description_body(info.description.as_deref()),
+        Some(LoadState::Loading) if pr.description.is_none() => {
+            frame.render_widget(
+                ratatui::widgets::Paragraph::new(widgets::loading("Loading description...")),
+                area,
+            );
+            return;
+        }
+        Some(LoadState::Failed(message)) if pr.description.is_none() => {
+            frame.render_widget(
+                ratatui::widgets::Paragraph::new(format!(
+                    "Couldn't load the description. F: retry\n{message}"
+                ))
+                .style(ratatui::style::Style::default().fg(crate::tui::theme::current().error)),
+                area,
+            );
+            return;
+        }
+        _ => description_body(pr.description.as_deref()),
+    };
+    let lines = markdown::render(body, area.width.saturating_sub(1));
     let content = Rect {
         width: area.width.saturating_sub(1),
         ..area
@@ -48,9 +80,8 @@ pub fn render(frame: &mut Frame<'_>, pr: &PullRequest, ui: &mut Description, are
     }
 }
 
-fn description_body(pr: &PullRequest) -> &str {
-    pr.description
-        .as_deref()
+fn description_body(description: Option<&str>) -> &str {
+    description
         .map(str::trim)
         .filter(|s| !s.is_empty())
         .unwrap_or("(no description)")
@@ -97,6 +128,6 @@ impl Component for Description {
         None
     }
     fn render(&mut self, frame: &mut Frame<'_>, area: Rect, pr: &&PullRequest) {
-        render(frame, pr, self, area);
+        render(frame, pr, None, self, area);
     }
 }

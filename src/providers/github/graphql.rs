@@ -66,6 +66,17 @@ query($owner: String!, $name: String!, $pr: Int!) {
   }
 }";
 
+/// The description and labels, which the list query leaves out.
+pub(super) const INFO: &str = r"
+query($owner: String!, $name: String!, $pr: Int!) {
+  repository(owner: $owner, name: $name) {
+    pullRequest(number: $pr) {
+      id body
+      labels(first: 100) { nodes { name } pageInfo { hasNextPage } }
+    }
+  }
+}";
+
 #[cfg(test)]
 mod tests {
     use super::*;

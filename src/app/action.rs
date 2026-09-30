@@ -4,7 +4,7 @@ use crate::{
         ci::Build,
         commit::Commit,
         diff::Diff,
-        pr::{MergeStatus, PrBatch},
+        pr::{MergeStatus, PrBatch, PrGroup, PrInfo},
     },
     tui::screens::pr_detail::tabs::DetailTab,
 };
@@ -51,8 +51,10 @@ pub enum SearchAction {
 pub enum ListAction {
     ToggleHelp,
     ToggleSort,
-    /// Read the next older merged and declined PRs.
+    /// Read the next older page of each closed group the view shows.
     LoadOlder,
+    /// The status filter changed, so the new view may need PRs not read yet.
+    FilterChanged,
     MoveSelection(i16),
     OpenPr(u64),
     OpenFilterPicker,
@@ -142,14 +144,18 @@ pub enum LoadedAction {
         submitted_summary: Option<String>,
         message: String,
     },
-    Prs(Result<PrBatch, String>),
-    /// The next older merged and declined PRs, read on request.
-    OlderPrs(Result<PrBatch, String>),
+    /// A group of PRs, or with `after` the page of a closed group that follows it.
+    Prs {
+        group: PrGroup,
+        after: Option<String>,
+        result: Result<PrBatch, String>,
+    },
     Commits(u64, Result<Vec<Commit>, String>),
     Diff(u64, Result<Diff, String>),
     Builds(u64, Result<Vec<Build>, String>),
     Activity(u64, Result<Activity, String>),
     Mergeability(u64, Result<MergeStatus, String>),
+    Info(u64, Result<PrInfo, String>),
     Merged(u64, Result<(), String>),
     Declined(u64, Result<(), String>),
     Reopened(u64, Result<(), String>),

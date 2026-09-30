@@ -22,7 +22,7 @@ use crate::domain::{
     ci::Build,
     commit::Commit,
     diff::Diff,
-    pr::{MergeStatus, PullRequest},
+    pr::{MergeStatus, PrGroup, PrInfo, PullRequest},
 };
 use std::collections::{HashMap, HashSet};
 
@@ -39,13 +39,36 @@ pub struct Store {
     pub reload_after_fetch: HashSet<FetchKey>,
     pub reviews: HashMap<u64, crate::app::reviews::PendingReview>,
     pub cache: Cache,
-    /// Where to continue reading older merged and declined PRs; `None` when
-    /// there are none left (or nothing has loaded yet).
-    pub older_cursor: Option<String>,
-    /// Whether the user has read older PRs, which a refresh must then keep.
-    pub older_loaded: bool,
+    /// What has been read of each group of PRs.
+    pub groups: HashMap<PrGroup, GroupState>,
+    pub open_chain: OpenChain,
+    /// How many more batches of open PRs `L` has asked for.
+    pub open_extra: usize,
     pub current_user: String,
     pub capabilities: crate::domain::capabilities::Capabilities,
+}
+
+/// Where the pages of the open group stand. They are read one after another.
+#[derive(Debug, Default)]
+pub enum OpenChain {
+    #[default]
+    Idle,
+    /// The first reading: each page is shown as it arrives.
+    Appending,
+    /// A refresh: the pages are held and swapped in when the last has arrived,
+    /// so the list never shrinks to its first page in the meantime.
+    Collecting(Vec<PullRequest>),
+}
+
+/// What has been read of one group of PRs.
+#[derive(Debug, Default, Clone)]
+pub struct GroupState {
+    pub loaded: bool,
+    /// Where to continue reading older PRs of a closed group; `None` when
+    /// there are none left.
+    pub more: Option<String>,
+    /// Whether an older page was read, which a refresh must then keep.
+    pub older_loaded: bool,
 }
 
 #[derive(Debug, Default)]
@@ -61,6 +84,8 @@ pub struct PrData {
     pub builds: LoadState<Vec<Build>>,
     pub activity: LoadState<Activity>,
     pub mergeability: LoadState<MergeStatus>,
+    /// Description and labels, for a provider whose list leaves them out.
+    pub info: LoadState<PrInfo>,
     pub commit_diffs: HashMap<String, LoadState<Diff>>,
 }
 
@@ -116,6 +141,7 @@ impl PrData {
             || self.builds.is_loading()
             || self.activity.is_loading()
             || self.mergeability.is_loading()
+            || self.info.is_loading()
             || self.commit_diffs.values().any(LoadState::is_loading)
     }
 }
@@ -141,22 +167,49 @@ pub enum Operation {
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub enum FetchKey {
-    Prs,
-    /// The next batch of older closed PRs.
-    OlderPrs,
+    /// One group of PRs, read first or, for a closed group, one page further.
+    Prs(PrGroup),
     Commits(u64),
     Diff(u64),
     Builds(u64),
     Activity(u64),
     Mergeability(u64),
+    Info(u64),
     CommitDiff(u64, String),
 }
 
+/// How many open PRs are read without being asked to, and how many each `L`
+/// adds. Three pages on GitHub. A repository with fewer is read in full.
+pub const OPEN_BATCH: usize = 90;
+
 impl Store {
+    /// How many open PRs are read now: the first batch and what `L` added.
+    pub const fn open_limit(&self) -> usize {
+        OPEN_BATCH * (1 + self.open_extra)
+    }
+
+    /// Whether the group has been read. The open group counts as read as soon
+    /// as the list itself has loaded.
+    pub fn group_loaded(&self, group: PrGroup) -> bool {
+        self.groups.get(&group).is_some_and(|state| state.loaded)
+            || (group == PrGroup::Open && matches!(self.cache.prs, LoadState::Loaded(_)))
+    }
+
+    /// Whether older PRs remain to be read in the group.
+    pub fn group_has_more(&self, group: PrGroup) -> bool {
+        self.groups
+            .get(&group)
+            .is_some_and(|state| state.more.is_some())
+    }
+
+    pub fn group_loading(&self, group: PrGroup) -> bool {
+        self.fetches.contains(&FetchKey::Prs(group))
+    }
+
     pub fn refreshing(&self, screen: crate::app::navigation::Screen) -> bool {
         use crate::app::navigation::Screen;
         self.fetches.iter().any(|key| match (screen, key) {
-            (_, FetchKey::Prs | FetchKey::OlderPrs) => true,
+            (_, FetchKey::Prs(_)) => true,
             (
                 Screen::Detail { pr_id, .. },
                 FetchKey::Commits(id)
@@ -164,6 +217,7 @@ impl Store {
                 | FetchKey::Builds(id)
                 | FetchKey::Activity(id)
                 | FetchKey::Mergeability(id)
+                | FetchKey::Info(id)
                 | FetchKey::CommitDiff(id, _),
             ) => pr_id == *id,
             _ => false,
@@ -193,26 +247,26 @@ impl Notice {
 impl Store {
     pub fn has_cached_data(&self, key: &FetchKey) -> bool {
         let id = match key {
-            FetchKey::Prs => return matches!(self.cache.prs, LoadState::Loaded(_)),
-            // A failed batch is reported once, not kept as a refresh failure.
-            FetchKey::OlderPrs => return false,
+            FetchKey::Prs(group) => return self.group_loaded(*group),
             FetchKey::Commits(id)
             | FetchKey::Diff(id)
             | FetchKey::Builds(id)
             | FetchKey::Activity(id)
             | FetchKey::Mergeability(id)
+            | FetchKey::Info(id)
             | FetchKey::CommitDiff(id, _) => id,
         };
         let Some(data) = self.cache.details.get(id) else {
             return false;
         };
         match key {
-            FetchKey::Prs | FetchKey::OlderPrs => false,
+            FetchKey::Prs(_) => false,
             FetchKey::Commits(_) => matches!(data.commits, LoadState::Loaded(_)),
             FetchKey::Diff(_) => matches!(data.diff, LoadState::Loaded(_)),
             FetchKey::Builds(_) => matches!(data.builds, LoadState::Loaded(_)),
             FetchKey::Activity(_) => matches!(data.activity, LoadState::Loaded(_)),
             FetchKey::Mergeability(_) => matches!(data.mergeability, LoadState::Loaded(_)),
+            FetchKey::Info(_) => matches!(data.info, LoadState::Loaded(_)),
             FetchKey::CommitDiff(_, oid) => {
                 matches!(data.commit_diffs.get(oid), Some(LoadState::Loaded(_)))
             }
@@ -221,7 +275,7 @@ impl Store {
     pub fn refresh_failed(&self, screen: crate::app::navigation::Screen) -> bool {
         use crate::{app::navigation::Screen, tui::screens::pr_detail::tabs::DetailTab};
         self.refresh_failures.iter().any(|key| match (screen, key) {
-            (_, FetchKey::Prs) => true,
+            (_, FetchKey::Prs(_)) => true,
             (Screen::Detail { pr_id, tab }, FetchKey::Diff(id)) => {
                 pr_id == *id && tab == DetailTab::Diff
             }
@@ -236,6 +290,9 @@ impl Store {
                 pr_id == *id && matches!(tab, DetailTab::Overview | DetailTab::Builds)
             }
             (Screen::Detail { pr_id, .. }, FetchKey::Mergeability(id)) => pr_id == *id,
+            (Screen::Detail { pr_id, tab }, FetchKey::Info(id)) => {
+                pr_id == *id && matches!(tab, DetailTab::Overview | DetailTab::Description)
+            }
             (
                 Screen::Detail { pr_id, tab },
                 FetchKey::Commits(id) | FetchKey::CommitDiff(id, _),

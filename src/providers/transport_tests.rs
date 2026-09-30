@@ -15,7 +15,7 @@ use super::{
 use crate::{
     domain::{
         diff::DiffRevision,
-        pr::{MergeStatus, MergeStrategy, Mergeability},
+        pr::{MergeStatus, MergeStrategy, Mergeability, PrGroup, PrStatus},
         review::{ReviewComment, ReviewVerdict, ReviewerState},
     },
     test_support::{FakeGh, InstalledGh, MockHttp, Route, gh_closed_pr, gh_list_page, gh_pr},
@@ -25,68 +25,131 @@ use crate::{
 // GitHub through a fake `gh`
 // ---------------------------------------------------------------------------
 
-fn fetch_prs_with(gh: FakeGh) -> (Result<crate::domain::pr::PrBatch, FetchError>, InstalledGh) {
+fn fetch_group_with(
+    gh: FakeGh,
+    group: PrGroup,
+    after: Option<&str>,
+) -> (Result<crate::domain::pr::PrBatch, FetchError>, InstalledGh) {
     let installed = gh.install();
-    (Provider::GitHub.fetch_prs(), installed)
+    (Provider::GitHub.fetch_prs(group, after), installed)
+}
+
+fn fetch_prs_with(gh: FakeGh) -> (Result<crate::domain::pr::PrBatch, FetchError>, InstalledGh) {
+    fetch_group_with(gh, PrGroup::Open, None)
 }
 
 #[test]
-fn github_list_reads_every_open_page_and_one_page_of_recent_closed() {
+fn github_open_group_is_read_a_page_at_a_time_with_drafts_and_nothing_closed() {
+    let mut draft = gh_pr(2, "2026-09-03T10:00:00Z");
+    draft["isDraft"] = json!(true);
     let gh = FakeGh::new()
         .on(
-            "states: OPEN, first: 100, after: null",
+            "states: OPEN, first: 30, after: null",
             &gh_list_page(&[gh_pr(1, "2026-09-01T10:00:00Z")], Some("c1")),
         )
         .on(
-            "states: OPEN, first: 100, after: \"c1\"",
-            &gh_list_page(&[gh_pr(2, "2026-09-03T10:00:00Z")], None),
+            "states: OPEN, first: 30, after: \"c1\"",
+            &gh_list_page(&[draft], None),
         )
-        // More closed PRs exist, but the list must not follow that cursor.
-        .on(
-            "states: [MERGED, CLOSED]",
-            &gh_list_page(
-                &[gh_closed_pr(3, "2026-09-02T10:00:00Z", "MERGED")],
-                Some("x"),
-            ),
-        );
-    let (result, installed) = fetch_prs_with(gh);
-    let crate::domain::pr::PrBatch { prs, more } = result.unwrap();
-    assert_eq!(more.as_deref(), Some("x"), "the closed cursor is handed on");
+        .install();
 
+    let first = Provider::GitHub.fetch_prs(PrGroup::Open, None).unwrap();
+    assert_eq!(first.more.as_deref(), Some("c1"), "the caller reads on");
     assert_eq!(
-        prs.iter().map(|pr| pr.id).collect::<Vec<_>>(),
-        vec![2, 3, 1]
+        first.prs.iter().map(|pr| pr.id).collect::<Vec<_>>(),
+        vec![1]
     );
-    assert_eq!(prs[1].status, crate::domain::pr::PrStatus::Merged);
-    assert_eq!(prs[2].author.username, "alice");
-    assert_eq!(prs[2].labels, vec!["bug"]);
-    assert_eq!(prs[2].comment_count, 4);
-    assert_eq!(prs[2].reviewers.len(), 1);
-
-    let calls = installed.calls();
-    assert_eq!(calls.len(), 3, "{calls:?}");
-    assert!(calls[0].starts_with("api graphql -F owner={owner} -F name={repo} -f query="));
-    assert!(calls[0].contains("pullRequests(states: OPEN, first: 100, after: null)"));
-    assert!(calls[1].contains("after: \"c1\""));
-    assert!(calls[2].contains(
-        "pullRequests(states: [MERGED, CLOSED], orderBy: {field: UPDATED_AT, direction: DESC}, first: 50, after: null)"
-    ));
+    let pr = &first.prs[0];
+    assert_eq!(pr.status, PrStatus::Open);
+    assert_eq!(pr.author.username, "alice");
     assert!(
-        calls.iter().all(|call| !call.contains("after: \"x\"")),
-        "the closed cursor is never followed: {calls:?}"
+        pr.labels.is_empty() && pr.description.is_none(),
+        "the list leaves out the description and the labels"
+    );
+    assert_eq!(pr.comment_count, 4);
+    assert_eq!(pr.reviewers.len(), 1);
+
+    let last = Provider::GitHub
+        .fetch_prs(PrGroup::Open, Some("c1"))
+        .unwrap();
+    assert_eq!(last.more, None);
+    assert_eq!(last.prs[0].id, 2);
+    assert_eq!(
+        last.prs[0].status,
+        PrStatus::Draft,
+        "drafts come with the open ones"
+    );
+
+    let calls = gh.calls();
+    assert_eq!(calls.len(), 2, "{calls:?}");
+    assert!(calls[0].starts_with("api graphql -F owner={owner} -F name={repo} -f query="));
+    assert!(calls[0].contains("pullRequests(states: OPEN, first: 30, after: null)"));
+    assert!(calls[1].contains("pullRequests(states: OPEN, first: 30, after: \"c1\")"));
+    assert!(
+        calls
+            .iter()
+            .all(|call| !call.contains("MERGED") && !call.contains("CLOSED")),
+        "no closed PRs are asked for: {calls:?}"
     );
 }
 
 #[test]
-fn github_a_failing_open_read_does_not_ask_for_closed_ones() {
-    let gh = FakeGh::new().fail("states: OPEN", 1, "gh: HTTP 502");
-    let (result, installed) = fetch_prs_with(gh);
+fn github_closed_groups_read_one_page_each_with_their_own_state() {
+    for (group, state, args) in [
+        (
+            PrGroup::Merged,
+            "MERGED",
+            "states: MERGED, orderBy: {field: UPDATED_AT, direction: DESC}, first: 30, after: null",
+        ),
+        (
+            PrGroup::Declined,
+            "CLOSED",
+            "states: CLOSED, orderBy: {field: UPDATED_AT, direction: DESC}, first: 30, after: null",
+        ),
+    ] {
+        // More exist, but reading the group must not follow that cursor.
+        let gh = FakeGh::new().on(
+            "after: null",
+            &gh_list_page(&[gh_closed_pr(3, "2026-08-01T10:00:00Z", state)], Some("x")),
+        );
+        let (result, installed) = fetch_group_with(gh, group, None);
+        let batch = result.unwrap();
 
-    assert!(
-        matches!(result, Err(FetchError::GhFailed { .. })),
-        "{result:?}"
-    );
-    assert_eq!(installed.calls().len(), 1);
+        assert_eq!(batch.prs.len(), 1);
+        assert_eq!(PrGroup::of(&batch.prs[0].status), group, "{group:?}");
+        assert_eq!(batch.more.as_deref(), Some("x"));
+        let calls = installed.calls();
+        assert_eq!(calls.len(), 1, "{calls:?}");
+        assert!(calls[0].contains(args), "{group:?}: {}", calls[0]);
+    }
+}
+
+#[test]
+fn github_a_closed_pr_still_flagged_as_a_draft_is_not_shown_as_one() {
+    // GitHub keeps the draft flag on a closed PR. Seen on a real repository.
+    for (state, expected) in [("CLOSED", PrStatus::Declined), ("MERGED", PrStatus::Merged)] {
+        let mut pr = gh_closed_pr(3, "2026-08-01T10:00:00Z", state);
+        pr["isDraft"] = json!(true);
+        let gh = FakeGh::new().on("states:", &gh_list_page(&[pr], None));
+        let group = PrGroup::of(&expected);
+        let (result, _installed) = fetch_group_with(gh, group, None);
+
+        assert_eq!(result.unwrap().prs[0].status, expected, "{state}");
+    }
+}
+
+#[test]
+fn github_a_failed_read_is_an_error_for_that_group() {
+    for group in PrGroup::ALL {
+        let gh = FakeGh::new().fail("states:", 1, "gh: HTTP 502");
+        let (result, installed) = fetch_group_with(gh, group, None);
+
+        assert!(
+            matches!(result, Err(FetchError::GhFailed { .. })),
+            "{group:?}: {result:?}"
+        );
+        assert_eq!(installed.calls().len(), 1);
+    }
 }
 
 #[test]
@@ -124,25 +187,69 @@ fn github_review_requests_become_pending_reviewers_and_replace_an_earlier_review
 }
 
 #[test]
-fn github_list_refetches_labels_when_the_embedded_page_is_truncated() {
-    let mut truncated = gh_pr(1, "2026-09-01T10:00:00Z");
-    truncated["labels"] = json!({
-        "nodes": [{"name": "bug"}],
-        "pageInfo": {"hasNextPage": true}
-    });
+fn github_list_query_leaves_out_the_body_and_the_labels() {
+    let gh = FakeGh::new()
+        .on(
+            "states: OPEN",
+            &gh_list_page(&[gh_pr(1, "2026-09-01T10:00:00Z")], None),
+        )
+        .install();
+    Provider::GitHub.fetch_prs(PrGroup::Open, None).unwrap();
+
+    let calls = gh.calls();
+    assert_eq!(calls.len(), 1, "{calls:?}");
+    assert!(
+        !calls[0].contains("body") && !calls[0].contains("labels"),
+        "{calls:?}"
+    );
+}
+
+fn info_answer(labels: &[&str], more: bool) -> String {
+    json!({"data": {"repository": {"pullRequest": {
+        "id": "PR_1",
+        "body": "Explains the change.",
+        "labels": {
+            "nodes": labels.iter().map(|name| json!({"name": name})).collect::<Vec<_>>(),
+            "pageInfo": {"hasNextPage": more}
+        }
+    }}}})
+    .to_string()
+}
+
+#[test]
+fn github_info_reads_the_description_and_the_labels_of_one_pr() {
+    let gh = FakeGh::new()
+        .on("pullRequest(number: $pr)", &info_answer(&["bug"], false))
+        .install();
+    let info = Provider::GitHub.fetch_info(7).unwrap();
+
+    assert_eq!(info.description.as_deref(), Some("Explains the change."));
+    assert_eq!(info.labels, vec!["bug"]);
+    assert_eq!(gh.calls().len(), 1);
+    assert!(gh.calls()[0].contains("pr=7"));
+}
+
+#[test]
+fn github_info_reads_on_when_the_labels_are_truncated() {
     let node_page = json!({"data": {"item": {"connection": {
         "nodes": [{"name": "bug"}, {"name": "ux"}],
         "pageInfo": {"hasNextPage": false, "endCursor": null}
     }}}})
     .to_string();
     let gh = FakeGh::new()
-        .on("states: OPEN", &gh_list_page(&[truncated], None))
-        .on("states: [MERGED, CLOSED]", &gh_list_page(&[], None))
-        .on("node(id: \"PR_1\")", &node_page);
-    let (result, installed) = fetch_prs_with(gh);
+        .on("node(id: \"PR_1\")", &node_page)
+        .on("pullRequest(number: $pr)", &info_answer(&["bug"], true))
+        .install();
+    let info = Provider::GitHub.fetch_info(1).unwrap();
 
-    assert_eq!(result.unwrap().prs[0].labels, vec!["bug", "ux"]);
-    assert_eq!(installed.calls().len(), 3);
+    assert_eq!(info.labels, vec!["bug", "ux"]);
+    assert_eq!(gh.calls().len(), 2);
+}
+
+#[test]
+fn only_github_reads_the_description_and_labels_apart_from_the_list() {
+    use crate::domain::capabilities::Feature;
+    assert!(Provider::GitHub.capabilities().supports(Feature::PrInfo));
 }
 
 #[test]
@@ -163,7 +270,7 @@ fn github_failure_carries_the_exit_code_and_stderr() {
 fn github_reports_a_missing_gh() {
     let _installed = InstalledGh::missing();
     assert!(matches!(
-        Provider::GitHub.fetch_prs(),
+        Provider::GitHub.fetch_prs(PrGroup::Open, None),
         Err(FetchError::GhMissing)
     ));
 }
@@ -320,13 +427,6 @@ fn last_page(values: &[Value]) -> String {
     json!({"values": values, "isLastPage": true}).to_string()
 }
 
-/// Empty answers for the two closed-PR reads.
-fn no_closed_prs() -> Vec<Route> {
-    ["MERGED", "DECLINED"]
-        .map(|state| Route::get(&closed_url(state), 200, &last_page(&[])))
-        .to_vec()
-}
-
 fn bitbucket(server: &MockHttp) -> Provider {
     Provider::BitbucketDc(Config {
         repo: RepoLocation {
@@ -352,71 +452,82 @@ fn bb_pr(id: u64) -> Value {
 }
 
 #[test]
-fn bitbucket_list_reads_every_open_page_and_one_page_of_each_closed_state() {
-    use crate::domain::pr::PrStatus;
+fn bitbucket_open_group_reads_every_page_with_drafts_and_nothing_closed() {
     let page_one = json!({"values": [bb_pr(1)], "isLastPage": false, "nextPageStart": 7});
-    let mut merged = bb_pr(3);
-    merged["state"] = json!("MERGED");
-    let mut declined = bb_pr(4);
-    declined["state"] = json!("DECLINED");
-    // More merged PRs exist, but the list must not follow that cursor.
-    let merged_page = json!({"values": [merged], "isLastPage": false, "nextPageStart": 25});
+    let mut draft = bb_pr(2);
+    draft["draft"] = json!(true);
     let server = MockHttp::start(vec![
         Route::get(&open_url(0), 200, &page_one.to_string()),
-        Route::get(&open_url(7), 200, &last_page(&[bb_pr(2)])),
-        Route::get(&closed_url("MERGED"), 200, &merged_page.to_string()),
-        Route::get(&closed_url("DECLINED"), 200, &last_page(&[declined])),
+        Route::get(&open_url(7), 200, &last_page(&[draft])),
     ]);
-    let crate::domain::pr::PrBatch { prs, more } = bitbucket(&server).fetch_prs().unwrap();
+    let batch = bitbucket(&server).fetch_prs(PrGroup::Open, None).unwrap();
 
+    assert_eq!(batch.more, None, "the open group is read in full");
     assert_eq!(
-        more.as_deref(),
-        Some("25|"),
-        "merged continues at offset 25, declined is done"
+        batch.prs.iter().map(|pr| pr.id).collect::<Vec<_>>(),
+        vec![1, 2]
     );
-    assert_eq!(
-        prs.iter().map(|pr| pr.id).collect::<Vec<_>>(),
-        vec![1, 2, 3, 4]
-    );
-    assert_eq!(
-        prs.iter().map(|pr| pr.status.clone()).collect::<Vec<_>>(),
-        [
-            PrStatus::Open,
-            PrStatus::Open,
-            PrStatus::Merged,
-            PrStatus::Declined
-        ]
-    );
-    assert_eq!(prs[0].source_branch, "feature");
+    assert_eq!(batch.prs[0].source_branch, "feature");
+    assert_eq!(batch.prs[1].status, PrStatus::Draft);
     let requests = server.requests();
-    assert_eq!(requests.len(), 4);
-    assert!(
-        requests
-            .iter()
-            .all(|request| !request.target.contains("start=25")),
-        "the merged cursor is never followed"
-    );
+    assert_eq!(requests.len(), 2);
     for request in &requests {
+        assert!(request.target.contains("state=OPEN"), "{}", request.target);
         assert_eq!(request.headers["authorization"], "Bearer secret-token");
         assert!(request.headers["user-agent"].starts_with("tuipr/"));
     }
 }
 
 #[test]
-fn bitbucket_a_failing_open_read_does_not_ask_for_closed_ones() {
-    let server = MockHttp::start(vec![Route::get(&open_url(0), 500, "{}")]);
+fn bitbucket_closed_groups_read_one_page_at_a_time_from_their_offset() {
+    for (group, state, status) in [
+        (PrGroup::Merged, "MERGED", PrStatus::Merged),
+        (PrGroup::Declined, "DECLINED", PrStatus::Declined),
+    ] {
+        let mut first = bb_pr(3);
+        first["state"] = json!(state);
+        // A closed PR can still carry the draft flag.
+        first["draft"] = json!(true);
+        let mut second = bb_pr(4);
+        second["state"] = json!(state);
+        let server = MockHttp::start(vec![
+            Route::get(
+                &closed_url(state),
+                200,
+                &json!({"values": [first], "isLastPage": false, "nextPageStart": 25}).to_string(),
+            ),
+            Route::get(&closed_url_at(state, 25), 200, &last_page(&[second])),
+        ]);
+        let provider = bitbucket(&server);
 
-    assert!(matches!(
-        bitbucket(&server).fetch_prs(),
-        Err(FetchError::HttpFailed { status: 500, .. })
-    ));
-    assert_eq!(server.requests().len(), 1);
+        let page = provider.fetch_prs(group, None).unwrap();
+        assert_eq!(page.prs[0].status, status, "a closed draft is not a draft");
+        assert_eq!(page.more.as_deref(), Some("25"));
+        assert_eq!(
+            server.requests().len(),
+            1,
+            "the next page is not followed on its own"
+        );
+
+        let next = provider.fetch_prs(group, Some("25")).unwrap();
+        assert_eq!(next.prs.iter().map(|pr| pr.id).collect::<Vec<_>>(), vec![4]);
+        assert_eq!(next.more, None, "the end is reported");
+        assert!(
+            server
+                .requests()
+                .iter()
+                .all(|request| request.target.contains(&format!("state={state}"))),
+            "each closed group reads only its own state"
+        );
+    }
 }
 
 #[test]
 fn bitbucket_rejected_token_is_reported_as_not_authenticated() {
     let server = MockHttp::start(vec![Route::get(&open_url(0), 401, "{}")]);
-    let error = bitbucket(&server).fetch_prs().unwrap_err();
+    let error = bitbucket(&server)
+        .fetch_prs(PrGroup::Open, None)
+        .unwrap_err();
 
     match error {
         FetchError::NotAuthenticated { host } => assert_eq!(host, server.host()),
@@ -428,7 +539,9 @@ fn bitbucket_rejected_token_is_reported_as_not_authenticated() {
 fn bitbucket_server_error_keeps_status_and_body() {
     let body = json!({"errors": [{"message": "Repository is being migrated"}]}).to_string();
     let server = MockHttp::start(vec![Route::get(&open_url(0), 500, &body)]);
-    let error = bitbucket(&server).fetch_prs().unwrap_err();
+    let error = bitbucket(&server)
+        .fetch_prs(PrGroup::Open, None)
+        .unwrap_err();
 
     match &error {
         FetchError::HttpFailed { status, body } => {
@@ -450,7 +563,10 @@ fn bitbucket_unreachable_server_is_a_network_error() {
     let provider = bitbucket(&server);
     drop(server);
 
-    assert!(matches!(provider.fetch_prs(), Err(FetchError::Network(_))));
+    assert!(matches!(
+        provider.fetch_prs(PrGroup::Open, None),
+        Err(FetchError::Network(_))
+    ));
 }
 
 #[test]
@@ -459,7 +575,7 @@ fn bitbucket_rejects_a_non_advancing_page_cursor() {
     let server = MockHttp::start(vec![Route::get(&open_url(0), 200, &stuck.to_string())]);
 
     assert!(matches!(
-        bitbucket(&server).fetch_prs(),
+        bitbucket(&server).fetch_prs(PrGroup::Open, None),
         Err(FetchError::ParseFailed(_))
     ));
     assert_eq!(server.requests().len(), 1);
@@ -569,10 +685,11 @@ fn bitbucket_reviewers_without_a_verdict_are_pending_requests() {
         {"user": {"name": "carol"}, "status": "NEEDS_WORK"}
     ]);
     let page = json!({"values": [pr], "isLastPage": true});
-    let mut routes = vec![Route::get(&open_url(0), 200, &page.to_string())];
-    routes.extend(no_closed_prs());
-    let server = MockHttp::start(routes);
-    let prs = bitbucket(&server).fetch_prs().unwrap().prs;
+    let server = MockHttp::start(vec![Route::get(&open_url(0), 200, &page.to_string())]);
+    let prs = bitbucket(&server)
+        .fetch_prs(PrGroup::Open, None)
+        .unwrap()
+        .prs;
 
     let states: Vec<_> = prs[0].reviewers.iter().map(|r| r.state.clone()).collect();
     assert_eq!(
@@ -778,27 +895,31 @@ fn github_older_prs_continue_from_the_cursor_and_report_when_they_end() {
         )
         .on(
             "after: \"y\"",
-            &gh_list_page(&[gh_closed_pr(8, "2026-07-01T10:00:00Z", "MERGED")], None),
+            &gh_list_page(&[gh_closed_pr(8, "2026-07-01T10:00:00Z", "CLOSED")], None),
         )
         .install();
 
-    let first = Provider::GitHub.fetch_older_prs("x").unwrap();
+    let first = Provider::GitHub
+        .fetch_prs(PrGroup::Declined, Some("x"))
+        .unwrap();
     assert_eq!(
         first.prs.iter().map(|pr| pr.id).collect::<Vec<_>>(),
         vec![9]
     );
-    assert_eq!(first.prs[0].status, crate::domain::pr::PrStatus::Declined);
+    assert_eq!(first.prs[0].status, PrStatus::Declined);
     assert_eq!(first.more.as_deref(), Some("y"));
 
-    let last = Provider::GitHub.fetch_older_prs("y").unwrap();
+    let last = Provider::GitHub
+        .fetch_prs(PrGroup::Declined, Some("y"))
+        .unwrap();
     assert_eq!(last.prs.iter().map(|pr| pr.id).collect::<Vec<_>>(), vec![8]);
     assert_eq!(last.more, None, "the end is reported, not guessed");
 
     let calls = gh.calls();
     assert_eq!(calls.len(), 2, "{calls:?}");
     for call in &calls {
-        assert!(call.contains("states: [MERGED, CLOSED]"), "{call}");
-        assert!(call.contains("first: 50"), "{call}");
+        assert!(call.contains("states: CLOSED"), "{call}");
+        assert!(call.contains("first: 30"), "{call}");
         assert!(
             !call.contains("states: OPEN"),
             "older reads skip open PRs: {call}"
@@ -807,56 +928,10 @@ fn github_older_prs_continue_from_the_cursor_and_report_when_they_end() {
 }
 
 #[test]
-fn bitbucket_older_prs_continue_each_closed_stream_from_its_own_offset() {
-    let mut merged = bb_pr(5);
-    merged["state"] = json!("MERGED");
-    let mut declined = bb_pr(6);
-    declined["state"] = json!("DECLINED");
-    let server = MockHttp::start(vec![
-        Route::get(
-            &closed_url_at("MERGED", 25),
-            200,
-            &json!({"values": [merged], "isLastPage": false, "nextPageStart": 50}).to_string(),
-        ),
-        Route::get(&closed_url_at("DECLINED", 10), 200, &last_page(&[declined])),
-    ]);
-    let batch = bitbucket(&server).fetch_older_prs("25|10").unwrap();
-
-    assert_eq!(
-        batch.prs.iter().map(|pr| pr.id).collect::<Vec<_>>(),
-        vec![5, 6]
-    );
-    assert_eq!(
-        batch.more.as_deref(),
-        Some("50|"),
-        "merged continues at 50, declined is done"
-    );
-    assert_eq!(server.requests().len(), 2);
-}
-
-#[test]
-fn bitbucket_older_prs_skip_a_finished_stream_and_end_when_both_are_done() {
-    let mut merged = bb_pr(5);
-    merged["state"] = json!("MERGED");
-    let server = MockHttp::start(vec![Route::get(
-        &closed_url_at("MERGED", 25),
-        200,
-        &last_page(&[merged]),
-    )]);
-    let batch = bitbucket(&server).fetch_older_prs("25|").unwrap();
-
-    assert_eq!(batch.prs.len(), 1);
-    assert_eq!(batch.more, None);
-    let requests = server.requests();
-    assert_eq!(requests.len(), 1, "declined is finished, so it is not read");
-    assert!(requests[0].target.contains("state=MERGED"));
-}
-
-#[test]
 fn bitbucket_rejects_an_unreadable_older_position_without_a_request() {
     let server = MockHttp::start(Vec::new());
-    for position in ["", "25", "a|b", "25|-1"] {
-        let result = bitbucket(&server).fetch_older_prs(position);
+    for position in ["", "x", "-1", "2.5", "25|10"] {
+        let result = bitbucket(&server).fetch_prs(PrGroup::Merged, Some(position));
         assert!(
             matches!(result, Err(FetchError::InvalidInput(_))),
             "{position:?}: {result:?}"

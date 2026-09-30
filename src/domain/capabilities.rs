@@ -15,6 +15,8 @@ pub enum Feature {
     Mergeability,
     ClosePr,
     ReopenPr,
+    /// The list omits the description and labels; they are read per PR.
+    PrInfo,
 }
 
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]

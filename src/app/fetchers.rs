@@ -3,10 +3,10 @@ use crate::{
         App,
         action::{Action, LoadedAction},
         reviews::{CommentTarget, PendingComment},
-        store::FetchKey,
+        store::{FetchKey, OpenChain},
     },
     domain::{
-        pr::MergeStrategy,
+        pr::{MergeStrategy, PrGroup},
         review::{ReviewComment, ReviewVerdict},
     },
     providers::FetchError,
@@ -30,30 +30,80 @@ impl App {
         });
     }
 
-    pub(super) fn spawn_load_prs(&mut self) {
-        if !self.state.store.fetches.insert(FetchKey::Prs) {
+    /// Read one group of PRs, or with `after` the next page of a closed group,
+    /// unless that group is already being read.
+    pub(super) fn spawn_load_prs(&mut self, group: PrGroup, after: Option<String>) {
+        if !self.state.store.fetches.insert(FetchKey::Prs(group)) {
             return;
         }
         let provider = self.provider.clone();
+        let position = after.clone();
         self.spawn_fetch(
-            move || provider.fetch_prs(),
-            |r| Action::Loaded(LoadedAction::Prs(r)),
+            move || provider.fetch_prs(group, position.as_deref()),
+            move |result| {
+                Action::Loaded(LoadedAction::Prs {
+                    group,
+                    after,
+                    result,
+                })
+            },
         );
     }
 
-    /// Read the next older batch, if one is known and none is in flight.
+    /// Read whatever the current view shows that has not been read yet.
+    pub(super) fn ensure_view_loaded(&mut self) {
+        for &group in self.state.ui.list.filter.groups() {
+            if !self.state.store.group_loaded(group) {
+                self.spawn_load_prs(group, None);
+            }
+        }
+    }
+
+    /// `L`: the next batch of each group in the view that has more.
     pub(super) fn load_older_prs(&mut self) {
-        let Some(after) = self.state.store.older_cursor.clone() else {
+        for &group in self.state.ui.list.filter.groups() {
+            if group == PrGroup::Open {
+                self.load_more_open();
+                continue;
+            }
+            let more = self
+                .state
+                .store
+                .groups
+                .get(&group)
+                .and_then(|state| state.more.clone());
+            if let Some(after) = more {
+                self.spawn_load_prs(group, Some(after));
+            }
+        }
+    }
+
+    /// Read on in the open group, the next batch past what is shown.
+    fn load_more_open(&mut self) {
+        let store = &mut self.state.store;
+        let Some(after) = store
+            .groups
+            .get(&PrGroup::Open)
+            .and_then(|state| state.more.clone())
+        else {
             return;
         };
-        if !self.state.store.fetches.insert(FetchKey::OlderPrs) {
+        if store.group_loading(PrGroup::Open) || !matches!(store.open_chain, OpenChain::Idle) {
             return;
         }
-        let provider = self.provider.clone();
-        self.spawn_fetch(
-            move || provider.fetch_older_prs(&after),
-            |r| Action::Loaded(LoadedAction::OlderPrs(r)),
-        );
+        store.open_extra += 1;
+        store.open_chain = OpenChain::Appending;
+        self.state.ui.list.hold_order = true;
+        self.spawn_load_prs(PrGroup::Open, Some(after));
+    }
+
+    /// Read the open group again, and every other group already read.
+    pub(super) fn refresh_list(&mut self) {
+        for group in PrGroup::ALL {
+            if group == PrGroup::Open || self.state.store.group_loaded(group) {
+                self.spawn_load_prs(group, None);
+            }
+        }
     }
 
     pub(super) fn spawn_load_commits(&mut self, pr_id: u64) {
@@ -173,6 +223,24 @@ impl App {
         );
     }
 
+    /// The description and labels of one PR, when the provider's list omits them.
+    pub(super) fn spawn_load_info(&mut self, pr_id: u64) {
+        if !self
+            .state
+            .store
+            .capabilities
+            .supports(crate::domain::capabilities::Feature::PrInfo)
+            || !self.state.store.fetches.insert(FetchKey::Info(pr_id))
+        {
+            return;
+        }
+        let provider = self.provider.clone();
+        self.spawn_fetch(
+            move || provider.fetch_info(pr_id),
+            move |r| Action::Loaded(LoadedAction::Info(pr_id, r)),
+        );
+    }
+
     pub(super) fn spawn_comment(&self, pr_id: u64, target: CommentTarget, text: String) {
         let provider = self.provider.clone();
         self.spawn_fetch(
@@ -280,19 +348,23 @@ impl App {
 
     pub(super) fn reload_after_mutation(&mut self, pr_id: u64) {
         self.reload_resource(FetchKey::Activity(pr_id));
-        self.reload_resource(FetchKey::Prs);
+        for group in PrGroup::ALL {
+            if group == PrGroup::Open || self.state.store.group_loaded(group) {
+                self.reload_resource(FetchKey::Prs(group));
+            }
+        }
         self.reload_resource(FetchKey::Mergeability(pr_id));
     }
 
     pub(super) fn load_resource(&mut self, key: FetchKey) {
         match key {
-            FetchKey::Prs => self.spawn_load_prs(),
-            FetchKey::OlderPrs => self.load_older_prs(),
+            FetchKey::Prs(group) => self.spawn_load_prs(group, None),
             FetchKey::Commits(id) => self.spawn_load_commits(id),
             FetchKey::Diff(id) => self.spawn_load_diff(id),
             FetchKey::Builds(id) => self.spawn_load_builds(id),
             FetchKey::Activity(id) => self.spawn_load_activity(id),
             FetchKey::Mergeability(id) => self.spawn_load_mergeability(id),
+            FetchKey::Info(id) => self.spawn_load_info(id),
             FetchKey::CommitDiff(id, oid) => self.spawn_load_commit_diff(id, oid),
         }
     }
