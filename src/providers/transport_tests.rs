@@ -66,7 +66,10 @@ fn github_open_group_is_read_a_page_at_a_time_with_drafts_and_nothing_closed() {
         pr.labels.is_empty() && pr.description.is_none(),
         "the list leaves out the description and the labels"
     );
-    assert_eq!(pr.comment_count, 4);
+    assert_eq!(
+        pr.comment_count, 6,
+        "four conversation comments and two threads on code"
+    );
     assert_eq!(pr.reviewers.len(), 1);
 
     let last = Provider::GitHub

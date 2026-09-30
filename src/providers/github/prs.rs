@@ -13,7 +13,7 @@ struct GhAuthor {
     login: String,
 }
 
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Default, Deserialize)]
 #[serde(rename_all = "camelCase")]
 struct Count {
     total_count: u32,
@@ -112,6 +112,10 @@ struct GhPr {
     #[serde(default)]
     changed_files: u32,
     comments: Count,
+    /// Threads on lines of code. Each one counts once however long it is, so the
+    /// list shows how many conversations a PR has, not how many posts.
+    #[serde(default)]
+    review_threads: Count,
     latest_reviews: Connection<GhReviewSummary>,
     #[serde(default)]
     review_requests: ReviewRequests,
@@ -130,6 +134,7 @@ const PR_FIELDS: &str = r"
     state isDraft headRefName baseRefName createdAt updatedAt
     additions deletions changedFiles
     comments { totalCount }
+    reviewThreads { totalCount }
     latestReviews(first: 100) { nodes { state author { login } } pageInfo { hasNextPage } }
     reviewRequests(first: 100) { nodes { requestedReviewer { ... on User { login } } } }
     commits(last: 1) { nodes { commit { statusCheckRollup { state } } } }
@@ -218,7 +223,7 @@ fn map_pr(gh: GhPr) -> PullRequest {
         .collect();
     let ci_state = summarize_checks(&checks);
     let reviewers = with_requests(map_reviewers(gh.latest_reviews.nodes), gh.review_requests);
-    let comment_count = gh.comments.total_count;
+    let comment_count = gh.comments.total_count + gh.review_threads.total_count;
 
     PullRequest {
         url: gh.url,
@@ -345,5 +350,37 @@ mod link_tests {
             map_pr(serde_json::from_value(json).unwrap()).url.as_deref(),
             Some("https://github.example.com/team/repo/pull/42")
         );
+    }
+}
+
+#[cfg(test)]
+mod comment_count_tests {
+    use super::*;
+
+    /// A PR with one conversation comment and, if given, that many threads on code.
+    fn comment_count(threads: Option<u32>) -> u32 {
+        let mut json = serde_json::json!({
+            "id": "PR_1", "number": 1, "title": "PR", "state": "OPEN", "author": {"login": "a"},
+            "url": "https://github.com/o/r/pull/1",
+            "headRefName": "f", "baseRefName": "main",
+            "createdAt": "2026-01-01T00:00:00Z", "updatedAt": "2026-01-01T00:00:00Z",
+            "comments": {"totalCount": 1},
+            "latestReviews": {"nodes": [], "pageInfo": {"hasNextPage": false}}
+        });
+        if let (Some(n), Some(object)) = (threads, json.as_object_mut()) {
+            object.insert("reviewThreads".into(), serde_json::json!({"totalCount": n}));
+        }
+        map_pr(serde_json::from_value(json).unwrap()).comment_count
+    }
+
+    #[test]
+    fn threads_on_code_count_beside_the_conversation_comments() {
+        assert_eq!(comment_count(Some(2)), 3);
+    }
+
+    #[test]
+    fn without_threads_only_the_conversation_comments_count() {
+        assert_eq!(comment_count(None), 1);
+        assert_eq!(comment_count(Some(0)), 1);
     }
 }
