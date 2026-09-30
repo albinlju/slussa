@@ -28,10 +28,11 @@ tagged releases.
 | GitHub | the [`gh`](https://cli.github.com) CLI | uses your existing `gh auth login` |
 | Bitbucket Data Center | REST with a personal access token | stored in the OS keyring; **listing has been seen working on one real server; everything else is tested only against a mock of the documented API** |
 
-Bitbucket Cloud and GitLab are on the roadmap, not supported. Atlassian ends
-Data Center licence sales on 2028-03-30 and support on 2029-03-28, so the
-Bitbucket Data Center provider is in maintenance: bugs are fixed, nothing new
-is added for it.
+Bitbucket Data Center is Atlassian's self-hosted Bitbucket, not Bitbucket Cloud.
+Atlassian ends Data Center licence sales on 2028-03-30 and support on
+2029-03-28, so this provider is in maintenance: bugs are fixed, nothing new is
+added for it. Bitbucket Cloud is a different product that this does not affect;
+it and GitLab are on the roadmap, not supported.
 
 The provider is detected from the `origin` remote of the repository you run
 tuipr in.
@@ -170,6 +171,12 @@ cargo deny check        # cargo install cargo-deny --locked
 
 CI runs the same four checks. `target/` grows quickly (several GB); `cargo
 clean` is always safe.
+
+## Contributing
+
+Open an issue first, then send a pull request from a fork. The rules are in
+[CONTRIBUTING.md](CONTRIBUTING.md); security problems go through
+[SECURITY.md](.github/SECURITY.md).
 
 ## License
 

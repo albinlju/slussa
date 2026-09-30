@@ -289,7 +289,7 @@ list; see *Not borrowed* below.
 
 ### When the project has more than one contributor
 
-- [ ] **`CONTRIBUTING.md`** with their one rule: *you must understand your
+- [x] **`CONTRIBUTING.md`.** *Done 2026-09-30, with `.github/SECURITY.md` and issue templates.* Their one rule: *you must understand your
   code*, even (especially) when an agent wrote it. Plus how to run fmt / lint
   / test, and the blocking-I/O and two-views principles.
 - [x] **`AGENTS.md` / `CLAUDE.md`.** *Done: `CLAUDE.md` holds the non-negotiables, commands and pointers.*  They keep one file as the primary
@@ -308,7 +308,7 @@ list; see *Not borrowed* below.
   "truncate in list, full text in popup", "scrolling up pauses follow").
   ARCHITECTURE.md has the first and last already; the lifecycle sections and
   the add-a-thing checklists are missing.
-- [ ] **PR template** with Summary / Changes / Testing, and a rule that
+- [x] **PR template.** *Done 2026-09-30 (`.github/pull_request_template.md`).* Summary / Changes / Testing, and a rule that
   user-visible changes update FEATURES.md.
 - [ ] **CodeRabbit on the repository.** An automatic AI reviewer on every PR.
   *Trigger:* the repository becomes public (VERIFICATION.md, D1). Third-party
