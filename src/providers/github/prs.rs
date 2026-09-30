@@ -136,8 +136,20 @@ const PR_FIELDS: &str = r"
     commits(last: 1) { nodes { commit { statusCheckRollup { state } } } }
 ";
 
+/// How many merged and closed PRs the list keeps, most recently updated first.
+/// Open PRs are always read in full; closed ones are history, so they are
+/// bounded to one page.
+const RECENT_CLOSED: u32 = 50;
+
 pub fn fetch_prs() -> Result<Vec<PullRequest>, FetchError> {
-    let mut prs: Vec<GhPr> = super::pagination::repo_nodes("pullRequests", PR_FIELDS)?;
+    let mut prs: Vec<GhPr> =
+        super::pagination::repo_nodes("pullRequests", "states: OPEN, ", PR_FIELDS)?;
+    prs.extend(super::pagination::repo_first_page::<GhPr>(
+        "pullRequests",
+        "states: [MERGED, CLOSED], orderBy: {field: UPDATED_AT, direction: DESC}, ",
+        PR_FIELDS,
+        RECENT_CLOSED,
+    )?);
     for pr in &mut prs {
         if pr.labels.page_info.has_next_page {
             pr.labels.nodes =

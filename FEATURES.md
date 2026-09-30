@@ -159,7 +159,12 @@ says so on the row.
   (the detail header badge is done; this extends it to rows).
 - [ ] **Labels in the list** — colored and filterable (shown in Overview today).
 - [ ] **Compact diff stats** (files / +/−) on list rows.
-- [ ] **Pagination / load more** — the list is currently capped at 50.
+- [ ] **Pagination / load more** — *partly done.* Open PRs are always read in
+  full. Merged and closed ones are bounded: the latest 50 by update time on
+  GitHub, the newest 25 merged and 25 declined on Bitbucket. The Merged,
+  Declined and All views say "recent" in their heading. **Open:** a way to
+  reach older closed PRs (load more, or search at the provider) and an
+  indication of how many exist.
 - [ ] **Jump to PR by number** (`#123`).
 - [ ] **Status bar** — provider, repo, match count, loading spinner. Only if it
   fits in the existing footer line; a second persistent bar is not wanted.

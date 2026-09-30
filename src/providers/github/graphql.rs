@@ -46,11 +46,12 @@ query {
   }
 }";
 
-/// A page of a connection on this repository.
+/// A page of a connection on this repository. `<<args>>` is either empty or
+/// arguments ending in a comma and a space, such as `states: OPEN, `.
 pub(super) const REPO_CONNECTION: &str = r"
 query($owner: String!, $name: String!) {
   repository(owner: $owner, name: $name) {
-    connection: <<field>>(first: 100, after: <<cursor>>) {
+    connection: <<field>>(<<args>>first: <<first>>, after: <<cursor>>) {
       nodes { <<selection>> }
       pageInfo { hasNextPage endCursor }
     }
@@ -85,6 +86,8 @@ mod tests {
             ("selection", "id"),
             ("id", "\"X\""),
             ("kind", "PullRequest"),
+            ("args", ""),
+            ("first", "100"),
         ];
         for template in [PR_CONNECTION, NODE_CONNECTION, REPO_CONNECTION] {
             assert!(!fill(template, &values).contains("<<"), "{template}");
@@ -127,6 +130,8 @@ mod tests {
             REPO_CONNECTION,
             &[
                 ("field", "pullRequests"),
+                ("args", ""),
+                ("first", "100"),
                 ("cursor", "\"c1\""),
                 ("selection", "id"),
             ],

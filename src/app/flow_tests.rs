@@ -43,6 +43,20 @@ fn one_pr_page() -> String {
     gh_list_page(&[gh_pr(1, "2026-09-01T10:00:00Z")], None)
 }
 
+/// The list makes two reads: the open PRs, and one page of recent closed ones.
+const OPEN_QUERY: &str = "states: OPEN";
+const CLOSED_QUERY: &str = "states: [MERGED, CLOSED]";
+
+fn no_closed_prs() -> String {
+    gh_list_page(&[], None)
+}
+
+/// Calls that read the open PRs, and calls that read the closed ones.
+fn list_reads(calls: &[String]) -> (usize, usize) {
+    let count = |needle: &str| calls.iter().filter(|call| call.contains(needle)).count();
+    (count(OPEN_QUERY), count(CLOSED_QUERY))
+}
+
 /// An answer shaped like every connection the refetch touches, so each read
 /// gets something parseable without modelling GitHub.
 fn any_connection() -> String {
@@ -67,7 +81,10 @@ fn loaded_ids(app: &App) -> Vec<u64> {
 
 #[tokio::test]
 async fn list_loads_through_the_provider_and_deduplicates_a_repeat_request() {
-    let gh = FakeGh::new().on("pullRequests(", &one_pr_page()).install();
+    let gh = FakeGh::new()
+        .on(OPEN_QUERY, &one_pr_page())
+        .on(CLOSED_QUERY, &no_closed_prs())
+        .install();
     let mut app = app();
 
     app.spawn_load_prs();
@@ -75,16 +92,22 @@ async fn list_loads_through_the_provider_and_deduplicates_a_repeat_request() {
     settle(&mut app).await;
 
     assert_eq!(loaded_ids(&app), vec![1]);
-    assert_eq!(gh.calls().len(), 1, "{:?}", gh.calls());
+    assert_eq!(
+        list_reads(&gh.calls()),
+        (1, 1),
+        "a repeat request reuses the one in flight: {:?}",
+        gh.calls()
+    );
     assert!(app.state.store.refresh_failures.is_empty());
 }
 
 #[tokio::test]
 async fn failed_refresh_keeps_the_list_then_recovers() {
     let gh = FakeGh::new()
-        .once("pullRequests(", &one_pr_page())
-        .fail_once("pullRequests(", 1, "gh: HTTP 502: Bad Gateway")
-        .on("pullRequests(", &one_pr_page())
+        .once(OPEN_QUERY, &one_pr_page())
+        .fail_once(OPEN_QUERY, 1, "gh: HTTP 502: Bad Gateway")
+        .on(OPEN_QUERY, &one_pr_page())
+        .on(CLOSED_QUERY, &no_closed_prs())
         .install();
     let mut app = app();
 
@@ -103,7 +126,12 @@ async fn failed_refresh_keeps_the_list_then_recovers() {
     app.spawn_load_prs();
     settle(&mut app).await;
     assert!(app.state.store.refresh_failures.is_empty());
-    assert_eq!(gh.calls().len(), 3);
+    assert_eq!(
+        list_reads(&gh.calls()),
+        (3, 2),
+        "a failed open read is not followed by a closed read: {:?}",
+        gh.calls()
+    );
 }
 
 #[tokio::test]
@@ -136,7 +164,8 @@ fn submit_pr_comment(app: &mut App, pr_id: u64, text: &str) {
 async fn a_comment_is_sent_once_and_followed_by_a_refetch() {
     let gh = FakeGh::new()
         .on("issues/1/comments", "{}")
-        .on("pullRequests(", &one_pr_page())
+        .on(OPEN_QUERY, &one_pr_page())
+        .on(CLOSED_QUERY, &no_closed_prs())
         .on("graphql", &any_connection())
         .install();
     let mut app = app();
@@ -163,7 +192,7 @@ async fn a_comment_is_sent_once_and_followed_by_a_refetch() {
     );
     for (what, needle) in [
         ("the activity", "comments(first: 100"),
-        ("the PR list", "pullRequests(first: 100"),
+        ("the PR list", "states: OPEN"),
         ("mergeability", "mergeable"),
     ] {
         assert!(
@@ -203,7 +232,8 @@ async fn a_failed_comment_is_reported_on_its_pr_and_not_followed_by_a_refetch() 
 async fn a_second_write_to_the_same_pr_is_ignored_while_one_is_pending() {
     let gh = FakeGh::new()
         .on("issues/1/comments", "{}")
-        .on("pullRequests(", &one_pr_page())
+        .on(OPEN_QUERY, &one_pr_page())
+        .on(CLOSED_QUERY, &no_closed_prs())
         .on("graphql", &any_connection())
         .install();
     let mut app = app();

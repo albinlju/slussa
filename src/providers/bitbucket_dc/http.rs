@@ -166,6 +166,18 @@ pub(super) fn get_all<T: DeserializeOwned>(
     })
 }
 
+/// Only the first page, never following `nextPageStart`: a bounded read of
+/// "the newest".
+pub(super) fn get_first_page<T: DeserializeOwned>(
+    base_url: &str,
+    path: &str,
+    pat: &str,
+) -> Result<Vec<T>, FetchError> {
+    let separator = if path.contains('?') { '&' } else { '?' };
+    let page: Page<T> = get_json(base_url, &format!("{path}{separator}start=0"), pat)?;
+    Ok(page.values)
+}
+
 fn collect_pages<T>(
     mut fetch: impl FnMut(u64) -> Result<Page<T>, FetchError>,
 ) -> Result<Vec<T>, FetchError> {

@@ -52,6 +52,14 @@ stays.
   `include_str!`, which gives editors syntax highlighting and GraphQL
   tooling. Not done because it splits each query from the code that fills it.
 
+- [x] **Bound the PR list.** *Done 2026-09-30.* Both providers used to read
+  every PR ever opened, on startup and again every minute. Now open PRs are
+  read in full and closed ones as one page (`pagination::repo_first_page` on
+  GitHub, `http::get_first_page` on Bitbucket). Tests assert that the closed
+  cursor is never followed and that a failing open read does not go on to ask
+  for closed ones. The new queries were also run against the real GitHub API.
+  **Not measured:** how the old behaviour scaled on a large repository.
+
 ### With the next feature that touches the area
 
 - [ ] **Split `Action` into local and app-level.** Today one enum carries both

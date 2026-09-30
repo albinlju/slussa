@@ -208,3 +208,21 @@ fn the_sort_setting_reads_config_and_falls_back_to_attention() {
     assert_eq!(Sort::from_config(Some("recent")), Sort::Recent);
     assert_eq!(Sort::from_config(Some("newest")), Sort::Attention);
 }
+
+#[test]
+fn views_of_closed_prs_say_they_show_only_recent_ones() {
+    assert_eq!(StatusFilter::Open.title(), "Open");
+    assert_eq!(StatusFilter::Draft.title(), "Draft");
+    for filter in [
+        StatusFilter::Merged,
+        StatusFilter::Declined,
+        StatusFilter::All,
+    ] {
+        assert!(filter.title().contains("recent"), "{}", filter.title());
+    }
+
+    let mut merged_view = state("me");
+    merged_view.ui.list.filter = StatusFilter::Merged;
+    let text = drawn(&mut merged_view, 100);
+    assert!(text.contains("Merged, recent (0)"), "{text}");
+}
