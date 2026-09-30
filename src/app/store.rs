@@ -1,3 +1,22 @@
+//! Application data shared by every screen: what was fetched, what is in
+//! flight and what failed. Components borrow it read-only; only `App` mutates it.
+//!
+//! - `Cache` holds provider data as `LoadState`s (not requested, loading,
+//!   loaded, failed), for the PR list and for each PR's commits, diff, builds,
+//!   activity, mergeability and per-commit diffs.
+//! - `fetches` holds one `FetchKey` per running read. An entry point inserts
+//!   its key before spawning and does nothing if it is already there, so a slow
+//!   older read can never overwrite a newer one. Completion removes only its
+//!   own key.
+//! - `reload_after_fetch` marks a resource that changed while a read was in
+//!   flight; it is fetched again once that read settles.
+//! - A failed reload keeps data that is already loaded (`LoadState::reload`)
+//!   and records the key in `refresh_failures` so the UI can say so.
+//! - `operations` and `errors` are keyed by PR id: one mutation per PR at a
+//!   time, and an error appears only on the PR it belongs to.
+//! - `reviews` holds review drafts by PR id, so a queued review cannot show up
+//!   on, or be submitted for, another PR.
+
 use crate::domain::{
     activity::Activity,
     ci::Build,

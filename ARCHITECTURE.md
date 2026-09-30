@@ -256,6 +256,61 @@ GitHub build details load check runs and legacy statuses with REST pagination.
 Bitbucket diffs explicitly marked truncated fail with an explanatory message.
 Provider-side limits and server/version compatibility still require live checks.
 
+## Rules for I/O and effects
+
+- **Provider and process calls block, and run off the UI thread.** GitHub
+  spawns `gh`; Bitbucket Data Center uses `reqwest::blocking`. Both run through
+  `App::spawn_fetch`, which wraps them in `spawn_blocking` and sends the result
+  back as an `Action::Loaded`. `gh` calls have a 60 second deadline. Do not add
+  async HTTP or ad hoc threads; a new external call follows the same path.
+- **Nothing starts I/O while rendering or handling a key.** Components return
+  an `Action`; `App` decides whether work starts.
+- **A child process that needs the terminal** (an editor, an agent) cannot use
+  this path. It needs the suspend and resume sequence described in
+  IMPROVEMENTS.md, which does not exist yet.
+
+## Lifecycle: a read
+
+1. A screen opens or a refresh ticks; `App` calls a `spawn_load_*` function in
+   `app/fetchers.rs`.
+2. It inserts the resource's `FetchKey` into `Store::fetches`. If the key is
+   already there, it returns.
+3. `spawn_fetch` runs the provider call on `spawn_blocking`.
+4. The result returns as `Action::Loaded(...)` and `app/loads.rs` applies it to
+   the `Cache` with `LoadState::reload`, which keeps loaded data if the reload
+   failed. It removes the key, records a refresh failure if needed, and starts
+   a follow-up fetch if `reload_after_fetch` names the resource.
+5. The next render reads the store.
+
+## Lifecycle: a write
+
+1. A key press becomes a `DetailAction`; the screen turns the finished dialog
+   or editor into a `Command` with the PR id (`pr_detail/interactions.rs`).
+2. `App::execute` (`app/commands.rs`) rejects commands the provider does not
+   support (`Command::supported_by`) and ignores a second write while one is
+   pending for that PR.
+3. It records an `Operation` for the PR and calls `checkpoint_submission`,
+   which saves drafts first. If that save fails, nothing is sent.
+4. A `spawn_*` function sends the write and returns a `LoadedAction`.
+5. On success the operation and the matching draft are cleared and activity,
+   PR metadata and mergeability are refetched. On failure the error is stored
+   under that PR, the draft stays, and the user can retry explicitly.
+
+## Checklists
+
+**A new provider write.** Add the method to `Provider` and to both provider
+modules. Add a `Feature` in `domain/capabilities` and set it in each provider's
+capabilities. Add a `Command` variant and its `supported_by` arm, and an
+`Operation` if it is a new kind. Add the `DetailAction`, key, help entry and
+footer hint, and resolve it to the `Command` in `interactions.rs`. Add the
+`execute` arm and a `spawn_*` function, handle the `LoadedAction` in `loads.rs`,
+and write a regression test that injects the result.
+
+**A new read resource.** Add a `FetchKey` and a `LoadState` field on `PrData`.
+Extend `has_cached_data`, `refreshing` and `refresh_failed` in `app/store.rs`,
+add a `spawn_load_*` function and a `LoadedAction`, apply it in `loads.rs`, and
+choose its cadence in `app/refresh.rs`.
+
 ## Verification and adding behavior
 
 `cargo test --locked` covers provider projections, parsing, component workflows

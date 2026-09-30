@@ -1,3 +1,11 @@
+//! Comment and review drafts, before anything is sent to a provider.
+//!
+//! A `CommentTarget` says where a comment goes. `Line` carries a
+//! `CommentAnchor`, which includes the `DiffRevision` the user was looking at,
+//! so a comment is never re-pointed at a newer commit. `PendingReview`
+//! collects line comments locally until a verdict submits them together.
+//! Everything here is serializable because `drafts` persists it.
+
 use crate::domain::review::ReviewVerdict;
 
 pub use crate::domain::review::CommentAnchor;
