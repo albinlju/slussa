@@ -102,7 +102,7 @@ Decisions and the release procedure are in [RELEASING.md](RELEASING.md).
      reopen it in tuipr. Expect GitHub's own message in the error dialog.
   Report: anything that looked wrong, and the message in step 4.
 
-- [ ] **V7. A large repository.** The list used to read every PR ever opened.
+- [x] **V7. A large repository.** The list used to read every PR ever opened.
   It now reads the open ones and a batch of closed ones. This has been checked
   against a tiny repository only.
   1. `git clone --depth 1 https://github.com/cli/cli && cd cli && tuipr`.
@@ -150,6 +150,11 @@ Decisions and the release procedure are in [RELEASING.md](RELEASING.md).
   runs of one page of 30 open PRs as now queried: 2.7, 2.2 and 2.0 s. The
   maintainer's part: open a PR on a real repository and check that the
   description and labels appear, and that the list appears with its first page.
+
+  **Done 2026-09-30, pass (maintainer, `cli/cli`).** The first page of the
+  list appeared after a few seconds and the remaining rows arrived as they were
+  read. `L` in the Merged view worked. Labels appear in the Overview sidebar and
+  were accepted. No timing in seconds was recorded for the interactive run.
 
 ## C. Bitbucket Data Center
 
