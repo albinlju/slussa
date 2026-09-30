@@ -23,16 +23,24 @@ stays.
 
 ### Now (cheap, no feature needed)
 
-- [ ] **Audit the remaining panics in non-test code.** `unreachable!` in
-  `app/mod.rs`, `app/commands.rs`, `pr_detail/interactions.rs`,
-  `overview/timeline.rs`, `app/fetchers.rs`; `expect("piped …")` in
-  `github/cli.rs`. Each is either a type-level gap (see *Split Action*) or
-  should degrade to a logged no-op. Ties into the FEATURES.md "No-panic audit".
-- [ ] **Clean `target/`** (3.5 GB) and add `cargo clean` guidance or a
-  `CARGO_TARGET_DIR` note to CONTRIBUTING.
-- [ ] **Real README.** What it is, a screenshot/gif, install, `tuipr auth`,
-  keybindings summary, providers. FEATURES.md already lists *Release* as a
-  backlog item; the README is the first half of it.
+- [x] **Audit the remaining panics in non-test code.** *Done 2026-09-30.*
+  Removed 12 of 16: the infallible `expect`s in `github/pagination.rs`,
+  `github/cli.rs`, `bitbucket_dc/mod.rs` and `widgets/dialog.rs` were
+  restructured so the impossible case cannot occur (or became a `FetchError`);
+  `unreachable!` in `fetchers.rs` became an `InvalidInput` error, in
+  `commands.rs` an empty arm, in `timeline.rs` a single match, in
+  `pr_detail/mod.rs` a `return None`. **Four remain**, all action-routing type
+  gaps: `app/mod.rs` (×2), `pr_detail/interactions.rs`, `pr_detail/mod.rs`.
+  They disappear with *Split `Action`* below; do not patch them separately.
+  The FEATURES.md "No-panic audit" (bad provider responses) is a different
+  audit and is still open.
+- [x] **Clean `target/`** (3.5 GB). *Done.* The README's *Develop* section
+  notes that `cargo clean` is always safe.
+- [x] **Real README.** *Done, one gap:* what it is, providers, install from
+  source, usage, keys, config, develop. **Still missing: a screenshot or gif.**
+  Record one against a real repo (e.g. with `vhs`); the snapshot test screens
+  use placeholder data and are not representative. Install instructions are
+  source-only until a release exists.
 
 ### With the next feature that touches the area
 
@@ -104,26 +112,41 @@ list; see *Not borrowed* below.
 
 ### Now
 
-- [ ] **Stricter lint set, workspace style.** OpenShell enables
+- [x] **Stricter lint set, workspace style.** *Done.* `[lints.rust]` block
+  plus `clippy::{all, pedantic, nursery}`; 153 new warnings fixed (62 elided
+  lifetimes, 36 `const fn`, 19 `use_self`, 17 unnecessary qualifications, the
+  rest small). Two nursery lints allowed by name with a reason:
+  `option_if_let_else` and `redundant_pub_crate`. Original note: OpenShell enables
   `clippy::{all, pedantic, nursery}` plus `rust::{unsafe_code,
   rust_2018_idioms, trivial_casts, trivial_numeric_casts, unused_lifetimes,
   unused_qualifications}`, then allows the noisy ones by name. tuipr has
   pedantic only. Add the `[lints.rust]` block and try `nursery` at `warn`;
   keep `too_many_lines = "allow"`. Run with `-D warnings` in CI, not locally.
-- [ ] **`rust-toolchain.toml`** pinning channel + `rustfmt`, `rust-analyzer`,
+- [x] **`rust-toolchain.toml`** *Done (1.95.0, rustfmt + clippy +
+  rust-analyzer; `rust-version = "1.95"`).* Pinning channel + `rustfmt`, `rust-analyzer`,
   and **`rust-version`** in `Cargo.toml`. Same build for everyone, and
   `cargo` refuses old toolchains with a clear message.
-- [ ] **CI on GitHub Actions**, modeled on their `branch-checks.yml` but
+- [x] **CI on GitHub Actions** *Done, `.github/workflows/ci.yml`: fmt,
+  clippy and test on ubuntu + macOS, cargo-deny; all actions pinned by SHA.
+  **Not yet run on GitHub** (nothing pushed); the Linux test run in
+  particular is unverified since all tests so far ran on macOS only.*
+  Modeled on their `branch-checks.yml` but
   trimmed to four jobs: `cargo fmt --check`, `cargo clippy --locked
   --all-targets -- -D warnings`, `cargo test --locked`, and `cargo deny
   check`. Matrix on `ubuntu-latest` + `macos-latest`. Pin action versions by
   SHA as they do. `CARGO_INCREMENTAL=0` and `concurrency.cancel-in-progress`.
-- [ ] **`cargo-deny` with `deny.toml`.** Advisories, license allow-list,
+- [x] **`cargo-deny` with `deny.toml`.** *Done, and it paid for itself: it
+  found RUSTSEC-2026-0285 in `rustls` 0.23.40 (TLS 1.3 handshake), fixed by
+  `cargo update -p rustls` to 0.23.45. Licenses: allow-list plus
+  `CDLA-Permissive-2.0`; `colored` and `option-ext` are MPL-2.0 and are named
+  exceptions. `publish = false` is set in `Cargo.toml` because tuipr has no
+  license field; remove it and add a license when releasing.* Advisories, license allow-list,
   `unknown-registry = "deny"`. Cheap, and it is the only thing that will tell
   you when `keyring` or `reqwest` pulls in something unwanted.
-- [ ] **Dependabot for GitHub Actions** (their config is five lines) and,
+- [x] **Dependabot for GitHub Actions** *Done (weekly, plus monthly grouped
+  Cargo updates).* (their config is five lines) and,
   optionally, for Cargo with a monthly cadence.
-- [ ] **`[profile.release] strip = true`** and **`[profile.dev] debug = 1`**;
+- [x] **`[profile.release] strip = true`** *Done.* and **`[profile.dev] debug = 1`**;
   the second one noticeably speeds up incremental builds.
 
 ### Soon
