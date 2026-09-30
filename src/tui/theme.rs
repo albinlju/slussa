@@ -4,7 +4,7 @@ use ratatui::style::Color;
 
 use crate::domain::pr::PrStatus;
 
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct Theme {
     pub fg: Color,
     pub bg: Color,
@@ -176,18 +176,63 @@ impl Theme {
     }
 }
 
+/// The theme used when none is configured, or when the configured name is unknown.
+pub const DEFAULT: &Theme = &GRAPHITE;
+
+/// Look a theme up by its config name.
+fn named(name: &str) -> Option<&'static Theme> {
+    match name {
+        "graphite" => Some(&GRAPHITE),
+        "slate" => Some(&SLATE),
+        "gruvbox" => Some(&GRUVBOX),
+        "catppuccin" => Some(&CATPPUCCIN),
+        "terminal" => Some(&TERMINAL),
+        _ => None,
+    }
+}
+
 pub fn current() -> &'static Theme {
     static SELECTED: OnceLock<&'static Theme> = OnceLock::new();
     SELECTED.get_or_init(|| {
         let name = std::env::var("TUIPR_THEME")
             .ok()
             .or_else(|| crate::config::load().theme);
-        match name.as_deref() {
-            Some("slate") => &SLATE,
-            Some("gruvbox") => &GRUVBOX,
-            Some("catppuccin") => &CATPPUCCIN,
-            Some("terminal") => &TERMINAL,
-            _ => &GRAPHITE,
-        }
+        let Some(name) = name else {
+            return DEFAULT;
+        };
+        named(&name).unwrap_or_else(|| {
+            tracing::warn!("unknown theme {name:?}, using graphite");
+            DEFAULT
+        })
     })
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn graphite_is_the_default() {
+        assert_eq!(*DEFAULT, GRAPHITE);
+    }
+
+    #[test]
+    fn every_documented_name_resolves_to_its_own_theme() {
+        for (name, theme) in [
+            ("graphite", &GRAPHITE),
+            ("slate", &SLATE),
+            ("gruvbox", &GRUVBOX),
+            ("catppuccin", &CATPPUCCIN),
+            ("terminal", &TERMINAL),
+        ] {
+            assert_eq!(named(name), Some(theme), "{name}");
+        }
+    }
+
+    #[test]
+    fn unknown_names_are_not_themes() {
+        for name in ["auto", "Graphite", "", "dark"] {
+            assert!(named(name).is_none(), "{name:?}");
+        }
+    }
 }

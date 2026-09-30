@@ -106,4 +106,84 @@ mod tests {
         let (_, suggestions) = split_suggestions("remove this\n```suggestion\n```");
         assert_eq!(suggestions, vec![""]);
     }
+
+    #[test]
+    fn several_suggestions_keep_their_order_and_the_prose_between() {
+        let body = "first\n```suggestion\na\n```\nmiddle\n```suggestion\nb\nc\n```\nlast";
+        let (prose, suggestions) = split_suggestions(body);
+        assert_eq!(prose, "first\nmiddle\nlast");
+        assert_eq!(suggestions, vec!["a", "b\nc"]);
+    }
+
+    #[test]
+    fn unterminated_suggestion_takes_the_rest_of_the_body() {
+        let (prose, suggestions) = split_suggestions("intro\n```suggestion\nfoo\nbar");
+        assert_eq!(prose, "intro");
+        assert_eq!(suggestions, vec!["foo\nbar"]);
+    }
+
+    #[test]
+    fn ordinary_code_fences_stay_in_the_prose() {
+        let body = "see:\n```rust\nlet x = 1;\n```";
+        let (prose, suggestions) = split_suggestions(body);
+        assert_eq!(prose, body);
+        assert!(suggestions.is_empty());
+    }
+
+    #[test]
+    fn indented_suggestion_fence_is_recognised() {
+        let (prose, suggestions) = split_suggestions("  ```suggestion\nx\n  ```");
+        assert_eq!(prose, "");
+        assert_eq!(suggestions, vec!["x"]);
+    }
+
+    fn thread(anchor: Option<ThreadAnchor>) -> CommentThread {
+        CommentThread {
+            comments: Vec::new(),
+            reply_to: None,
+            anchor,
+        }
+    }
+
+    fn anchor(revision: Option<&str>, resolved: bool) -> ThreadAnchor {
+        ThreadAnchor {
+            revision: revision.map(str::to_owned),
+            path: "src/lib.rs".into(),
+            line: Some(3),
+            old_line: None,
+            resolved,
+            node_id: None,
+        }
+    }
+
+    fn revision(head: &str) -> crate::domain::diff::DiffRevision {
+        crate::domain::diff::DiffRevision {
+            head: head.into(),
+            base: None,
+            commit: false,
+        }
+    }
+
+    #[test]
+    fn thread_matches_only_the_revision_it_was_anchored_to() {
+        let anchored = thread(Some(anchor(Some("abc"), false)));
+        assert!(anchored.matches_revision(Some(&revision("abc"))));
+        assert!(!anchored.matches_revision(Some(&revision("def"))));
+        assert!(!anchored.matches_revision(None));
+        assert!(!thread(None).matches_revision(Some(&revision("abc"))));
+    }
+
+    #[test]
+    fn thread_without_a_revision_matches_only_a_missing_one() {
+        let unversioned = thread(Some(anchor(None, false)));
+        assert!(unversioned.matches_revision(None));
+        assert!(!unversioned.matches_revision(Some(&revision("abc"))));
+    }
+
+    #[test]
+    fn only_anchored_threads_can_be_resolved() {
+        assert!(thread(Some(anchor(None, true))).resolved());
+        assert!(!thread(Some(anchor(None, false))).resolved());
+        assert!(!thread(None).resolved());
+    }
 }

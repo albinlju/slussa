@@ -86,21 +86,24 @@ stays.
   around the child, or gate it with an `AtomicBool` the way they do. Put it in
   `app/desktop.rs` next to browser/clipboard as `run_in_terminal(cmd)`.
   *Trigger:* send-to-agent or open-in-editor.
-- [ ] **Write down the blocking-I/O rule.** GitHub spawns `gh`, Bitbucket uses
+- [x] **Write down the blocking-I/O rule.** *Done: ARCHITECTURE.md "Rules for I/O and effects" and CLAUDE.md.*  GitHub spawns `gh`, Bitbucket uses
   `reqwest::blocking`, both via `spawn_blocking` with a 60 s deadline. That
   is a deliberate design; add it to ARCHITECTURE.md so agent handoff and
   run-a-review follow the same pattern instead of introducing async HTTP.
 
 ### Test coverage gaps
 
-- [ ] `domain/` has 3 tests; `comment.rs` (109 lines of thread logic) deserves
+- [x] `domain/` has 3 tests; *Done: `domain/comment.rs` now has 10 tests (suggestion parsing edge cases, revision matching, resolution). Thread assembly has not moved there yet, so assembly tests wait for that refactor.*  `comment.rs` (109 lines of thread logic) deserves
   direct tests once thread assembly moves there.
 - [ ] No test drives the full `App::run` loop with a fake provider. A
   `Provider::Fake(FakeConfig)` behind `#[cfg(test)]` would let the
   regression tests cover refresh, in-flight dedup and mutation-then-refetch
   end to end instead of via `App::apply` only.
-- [ ] Snapshot tests (`tui/testdata/screens.txt`) cover the happy layouts;
-  add narrow-terminal (≤ 80×24) snapshots since the principles promise it.
+- [ ] Snapshot tests (`tui/testdata/screens.txt`) cover 100×30 and 40×12 for
+  the list and all five detail tabs, but with placeholder data: one PR, no
+  diff, no threads. Add a snapshot with realistic content (a diff with an
+  inline thread, several commits, a failing build) at both sizes, and one at
+  80×24.
 
 ---
 
@@ -151,13 +154,14 @@ list; see *Not borrowed* below.
 
 ### Soon
 
-- [x] **Tag-driven release workflow.** *Built, not yet run on GitHub.*
-  `.github/workflows/release.yml` + `.github/scripts/package.sh`, described in
-  RELEASING.md. The packaging script, the tag/version check and both macOS
-  builds were tested locally; the two Linux builds (the aarch64 one is
-  cross-compiled with gcc) and the publish step are **unverified until a
-  manual dry run**. Left out on purpose: Homebrew tap (needs its own repo),
-  crates.io (remove `publish = false` first), macOS signing/notarization.
+- [x] **Tag-driven release workflow.** *Done and dry-run on GitHub
+  (2026-09-30): all four builds succeeded, the publish job was skipped as
+  designed, and the Linux artifacts were downloaded and checked (checksums
+  match, binaries are x86-64 and ARM aarch64 ELF).* `.github/workflows/release.yml`
+  + `.github/scripts/package.sh`, described in RELEASING.md. **The publish
+  step itself has still never run**; the first real tag is its test. Left out
+  on purpose: Homebrew tap (needs its own repo), crates.io (remove
+  `publish = false` first), macOS signing/notarization.
   Original note: On `v*.*.*`: build for
   `aarch64-apple-darwin`, `x86_64-apple-darwin`, `x86_64-unknown-linux-gnu`,
   `aarch64-unknown-linux-gnu`; attach tarballs + `sha256` to a GitHub
@@ -173,7 +177,10 @@ list; see *Not borrowed* below.
   SSH, tmux and mosh without `pbcopy`/`xclip`/`wl-copy`. tuipr's
   `app/desktop.rs` shells out to platform helpers. Use OSC 52 first and keep
   the helpers as fallback (some terminals disable OSC 52 writes).
-- [ ] **Auto light/dark theme.** They detect the terminal background with an
+- [x] **Auto light/dark theme.** *Dropped (2026-09-30).* All five themes are
+  dark, and `terminal` (terminal's own colours) already follows a light
+  terminal, so detection would only choose between a dark palette and
+  `terminal`. Revisit only if a light palette is added. Original note: They detect the terminal background with an
   OSC 11 query (`terminal-colorsaurus`) *before* entering raw mode, with
   `auto | dark | light` as the config value. tuipr's `theme = "…"` picks a
   named palette; add `auto` that maps to a light or dark default. Detection
@@ -205,13 +212,13 @@ list; see *Not borrowed* below.
 - [ ] **`CONTRIBUTING.md`** with their one rule: *you must understand your
   code*, even (especially) when an agent wrote it. Plus how to run fmt / lint
   / test, and the blocking-I/O and two-views principles.
-- [ ] **`AGENTS.md` / `CLAUDE.md`.** They keep one file as the primary
+- [x] **`AGENTS.md` / `CLAUDE.md`.** *Done: `CLAUDE.md` holds the non-negotiables, commands and pointers.*  They keep one file as the primary
   instruction surface for coding agents and point it at ARCHITECTURE and
   CONTRIBUTING. tuipr's ARCHITECTURE.md already reads like one; a short
   `CLAUDE.md` that names the principles, the two-views rule, the I/O pattern
   and the test commands would make every agent session start on the same
   footing.
-- [ ] **A `tui-development` skill, or the same content in ARCHITECTURE.md.**
+- [x] **A `tui-development` skill, or the same content in ARCHITECTURE.md.** *Done: ARCHITECTURE.md now has read and write lifecycles and checklists for a new provider write and a new read resource. No separate skill.* 
   Their internal skill for the TUI crate is the most useful agent doc in the
   repo. Worth copying the *shape*, not the text: a domain-object hierarchy;
   numbered "adding a new screen / event variant / RPC" checklists; one
@@ -247,7 +254,7 @@ transfers.
   screen → app boundary: a `ResolvedCommand` that only
   `pr_detail/interactions.rs` can construct, so `app/commands.rs` never
   re-checks dialog state. Pairs with *Split `Action`* above.
-- [ ] **`//!` contract docs on the core modules.** Every module of theirs
+- [x] **`//!` contract docs on the core modules.** *Done: added to `app/store.rs`, `app/reviews.rs`, `app/drafts.rs`, `providers/mod.rs` and `tui/component.rs`.*  Every module of theirs
   opens with what it guarantees and what it does not, often with a small
   state diagram. ARCHITECTURE.md has that content for tuipr but the modules
   are silent. Add `//!` blocks to `app/store.rs` (resource keys, in-flight
@@ -334,10 +341,15 @@ coexist (`tests.rs`, `<module>_tests.rs`, `src/**/tests/*.rs`), and `mod.rs`
 is often the main body rather than an index. The CLI's `main.rs` (242 KB) and
 `run.rs` (271 KB) hold the command logic while `commands/` has four files.
 
-tuipr's largest file is 475 lines, `mod.rs` files compose and named files hold
-the parts, and `cli.rs` dispatches to `preflight` and `auth`. Keep all three.
+tuipr is an order of magnitude smaller: its largest non-test files are
+`widgets/comment.rs` (683 lines), `diff_viewer/pane.rs` (581), `pr_list/mod.rs`
+(552) and `timeline.rs` (520), and two test files pass 1 000 lines
+(`tui/regression_tests.rs` 1 308, `app/tests.rs` 1 154). `mod.rs` files
+compose and named files hold the parts, and `cli.rs` dispatches to
+`preflight` and `auth`. Keep those two habits; the four files above are
+where the size rule is already broken.
 
-- [ ] **Write the file-size rule down.** In CONTRIBUTING (or CLAUDE.md until
+- [x] **Write the file-size rule down.** *Done: the rule is in CLAUDE.md. `too_many_lines` stays `allow`. Four non-test files and two test files already exceed it (measured 2026-09-30, see above); split them when next touched substantially, not in a refactor-only change.*  In CONTRIBUTING (or CLAUDE.md until
   one exists): modules stay under ~500 lines, `mod.rs` composes and does not
   implement, tests for a module live inline or in exactly one sibling
   `tests.rs`, never both conventions. Consider `too_many_lines` at `warn`
