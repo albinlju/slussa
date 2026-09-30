@@ -25,7 +25,6 @@ pub fn dispatch(mut args: Vec<String>) -> Dispatch {
 
     match args.get(1).map(String::as_str) {
         Some("auth") => return Dispatch::Done(run_auth(&args[2..])),
-        Some("keyring-test") => return Dispatch::Done(run_keyring_test()),
         Some("--help" | "-h") => {
             print_help();
             return Dispatch::Done(ExitCode::SUCCESS);
@@ -114,61 +113,4 @@ fn resolve_provider() -> Result<Provider, PreflightError> {
         }
         Err(other) => Err(other),
     }
-}
-
-fn run_keyring_test() -> ExitCode {
-    use crate::providers::bitbucket_dc::auth::SERVICE;
-    use keyring::Entry;
-
-    const ACCOUNT: &str = "slussa-keyring-test.localhost";
-    const SECRET: &str = "test-token-12345";
-
-    println!("Keyring test (service='{SERVICE}', account='{ACCOUNT}')");
-
-    let entry = match Entry::new(SERVICE, ACCOUNT) {
-        Ok(e) => e,
-        Err(err) => {
-            eprintln!("✗ Entry::new failed: {err}");
-            return ExitCode::from(1);
-        }
-    };
-
-    print!("  set_password... ");
-    if let Err(err) = entry.set_password(SECRET) {
-        eprintln!("✗ {err}");
-        return ExitCode::from(1);
-    }
-    println!("ok");
-
-    print!("  get_password... ");
-    let got = match entry.get_password() {
-        Ok(s) => {
-            println!("ok");
-            s
-        }
-        Err(err) => {
-            eprintln!("✗ {err}");
-            return ExitCode::from(1);
-        }
-    };
-
-    if got != SECRET {
-        eprintln!("✗ Round-trip mismatch: expected {SECRET:?}, got {got:?}");
-        return ExitCode::from(1);
-    }
-    println!("  round-trip values match");
-
-    print!("  delete_credential (cleanup)... ");
-    if let Err(err) = entry.delete_credential() {
-        println!("warn: cleanup failed: {err}");
-    } else {
-        println!("ok");
-    }
-
-    println!("\n✓ Keyring backend is working.");
-    println!(
-        "  Verify in Keychain Access (macOS) or with:\n  \
-         security find-generic-password -s {SERVICE} -a {ACCOUNT}"
-    );
-    ExitCode::SUCCESS
 }

@@ -10,44 +10,37 @@ ordinary rendering functions; they do not need the component interface.
 
 ## Product and interaction principles
 
-slussa should remain minimalist, easy to understand and comfortable for daily
-use as its feature set grows. Polish comes from consistent behavior, clear
-hierarchy, restrained styling and reliable feedback. These principles guide
-future features and UI changes; they do not imply every current screen already
-meets them.
+What slussa is for, what it rules out and the two-views rule are in
+[FEATURES.md](FEATURES.md) (*Positioning*) and the non-negotiables in
+`CLAUDE.md`. The interaction principles below guide UI changes; they do not imply
+every current screen already meets them.
 
 - **Content first.** Give code, diffs and conversations the most space. Keep
   persistent controls and status indicators limited to what helps the current
-  task. Adding a feature does not automatically justify another visible control.
-- **Reveal actions in context.** Offer relevant actions for the focused item,
-  such as replying to a comment or inspecting a build. Put less frequent actions
-  behind a consistently placed, clearly labeled actions menu.
-- **Keep features discoverable.** Provide a visible route to actions and help;
-  shortcuts accelerate that route. Essential functions must not require users
-  to guess an undocumented key. Keep contextual hints short and predictable.
-- **Use dialogs for focused tasks.** A dialog can give a comment editor or merge
-  choice room when needed. Avoid chains of popups and unnecessary confirmations
-  that slow routine work. Opening and closing a dialog should preserve context.
-- **Use restrained visual emphasis.** Reserve strong colors and emphasis for
-  focus, meaningful changes and actionable problems. Use spacing and hierarchy
-  to organize information; avoid competing badges, panels and indicators.
-- **Keep interaction consistent.** Reuse navigation and selection behavior;
-  Enter opens or selects and Esc returns or dismisses the current interaction.
-  Text entry must clearly distinguish inserting a newline from sending text.
-  Restore focus predictably and make sending, success and failure understandable.
-- **Protect continuity.** Preserve work and reading position across ordinary
-  interactions. Drafts are saved automatically; failures leave the user's
-  work available for recovery.
+  task; a new feature does not justify another visible control.
+- **Actions in context, and discoverable.** Offer the relevant actions for the
+  focused item (replying to a comment, inspecting a build) with a short,
+  predictable footer hint; `?` lists the keys. An essential function must not
+  need an undocumented key.
+- **Dialogs for focused tasks.** A dialog gives a comment editor or a merge
+  choice room when needed. Avoid chains of popups and unnecessary
+  confirmations, and preserve context when one opens and closes.
+- **Restrained emphasis.** Reserve strong colors for focus, meaningful changes
+  and actionable problems; use spacing and hierarchy, not competing badges.
+- **Consistent interaction.** Enter opens or selects and Esc returns or
+  dismisses. Text entry must clearly distinguish inserting a newline from
+  sending. Restore focus predictably and make sending, success and failure
+  understandable.
+- **Continuity.** Preserve work and reading position across ordinary
+  interactions. Drafts are saved automatically; failures leave the user's work
+  available for recovery.
 - **Respect platform support.** Show optional functions only when the adapter
-  supports them. Distinguish unsupported features from supported actions blocked
-  by the current PR's state, with a concise reason for the latter.
+  supports them. Tell an unsupported feature from a supported action blocked by
+  the PR's state, and give the reason for the latter.
 
 When designing a feature, identify its entry point, what appears only after
-interaction, and how the user returns to their work. Review both discoverability
-and visual load, including narrow terminals and keyboard-only operation. Prefer
-reusing an existing interaction over adding a new visual pattern. Detailed merge
-requirements, for example, can open on demand while the main view keeps a brief
-status; a longer editor can occupy space only while composing.
+interaction, and how the user returns to their work; check narrow terminals and
+keyboard-only use, and prefer an existing interaction over a new visual pattern.
 
 ```text
 src/

@@ -109,19 +109,12 @@ state (for example merging with conflicts) stay visible and say why.
 | `esc` | clear search | back |
 | `q` | quit | quit |
 
-The list starts with the open PRs (drafts included), read a page at a time: the
-list appears with the first page and the rest are added as they arrive, in
-arrival order, with "loading more..." in the heading. When the reading ends the
-list takes its order, so what needs you moves to the top once. Up to 90 open
-PRs are read on their own, which is the whole list on most repositories. If
-there are more, the heading says "more unread" and `L` reads 90 more. Merged
-and declined PRs are read only when you switch to that view, with a spinner
-while they load, and then only the most recent ones: 30 per group on GitHub, 25
-on Bitbucket. The All view reads whichever groups are still missing. In the
-Merged, Declined and All views, `L` reads the next older batch for as long as
-there is one, and the heading says "recent" until everything is loaded. The
-footer shows `L: more` only when there is more to read. A refresh keeps as much
-as you have already loaded. Search covers the PRs that are loaded.
+The list starts with the open PRs (drafts included): the first page appears at
+once, the rest are added as they arrive, and what needs you moves to the top when
+the reading ends. Up to 90 open PRs are read on their own; past that the heading
+says "more unread" and `L` reads 90 more. Merged and declined PRs are read only
+when you switch to that view, the most recent first, and `L` reads older ones
+there. Search covers the PRs that are loaded.
 
 The list opens sorted by what needs you. A "Needs you" column, shown at 90
 columns or wider and only when some row has a reason, says why:
