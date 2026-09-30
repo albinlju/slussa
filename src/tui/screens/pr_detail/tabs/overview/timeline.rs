@@ -410,23 +410,22 @@ fn event_block(event: &TimelineEvent, now: DateTime<Utc>) -> (Color, Vec<Line<'s
         widgets::author_line(lead, event.created, now)
     };
 
-    if let EventKind::Pushed(commits) = &event.kind {
-        let verb = if commits.len() == 1 {
-            "added 1 commit".to_string()
-        } else {
-            format!("added {} commits", commits.len())
-        };
-        let mut lines = vec![header(verb, theme.info)];
-        for c in commits {
-            lines.push(Line::from(vec![
-                Span::styled(format!("{}  ", c.id), Style::default().fg(theme.warning)),
-                Span::styled(c.message.clone(), Style::default().fg(theme.muted)),
-            ]));
-        }
-        return (theme.info, lines);
-    }
-
     let (verb, color) = match &event.kind {
+        EventKind::Pushed(commits) => {
+            let verb = if commits.len() == 1 {
+                "added 1 commit".to_string()
+            } else {
+                format!("added {} commits", commits.len())
+            };
+            let mut lines = vec![header(verb, theme.info)];
+            for c in commits {
+                lines.push(Line::from(vec![
+                    Span::styled(format!("{}  ", c.id), Style::default().fg(theme.warning)),
+                    Span::styled(c.message.clone(), Style::default().fg(theme.muted)),
+                ]));
+            }
+            return (theme.info, lines);
+        }
         EventKind::Opened => ("opened this pull request", theme.success),
         EventKind::Approved => ("approved these changes", theme.success),
         EventKind::ChangesRequested => ("requested changes", theme.error),
@@ -434,7 +433,6 @@ fn event_block(event: &TimelineEvent, now: DateTime<Utc>) -> (Color, Vec<Line<'s
         EventKind::Merged => ("merged this pull request", theme.status_merged),
         EventKind::Declined => ("declined this pull request", theme.status_declined),
         EventKind::Reopened => ("reopened this pull request", theme.success),
-        EventKind::Pushed(_) => unreachable!("handled above"),
     };
     (color, vec![header(verb.to_string(), color)])
 }

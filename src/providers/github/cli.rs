@@ -29,15 +29,15 @@ fn run_command(
         .stderr(Stdio::piped())
         .spawn()
         .map_err(|_| FetchError::GhMissing)?;
-    let mut stdin = child.stdin.take().expect("piped stdin");
+    let mut stdin = take_pipe(child.stdin.take(), "stdin")?;
     let input = input.to_vec();
     let writer = background(move || stdin.write_all(&input));
-    let mut stdout = child.stdout.take().expect("piped stdout");
+    let mut stdout = take_pipe(child.stdout.take(), "stdout")?;
     let out = background(move || {
         let mut bytes = Vec::new();
         stdout.read_to_end(&mut bytes).map(|_| bytes)
     });
-    let mut stderr = child.stderr.take().expect("piped stderr");
+    let mut stderr = take_pipe(child.stderr.take(), "stderr")?;
     let err = background(move || {
         let mut bytes = Vec::new();
         stderr.read_to_end(&mut bytes).map(|_| bytes)
@@ -80,6 +80,12 @@ fn run_command(
     }
     receive(&writer, deadline)?;
     Ok(stdout)
+}
+
+/// `Stdio::piped()` guarantees the handle exists; report the impossible case
+/// as an error instead of panicking.
+fn take_pipe<T>(pipe: Option<T>, name: &str) -> Result<T, FetchError> {
+    pipe.ok_or_else(|| FetchError::Network(format!("gh {name} was not available")))
 }
 
 fn background<T: Send + 'static>(

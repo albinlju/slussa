@@ -160,7 +160,7 @@ impl Component for PrDetailScreen {
                     DetailAction::NextTab => tab.step(1, &ctx.store.capabilities),
                     DetailAction::PrevTab => tab.step(-1, &ctx.store.capabilities),
                     DetailAction::SelectTab(tab) => tab,
-                    _ => unreachable!(),
+                    _ => return None,
                 };
                 self.active_tab = tab;
                 self.commits.open_commit = None;

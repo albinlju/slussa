@@ -34,7 +34,7 @@ pub(super) fn node_nodes_after<T: DeserializeOwned>(
     selection: &str,
     cursor: Option<&str>,
 ) -> Result<Vec<T>, FetchError> {
-    let id = serde_json::to_string(id).expect("string JSON");
+    let id = Value::String(id.to_owned()).to_string();
     nodes_after(
         |cursor| {
             format!(
@@ -80,15 +80,14 @@ fn nodes_after<T: DeserializeOwned>(
     cursor: Option<&str>,
 ) -> Result<Vec<T>, FetchError> {
     collect_from(cursor, |cursor| {
-        let cursor = serde_json::to_string(&cursor).expect("cursor JSON");
+        let cursor = serde_json::json!(cursor).to_string();
         let query = query(&cursor);
+        let query_arg = format!("query={query}");
         let mut args = vec!["api", "graphql"];
         if query.contains("$owner") {
             args.extend(["-F", "owner={owner}", "-F", "name={repo}"]);
         }
-        args.extend(["-f", &query]);
-        let query_arg = format!("query={query}");
-        *args.last_mut().expect("query argument") = &query_arg;
+        args.extend(["-f", &query_arg]);
         let mut value: Value = cli::run_gh_json(&args)?;
         if value.get("errors").is_some() {
             return Err(FetchError::InvalidInput(
