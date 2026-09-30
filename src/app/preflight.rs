@@ -15,7 +15,8 @@ pub enum PreflightError {
     UnsupportedHost { host: String },
     #[error(
         "Bitbucket Cloud (bitbucket.org) isn't supported yet — it's on the roadmap.\n\
-         Open an issue at https://github.com/albinljung/tuipr/issues if you'd like to help."
+         Open an issue at {}/issues if you'd like to help.",
+        env!("CARGO_PKG_REPOSITORY")
     )]
     BitbucketCloudUnsupported,
     #[error(

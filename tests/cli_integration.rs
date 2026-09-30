@@ -85,7 +85,7 @@ impl Drop for Sandbox {
 fn help_lists_every_command() {
     let output = Sandbox::new().run(&["--help"]);
     assert_eq!(output.code, 0, "{}", output.combined);
-    for expected in ["tuipr", "-C <dir>", "auth login", "--help"] {
+    for expected in ["tuipr", "-C <dir>", "auth login", "--version", "--help"] {
         assert!(
             output.combined.contains(expected),
             "missing {expected:?} in:\n{}",
@@ -101,6 +101,19 @@ fn short_help_flag_matches_long() {
         sandbox.run(&["-h"]).combined,
         sandbox.run(&["--help"]).combined
     );
+}
+
+#[test]
+fn version_prints_the_cargo_version_under_both_spellings() {
+    let sandbox = Sandbox::new();
+    for flag in ["--version", "-V"] {
+        let output = sandbox.run(&[flag]);
+        assert_eq!(output.code, 0, "{flag}: {}", output.combined);
+        assert_eq!(
+            output.combined.trim(),
+            format!("tuipr {}", env!("CARGO_PKG_VERSION"))
+        );
+    }
 }
 
 #[test]
@@ -169,4 +182,11 @@ fn bitbucket_cloud_is_reported_as_unsupported() {
     assert_eq!(output.code, 1);
     assert!(output.combined.contains("Bitbucket Cloud"));
     assert!(output.combined.contains("isn't supported yet"));
+    assert!(
+        output
+            .combined
+            .contains(&format!("{}/issues", env!("CARGO_PKG_REPOSITORY"))),
+        "the issue link points at this project: {}",
+        output.combined
+    );
 }

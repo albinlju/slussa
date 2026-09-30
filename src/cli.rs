@@ -30,6 +30,10 @@ pub fn dispatch(mut args: Vec<String>) -> Dispatch {
             print_help();
             return Dispatch::Done(ExitCode::SUCCESS);
         }
+        Some("--version" | "-V") => {
+            println!("tuipr {}", env!("CARGO_PKG_VERSION"));
+            return Dispatch::Done(ExitCode::SUCCESS);
+        }
         Some(other) => {
             eprintln!("tuipr: unknown command `{other}`. Try `tuipr --help`.");
             return Dispatch::Done(ExitCode::from(2));
@@ -57,6 +61,7 @@ fn print_help() {
          tuipr                       Open the PR browser for the current repo.\n  \
          tuipr -C <dir> [...]        Run as if started in <dir> (matches git/cargo -C).\n  \
          tuipr auth login            Store a Bitbucket Data Center PAT for the current repo's host.\n  \
+         tuipr --version             Show the version.\n  \
          tuipr --help                Show this message.\n"
     );
 }
