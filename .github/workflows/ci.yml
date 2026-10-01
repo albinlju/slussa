@@ -4,6 +4,10 @@ on:
   push:
     branches: [main]
   pull_request:
+  # A weekly `cargo deny`, so an advisory published between pull requests is
+  # noticed. The other jobs do not run on the schedule.
+  schedule:
+    - cron: "17 6 * * 1"
 
 env:
   CARGO_TERM_COLOR: always
@@ -19,6 +23,7 @@ concurrency:
 jobs:
   fmt:
     name: Format
+    if: github.event_name != 'schedule'
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
@@ -27,6 +32,7 @@ jobs:
 
   clippy:
     name: Clippy (${{ matrix.os }})
+    if: github.event_name != 'schedule'
     runs-on: ${{ matrix.os }}
     timeout-minutes: 30
     strategy:
@@ -40,6 +46,7 @@ jobs:
 
   test:
     name: Test (${{ matrix.os }})
+    if: github.event_name != 'schedule'
     runs-on: ${{ matrix.os }}
     timeout-minutes: 30
     strategy:
@@ -50,6 +57,25 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2
       - run: cargo test --locked
+
+  # `rust-toolchain.toml` pins a newer compiler for development and for the
+  # jobs above. This builds with the `rust-version` in Cargo.toml, the oldest
+  # compiler `cargo install slussa` promises to work with.
+  msrv:
+    name: Minimum Rust version
+    if: github.event_name != 'schedule'
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2
+        with:
+          key: msrv
+      - name: Check with the minimum Rust version
+        run: |
+          msrv=$(cargo metadata --no-deps --format-version 1 | jq -r '.packages[0].rust_version')
+          rustup toolchain install "$msrv" --profile minimal
+          cargo "+$msrv" check --locked --all-targets
 
   deny:
     name: Cargo deny
