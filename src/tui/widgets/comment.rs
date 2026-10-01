@@ -1,7 +1,7 @@
 use crate::{
     domain::{
         comment::{Comment, CommentThread, split_suggestions},
-        diff::{Diff, DiffLine},
+        diff::{Diff, DiffLine, LineRef},
     },
     tui::{
         format, theme,
@@ -16,7 +16,7 @@ use ratatui::{
 
 /// The diff line a thread is anchored to (new- or old-side), if any.
 fn anchor_pos(thread: &CommentThread) -> Option<usize> {
-    thread.anchor.as_ref().and_then(|a| a.line.or(a.old_line))
+    thread.anchor.as_ref()?.line.map(LineRef::number)
 }
 
 pub(in crate::tui) fn render_inline_thread(
@@ -154,14 +154,11 @@ pub(in crate::tui) fn comment_thread_box(
     let first = thread.comments.first()?;
     let frame = if active { theme.accent } else { theme.divider };
 
-    let location = thread
-        .anchor
-        .as_ref()
-        .and_then(|a| match a.line.or(a.old_line) {
-            Some(l) => Some(format!("{}:{l}", a.path)),
-            None if !a.path.is_empty() => Some(a.path.clone()),
-            None => None,
-        });
+    let location = thread.anchor.as_ref().and_then(|a| match a.line {
+        Some(l) => Some(format!("{}:{}", a.path, l.number())),
+        None if !a.path.is_empty() => Some(a.path.clone()),
+        None => None,
+    });
     let has_suggestion = thread
         .comments
         .iter()
@@ -202,7 +199,7 @@ pub(in crate::tui) fn comment_thread_box(
     let mut out: Vec<Line<'static>> = vec![header_line(left, right, width)];
 
     let (snippet, anchor_text) = match (diff, &thread.anchor) {
-        (Some(d), Some(a)) => diff_snippet(d, &a.path, a.line, a.old_line, width.saturating_sub(2)),
+        (Some(d), Some(a)) => diff_snippet(d, &a.path, a.line, width.saturating_sub(2)),
         _ => Default::default(),
     };
     let pos = anchor_pos(thread).zip(anchor_text.as_deref());
@@ -558,8 +555,7 @@ const SNIPPET_CONTEXT: usize = 3;
 fn diff_snippet(
     diff: &Diff,
     path: &str,
-    line: Option<usize>,
-    old_line: Option<usize>,
+    line: Option<LineRef>,
     width: u16,
 ) -> (Vec<Line<'static>>, Option<String>) {
     struct Row<'a> {
@@ -586,10 +582,10 @@ fn diff_snippet(
         }
     }
 
-    let anchor = rows.iter().position(|r| match (line, old_line) {
-        (Some(l), _) => !matches!(r.dl, DiffLine::Removed(_)) && r.new_no == l,
-        (None, Some(o)) => matches!(r.dl, DiffLine::Removed(_)) && r.old_no == o,
-        _ => false,
+    let anchor = rows.iter().position(|r| match line {
+        Some(LineRef::New(l)) => !matches!(r.dl, DiffLine::Removed(_)) && r.new_no == l,
+        Some(LineRef::Old(o)) => matches!(r.dl, DiffLine::Removed(_)) && r.old_no == o,
+        None => false,
     });
     let Some((anchor, anchor_row)) = anchor.and_then(|i| Some((i, rows.get(i)?))) else {
         return (Vec::new(), None);

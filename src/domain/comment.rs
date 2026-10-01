@@ -100,8 +100,8 @@ pub struct CommentThread {
 pub struct ThreadAnchor {
     pub revision: Option<String>,
     pub path: String,
-    pub line: Option<usize>,
-    pub old_line: Option<usize>,
+    /// The line it is on; none for a thread on the file as a whole.
+    pub line: Option<super::diff::LineRef>,
     pub resolved: bool,
     /// What resolving or reopening the thread takes; none when the provider
     /// gave nothing to address it by.
@@ -211,8 +211,7 @@ mod tests {
         ThreadAnchor {
             revision: revision.map(str::to_owned),
             path: "src/lib.rs".into(),
-            line: Some(3),
-            old_line: None,
+            line: Some(crate::domain::diff::LineRef::New(3)),
             resolved,
             handle: None,
         }

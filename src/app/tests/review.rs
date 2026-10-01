@@ -275,8 +275,7 @@ fn comment_lookup_keeps_review_and_pr_ids_separate() {
             anchor: Some(ThreadAnchor {
                 revision: None,
                 path: "src/main.rs".into(),
-                line: Some(1),
-                old_line: None,
+                line: Some(crate::domain::diff::LineRef::New(1)),
                 resolved: false,
                 handle: Some(ThreadHandle::NodeId("thread".into())),
             }),

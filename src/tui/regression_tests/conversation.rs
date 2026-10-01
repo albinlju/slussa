@@ -32,8 +32,7 @@ fn timeline_keeps_thread_selection_and_sidebar_is_responsive() {
             anchor: Some(ThreadAnchor {
                 revision: None,
                 path: "src/main.rs".into(),
-                line: Some(1),
-                old_line: None,
+                line: Some(LineRef::New(1)),
                 resolved: false,
                 handle: Some(ThreadHandle::NodeId("thread-1".into())),
             }),
@@ -208,8 +207,7 @@ fn diff_fold_keeps_target_and_shows_the_next_action() {
                 anchor: Some(ThreadAnchor {
                     revision: None,
                     path: "src/main.rs".into(),
-                    line: Some(1),
-                    old_line: None,
+                    line: Some(LineRef::New(1)),
                     resolved: true,
                     handle: Some(ThreadHandle::NodeId("thread-10".into())),
                 }),
@@ -373,8 +371,7 @@ fn a_thread_taller_than_the_diff_pane_is_shown_from_its_first_row() {
             anchor: Some(ThreadAnchor {
                 revision: None,
                 path: "src/main.rs".into(),
-                line: Some(1),
-                old_line: None,
+                line: Some(LineRef::New(1)),
                 resolved: false,
                 handle: Some(ThreadHandle::NodeId("thread-10".into())),
             }),

@@ -2,7 +2,7 @@ use crate::{
     app::reviews::{CommentAnchor, PendingComment},
     domain::{
         comment::CommentThread,
-        diff::{Diff, DiffLine, FileDiff},
+        diff::{Diff, DiffLine, FileDiff, LineRef},
     },
     tui::{
         components::diff_viewer::{DiffViewer, FocusedNav, NavTarget, PaneNav},
@@ -334,10 +334,10 @@ fn index_comments<'a>(
         if anchor.path != path || !thread.matches_revision(revision) {
             continue;
         }
-        if let Some(line) = anchor.line {
-            by_new.entry(line).or_default().push(thread);
-        } else if let Some(old) = anchor.old_line {
-            by_old.entry(old).or_default().push(thread);
+        match anchor.line {
+            Some(LineRef::New(line)) => by_new.entry(line).or_default().push(thread),
+            Some(LineRef::Old(line)) => by_old.entry(line).or_default().push(thread),
+            None => {}
         }
     }
     (by_new, by_old)

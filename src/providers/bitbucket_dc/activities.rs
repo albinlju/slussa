@@ -2,9 +2,12 @@ use serde::Deserialize;
 
 use super::{Config, ms_to_utc};
 use crate::domain::activity::Activity;
-use crate::domain::comment::{Comment, CommentThread, Reaction, ThreadAnchor, ThreadHandle};
 use crate::domain::event::{EventKind, PushedCommit, TimelineEvent};
 use crate::domain::user::User;
+use crate::domain::{
+    comment::{Comment, CommentThread, Reaction, ThreadAnchor, ThreadHandle},
+    diff::LineRef,
+};
 use crate::providers::bitbucket_dc::http::get_all;
 use crate::providers::error::FetchError;
 
@@ -170,10 +173,10 @@ fn event_kind(action: &str) -> Option<EventKind> {
 }
 
 fn make_thread(anchor: Anchor, root: &BbComment) -> CommentThread {
-    let (line, old_line) = if anchor.line_type.eq_ignore_ascii_case("REMOVED") {
-        (None, Some(anchor.line))
+    let line = if anchor.line_type.eq_ignore_ascii_case("REMOVED") {
+        LineRef::Old(anchor.line)
     } else {
-        (Some(anchor.line), None)
+        LineRef::New(anchor.line)
     };
     let mut comments = Vec::new();
     collect_replies(root, &mut comments);
@@ -183,8 +186,7 @@ fn make_thread(anchor: Anchor, root: &BbComment) -> CommentThread {
         anchor: Some(ThreadAnchor {
             revision: anchor.to_hash,
             path: anchor.path,
-            line,
-            old_line,
+            line: Some(line),
             // Resolved by the "Resolve" button (threadResolved) or, for a task,
             // by closing the task (state == RESOLVED).
             resolved: root.thread_resolved || root.state.eq_ignore_ascii_case("RESOLVED"),
@@ -294,7 +296,7 @@ mod tests {
         assert_eq!(bundle.threads.len(), 1);
         let anchor = bundle.threads[0].anchor.as_ref().unwrap();
         assert_eq!(anchor.path, "src/x.rs");
-        assert_eq!(anchor.line, Some(42));
+        assert_eq!(anchor.line, Some(LineRef::New(42)));
         assert_eq!(bundle.threads[0].comments.len(), 2);
         assert_eq!(bundle.threads[0].reply_to, Some(2));
         assert!(!anchor.resolved); // state OPEN, no threadResolved
