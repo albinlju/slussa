@@ -23,7 +23,7 @@ impl PrDetailScreen {
         if let Some(previous) = self.pr_id {
             self.navigation.insert(
                 previous,
-                super::DetailNavigation {
+                super::screen::DetailNavigation {
                     overview: std::mem::take(&mut self.overview),
                     builds: std::mem::take(&mut self.builds),
                     description: std::mem::take(&mut self.description),
