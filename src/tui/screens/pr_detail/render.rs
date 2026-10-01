@@ -227,38 +227,23 @@ pub(super) fn render(
         options: state.review_context().options,
         pending: ctx.store.reviews.get(&pr_id),
     };
-    ui.editor.target_context = ui.editor.draft.as_ref().and_then(|draft| {
-        let comment = match &draft.target {
-            crate::app::reviews::CommentTarget::Reply(id) => {
-                pr_data.and_then(|data| match &data.activity {
-                    LoadState::Loaded(activity) => activity
-                        .threads
-                        .iter()
-                        .find(|thread| thread.reply_to == Some(*id))
-                        .and_then(|thread| thread.comments.first()),
-                    _ => None,
-                })
-            }
-            crate::app::reviews::CommentTarget::Edit { id, review } => {
-                state.find_comment(*id, *review)
-            }
-            _ => None,
-        }?;
-        Some(format!(
-            "@{}: {}",
-            comment.author.username,
-            comment.content.lines().next().unwrap_or("")
-        ))
-    });
     if ui.editor.is_open() {
-        ui.editor.render(
-            frame,
-            area,
-            &EditorView {
-                sending: ctx.store.operations.contains_key(&pr_id),
-                review_active: ctx.store.reviews.contains_key(&pr_id),
-            },
-        );
+        let view = EditorView {
+            sending: ctx.store.operations.contains_key(&pr_id),
+            review_active: ctx.store.reviews.contains_key(&pr_id),
+            context: ui
+                .editor
+                .target()
+                .and_then(|target| state.comment_under(target))
+                .map(|comment| {
+                    format!(
+                        "@{}: {}",
+                        comment.author.username,
+                        comment.content.lines().next().unwrap_or("")
+                    )
+                }),
+        };
+        ui.editor.render(frame, area, &view);
     }
     match &mut ui.overlay {
         Some(Overlay::Help(help)) => help.render(

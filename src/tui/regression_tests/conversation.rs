@@ -392,3 +392,46 @@ fn a_thread_taller_than_the_diff_pane_is_shown_from_its_first_row() {
     assert!(text.contains("TOP_OF_THREAD"), "{text}");
     assert!(!text.contains("Paragraph 30."), "it does not fit: {text}");
 }
+
+#[test]
+fn a_reply_being_written_names_the_comment_it_answers() {
+    use crate::domain::comment::{Comment, CommentThread};
+    let mut state = fixture();
+    state.screen = Screen::Detail {
+        pr_id: 42,
+        tab: DetailTab::Overview,
+    };
+    state.store.cache.details.get_mut(&42).unwrap().activity = LoadState::Loaded(Activity {
+        comments: vec![],
+        events: vec![],
+        threads: vec![CommentThread {
+            comments: vec![Comment {
+                id: Some(10),
+                author: User {
+                    username: "alice".into(),
+                },
+                content: "Why this name?\nSecond line".into(),
+                created: chrono::Utc::now(),
+                reactions: vec![],
+                reply_to: Some(10),
+            }],
+            reply_to: Some(10),
+            anchor: None,
+        }],
+    });
+    let mut terminal = Terminal::new(TestBackend::new(100, 30)).unwrap();
+    terminal.draw(|frame| render(frame, &mut state)).unwrap();
+    assert!(!rendered_text(&terminal).contains("@alice: Why this name?"));
+
+    state.ui.detail.editor = CommentEditor::start(CommentTarget::Reply(10), "Because".into());
+    terminal.draw(|frame| render(frame, &mut state)).unwrap();
+    let text = rendered_text(&terminal);
+    assert!(text.contains("@alice: Why this name?"), "{text}");
+    assert!(!text.contains("@alice: Why this name?Second"), "{text}");
+    assert!(text.contains("Because"), "{text}");
+
+    // A new comment answers nothing, so no line is shown above it.
+    state.ui.detail.editor = CommentEditor::start(CommentTarget::Pr, "Standalone".into());
+    terminal.draw(|frame| render(frame, &mut state)).unwrap();
+    assert!(!rendered_text(&terminal).contains("@alice: Why this name?"));
+}

@@ -82,7 +82,7 @@ fn read_only_capabilities_block_shortcuts_commands_and_optional_loads() {
     for ch in ['c', 'r', 'a', 'v', 'm', 'x', 'e', 'd', 'R', '5'] {
         press(&mut app, KeyCode::Char(ch));
     }
-    assert!(app.state.ui.detail.editor.draft.is_none());
+    assert!(!app.state.ui.detail.editor.has_draft());
     assert!(app.state.ui.detail.review_picker().is_none());
     assert!(app.state.ui.detail.merge_picker().is_none());
     assert!(app.state.ui.detail.confirm().is_none());

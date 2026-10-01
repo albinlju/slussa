@@ -12,7 +12,7 @@ pub(super) use crate::{
     domain::{activity::Activity, ci::CiSummary, commit::Commit, diff::*, pr::*, user::User},
     tui::{
         components::{
-            comment_editor::{CommentDraft, EditorView},
+            comment_editor::{CommentDraft, CommentEditor, EditorView},
             diff_viewer::DiffFocus,
             help_dialog::HelpDialog,
         },

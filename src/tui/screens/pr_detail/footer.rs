@@ -59,7 +59,7 @@ fn pr_action_hints(state: &DetailView<'_>) -> Vec<Hint> {
 }
 
 fn footer_actions(state: &DetailView<'_>, tab: DetailTab) -> Vec<Hint> {
-    if state.detail.editor.draft.is_some() {
+    if state.detail.editor.has_draft() {
         return widgets::hints_on("c: resume draft");
     }
     // While a batched review is open, surface its state and finish/discard keys

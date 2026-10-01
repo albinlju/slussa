@@ -208,7 +208,7 @@ fn a_pr_that_is_not_in_the_list_gives_no_context_and_only_the_way_out() {
         state.screen,
     );
     assert!(effect.is_none());
-    assert!(state.ui.detail.editor.draft.is_none());
+    assert!(!state.ui.detail.editor.has_draft());
 }
 
 /// The Commits list, reached after the Diff tab was left with its pane on a

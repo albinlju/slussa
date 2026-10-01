@@ -20,7 +20,7 @@ async fn failed_submission_preserves_draft_and_blocks_duplicate_input() {
     send_comment(&mut app);
     assert_eq!(app.state.store.operations.len(), 1);
     assert_eq!(
-        app.state.ui.detail.editor.draft.as_ref().unwrap().text,
+        app.state.ui.detail.editor.text().unwrap(),
         "Keep this draft"
     );
     // A read result must never acknowledge a write.
@@ -39,12 +39,12 @@ async fn failed_submission_preserves_draft_and_blocks_duplicate_input() {
     assert!(!app.state.store.operations.contains_key(&42));
     assert!(app.state.store.errors.is_empty());
     assert_eq!(
-        app.state.ui.detail.editor.draft.as_ref().unwrap().text,
+        app.state.ui.detail.editor.text().unwrap(),
         "Keep this draft"
     );
     send_comment(&mut app);
     finish_write(&mut app, 42, Ok(()));
-    assert!(app.state.ui.detail.editor.draft.is_none());
+    assert!(!app.state.ui.detail.editor.has_draft());
 }
 
 #[tokio::test(flavor = "current_thread")]
@@ -69,11 +69,11 @@ async fn late_completion_only_clears_the_submitting_pr_editor() {
         'B',
     ))));
     finish_write(&mut app, 42, Ok(()));
-    assert_eq!(app.state.ui.detail.editor.draft.as_ref().unwrap().text, "B");
+    assert_eq!(app.state.ui.detail.editor.text().unwrap(), "B");
     app.open_pr(42);
-    assert!(app.state.ui.detail.editor.draft.is_none());
+    assert!(!app.state.ui.detail.editor.has_draft());
     app.open_pr(43);
-    assert_eq!(app.state.ui.detail.editor.draft.as_ref().unwrap().text, "B");
+    assert_eq!(app.state.ui.detail.editor.text().unwrap(), "B");
 }
 
 #[tokio::test(flavor = "current_thread")]
@@ -144,7 +144,7 @@ async fn escape_during_submission_keeps_request_and_draft_scoped() {
     assert!(app.state.store.operations.contains_key(&42));
     finish_write(&mut app, 42, Err(failed("timeout").into()));
     press(&mut app, KeyCode::Enter);
-    assert_eq!(app.state.ui.detail.editor.draft.as_ref().unwrap().text, "A");
+    assert_eq!(app.state.ui.detail.editor.text().unwrap(), "A");
     assert_eq!(app.state.detail_view().error(), Some("timeout"));
 }
 

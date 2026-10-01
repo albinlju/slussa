@@ -30,10 +30,7 @@ fn keyboard_routes_list_diff_commit_and_editor() {
         key(&state, KeyCode::Enter),
         Action::Commits(CommitsAction::Open)
     ));
-    state.ui.detail.editor.draft = Some(CommentDraft {
-        target: CommentTarget::Pr,
-        text: String::new(),
-    });
+    state.ui.detail.editor = CommentEditor::start(CommentTarget::Pr, String::new());
     assert!(matches!(
         key(&state, KeyCode::Char('q')),
         Action::Detail(DetailAction::Editor(EditorAction::Type('q')))
@@ -106,10 +103,7 @@ fn link_shortcuts_target_selected_pr_and_never_escape_editor_or_help() {
         .is_none()
     );
     state.ui.detail.overlay = None;
-    state.ui.detail.editor.draft = Some(CommentDraft {
-        target: CommentTarget::Pr,
-        text: String::new(),
-    });
+    state.ui.detail.editor = CommentEditor::start(CommentTarget::Pr, String::new());
     for ch in ['o', 'y'] {
         assert!(
             matches!(key(&state, KeyCode::Char(ch)), Action::Detail(DetailAction::Editor(EditorAction::Type(c))) if c == ch)

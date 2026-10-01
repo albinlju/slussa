@@ -44,16 +44,10 @@ fn editor_captures_shortcuts_and_unicode_backspace() {
         press(&mut app, KeyCode::Char(c));
     }
     press(&mut app, KeyCode::Backspace);
-    assert_eq!(
-        app.state.ui.detail.editor.draft.as_ref().unwrap().text,
-        "qå"
-    );
+    assert_eq!(app.state.ui.detail.editor.text().unwrap(), "qå");
     press(&mut app, KeyCode::Esc);
     assert!(!app.state.ui.detail.editor.is_open());
-    assert_eq!(
-        app.state.ui.detail.editor.draft.as_ref().unwrap().text,
-        "qå"
-    );
+    assert_eq!(app.state.ui.detail.editor.text().unwrap(), "qå");
 }
 
 #[test]
@@ -72,7 +66,7 @@ fn own_pr_review_gate_and_decline_cancel_are_preserved() {
     );
     press(&mut app, KeyCode::Enter);
     assert!(matches!(
-        app.state.ui.detail.editor.draft.as_ref().unwrap().target,
+        app.state.ui.detail.editor.target().unwrap(),
         CommentTarget::Review {
             verdict: crate::domain::review::ReviewVerdict::Comment
         }
@@ -135,7 +129,7 @@ fn detail_emits_resolved_commands_and_retains_submission_payload() {
     assert!(matches!(command, Some(Effect::Command {
         pr_id: 42, command: Command::SubmitComment { target: CommentTarget::Pr, text }
     }) if text == "å"));
-    assert_eq!(app.state.ui.detail.editor.draft.as_ref().unwrap().text, "å");
+    assert_eq!(app.state.ui.detail.editor.text().unwrap(), "å");
     press(&mut app, KeyCode::Esc);
     app.apply(Action::Detail(DetailAction::Pr(PrAction::OpenDecline)));
     app.apply(Action::Detail(DetailAction::Confirm(ConfirmAction::Move(
@@ -164,7 +158,7 @@ fn reply_shortcut_in_diff_opens_editor_for_the_focused_thread() {
     app.state.ui.detail.diff.pane_reply = Some(987);
     press(&mut app, KeyCode::Char('r'));
     assert!(matches!(
-        app.state.ui.detail.editor.draft.as_ref().unwrap().target,
+        app.state.ui.detail.editor.target().unwrap(),
         CommentTarget::Reply(987)
     ));
 }
@@ -299,7 +293,7 @@ fn comment_lookup_keeps_review_and_pr_ids_separate() {
             review: true,
         });
     press(&mut app, KeyCode::Char('e'));
-    let draft = app.state.ui.detail.editor.draft.as_ref().unwrap();
+    let draft = app.state.ui.detail.editor.draft().unwrap();
     assert_eq!(draft.text, "My review comment");
     assert!(matches!(
         draft.target,
@@ -328,5 +322,5 @@ fn comment_lookup_keeps_review_and_pr_ids_separate() {
         .unwrap()
         .review = false;
     press(&mut app, KeyCode::Char('e'));
-    assert!(app.state.ui.detail.editor.draft.is_none());
+    assert!(!app.state.ui.detail.editor.has_draft());
 }

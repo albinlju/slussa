@@ -181,7 +181,7 @@ async fn rapid_keys_open_the_latest_selection_and_capture_editor_text() {
         );
     }
     assert!(matches!(app.state.screen, Screen::Detail { pr_id: 44, .. }));
-    assert_eq!(app.state.ui.detail.editor.draft.as_ref().unwrap().text, "q");
+    assert_eq!(app.state.ui.detail.editor.text().unwrap(), "q");
 }
 
 #[test]
@@ -202,7 +202,7 @@ fn help_in_both_screens_captures_keys_and_restores_navigation() {
             press(&mut app, KeyCode::Char(ch));
         }
         assert!(!app.state.ui.list.search.open);
-        assert!(app.state.ui.detail.editor.draft.is_none());
+        assert!(!app.state.ui.detail.editor.has_draft());
         assert!(app.state.ui.detail.merge_picker().is_none());
         assert_eq!(app.state.ui.list.selected, selected);
         press(&mut app, KeyCode::Esc);

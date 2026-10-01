@@ -106,10 +106,10 @@ fn multiline_editor_scrolls_to_cursor_and_keeps_controls_visible() {
             pr_id: 42,
             tab: DetailTab::Overview,
         };
-        state.ui.detail.editor.draft = Some(CommentDraft {
-            target: CommentTarget::Pr,
-            text: format!("{}last line 🦀", "earlier line\n".repeat(30)),
-        });
+        state.ui.detail.editor = CommentEditor::start(
+            CommentTarget::Pr,
+            format!("{}last line 🦀", "earlier line\n".repeat(30)),
+        );
         let mut terminal = Terminal::new(TestBackend::new(width, height)).unwrap();
         terminal.draw(|f| render(f, &mut state)).unwrap();
         let text: String = terminal
@@ -300,19 +300,14 @@ fn editor_distinguishes_queued_comments_from_direct_publication() {
         ),
     ] {
         for width in [40, 100] {
-            let mut editor = CommentEditor {
-                draft: Some(CommentDraft {
-                    target: target.clone(),
-                    text: "Draft".into(),
-                }),
-                ..CommentEditor::default()
-            };
+            let mut editor = CommentEditor::start(target.clone(), "Draft".into());
             let mut terminal = Terminal::new(TestBackend::new(width, 16)).unwrap();
             terminal
                 .draw(|frame| {
                     let view = EditorView {
                         sending: false,
                         review_active: true,
+                        context: None,
                     };
                     editor.render(frame, frame.area(), &view);
                 })
@@ -359,21 +354,18 @@ fn mutation_dialogs_show_pr_and_target_even_with_a_long_source_branch() {
 fn resumed_editor_and_delete_dialog_identify_the_comment() {
     use crate::tui::{component::Component, components::comment_editor::CommentEditor};
     for width in [40, 100] {
-        let mut editor = CommentEditor {
-            draft: Some(CommentDraft {
-                target: CommentTarget::Reply(7),
-                text: "My draft".into(),
-            }),
-            resuming: true,
-            target_context: Some("@alice: Original comment".into()),
-            ..CommentEditor::default()
-        };
+        let mut editor = CommentEditor::restored(CommentDraft {
+            target: CommentTarget::Reply(7),
+            text: "My draft".into(),
+        });
+        assert!(editor.resume());
         let mut terminal = Terminal::new(TestBackend::new(width, 16)).unwrap();
         terminal
             .draw(|frame| {
                 let view = EditorView {
                     sending: false,
                     review_active: false,
+                    context: Some("@alice: Original comment".into()),
                 };
                 editor.render(frame, frame.area(), &view);
             })

@@ -66,7 +66,7 @@ impl PrDetailScreen {
             self.editors.get_mut(&pr_id)
         };
         if success && let Some(editor) = editor {
-            editor.draft = None;
+            editor.clear();
         }
     }
 
@@ -75,19 +75,11 @@ impl PrDetailScreen {
     }
 
     fn open_draft(&mut self, target: Option<CommentTarget>) {
-        if self.editor.draft.is_some() {
-            self.editor.resuming = true;
-            self.editor.suspended = false;
+        if self.editor.resume() {
             return;
         }
         if let Some(target) = target {
-            self.editor = CommentEditor {
-                draft: Some(CommentDraft {
-                    target,
-                    text: String::new(),
-                }),
-                ..CommentEditor::default()
-            };
+            self.editor = CommentEditor::start(target, String::new());
         }
     }
 
@@ -208,16 +200,13 @@ impl PrDetailScreen {
     }
 
     pub(super) fn submit_editor(&self, pr_id: u64) -> Option<Effect> {
-        let draft = self.editor.draft.as_ref()?;
-        if draft.text.trim().is_empty() {
+        let CommentDraft { target, text } = self.editor.draft()?;
+        if text.trim().is_empty() {
             return None;
         }
         Some(Self::command(
             pr_id,
-            Command::SubmitComment {
-                target: draft.target.clone(),
-                text: draft.text.clone(),
-            },
+            Command::SubmitComment { target, text },
         ))
     }
 
@@ -283,19 +272,10 @@ impl PrDetailScreen {
                 let selected = view.editable_selected()?;
                 let id = selected.id?;
                 let text = view.find_comment(id, selected.review)?.content.clone();
-                if self.editor.draft.is_some() {
-                    self.editor.resuming = true;
-                    self.editor.suspended = false;
-                    return None;
+                let review = selected.review;
+                if !self.editor.resume() {
+                    self.editor = CommentEditor::start(CommentTarget::Edit { id, review }, text);
                 }
-                self.editor = CommentEditor::default();
-                self.editor.draft = Some(CommentDraft {
-                    target: CommentTarget::Edit {
-                        id,
-                        review: selected.review,
-                    },
-                    text,
-                });
                 return None;
             }
             PrAction::DeleteComment => {
@@ -332,12 +312,12 @@ impl PrDetailScreen {
         let mut drafts: std::collections::BTreeMap<_, _> = self
             .editors
             .iter()
-            .filter_map(|(id, editor)| editor.draft.clone().map(|draft| (*id, draft)))
+            .filter_map(|(id, editor)| editor.draft().map(|draft| (*id, draft)))
             .collect();
         if let Some(id) = self.pr_id {
             drafts.remove(&id);
-            if let Some(draft) = &self.editor.draft {
-                drafts.insert(id, draft.clone());
+            if let Some(draft) = self.editor.draft() {
+                drafts.insert(id, draft);
             }
         }
         drafts
@@ -345,17 +325,7 @@ impl PrDetailScreen {
     pub fn restore_drafts(&mut self, drafts: std::collections::BTreeMap<u64, CommentDraft>) {
         self.editors = drafts
             .into_iter()
-            .map(|(id, draft)| {
-                (
-                    id,
-                    CommentEditor {
-                        draft: Some(draft),
-                        suspended: true,
-                        resuming: true,
-                        ..CommentEditor::default()
-                    },
-                )
-            })
+            .map(|(id, draft)| (id, CommentEditor::restored(draft)))
             .collect();
     }
 }

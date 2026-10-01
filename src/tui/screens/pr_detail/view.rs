@@ -174,6 +174,23 @@ impl<'a> DetailView<'a> {
             .find(|c| c.id == Some(id))
     }
 
+    /// The comment a draft is a reply to or an edit of; none for a new comment.
+    pub fn comment_under(&self, target: &CommentTarget) -> Option<&'a Comment> {
+        match target {
+            CommentTarget::Reply(id) => self
+                .data?
+                .activity
+                .loaded()?
+                .threads
+                .iter()
+                .find(|thread| thread.reply_to == Some(*id))?
+                .comments
+                .first(),
+            CommentTarget::Edit { id, review } => self.find_comment(*id, *review),
+            CommentTarget::Line(_) | CommentTarget::Review { .. } | CommentTarget::Pr => None,
+        }
+    }
+
     /// The thread the cursor is on, for resolve/unresolve (`R`).
     pub const fn focused_thread(&self) -> Option<&'a ThreadRef> {
         match self.surface() {
@@ -319,7 +336,7 @@ impl DetailView<'_> {
                 PrAction::OpenDecline => caps.supports(F::ClosePr),
                 PrAction::OpenReopen => caps.supports(F::ReopenPr),
                 PrAction::OpenComment => {
-                    self.detail.editor.draft.is_some() || self.comment_target().is_some()
+                    self.detail.editor.has_draft() || self.comment_target().is_some()
                 }
                 PrAction::OpenReply => self.reply_target().is_some(),
                 PrAction::EditComment => caps.supports(F::EditComments),
