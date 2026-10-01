@@ -69,32 +69,40 @@ fn f_cycles_between_all_people_and_the_agent() {
 }
 
 #[test]
-fn a_filter_that_leaves_nothing_says_so_and_can_be_changed_again() {
+fn what_the_filter_hides_stays_as_a_dimmed_line_and_f_brings_it_back() {
     let mut state = overview_with(&["Human note", "> **gator-agent**\nAgent finding"]);
     state.store.ai_markers = AiMarkers::from_config(&["> **gator-agent**".into()]).0;
-    // Humans only, then remove the agent's comment as a refresh could.
+    // People only: the agent's comment is a line, not a gap.
     local_key(&mut state, KeyCode::Char('f'));
-    if let LoadState::Loaded(activity) = &mut state
-        .store
-        .cache
-        .details
-        .get_mut(&PrId(42))
-        .unwrap()
-        .activity
-    {
-        activity.comments.remove(1);
-    }
+    let humans = screen(&mut state);
+    assert!(humans.contains("Human note") && !humans.contains("Agent finding"));
+    assert!(
+        humans.contains("◆ 1 AI comment hidden · f to cycle"),
+        "{humans}"
+    );
+    // AI only: now the person's comment is the one hidden.
     local_key(&mut state, KeyCode::Char('f'));
     let ai = screen(&mut state);
-    assert!(ai.contains("(no comments from AI)"), "{ai}");
-    assert!(ai.contains("f: comments (AI)"));
+    assert!(ai.contains("Agent finding") && !ai.contains("Human note"));
+    assert!(ai.contains("◆ 1 human comment hidden · f to cycle"), "{ai}");
+    // All: nothing is hidden, so there is no line.
     local_key(&mut state, KeyCode::Char('f'));
     let all = screen(&mut state);
-    assert!(all.contains("Human note"));
-    assert!(
-        !all.contains("f: comments"),
-        "nothing to filter on any more"
-    );
+    assert!(all.contains("Human note") && all.contains("Agent finding"));
+    assert!(!all.contains("hidden"), "{all}");
+}
+
+#[test]
+fn a_filter_that_hides_everything_leaves_the_line_and_the_way_back() {
+    let mut state = overview_with(&["Human note"]);
+    state.store.ai_markers = AiMarkers::from_config(&["> **gator-agent**".into()]).0;
+    state.ui.detail.overview.timeline.filter = crate::domain::authorship::AuthorFilter::Ai;
+    let text = screen(&mut state);
+    assert!(text.contains("◆ 1 human comment hidden"), "{text}");
+    assert!(text.contains("f: comments (AI)"), "{text}");
+    // The cursor has nothing to land on, and j must not panic or move.
+    local_key(&mut state, KeyCode::Char('j'));
+    assert!(screen(&mut state).contains("hidden"));
 }
 
 #[test]
