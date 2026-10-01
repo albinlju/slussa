@@ -354,10 +354,11 @@ tighter than their `App` struct with 20 `pending_*` flags, and it stays.
   under *Features to build*.
 - [ ] **Split the files that exceed the size rule when next touched
   substantially** (modules stay under about 500 lines, `mod.rs` composes): the
-  non-test files `widgets/comment.rs`, `diff_viewer/pane.rs`, `pr_list/mod.rs`
-  and `timeline.rs`, and the test files `tui/regression_tests.rs` and
-  `app/tests.rs`. Split tests by concern with `use super::*`. Not a
-  refactor-only change.
+  files `widgets/comment.rs`, `diff_viewer/pane.rs`, `pr_list/mod.rs` and
+  `timeline.rs`. Not a refactor-only change. *Done for the tests:* the four
+  suites over the limit (`app/tests`, `app/flow_tests`,
+  `providers/transport_tests`, `tui/regression_tests`) are directories with a
+  file per concern and a shared `support.rs`.
 - [ ] **The first load is slow on a large repository.** On `cli/cli` (63 open
   PRs) the first frame took about 0.75 s for `git`, `gh --version`,
   `gh auth status` and `gh api user`, and the first page of 30 open PRs 2.0 to
@@ -450,7 +451,7 @@ Kept as one line each; the detail is in git history.
 - **Blocking-I/O rule** written down (ARCHITECTURE.md *Rules for I/O and
   effects*, AGENTS.md) so agent handoff follows the same pattern.
 - **Tests:** domain thread logic (10 tests), the full app loop against `FakeGh`
-  (`app/flow_tests.rs`), the transport doubles `FakeGh` and `MockHttp` and their
+  (`app/flow_tests/`), the transport doubles `FakeGh` and `MockHttp` and their
   18 transport tests, shared fixtures in `src/test_support.rs`, and CLI
   integration tests (`tests/cli_integration.rs`, isolated HOME, no network).
 - **Lints:** `clippy::{all, pedantic, nursery}` and a `[lints.rust]` block, two

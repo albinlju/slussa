@@ -29,7 +29,8 @@ reviews:
         - Show only what the provider supports: unsupported actions are hidden,
           actions blocked by the PR's state stay visible with a reason.
         - Modules stay under about 500 lines and `mod.rs` composes rather than
-          implements; tests live inline or in one sibling `tests.rs`.
+          implements; tests live inline or in one sibling `tests.rs`, which
+          becomes a directory with a file per concern once it outgrows the limit.
     - path: "src/providers/**"
       instructions: |
         Writes are not exactly-once: an ambiguous failure may follow a successful

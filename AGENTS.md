@@ -16,9 +16,11 @@ for AI-generated PRs: triage, check intent, approve or merge.
 - **No new panics in non-test code.** No `unwrap`, `expect` or `unreachable!`.
   Return an error, or restructure so the case cannot occur.
 - **Modules stay under about 500 lines.** `mod.rs` composes and does not
-  implement. Tests live inline, or in exactly one sibling `tests.rs`; suites that drive several modules through the doubles in `src/test_support.rs` are named `*_tests.rs`. A few
+  implement. Tests live inline, or in exactly one sibling `tests.rs`; suites that drive several modules through the doubles in `src/test_support.rs` are named `*_tests.rs`. A test
+  suite that outgrows the limit becomes a directory with a file per concern and
+  a `support.rs` for what they share (`src/app/tests/`). A few
   files already exceed the limit (`widgets/comment.rs`, `diff_viewer/pane.rs`,
-  `pr_list/mod.rs`, `timeline.rs` and the two big test files); split one when
+  `pr_list/mod.rs` and `timeline.rs`); split one when
   you next change it substantially, and do not make them bigger.
 - **Show only what the provider supports.** Hide unsupported actions; keep
   actions blocked by PR state visible with a reason.

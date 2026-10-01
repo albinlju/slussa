@@ -455,7 +455,7 @@ SHAs or branch names remain separate future work.
 ## UI behaviour rules
 
 The rules the code relies on, kept short; the regression tests in
-`tui/regression_tests.rs` and `app/tests.rs` pin them.
+`tui/regression_tests/` and `app/tests/` pin them.
 
 - **Dialogs.** Review, merge, confirmation and filter dialogs share geometry
   and a keyboard footer through `widgets/dialog.rs`; the selected option stays
