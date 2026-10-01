@@ -189,7 +189,8 @@ fn footer_actions(state: &DetailView<'_>, tab: DetailTab) -> Vec<Hint> {
         }
         DetailTab::Commits => widgets::hints_on("enter: open  /: search"),
         DetailTab::Builds => widgets::hints_on("j/k: scroll  h/l: tabs"),
-        _ => Vec::new(),
+        // Both returned above with hints of their own.
+        DetailTab::Overview | DetailTab::Diff => Vec::new(),
     }
 }
 

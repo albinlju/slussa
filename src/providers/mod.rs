@@ -12,6 +12,10 @@
 //!   a failure can be `ReviewError::Partial`. Nothing retries
 //!   automatically.
 
+// A match on one of our own enums names every variant, so that adding one is a
+// compile error wherever it has to be handled. Tests assert by a catch-all.
+#![cfg_attr(not(test), warn(clippy::wildcard_enum_match_arm))]
+
 pub mod bitbucket_dc;
 pub mod error;
 pub mod github;

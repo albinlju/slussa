@@ -230,13 +230,11 @@ impl App {
         let store = &mut self.state.store;
         let read = match &chain {
             OpenChain::Collecting(held) => held.len(),
-            _ => match &store.cache.prs {
-                LoadState::Loaded(prs) => prs
-                    .iter()
+            OpenChain::Idle | OpenChain::Appending => store.cache.prs.loaded().map_or(0, |prs| {
+                prs.iter()
                     .filter(|pr| PrGroup::of(&pr.status) == PrGroup::Open)
-                    .count(),
-                _ => 0,
-            },
+                    .count()
+            }),
         };
         let next = more.clone().filter(|_| read < store.open_limit());
         // Where `L` continues from, if the reading stops with more left.
@@ -269,7 +267,7 @@ impl App {
         let store = &mut self.state.store;
         let existing = match &mut store.cache.prs {
             LoadState::Loaded(prs) => std::mem::take(prs),
-            _ => Vec::new(),
+            LoadState::NotRequested | LoadState::Loading | LoadState::Failed(_) => Vec::new(),
         };
         let state = store.groups.entry(group).or_default();
         let mut notice = None;

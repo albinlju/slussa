@@ -2,7 +2,7 @@ use super::{dialogs, footer, header};
 use crate::{
     app::{
         reviews::{PendingComment, PendingReview},
-        store::{LoadState, PrData},
+        store::PrData,
     },
     domain::{
         capabilities::{Capabilities, Feature},
@@ -103,7 +103,7 @@ fn render_content(
     let (pr, pr_data, tab) = (ctx.pr, ctx.data, ctx.tab);
     let inset = match tab {
         DetailTab::Description => area,
-        _ => Rect {
+        DetailTab::Overview | DetailTab::Diff | DetailTab::Commits | DetailTab::Builds => Rect {
             x: area.x + if area.width < 70 { 0 } else { 2 },
             y: area.y,
             width: area
@@ -166,11 +166,8 @@ fn pending_comments(pending: Option<&PendingReview>) -> &[PendingComment] {
 
 fn activity_threads(pr_data: Option<&PrData>) -> &[CommentThread] {
     pr_data
-        .and_then(|d| match &d.activity {
-            LoadState::Loaded(b) => Some(b.threads.as_slice()),
-            _ => None,
-        })
-        .unwrap_or(&[])
+        .and_then(|data| data.activity.loaded())
+        .map_or(&[], |activity| activity.threads.as_slice())
 }
 
 pub(super) fn render(

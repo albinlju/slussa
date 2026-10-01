@@ -2,7 +2,7 @@
 use super::{
     App,
     action::{LinkAction, TaskResult},
-    store::{LoadState, Notice},
+    store::Notice,
 };
 use crate::domain::pr::PrId;
 use std::{
@@ -16,14 +16,9 @@ impl App {
         if self.state.store.link_pending {
             return;
         }
-        let url = match &self.state.store.cache.prs {
-            LoadState::Loaded(prs) => prs
-                .iter()
-                .find(|pr| pr.id == pr_id)
-                .and_then(|pr| pr.url.clone()),
-            _ => None,
-        };
-        let Some(url) = url else {
+        let prs = self.state.store.cache.prs.loaded();
+        let pr = prs.and_then(|prs| prs.iter().find(|pr| pr.id == pr_id));
+        let Some(url) = pr.and_then(|pr| pr.url.clone()) else {
             return;
         };
         let url = match WebUrl::parse(&url) {

@@ -69,10 +69,7 @@ fn render_timeline(
         return;
     }
 
-    let diff = pr_data.and_then(|d| match &d.diff {
-        LoadState::Loaded(diff) => Some(diff),
-        _ => None,
-    });
+    let diff = pr_data.and_then(|data| data.diff.loaded());
 
     let previous_selection = ui.selected.filter(|selected| selected.id.is_some());
     if let Some(selected) = previous_selection {
