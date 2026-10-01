@@ -1,6 +1,6 @@
 use crate::{
     app::{
-        action::{Action, DetailAction},
+        action::{Action, DetailAction, NavAction, PrAction},
         navigation::Screen,
         state::AppState,
         store::LoadState,
@@ -56,14 +56,14 @@ fn x_declines_an_open_pr_and_reopens_a_declined_one() {
         assert!(
             matches!(
                 x(&overview_of(status)),
-                Some(Action::Detail(DetailAction::OpenDecline))
+                Some(Action::Detail(DetailAction::Pr(PrAction::OpenDecline)))
             ),
             "an open PR is declined"
         );
     }
     assert!(matches!(
         x(&overview_of(PrStatus::Declined)),
-        Some(Action::Detail(DetailAction::OpenReopen))
+        Some(Action::Detail(DetailAction::Pr(PrAction::OpenReopen)))
     ));
     assert!(
         x(&overview_of(PrStatus::Merged)).is_none(),
@@ -92,20 +92,20 @@ fn the_pr_level_actions_work_from_the_description_too() {
     let state = on_tab(overview_of(PrStatus::Open), DetailTab::Description);
     assert!(matches!(
         key(&state, 'x'),
-        Some(Action::Detail(DetailAction::OpenDecline))
+        Some(Action::Detail(DetailAction::Pr(PrAction::OpenDecline)))
     ));
     assert!(matches!(
         key(&state, 'a'),
-        Some(Action::Detail(DetailAction::OpenReviewPicker))
+        Some(Action::Detail(DetailAction::Pr(PrAction::OpenReviewPicker)))
     ));
     assert!(matches!(
         key(&state, 'v'),
-        Some(Action::Detail(DetailAction::StartReview))
+        Some(Action::Detail(DetailAction::Pr(PrAction::StartReview)))
     ));
     let declined = on_tab(overview_of(PrStatus::Declined), DetailTab::Description);
     assert!(matches!(
         key(&declined, 'x'),
-        Some(Action::Detail(DetailAction::OpenReopen))
+        Some(Action::Detail(DetailAction::Pr(PrAction::OpenReopen)))
     ));
 }
 
@@ -134,14 +134,14 @@ fn h_and_l_change_tab_on_every_tab_including_the_diff_panes() {
             assert!(
                 matches!(
                     key(&state, 'l'),
-                    Some(Action::Detail(DetailAction::NextTab))
+                    Some(Action::Detail(DetailAction::Nav(NavAction::NextTab)))
                 ),
                 "l on {tab:?} with {focus:?} focus"
             );
             assert!(
                 matches!(
                     key(&state, 'h'),
-                    Some(Action::Detail(DetailAction::PrevTab))
+                    Some(Action::Detail(DetailAction::Nav(NavAction::PrevTab)))
                 ),
                 "h on {tab:?} with {focus:?} focus"
             );

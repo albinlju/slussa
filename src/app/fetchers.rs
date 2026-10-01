@@ -1,7 +1,7 @@
 use crate::{
     app::{
         App,
-        action::{Action, LoadedAction},
+        action::{LoadedAction, TaskResult},
         reviews::{CommentTarget, PendingComment},
         store::{FetchKey, OpenChain},
     },
@@ -18,15 +18,15 @@ impl App {
     where
         T: Send + 'static,
         F: FnOnce() -> Result<T, FetchError> + Send + 'static,
-        A: FnOnce(Result<T, String>) -> Action + Send + 'static,
+        A: FnOnce(Result<T, String>) -> LoadedAction + Send + 'static,
     {
-        let tx = self.action_tx.clone();
+        let tx = self.results_tx.clone();
         tokio::spawn(async move {
             let result = match task::spawn_blocking(fetch).await {
                 Ok(r) => r.map_err(|e| e.user_message()),
                 Err(join_err) => Err(format!("worker thread panicked: {join_err}")),
             };
-            tx.send(make_action(result)).ok();
+            tx.send(TaskResult::Loaded(make_action(result))).ok();
         });
     }
 
@@ -40,12 +40,10 @@ impl App {
         let position = after.clone();
         self.spawn_fetch(
             move || provider.fetch_prs(group, position.as_deref()),
-            move |result| {
-                Action::Loaded(LoadedAction::Prs {
-                    group,
-                    after,
-                    result,
-                })
+            move |result| LoadedAction::Prs {
+                group,
+                after,
+                result,
             },
         );
     }
@@ -113,7 +111,7 @@ impl App {
         let provider = self.provider.clone();
         self.spawn_fetch(
             move || provider.fetch_commits(pr_id),
-            move |r| Action::Loaded(LoadedAction::Commits(pr_id, r)),
+            move |r| LoadedAction::Commits(pr_id, r),
         );
     }
 
@@ -124,7 +122,7 @@ impl App {
         let provider = self.provider.clone();
         self.spawn_fetch(
             move || provider.fetch_diff(pr_id),
-            move |r| Action::Loaded(LoadedAction::Diff(pr_id, r)),
+            move |r| LoadedAction::Diff(pr_id, r),
         );
     }
 
@@ -143,7 +141,7 @@ impl App {
         let provider = self.provider.clone();
         self.spawn_fetch(
             move || provider.fetch_builds(pr_id),
-            move |r| Action::Loaded(LoadedAction::Builds(pr_id, r)),
+            move |r| LoadedAction::Builds(pr_id, r),
         );
     }
 
@@ -160,7 +158,7 @@ impl App {
         let oid_fetch = oid.clone();
         self.spawn_fetch(
             move || provider.fetch_commit_diff(&oid_fetch),
-            move |r| Action::Loaded(LoadedAction::CommitDiff(pr_id, oid, r)),
+            move |r| LoadedAction::CommitDiff(pr_id, oid, r),
         );
     }
 
@@ -171,7 +169,7 @@ impl App {
         let provider = self.provider.clone();
         self.spawn_fetch(
             move || provider.fetch_activity(pr_id),
-            move |r| Action::Loaded(LoadedAction::Activity(pr_id, r)),
+            move |r| LoadedAction::Activity(pr_id, r),
         );
     }
 
@@ -179,7 +177,7 @@ impl App {
         let provider = self.provider.clone();
         self.spawn_fetch(
             move || provider.merge(pr_id, strategy),
-            move |r| Action::Loaded(LoadedAction::Merged(pr_id, r)),
+            move |r| LoadedAction::Merged(pr_id, r),
         );
     }
 
@@ -187,7 +185,7 @@ impl App {
         let provider = self.provider.clone();
         self.spawn_fetch(
             move || provider.decline(pr_id),
-            move |r| Action::Loaded(LoadedAction::Declined(pr_id, r)),
+            move |r| LoadedAction::Declined(pr_id, r),
         );
     }
 
@@ -195,7 +193,7 @@ impl App {
         let provider = self.provider.clone();
         self.spawn_fetch(
             move || provider.reopen(pr_id),
-            move |r| Action::Loaded(LoadedAction::Reopened(pr_id, r)),
+            move |r| LoadedAction::Reopened(pr_id, r),
         );
     }
 
@@ -219,7 +217,7 @@ impl App {
         let provider = self.provider.clone();
         self.spawn_fetch(
             move || provider.fetch_mergeability(pr_id),
-            move |r| Action::Loaded(LoadedAction::Mergeability(pr_id, r)),
+            move |r| LoadedAction::Mergeability(pr_id, r),
         );
     }
 
@@ -237,7 +235,7 @@ impl App {
         let provider = self.provider.clone();
         self.spawn_fetch(
             move || provider.fetch_info(pr_id),
-            move |r| Action::Loaded(LoadedAction::Info(pr_id, r)),
+            move |r| LoadedAction::Info(pr_id, r),
         );
     }
 
@@ -256,7 +254,7 @@ impl App {
                     "A review verdict cannot be posted as a plain comment.".into(),
                 )),
             },
-            move |r| Action::Loaded(LoadedAction::Commented(pr_id, r)),
+            move |r| LoadedAction::Commented(pr_id, r),
         );
     }
 
@@ -264,7 +262,7 @@ impl App {
         let provider = self.provider.clone();
         self.spawn_fetch(
             move || provider.delete_comment(pr_id, comment_id, review),
-            move |r| Action::Loaded(LoadedAction::Commented(pr_id, r)),
+            move |r| LoadedAction::Commented(pr_id, r),
         );
     }
 
@@ -290,7 +288,7 @@ impl App {
                 body: c.text,
             })
             .collect();
-        let tx = self.action_tx.clone();
+        let tx = self.results_tx.clone();
         tokio::spawn(async move {
             let submitted_body = body.clone();
             let result = task::spawn_blocking(move || {
@@ -317,7 +315,7 @@ impl App {
                     LoadedAction::Commented(pr_id, Err(format!("worker thread panicked: {error}")))
                 }
             };
-            tx.send(Action::Loaded(action)).ok();
+            tx.send(TaskResult::Loaded(action)).ok();
         });
     }
 
@@ -331,7 +329,7 @@ impl App {
         let provider = self.provider.clone();
         self.spawn_fetch(
             move || provider.set_thread_resolved(pr_id, node_id.as_deref(), comment_id, resolved),
-            move |r| Action::Loaded(LoadedAction::Commented(pr_id, r)),
+            move |r| LoadedAction::Commented(pr_id, r),
         );
     }
 }

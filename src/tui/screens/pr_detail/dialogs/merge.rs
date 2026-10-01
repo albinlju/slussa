@@ -1,5 +1,5 @@
 use crate::{
-    app::action::{Action, DetailAction},
+    app::action::{Action, Effect, MergeAction},
     tui::{
         component::{Component, step_index},
         theme,
@@ -94,16 +94,12 @@ fn render(
     );
 }
 
-const fn key_to_action(code: KeyCode) -> Option<Action> {
+const fn key_to_action(code: KeyCode) -> Option<MergeAction> {
     match code {
-        KeyCode::Left | KeyCode::Up | KeyCode::Char('h' | 'k') => {
-            Some(Action::Detail(DetailAction::MergeMove(-1)))
-        }
-        KeyCode::Right | KeyCode::Down | KeyCode::Char('j' | 'l') => {
-            Some(Action::Detail(DetailAction::MergeMove(1)))
-        }
-        KeyCode::Enter => Some(Action::Detail(DetailAction::MergeSelect)),
-        KeyCode::Esc => Some(Action::Detail(DetailAction::CloseMergePicker)),
+        KeyCode::Left | KeyCode::Up | KeyCode::Char('h' | 'k') => Some(MergeAction::Move(-1)),
+        KeyCode::Right | KeyCode::Down | KeyCode::Char('j' | 'l') => Some(MergeAction::Move(1)),
+        KeyCode::Enter => Some(MergeAction::Select),
+        KeyCode::Esc => Some(MergeAction::Close),
         _ => None,
     }
 }
@@ -129,18 +125,17 @@ impl MergeDialog {
 
 impl Component for MergeDialog {
     type Context<'a> = &'a [crate::domain::pr::MergeStrategy];
-    type Message = DetailAction;
+    type Message = MergeAction;
     fn handle_key(&self, key: KeyEvent, _: &Self::Context<'_>) -> Option<Action> {
-        key_to_action(key.code)
+        key_to_action(key.code).map(Action::from)
     }
-    fn update(&mut self, action: DetailAction, ctx: &Self::Context<'_>) -> Option<Action> {
+    fn update(&mut self, action: MergeAction, ctx: &Self::Context<'_>) -> Option<Effect> {
         match action {
-            DetailAction::MergeMove(delta) => {
-                self.cursor = step_index(self.cursor, delta, ctx.len());
-                None
-            }
-            other => Some(Action::Detail(other)),
+            MergeAction::Move(delta) => self.cursor = step_index(self.cursor, delta, ctx.len()),
+            // Closing and merging are the screen's: it holds the dialog.
+            MergeAction::Select | MergeAction::Close => {}
         }
+        None
     }
     fn render(&mut self, frame: &mut Frame<'_>, area: Rect, ctx: &Self::Context<'_>) {
         render(frame, ctx, self, area);

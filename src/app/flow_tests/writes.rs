@@ -3,13 +3,13 @@
 use super::support::*;
 
 fn submit_pr_comment(app: &mut App, pr_id: u64, text: &str) {
-    app.apply(Action::Command {
+    app.apply(Action::Effect(Effect::Command {
         pr_id,
         command: Command::SubmitComment {
             target: CommentTarget::Pr,
             text: text.into(),
         },
-    });
+    }));
 }
 
 #[tokio::test]
@@ -102,10 +102,10 @@ async fn a_second_write_to_the_same_pr_is_ignored_while_one_is_pending() {
 }
 
 fn reopen(app: &mut App, pr_id: u64) {
-    app.apply(Action::Command {
+    app.apply(Action::Effect(Effect::Command {
         pr_id,
         command: Command::Reopen,
-    });
+    }));
 }
 
 #[tokio::test]

@@ -36,11 +36,11 @@ fn keyboard_routes_list_diff_commit_and_editor() {
     });
     assert!(matches!(
         key(&state, KeyCode::Char('q')),
-        Action::Detail(DetailAction::CommentType('q'))
+        Action::Detail(DetailAction::Editor(EditorAction::Type('q')))
     ));
     assert!(matches!(
         key(&state, KeyCode::Enter),
-        Action::Detail(DetailAction::CommentType('\n'))
+        Action::Detail(DetailAction::Editor(EditorAction::Type('\n')))
     ));
 }
 
@@ -59,11 +59,11 @@ fn filter_and_confirmation_capture_navigation() {
     state.ui.detail.confirm = Some(ConfirmDialog::new(ConfirmKind::Decline));
     assert!(matches!(
         key(&state, KeyCode::Enter),
-        Action::Detail(DetailAction::SubmitConfirm)
+        Action::Detail(DetailAction::Confirm(ConfirmAction::Accept))
     ));
     assert!(matches!(
         key(&state, KeyCode::Esc),
-        Action::Detail(DetailAction::CloseConfirm)
+        Action::Detail(DetailAction::Confirm(ConfirmAction::Close))
     ));
 }
 
@@ -80,19 +80,19 @@ fn link_shortcuts_target_selected_pr_and_never_escape_editor_or_help() {
     state.ui.list.search.query = "Different".into();
     assert!(matches!(
         key(&state, KeyCode::Char('y')),
-        Action::PrLink {
+        Action::Effect(Effect::PrLink {
             pr_id: 43,
             kind: LinkAction::Copy
-        }
+        })
     ));
     for tab in DetailTab::ALL {
         state.screen = Screen::Detail { pr_id: 42, tab };
         assert!(matches!(
             key(&state, KeyCode::Char('o')),
-            Action::PrLink {
+            Action::Effect(Effect::PrLink {
                 pr_id: 42,
                 kind: LinkAction::Open
-            }
+            })
         ));
     }
     state.ui.detail.help_open = true;
@@ -110,7 +110,7 @@ fn link_shortcuts_target_selected_pr_and_never_escape_editor_or_help() {
     });
     for ch in ['o', 'y'] {
         assert!(
-            matches!(key(&state, KeyCode::Char(ch)), Action::Detail(DetailAction::CommentType(c)) if c == ch)
+            matches!(key(&state, KeyCode::Char(ch)), Action::Detail(DetailAction::Editor(EditorAction::Type(c))) if c == ch)
         );
     }
 }

@@ -2,7 +2,7 @@
 
 pub(super) use crate::app::{
     App,
-    action::{Action, Command, ListAction},
+    action::{Action, Command, Effect, ListAction},
     reviews::CommentTarget,
     store::{FetchKey, LoadState, OpenChain},
 };
@@ -22,11 +22,11 @@ pub(super) fn app() -> App {
 /// Apply provider results until nothing is in flight.
 pub(super) async fn settle(app: &mut App) {
     while !app.state.store.fetches.is_empty() || !app.state.store.operations.is_empty() {
-        let action = tokio::time::timeout(Duration::from_secs(10), app.action_rx.recv())
+        let action = tokio::time::timeout(Duration::from_secs(10), app.results_rx.recv())
             .await
             .expect("a provider result within 10 seconds")
             .expect("the action channel stays open");
-        app.apply(action);
+        app.apply_result(action);
     }
 }
 

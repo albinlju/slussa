@@ -2,7 +2,7 @@ mod sidebar;
 pub mod timeline;
 use crate::{
     app::{
-        action::{Action, DetailAction},
+        action::{Action, Effect, TimelineAction},
         store::PrData,
     },
     domain::{
@@ -44,7 +44,7 @@ impl Overview {
 }
 impl Component for Overview {
     type Context<'a> = OverviewContext<'a>;
-    type Message = DetailAction;
+    type Message = TimelineAction;
     fn handle_key(&self, key: KeyEvent, ctx: &Self::Context<'_>) -> Option<Action> {
         self.timeline.handle_key(
             key,
@@ -55,7 +55,7 @@ impl Component for Overview {
             },
         )
     }
-    fn update(&mut self, action: DetailAction, ctx: &Self::Context<'_>) -> Option<Action> {
+    fn update(&mut self, action: TimelineAction, ctx: &Self::Context<'_>) -> Option<Effect> {
         self.timeline.update(
             action,
             &TimelineContext {

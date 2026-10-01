@@ -4,23 +4,24 @@
 //! and changes nothing. `update` applies a message to local state. `render`
 //! draws and may record layout-derived values such as the viewport size. The
 //! `Context` is borrowed data, never the mutable application. A returned
-//! `Action` asks the application for work; `None` means the component handled
-//! it locally.
+//! `Effect` asks the application for work; `None` means the component handled
+//! it locally. A component cannot hand its own message on to the application:
+//! `Effect` has no variant for one.
 //!
 //! A key ignored by a modal must not fall through to what is behind it. Callers
 //! rely on the explicit modal and focus priority.
 
-use crate::app::action::Action;
+use crate::app::action::{Action, Effect};
 use ratatui::{Frame, crossterm::event::KeyEvent, layout::Rect};
 
 /// Interactive UI owner. Context is borrowed data, never the mutable application.
-/// Local updates stay here; returned actions request application-level work.
+/// Local updates stay here; a returned effect requests application-level work.
 pub trait Component {
     type Context<'a>;
     type Message;
 
     fn handle_key(&self, key: KeyEvent, context: &Self::Context<'_>) -> Option<Action>;
-    fn update(&mut self, message: Self::Message, context: &Self::Context<'_>) -> Option<Action>;
+    fn update(&mut self, message: Self::Message, context: &Self::Context<'_>) -> Option<Effect>;
     fn render(&mut self, frame: &mut Frame<'_>, area: Rect, context: &Self::Context<'_>);
 }
 

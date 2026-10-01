@@ -379,10 +379,7 @@ fn choosing_another_view_asks_the_app_to_read_it_and_choosing_the_same_one_does_
         ..PrListScreen::default()
     };
     let action = list.update(ListAction::ApplyFilter, &ctx);
-    assert!(matches!(
-        action,
-        Some(Action::List(ListAction::FilterChanged))
-    ));
+    assert!(matches!(action, Some(Effect::LoadView)));
     assert_eq!(list.filter, StatusFilter::Merged);
 
     let again = list.update(ListAction::ApplyFilter, &ctx);

@@ -4,11 +4,11 @@ use super::support::*;
 
 /// Take exactly one provider result and apply it.
 async fn apply_next(app: &mut App) {
-    let action = tokio::time::timeout(Duration::from_secs(10), app.action_rx.recv())
+    let action = tokio::time::timeout(Duration::from_secs(10), app.results_rx.recv())
         .await
         .expect("a provider result within 10 seconds")
         .expect("the action channel stays open");
-    app.apply(action);
+    app.apply_result(action);
 }
 
 #[tokio::test]

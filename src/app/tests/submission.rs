@@ -24,12 +24,12 @@ async fn failed_submission_preserves_draft_and_blocks_duplicate_input() {
         "Keep this draft"
     );
     // A read result must never acknowledge a write.
-    app.apply(Action::Loaded(LoadedAction::Activity(
+    app.apply_result(TaskResult::Loaded(LoadedAction::Activity(
         42,
         Err("read failed".into()),
     )));
     assert!(app.state.store.operations.contains_key(&42));
-    app.apply(Action::Loaded(LoadedAction::Commented(
+    app.apply_result(TaskResult::Loaded(LoadedAction::Commented(
         42,
         Err("offline".into()),
     )));
@@ -46,7 +46,7 @@ async fn failed_submission_preserves_draft_and_blocks_duplicate_input() {
         "Keep this draft"
     );
     send_comment(&mut app);
-    app.apply(Action::Loaded(LoadedAction::Commented(42, Ok(()))));
+    app.apply_result(TaskResult::Loaded(LoadedAction::Commented(42, Ok(()))));
     assert!(app.state.ui.detail.editor.draft.is_none());
 }
 
@@ -63,10 +63,14 @@ async fn late_completion_only_clears_the_submitting_pr_editor() {
     press(&mut app, KeyCode::Char('A'));
     send_comment(&mut app);
     app.open_pr(43);
-    app.apply(Action::Detail(DetailAction::SelectTab(DetailTab::Overview)));
-    app.apply(Action::Detail(DetailAction::OpenComment));
-    app.apply(Action::Detail(DetailAction::CommentType('B')));
-    app.apply(Action::Loaded(LoadedAction::Commented(42, Ok(()))));
+    app.apply(Action::Detail(DetailAction::Nav(NavAction::SelectTab(
+        DetailTab::Overview,
+    ))));
+    app.apply(Action::Detail(DetailAction::Pr(PrAction::OpenComment)));
+    app.apply(Action::Detail(DetailAction::Editor(EditorAction::Type(
+        'B',
+    ))));
+    app.apply_result(TaskResult::Loaded(LoadedAction::Commented(42, Ok(()))));
     assert_eq!(app.state.ui.detail.editor.draft.as_ref().unwrap().text, "B");
     app.open_pr(42);
     assert!(app.state.ui.detail.editor.draft.is_none());
@@ -100,17 +104,17 @@ async fn failed_review_and_error_stay_with_their_pr_until_success() {
             }],
         },
     );
-    app.apply(Action::Command {
+    app.apply(Action::Effect(Effect::Command {
         pr_id: 42,
         command: Command::SubmitReview {
             verdict: ReviewVerdict::Approve,
             body: String::new(),
         },
-    });
+    }));
     assert_eq!(app.state.store.reviews[&42].comments.len(), 1);
     app.open_pr(43);
     app.state.store.operations.insert(43, Operation::Merge);
-    app.apply(Action::Loaded(LoadedAction::Commented(
+    app.apply_result(TaskResult::Loaded(LoadedAction::Commented(
         42,
         Err("offline".into()),
     )));
@@ -120,14 +124,14 @@ async fn failed_review_and_error_stay_with_their_pr_until_success() {
     app.open_pr(42);
     assert_eq!(app.state.detail_view().error(), Some("offline"));
     press(&mut app, KeyCode::Esc);
-    app.apply(Action::Command {
+    app.apply(Action::Effect(Effect::Command {
         pr_id: 42,
         command: Command::SubmitReview {
             verdict: ReviewVerdict::Approve,
             body: String::new(),
         },
-    });
-    app.apply(Action::Loaded(LoadedAction::Commented(42, Ok(()))));
+    }));
+    app.apply_result(TaskResult::Loaded(LoadedAction::Commented(42, Ok(()))));
     assert!(!app.state.store.reviews.contains_key(&42));
     assert!(app.state.store.operations.contains_key(&43));
 }
@@ -142,7 +146,7 @@ async fn escape_during_submission_keeps_request_and_draft_scoped() {
     press(&mut app, KeyCode::Esc);
     assert_eq!(app.state.screen, Screen::List);
     assert!(app.state.store.operations.contains_key(&42));
-    app.apply(Action::Loaded(LoadedAction::Commented(
+    app.apply_result(TaskResult::Loaded(LoadedAction::Commented(
         42,
         Err("timeout".into()),
     )));
@@ -176,7 +180,7 @@ async fn partial_review_removes_confirmed_posts_and_remembers_sent_summary() {
         },
     );
     app.state.store.operations.insert(42, Operation::Review);
-    app.apply(Action::Loaded(LoadedAction::ReviewFailed {
+    app.apply_result(TaskResult::Loaded(LoadedAction::ReviewFailed {
         pr_id: 42,
         posted_comments: 1,
         submitted_summary: Some("summary".into()),
@@ -197,7 +201,7 @@ async fn successful_mutation_reports_which_pr_changed() {
         .store
         .operations
         .insert(42, crate::app::store::Operation::Merge);
-    app.apply(Action::Loaded(LoadedAction::Merged(42, Ok(()))));
+    app.apply_result(TaskResult::Loaded(LoadedAction::Merged(42, Ok(()))));
     let notice = app.state.store.notice.as_ref().unwrap();
     assert!(!notice.error);
     assert!(notice.message.contains("42"));

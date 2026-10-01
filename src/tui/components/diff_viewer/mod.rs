@@ -1,7 +1,7 @@
 pub(crate) mod file_tree;
 use crate::{
     app::{
-        action::{Action, DiffAction},
+        action::{Action, DiffAction, Effect},
         reviews::{CommentAnchor, PendingComment},
         store::LoadState,
     },
@@ -80,7 +80,7 @@ impl Component for DiffViewer {
     fn handle_key(&self, key: KeyEvent, _: &DiffContext<'_>) -> Option<Action> {
         keys::key_to_action(key.code, self).map(Action::Diff)
     }
-    fn update(&mut self, action: DiffAction, ctx: &DiffContext<'_>) -> Option<Action> {
+    fn update(&mut self, action: DiffAction, ctx: &DiffContext<'_>) -> Option<Effect> {
         let files = ctx.files();
         match action {
             DiffAction::MoveCursor(delta) => self.diff_move_cursor(files, delta),

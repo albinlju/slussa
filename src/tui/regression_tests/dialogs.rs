@@ -13,23 +13,26 @@ fn extracted_dialogs_render_and_keep_their_key_bindings() {
         let (label, close) = match dialog {
             "confirm" => {
                 state.ui.detail.confirm = Some(ConfirmDialog::new(ConfirmKind::Decline));
-                ("Close / decline this PR?", DetailAction::CloseConfirm)
+                (
+                    "Close / decline this PR?",
+                    DetailAction::Confirm(ConfirmAction::Close),
+                )
             }
             "review" => {
                 state.ui.detail.review_picker = Some(ReviewDialog::default());
-                ("Submit review", DetailAction::CloseReviewPicker)
+                ("Submit review", DetailAction::Review(ReviewAction::Close))
             }
             "merge" => {
                 state.ui.detail.merge_picker = Some(MergeDialog::default());
-                ("Merge this PR", DetailAction::CloseMergePicker)
+                ("Merge this PR", DetailAction::Merge(MergeAction::Close))
             }
             "error" => {
                 state.store.errors.insert(42, "Request failed".into());
-                ("Request failed", DetailAction::DismissError)
+                ("Request failed", DetailAction::Error(ErrorAction::Dismiss))
             }
             "help" => {
                 state.ui.detail.help_open = true;
-                ("Help", DetailAction::ToggleHelp)
+                ("Help", DetailAction::Nav(NavAction::ToggleHelp))
             }
             other => panic!("no such dialog in this test: {other}"),
         };
@@ -52,13 +55,13 @@ fn extracted_dialogs_render_and_keep_their_key_bindings() {
         if dialog == "review" {
             assert!(matches!(
                 key(&state, KeyCode::Enter),
-                Action::Detail(DetailAction::ReviewSelect)
+                Action::Detail(DetailAction::Review(ReviewAction::Select))
             ));
         }
         if dialog == "merge" {
             assert!(matches!(
                 key(&state, KeyCode::Enter),
-                Action::Detail(DetailAction::MergeSelect)
+                Action::Detail(DetailAction::Merge(MergeAction::Select))
             ));
         }
     }
@@ -72,7 +75,7 @@ fn dialog_instances_own_selection_and_respect_available_choices() {
     };
     let mut confirm = ConfirmDialog::new(ConfirmKind::Decline);
     let other = ConfirmDialog::new(ConfirmKind::Decline);
-    confirm.update(DetailAction::ConfirmMove(-1), &());
+    confirm.update(ConfirmAction::Move(-1), &());
     assert_eq!(confirm.accepted(), Some(ConfirmKind::Decline));
     assert_eq!(other.accepted(), None);
 
@@ -85,12 +88,12 @@ fn dialog_instances_own_selection_and_respect_available_choices() {
     };
     let mut review = ReviewDialog::new(&ctx);
     assert_eq!(review.selected(&ctx), Some(ReviewVerdict::Comment));
-    review.update(DetailAction::ReviewMove(-1), &ctx);
+    review.update(ReviewAction::Move(-1), &ctx);
     assert_eq!(review.selected(&ctx), None);
 
     let strategies = [MergeStrategy::Merge, MergeStrategy::Rebase];
     let mut merge = MergeDialog::default();
-    merge.update(DetailAction::MergeMove(99), &strategies.as_slice());
+    merge.update(MergeAction::Move(99), &strategies.as_slice());
     assert_eq!(merge.selected(&strategies), Some(MergeStrategy::Rebase));
 }
 
@@ -218,7 +221,7 @@ fn long_error_scrolls_without_dismissing_or_acting_on_the_pr() {
     assert!(state.ui.detail.review_picker.is_none());
     assert!(matches!(
         key(&state, KeyCode::Esc),
-        Action::Detail(DetailAction::DismissError)
+        Action::Detail(DetailAction::Error(ErrorAction::Dismiss))
     ));
 }
 

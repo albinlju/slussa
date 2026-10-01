@@ -1,6 +1,6 @@
 use crate::{
     app::{
-        action::{Action, ListAction},
+        action::{Action, Effect, ListAction},
         navigation::Screen,
         store::{LoadState, OpenChain, Store},
     },
@@ -555,7 +555,7 @@ impl Component for PrListScreen {
     fn handle_key(&self, key: KeyEvent, ctx: &ListContext<'_>) -> Option<Action> {
         if self.filter_picker_open {
             return match key.code {
-                KeyCode::Char('q') => Some(Action::Quit),
+                KeyCode::Char('q') => Some(Action::Effect(Effect::Quit)),
                 KeyCode::Esc | KeyCode::Char('f') => {
                     Some(Action::List(ListAction::CloseFilterPicker))
                 }
@@ -573,7 +573,7 @@ impl Component for PrListScreen {
         if self.help_open {
             return match key.code {
                 KeyCode::Esc | KeyCode::Char('?') => Some(Action::List(ListAction::ToggleHelp)),
-                KeyCode::Char('q') => Some(Action::Quit),
+                KeyCode::Char('q') => Some(Action::Effect(Effect::Quit)),
                 _ => self.help.handle_key(key, &HELP_KEYS),
             };
         }
@@ -588,14 +588,14 @@ impl Component for PrListScreen {
                     .filtered_prs(ctx.prs, ctx.viewer)
                     .get(self.selected)
                     .filter(|pr| pr.url.is_some())
-                    .map(|pr| Action::PrLink { pr_id: pr.id, kind });
+                    .map(|pr| Action::Effect(Effect::PrLink { pr_id: pr.id, kind }));
             }
         }
         let half = half_page(self.viewport);
         match key.code {
-            KeyCode::Char('q') => Some(Action::Quit),
+            KeyCode::Char('q') => Some(Action::Effect(Effect::Quit)),
             KeyCode::Char('?') => Some(Action::List(ListAction::ToggleHelp)),
-            KeyCode::Char('F') => Some(Action::Refresh),
+            KeyCode::Char('F') => Some(Action::Effect(Effect::Refresh)),
             KeyCode::Char('f') => Some(Action::List(ListAction::OpenFilterPicker)),
             KeyCode::Char('s') => Some(Action::List(ListAction::ToggleSort)),
             KeyCode::Char('L') if Self::can_load_older(ctx) => {
@@ -613,7 +613,7 @@ impl Component for PrListScreen {
         }
     }
 
-    fn update(&mut self, action: ListAction, ctx: &ListContext<'_>) -> Option<Action> {
+    fn update(&mut self, action: ListAction, ctx: &ListContext<'_>) -> Option<Effect> {
         match action {
             ListAction::ToggleHelp => {
                 self.help_open = !self.help_open;
@@ -640,18 +640,17 @@ impl Component for PrListScreen {
                     self.filtered_prs(ctx.prs, ctx.viewer).len(),
                 );
             }
-            ListAction::OpenPr(id) => return Some(Action::List(ListAction::OpenPr(id))),
-            ListAction::LoadOlder => return Some(Action::List(ListAction::LoadOlder)),
+            ListAction::OpenPr(id) => return Some(Effect::OpenPr(id)),
+            ListAction::LoadOlder => return Some(Effect::LoadOlder),
             ListAction::OpenFilterPicker => self.open_filter_picker(),
             ListAction::CloseFilterPicker => self.close_filter_picker(),
             ListAction::FilterPickerNext => self.filter_picker_next(),
             ListAction::FilterPickerPrev => self.filter_picker_prev(),
             ListAction::ApplyFilter => {
                 if self.apply_filter() {
-                    return Some(Action::List(ListAction::FilterChanged));
+                    return Some(Effect::LoadView);
                 }
             }
-            ListAction::FilterChanged => return Some(Action::List(ListAction::FilterChanged)),
         }
         None
     }

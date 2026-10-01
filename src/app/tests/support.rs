@@ -1,6 +1,6 @@
 //! Imports and helpers shared by the files in this directory.
 
-pub(super) use crate::app::{App, action::*};
+pub(super) use crate::app::{App, action::*, event_loop::Next};
 pub(super) use crate::{
     app::{
         navigation::Screen,
@@ -35,7 +35,7 @@ pub(super) fn press(app: &mut App, code: KeyCode) {
 
 pub(super) fn detail(app: &mut App, tab: DetailTab) {
     app.apply(Action::List(ListAction::OpenPr(42)));
-    app.apply(Action::Detail(DetailAction::SelectTab(tab)));
+    app.apply(Action::Detail(DetailAction::Nav(NavAction::SelectTab(tab))));
 }
 
 pub(super) fn send_comment(app: &mut App) {

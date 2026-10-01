@@ -8,11 +8,19 @@ mod render;
 pub mod tabs;
 pub mod view;
 use crate::{
-    app::{navigation::Screen, store::LoadState},
+    app::{
+        action::{
+            Action, CommitsAction, DetailAction, DiffAction, EditorAction, Effect, ErrorAction,
+            NavAction, SearchAction,
+        },
+        navigation::Screen,
+        store::LoadState,
+    },
+    domain::pr::PullRequest,
     tui::{
         component::Component,
-        components::diff_viewer::DiffViewer,
-        screens::pr_detail::{dialogs::confirm::ConfirmKind, tabs::commits::CommitList},
+        components::diff_viewer::{DiffContext, DiffViewer},
+        screens::pr_detail::tabs::commits::CommitList,
     },
 };
 use ratatui::{Frame, layout::Rect};
@@ -88,184 +96,112 @@ impl PrDetailScreen {
 
 impl Component for PrDetailScreen {
     type Context<'a> = DetailContext<'a>;
-    type Message = crate::app::action::DetailAction;
+    type Message = DetailAction;
     fn handle_key(
         &self,
         key: crossterm::event::KeyEvent,
         ctx: &DetailContext<'_>,
-    ) -> Option<crate::app::action::Action> {
-        let view = DetailView {
-            detail: self,
-            store: ctx.store,
-            screen: ctx.screen,
-            refreshing: ctx.refreshing,
-        };
+    ) -> Option<Action> {
+        let view = self.view(ctx);
         keys::key_to_action(&view, key).filter(|action| match action {
-            crate::app::action::Action::Detail(action) => view.supports_action(*action),
-            _ => true,
+            Action::Detail(action) => view.supports_action(*action),
+            Action::HelpScroll(_)
+            | Action::Paste(_)
+            | Action::List(_)
+            | Action::Diff(_)
+            | Action::Commits(_)
+            | Action::Search(_)
+            | Action::Effect(_) => true,
         })
     }
 
     fn render(&mut self, frame: &mut Frame<'_>, area: Rect, ctx: &DetailContext<'_>) {
         render::render(self, frame, area, ctx);
     }
-    fn update(
-        &mut self,
-        action: Self::Message,
-        ctx: &DetailContext<'_>,
-    ) -> Option<crate::app::action::Action> {
-        use crate::app::action::{Action, DetailAction};
-        if !(DetailView {
-            detail: self,
-            store: ctx.store,
-            screen: ctx.screen,
-            refreshing: ctx.refreshing,
-        })
-        .supports_action(action)
-        {
+
+    fn update(&mut self, action: DetailAction, ctx: &DetailContext<'_>) -> Option<Effect> {
+        if !self.view(ctx).supports_action(action) {
             return None;
         }
-        if let Screen::Detail { pr_id, .. } = ctx.screen
-            && ctx.store.operations.contains_key(&pr_id)
-            && !matches!(
-                action,
-                DetailAction::Back
-                    | DetailAction::NextTab
-                    | DetailAction::PrevTab
-                    | DetailAction::SelectTab(_)
-                    | DetailAction::ErrorScroll(_)
-                    | DetailAction::DismissError
-                    | DetailAction::ToggleHelp
-                    | DetailAction::BuildsScroll(_)
-                    | DetailAction::DescriptionHorizontal(_)
-                    | DetailAction::DescriptionScroll(_)
-                    | DetailAction::OverviewScroll(_)
-                    | DetailAction::OverviewMove(_)
-                    | DetailAction::OverviewSubMove(_)
-            )
-        {
+        let Screen::Detail { pr_id, tab } = ctx.screen else {
+            return None;
+        };
+        if ctx.store.operations.contains_key(&pr_id) && !action.allowed_while_sending() {
             return None;
         }
         match action {
-            DetailAction::Back => {
-                self.help_open = false;
-                return Some(Action::Navigate(Screen::List));
+            DetailAction::Nav(action) => return self.navigate(action, pr_id, tab, ctx),
+            DetailAction::BuildsScroll(delta) => {
+                self.builds.update(delta, &None);
             }
-            DetailAction::NextTab | DetailAction::PrevTab | DetailAction::SelectTab(_) => {
-                let Screen::Detail { pr_id, tab } = ctx.screen else {
-                    return None;
-                };
-                let tab = match action {
-                    DetailAction::NextTab => tab.step(1, &ctx.store.capabilities),
-                    DetailAction::PrevTab => tab.step(-1, &ctx.store.capabilities),
-                    DetailAction::SelectTab(tab) => tab,
-                    _ => return None,
-                };
-                self.active_tab = tab;
-                self.commits.open_commit = None;
-                return Some(Action::Navigate(Screen::Detail { pr_id, tab }));
-            }
-            DetailAction::BuildsScroll(_) => {
-                self.builds.update(action, &None);
-            }
-            DetailAction::DescriptionHorizontal(_)
-            | DetailAction::DescriptionScroll(_)
-            | DetailAction::OverviewScroll(_)
-            | DetailAction::OverviewMove(_)
-            | DetailAction::OverviewSubMove(_) => {
-                let Screen::Detail { pr_id, .. } = ctx.screen else {
-                    return None;
-                };
-                if let LoadState::Loaded(prs) = &ctx.store.cache.prs
-                    && let Some(pr) = prs.iter().find(|p| p.id == pr_id)
-                {
-                    match action {
-                        DetailAction::DescriptionHorizontal(_)
-                        | DetailAction::DescriptionScroll(_) => {
-                            self.description.update(action, &pr);
-                        }
-                        _ => {
-                            self.overview.update(
-                                action,
-                                &tabs::overview::OverviewContext {
-                                    pr,
-                                    data: ctx.store.cache.details.get(&pr_id),
-                                    capabilities: &ctx.store.capabilities,
-                                },
-                            );
-                        }
-                    }
+            DetailAction::Description(action) => {
+                if let Some(pr) = loaded_pr(ctx, pr_id) {
+                    self.description.update(action, &pr);
                 }
             }
-            DetailAction::ErrorScroll(_) => {
+            DetailAction::Timeline(action) => {
+                if let Some(pr) = loaded_pr(ctx, pr_id) {
+                    self.overview.update(
+                        action,
+                        &tabs::overview::OverviewContext {
+                            pr,
+                            data: ctx.store.cache.details.get(&pr_id),
+                            capabilities: &ctx.store.capabilities,
+                        },
+                    );
+                }
+            }
+            DetailAction::Error(ErrorAction::Dismiss) => return Some(self.dismiss_error(pr_id)),
+            DetailAction::Error(action @ ErrorAction::Scroll(_)) => {
                 self.error.update(action, &"");
             }
-            DetailAction::ToggleHelp => {
-                self.help_open = !self.help_open;
-                self.help = crate::tui::components::help_dialog::HelpDialog::default();
-            }
-            DetailAction::CloseConfirm => self.confirm = None,
-            DetailAction::ConfirmMove(_) => {
-                if let Some(dialog) = &mut self.confirm {
-                    return dialog.update(action, &());
-                }
-            }
-            DetailAction::ReviewPreview | DetailAction::ReviewMove(_) => {
-                let options = DetailView {
-                    detail: self,
-                    store: ctx.store,
-                    screen: ctx.screen,
-                    refreshing: ctx.refreshing,
-                }
-                .review_context()
-                .options;
-                let review_ctx = dialogs::review::ReviewContext {
-                    options,
-                    pending: None,
-                };
-                if let Some(dialog) = &mut self.review_picker {
-                    return dialog.update(action, &review_ctx);
-                }
-            }
-            DetailAction::CloseReviewPicker => self.review_picker = None,
-            DetailAction::OpenMergePicker => {
-                if !ctx.store.capabilities.merge_strategies.is_empty() {
-                    self.merge_picker = Some(dialogs::merge::MergeDialog::default());
-                }
-            }
-            DetailAction::MergeMove(_) => {
-                if let Some(dialog) = &mut self.merge_picker {
-                    return dialog
-                        .update(action, &ctx.store.capabilities.merge_strategies.as_slice());
-                }
-            }
-            DetailAction::CloseMergePicker => self.merge_picker = None,
-            DetailAction::OpenDecline => {
-                self.confirm = Some(dialogs::confirm::ConfirmDialog::new(ConfirmKind::Decline));
-            }
-            DetailAction::OpenReopen => {
-                self.confirm = Some(dialogs::confirm::ConfirmDialog::new(ConfirmKind::Reopen));
-            }
-            DetailAction::CommentType(_)
-            | DetailAction::CommentDelete
-            | DetailAction::CommentMove(_)
-            | DetailAction::CommentVertical(_)
-            | DetailAction::CommentHome
-            | DetailAction::CommentEnd
-            | DetailAction::CommentDiscard
-            | DetailAction::CommentDiscardConfirm
-            | DetailAction::CommentKeep
-            | DetailAction::CommentBackspace
-            | DetailAction::CommentCancel => {
+            DetailAction::Confirm(action) => return self.confirm_action(action, pr_id),
+            DetailAction::Review(action) => return self.review_action(action, pr_id, ctx),
+            DetailAction::Merge(action) => return self.merge_action(action, pr_id, ctx),
+            DetailAction::Editor(EditorAction::Submit) => return self.submit_editor(pr_id),
+            DetailAction::Editor(action) => {
                 self.editor.update(action, &false);
             }
-            other => return self.interaction(other, ctx),
+            DetailAction::Pr(action) => return self.pr_action(action, pr_id, ctx),
         }
         None
     }
 }
 
+fn loaded_pr<'a>(ctx: &DetailContext<'a>, pr_id: u64) -> Option<&'a PullRequest> {
+    match &ctx.store.cache.prs {
+        LoadState::Loaded(prs) => prs.iter().find(|pr| pr.id == pr_id),
+        LoadState::NotRequested | LoadState::Loading | LoadState::Failed(_) => None,
+    }
+}
+
 impl PrDetailScreen {
+    fn navigate(
+        &mut self,
+        action: NavAction,
+        pr_id: u64,
+        tab: tabs::DetailTab,
+        ctx: &DetailContext<'_>,
+    ) -> Option<Effect> {
+        let tab = match action {
+            NavAction::Back => {
+                self.help_open = false;
+                return Some(Effect::Navigate(Screen::List));
+            }
+            NavAction::ToggleHelp => {
+                self.help_open = !self.help_open;
+                self.help = crate::tui::components::help_dialog::HelpDialog::default();
+                return None;
+            }
+            NavAction::NextTab => tab.step(1, &ctx.store.capabilities),
+            NavAction::PrevTab => tab.step(-1, &ctx.store.capabilities),
+            NavAction::SelectTab(tab) => tab,
+        };
+        self.active_tab = tab;
+        self.commits.open_commit = None;
+        Some(Effect::Navigate(Screen::Detail { pr_id, tab }))
+    }
+
     pub const fn active_search(
         &self,
         tab: tabs::DetailTab,
@@ -276,62 +212,59 @@ impl PrDetailScreen {
                 Some((&self.commits.search, false))
             }
             DetailTab::Diff | DetailTab::Commits => Some(self.active_diff_view().active_search()),
-            _ => None,
+            DetailTab::Description | DetailTab::Overview | DetailTab::Builds => None,
         }
     }
 
-    #[expect(
-        clippy::unreachable,
-        reason = "a component consumed these; the `Action` split removes the arm (ROADMAP)"
-    )]
-    pub fn update_action(
+    pub fn update_commits(
         &mut self,
-        action: crate::app::action::Action,
+        action: CommitsAction,
         ctx: &DetailContext<'_>,
-    ) -> Option<crate::app::action::Action> {
-        use crate::{app::action::Action, tui::components::diff_viewer::DiffContext};
-        let Screen::Detail { pr_id, tab } = ctx.screen else {
+    ) -> Option<Effect> {
+        let Screen::Detail { pr_id, .. } = ctx.screen else {
+            return None;
+        };
+        self.commits.update(
+            action,
+            &tabs::commits::CommitContext {
+                pr_id,
+                data: ctx.store.cache.details.get(&pr_id),
+                pending: &[],
+                author: "",
+            },
+        )
+    }
+
+    pub fn update_diff(&mut self, action: DiffAction, ctx: &DetailContext<'_>) -> Option<Effect> {
+        let diff_ctx = self.diff_input_context(ctx)?;
+        self.active_diff_view_mut().update(action, &diff_ctx)
+    }
+
+    pub fn update_search(&mut self, action: SearchAction, ctx: &DetailContext<'_>) {
+        let Screen::Detail { tab, .. } = ctx.screen else {
+            return;
+        };
+        if tab == tabs::DetailTab::Commits && self.commits.open_commit.is_none() {
+            self.commits.update_search(action);
+        } else if self.active_search(tab).is_some()
+            && let Some(diff_ctx) = self.diff_input_context(ctx)
+        {
+            self.active_diff_view_mut().update_search(action, &diff_ctx);
+        }
+    }
+
+    /// The diff on screen, for input: which files there are to move between.
+    fn diff_input_context<'a>(&self, ctx: &DetailContext<'a>) -> Option<DiffContext<'a>> {
+        let Screen::Detail { pr_id, .. } = ctx.screen else {
             return None;
         };
         let data = ctx.store.cache.details.get(&pr_id);
-        match action {
-            Action::Detail(action) => self.update(action, ctx),
-            Action::Commits(action) => self.commits.update(
-                action,
-                &tabs::commits::CommitContext {
-                    pr_id,
-                    data,
-                    pending: &[],
-                    author: "",
-                },
-            ),
-            Action::Search(action)
-                if tab == tabs::DetailTab::Commits && self.commits.open_commit.is_none() =>
-            {
-                self.commits.update_search(action);
-                None
-            }
-            Action::Diff(_) | Action::Search(_) => {
-                let diff = data.and_then(|d| d.diff_for(self.commits.open_commit.as_deref()));
-                let diff_ctx = DiffContext {
-                    diff,
-                    threads: &[],
-                    pending: &[],
-                    author: "",
-                };
-                match action {
-                    Action::Diff(action) => self.active_diff_view_mut().update(action, &diff_ctx),
-                    Action::Search(action) => {
-                        if self.active_search(tab).is_some() {
-                            self.active_diff_view_mut().update_search(action, &diff_ctx);
-                        }
-                        None
-                    }
-                    _ => unreachable!(),
-                }
-            }
-            effect => Some(effect),
-        }
+        Some(DiffContext {
+            diff: data.and_then(|d| d.diff_for(self.commits.open_commit.as_deref())),
+            threads: &[],
+            pending: &[],
+            author: "",
+        })
     }
 }
 

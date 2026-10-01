@@ -1,6 +1,9 @@
 use crate::{
     app::{
-        action::{Action, CommitsAction, DetailAction, DiffAction, SearchAction},
+        action::{
+            Action, CommitsAction, DetailAction, DiffAction, Effect, NavAction, PrAction,
+            SearchAction,
+        },
         navigation::Screen,
     },
     tui::{
@@ -21,8 +24,8 @@ pub(in crate::tui) fn key_to_action(
     }
     if state.operation_pending() && state.detail.editor.is_open() {
         return match key.code {
-            KeyCode::Esc => Some(Action::Detail(DetailAction::Back)),
-            KeyCode::Char('q') => Some(Action::Quit),
+            KeyCode::Esc => Some(Action::from(NavAction::Back)),
+            KeyCode::Char('q') => Some(Action::Effect(Effect::Quit)),
             _ => None,
         };
     }
@@ -30,7 +33,7 @@ pub(in crate::tui) fn key_to_action(
         return state.detail.editor.handle_key(key, &false);
     }
     if key.code == KeyCode::Char('q') {
-        return Some(Action::Quit);
+        return Some(Action::Effect(Effect::Quit));
     }
     let Screen::Detail { tab, pr_id } = state.screen else {
         return None;
@@ -54,11 +57,11 @@ pub(in crate::tui) fn key_to_action(
     }
 
     if code == KeyCode::Char('?') {
-        return Some(Action::Detail(DetailAction::ToggleHelp));
+        return Some(Action::from(NavAction::ToggleHelp));
     }
     if state.detail.help_open {
         return if code == KeyCode::Esc {
-            Some(Action::Detail(DetailAction::ToggleHelp))
+            Some(Action::from(NavAction::ToggleHelp))
         } else {
             state.detail.help.handle_key(key, &&[][..])
         };
@@ -71,7 +74,7 @@ pub(in crate::tui) fn key_to_action(
             _ => None,
         };
         if let Some(kind) = kind {
-            return Some(Action::PrLink { pr_id, kind });
+            return Some(Action::Effect(Effect::PrLink { pr_id, kind }));
         }
     }
     // The PR-level actions (`a`, `v`, `m`, `x`) work on the tabs that read the PR
@@ -80,7 +83,7 @@ pub(in crate::tui) fn key_to_action(
     // `a` opens the review-verdict menu. Always available — even on your own PR
     // you can leave a comment review; the picker dims the verdicts you can't use.
     if plain && code == KeyCode::Char('a') && acts_on_pr {
-        return Some(Action::Detail(DetailAction::OpenReviewPicker));
+        return Some(Action::from(PrAction::OpenReviewPicker));
     }
     // `v` runs the batched review: it starts a review the first time, then finishes
     // it (opening the verdict menu) once one's in progress. Line comments made
@@ -89,43 +92,45 @@ pub(in crate::tui) fn key_to_action(
         && code == KeyCode::Char('v')
         && (state.pending_review().is_some() || acts_on_pr || tab == DetailTab::Diff)
     {
-        return Some(Action::Detail(if state.pending_review().is_some() {
-            DetailAction::FinishReview
+        return Some(Action::from(if state.pending_review().is_some() {
+            PrAction::FinishReview
         } else {
-            DetailAction::StartReview
+            PrAction::StartReview
         }));
     }
     // Shift+V discards an in-progress review and its queued comments.
     if code == KeyCode::Char('V') && state.pending_review().is_some() {
-        return Some(Action::Detail(DetailAction::AbandonReview));
+        return Some(Action::from(PrAction::AbandonReview));
     }
     // `m` opens the merge-strategy menu — only when the PR is mergeable. You can
     // merge your own PR, so (unlike `a`) there's no own-PR gate.
     if plain && code == KeyCode::Char('m') && acts_on_pr && state.can_merge(pr_id) {
-        return Some(Action::Detail(DetailAction::OpenMergePicker));
+        return Some(Action::from(PrAction::OpenMergePicker));
     }
     // `x` declines/closes the PR (with a confirm) while it's still open, and
     // reopens it (with a confirm) once it has been declined.
     if plain && code == KeyCode::Char('x') && acts_on_pr {
         if state.pr_is_open(pr_id) {
-            return Some(Action::Detail(DetailAction::OpenDecline));
+            return Some(Action::from(PrAction::OpenDecline));
         }
-        if state.pr_is_declined(pr_id) && state.supports_action(DetailAction::OpenReopen) {
-            return Some(Action::Detail(DetailAction::OpenReopen));
+        if state.pr_is_declined(pr_id)
+            && state.supports_action(DetailAction::Pr(PrAction::OpenReopen))
+        {
+            return Some(Action::from(PrAction::OpenReopen));
         }
     }
     if plain && code == KeyCode::Char('c') {
-        return Some(Action::Detail(DetailAction::OpenComment));
+        return Some(Action::from(PrAction::OpenComment));
     }
     if plain && code == KeyCode::Char('r') {
-        return Some(Action::Detail(DetailAction::OpenReply));
+        return Some(Action::from(PrAction::OpenReply));
     }
     // Shift+R toggles resolve on the focused thread (application no-ops off-thread).
     if code == KeyCode::Char('R') {
-        return Some(Action::Detail(DetailAction::ResolveThread));
+        return Some(Action::from(PrAction::ResolveThread));
     }
     if code == KeyCode::Char('F') {
-        return Some(Action::Refresh);
+        return Some(Action::Effect(Effect::Refresh));
     }
     // Overview-only: step individual comments within the focused block (Ctrl-j/k),
     // then edit/delete the one you land on (the application gates on authorship).
@@ -148,10 +153,10 @@ pub(in crate::tui) fn key_to_action(
             }
         }
         if plain && code == KeyCode::Char('e') {
-            return Some(Action::Detail(DetailAction::EditComment));
+            return Some(Action::from(PrAction::EditComment));
         }
         if plain && code == KeyCode::Char('d') {
-            return Some(Action::Detail(DetailAction::DeleteComment));
+            return Some(Action::from(PrAction::DeleteComment));
         }
     }
 
@@ -161,7 +166,9 @@ pub(in crate::tui) fn key_to_action(
         && (tab == DetailTab::Diff || (tab == DetailTab::Commits && viewing_commit))
         && state.detail.active_diff_view().pane_pending.is_some()
     {
-        return Some(Action::Detail(DetailAction::RemovePendingComment));
+        return Some(Action::Detail(DetailAction::Pr(
+            PrAction::RemovePendingComment,
+        )));
     }
 
     escape_action(state, tab, viewing_commit, code)
@@ -193,7 +200,7 @@ fn escape_action(
     if tab == DetailTab::Commits && viewing_commit {
         return Some(Action::Commits(CommitsAction::Back));
     }
-    Some(Action::Detail(DetailAction::Back))
+    Some(Action::from(NavAction::Back))
 }
 
 fn tab_select_key(code: KeyCode) -> Option<Action> {
@@ -202,16 +209,16 @@ fn tab_select_key(code: KeyCode) -> Option<Action> {
             let idx = (c as u8 - b'1') as usize;
             DetailTab::ALL
                 .get(idx)
-                .map(|&t| Action::Detail(DetailAction::SelectTab(t)))
+                .map(|&t| Action::Detail(DetailAction::Nav(NavAction::SelectTab(t))))
         }
         _ => None,
     }
 }
 
-const fn tab_bracket_key(code: KeyCode) -> Option<Action> {
+fn tab_bracket_key(code: KeyCode) -> Option<Action> {
     match code {
-        KeyCode::Char('[') => Some(Action::Detail(DetailAction::PrevTab)),
-        KeyCode::Char(']') => Some(Action::Detail(DetailAction::NextTab)),
+        KeyCode::Char('[') => Some(Action::from(NavAction::PrevTab)),
+        KeyCode::Char(']') => Some(Action::from(NavAction::NextTab)),
         _ => None,
     }
 }
@@ -306,18 +313,18 @@ fn tab_key(
 
 /// `h` and `l` change tab on every tab. The arrow keys do too, except in the
 /// diff, where they move between the file tree and the code.
-const fn tab_letters(code: KeyCode) -> Option<Action> {
+fn tab_letters(code: KeyCode) -> Option<Action> {
     match code {
-        KeyCode::Char('l') => Some(Action::Detail(DetailAction::NextTab)),
-        KeyCode::Char('h') => Some(Action::Detail(DetailAction::PrevTab)),
+        KeyCode::Char('l') => Some(Action::from(NavAction::NextTab)),
+        KeyCode::Char('h') => Some(Action::from(NavAction::PrevTab)),
         _ => None,
     }
 }
 
-const fn tab_nav(code: KeyCode) -> Option<Action> {
+fn tab_nav(code: KeyCode) -> Option<Action> {
     match code {
-        KeyCode::Right | KeyCode::Char('l') => Some(Action::Detail(DetailAction::NextTab)),
-        KeyCode::Left | KeyCode::Char('h') => Some(Action::Detail(DetailAction::PrevTab)),
+        KeyCode::Right | KeyCode::Char('l') => Some(Action::from(NavAction::NextTab)),
+        KeyCode::Left | KeyCode::Char('h') => Some(Action::from(NavAction::PrevTab)),
         _ => None,
     }
 }

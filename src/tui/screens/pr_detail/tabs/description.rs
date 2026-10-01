@@ -1,6 +1,6 @@
 use crate::{
     app::{
-        action::{Action, DetailAction},
+        action::{Action, DescriptionAction, Effect},
         store::LoadState,
     },
     domain::pr::{PrInfo, PullRequest},
@@ -95,16 +95,15 @@ pub struct Description {
 
 impl Component for Description {
     type Context<'a> = &'a PullRequest;
-    type Message = DetailAction;
+    type Message = DescriptionAction;
     fn handle_key(&self, key: KeyEvent, _: &Self::Context<'_>) -> Option<Action> {
         if matches!(key.code, KeyCode::Char('H' | 'L')) && self.max_horizontal > 0 {
-            return Some(Action::Detail(DetailAction::DescriptionHorizontal(
-                if key.code == KeyCode::Char('H') {
-                    -8
-                } else {
-                    8
-                },
-            )));
+            let delta = if key.code == KeyCode::Char('H') {
+                -8
+            } else {
+                8
+            };
+            return Some(DescriptionAction::Horizontal(delta).into());
         }
         let delta = match key.code {
             KeyCode::Char('j') | KeyCode::Down => 1,
@@ -113,15 +112,14 @@ impl Component for Description {
             KeyCode::PageUp => -crate::tui::screens::half_page(self.viewport),
             _ => return None,
         };
-        Some(Action::Detail(DetailAction::DescriptionScroll(delta)))
+        Some(DescriptionAction::Scroll(delta).into())
     }
-    fn update(&mut self, action: DetailAction, _: &Self::Context<'_>) -> Option<Action> {
+    fn update(&mut self, action: DescriptionAction, _: &Self::Context<'_>) -> Option<Effect> {
         match action {
-            DetailAction::DescriptionScroll(delta) => self.scroll = scroll(self.scroll, delta),
-            DetailAction::DescriptionHorizontal(delta) => {
+            DescriptionAction::Scroll(delta) => self.scroll = scroll(self.scroll, delta),
+            DescriptionAction::Horizontal(delta) => {
                 self.horizontal = scroll(self.horizontal, delta).min(self.max_horizontal);
             }
-            _ => {}
         }
         None
     }

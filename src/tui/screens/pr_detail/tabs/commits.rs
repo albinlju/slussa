@@ -1,6 +1,6 @@
 use crate::{
     app::{
-        action::{Action, CommitsAction},
+        action::{Action, CommitsAction, Effect},
         reviews::PendingComment,
         store::{LoadState, PrData},
     },
@@ -219,7 +219,7 @@ impl Component for CommitList {
         };
         Some(Action::Commits(action))
     }
-    fn update(&mut self, action: CommitsAction, ctx: &CommitContext<'_>) -> Option<Action> {
+    fn update(&mut self, action: CommitsAction, ctx: &CommitContext<'_>) -> Option<Effect> {
         let commits = match ctx.data.map(|d| &d.commits) {
             Some(LoadState::Loaded(c)) => c.as_slice(),
             _ => &[],
@@ -246,7 +246,7 @@ impl Component for CommitList {
         let oid = filtered.get(self.selected)?.oid.clone();
         self.open_commit = Some(oid.clone());
         self.diff = DiffViewer::default();
-        Some(Action::LoadCommitDiff {
+        Some(Effect::LoadCommitDiff {
             pr_id: ctx.pr_id,
             oid,
         })

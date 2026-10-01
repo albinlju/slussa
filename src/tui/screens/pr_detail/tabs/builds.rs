@@ -134,7 +134,8 @@ pub struct Builds {
 }
 impl crate::tui::component::Component for Builds {
     type Context<'a> = Option<&'a PrData>;
-    type Message = crate::app::action::DetailAction;
+    /// How far to scroll.
+    type Message = i16;
     fn handle_key(
         &self,
         key: crossterm::event::KeyEvent,
@@ -154,12 +155,10 @@ impl crate::tui::component::Component for Builds {
     }
     fn update(
         &mut self,
-        action: Self::Message,
+        delta: Self::Message,
         _: &Self::Context<'_>,
-    ) -> Option<crate::app::action::Action> {
-        if let crate::app::action::DetailAction::BuildsScroll(delta) = action {
-            self.scroll = crate::tui::component::scroll(self.scroll, delta);
-        }
+    ) -> Option<crate::app::action::Effect> {
+        self.scroll = crate::tui::component::scroll(self.scroll, delta);
         None
     }
     fn render(&mut self, frame: &mut Frame<'_>, area: Rect, data: &Self::Context<'_>) {

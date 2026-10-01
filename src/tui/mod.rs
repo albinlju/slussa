@@ -1,5 +1,9 @@
 use crate::{
-    app::{action::Action, navigation::Screen, state::AppState},
+    app::{
+        action::{Action, Effect},
+        navigation::Screen,
+        state::AppState,
+    },
     tui::components::search_input::SearchInput,
 };
 use component::Component;
@@ -184,8 +188,14 @@ impl Ui {
         action: Action,
         store: &crate::app::store::Store,
         screen: Screen,
-    ) -> Option<Action> {
+    ) -> Option<Effect> {
+        let detail_ctx = pr_detail::DetailContext {
+            store,
+            screen,
+            refreshing: store.refreshing(screen),
+        };
         match action {
+            Action::Effect(effect) => Some(effect),
             Action::Paste(text) => {
                 if let Screen::Detail { pr_id, .. } = screen
                     && !store.operations.contains_key(&pr_id)
@@ -210,23 +220,20 @@ impl Ui {
                 action,
                 &pr_list::ListContext::from_store(store, self.list.filter, screen),
             ),
-            Action::Search(action) if screen == Screen::List => {
-                if !self.list.filter_picker_open {
-                    self.list.update_search(action);
+            Action::Search(action) => {
+                match screen {
+                    Screen::List => {
+                        if !self.list.filter_picker_open {
+                            self.list.update_search(action);
+                        }
+                    }
+                    Screen::Detail { .. } => self.detail.update_search(action, &detail_ctx),
                 }
                 None
             }
-            Action::Detail(_) | Action::Diff(_) | Action::Commits(_) | Action::Search(_) => {
-                self.detail.update_action(
-                    action,
-                    &pr_detail::DetailContext {
-                        store,
-                        screen,
-                        refreshing: store.refreshing(screen),
-                    },
-                )
-            }
-            effect => Some(effect),
+            Action::Detail(action) => self.detail.update(action, &detail_ctx),
+            Action::Diff(action) => self.detail.update_diff(action, &detail_ctx),
+            Action::Commits(action) => self.detail.update_commits(action, &detail_ctx),
         }
     }
 }

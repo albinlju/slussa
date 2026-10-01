@@ -1,5 +1,5 @@
 use crate::{
-    app::action::{Action, DetailAction},
+    app::action::{Action, Effect, ErrorAction},
     tui::{
         component::{Component, saturating_u16},
         theme, widgets,
@@ -36,26 +36,29 @@ impl ErrorDialog {
 
 impl Component for ErrorDialog {
     type Context<'a> = &'a str;
-    type Message = DetailAction;
+    type Message = ErrorAction;
     fn handle_key(&self, key: crossterm::event::KeyEvent, _: &Self::Context<'_>) -> Option<Action> {
         use ratatui::crossterm::event::KeyCode;
         let action = match key.code {
-            KeyCode::Esc | KeyCode::Enter => DetailAction::DismissError,
-            KeyCode::Char('j') | KeyCode::Down => DetailAction::ErrorScroll(1),
-            KeyCode::Char('k') | KeyCode::Up => DetailAction::ErrorScroll(-1),
-            KeyCode::PageDown => DetailAction::ErrorScroll(5),
-            KeyCode::PageUp => DetailAction::ErrorScroll(-5),
+            KeyCode::Esc | KeyCode::Enter => ErrorAction::Dismiss,
+            KeyCode::Char('j') | KeyCode::Down => ErrorAction::Scroll(1),
+            KeyCode::Char('k') | KeyCode::Up => ErrorAction::Scroll(-1),
+            KeyCode::PageDown => ErrorAction::Scroll(5),
+            KeyCode::PageUp => ErrorAction::Scroll(-5),
             _ => return None,
         };
-        Some(Action::Detail(action))
+        Some(action.into())
     }
-    fn update(&mut self, action: DetailAction, _: &Self::Context<'_>) -> Option<Action> {
-        if let DetailAction::ErrorScroll(delta) = action {
-            self.scroll = crate::tui::component::scroll(self.scroll, delta).min(self.max_scroll);
-            None
-        } else {
-            Some(Action::Detail(action))
+    fn update(&mut self, action: ErrorAction, _: &Self::Context<'_>) -> Option<Effect> {
+        match action {
+            ErrorAction::Scroll(delta) => {
+                self.scroll =
+                    crate::tui::component::scroll(self.scroll, delta).min(self.max_scroll);
+            }
+            // Dismissing is the screen's: the error itself is in the store.
+            ErrorAction::Dismiss => {}
         }
+        None
     }
     fn render(&mut self, frame: &mut Frame<'_>, area: Rect, message: &Self::Context<'_>) {
         self.render(frame, message, area);

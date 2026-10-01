@@ -1,5 +1,5 @@
 use crate::{
-    app::action::{Action, DetailAction},
+    app::action::{Action, ConfirmAction, Effect},
     tui::{
         component::{Component, step_index},
         theme,
@@ -98,16 +98,12 @@ fn render(
     crate::tui::widgets::dialog::choices(frame, area, "Confirm", lines, selected_line);
 }
 
-const fn key_to_action(code: KeyCode) -> Option<Action> {
+const fn key_to_action(code: KeyCode) -> Option<ConfirmAction> {
     match code {
-        KeyCode::Left | KeyCode::Up | KeyCode::Char('h' | 'k') => {
-            Some(Action::Detail(DetailAction::ConfirmMove(-1)))
-        }
-        KeyCode::Right | KeyCode::Down | KeyCode::Char('j' | 'l') => {
-            Some(Action::Detail(DetailAction::ConfirmMove(1)))
-        }
-        KeyCode::Enter => Some(Action::Detail(DetailAction::SubmitConfirm)),
-        KeyCode::Esc => Some(Action::Detail(DetailAction::CloseConfirm)),
+        KeyCode::Left | KeyCode::Up | KeyCode::Char('h' | 'k') => Some(ConfirmAction::Move(-1)),
+        KeyCode::Right | KeyCode::Down | KeyCode::Char('j' | 'l') => Some(ConfirmAction::Move(1)),
+        KeyCode::Enter => Some(ConfirmAction::Accept),
+        KeyCode::Esc => Some(ConfirmAction::Close),
         _ => None,
     }
 }
@@ -157,18 +153,17 @@ impl ConfirmDialog {
 
 impl Component for ConfirmDialog {
     type Context<'a> = ();
-    type Message = DetailAction;
+    type Message = ConfirmAction;
     fn handle_key(&self, key: KeyEvent, (): &Self::Context<'_>) -> Option<Action> {
-        key_to_action(key.code)
+        key_to_action(key.code).map(Action::from)
     }
-    fn update(&mut self, action: DetailAction, (): &()) -> Option<Action> {
+    fn update(&mut self, action: ConfirmAction, (): &()) -> Option<Effect> {
         match action {
-            DetailAction::ConfirmMove(delta) => {
-                self.cursor = step_index(self.cursor, delta, 2);
-                None
-            }
-            other => Some(Action::Detail(other)),
+            ConfirmAction::Move(delta) => self.cursor = step_index(self.cursor, delta, 2),
+            // Closing and accepting are the screen's: it holds the dialog.
+            ConfirmAction::Accept | ConfirmAction::Close => {}
         }
+        None
     }
     fn render(&mut self, frame: &mut Frame<'_>, area: Rect, (): &()) {
         render(

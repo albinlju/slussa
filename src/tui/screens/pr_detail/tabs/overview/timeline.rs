@@ -1,6 +1,6 @@
 use crate::{
     app::{
-        action::{Action, DetailAction},
+        action::{Action, Effect, TimelineAction},
         store::{LoadState, PrData},
     },
     domain::{
@@ -440,42 +440,33 @@ pub struct Timeline {
 
 impl Component for Timeline {
     type Context<'a> = TimelineContext<'a>;
-    type Message = DetailAction;
+    type Message = TimelineAction;
     fn handle_key(&self, key: KeyEvent, _: &Self::Context<'_>) -> Option<Action> {
-        if key
+        let control = key
             .modifiers
-            .contains(crossterm::event::KeyModifiers::CONTROL)
-        {
-            match key.code {
-                KeyCode::Char('j') => {
-                    return Some(Action::Detail(DetailAction::OverviewSubMove(1)));
-                }
-                KeyCode::Char('k') => {
-                    return Some(Action::Detail(DetailAction::OverviewSubMove(-1)));
-                }
-                _ => {}
+            .contains(crossterm::event::KeyModifiers::CONTROL);
+        let action = match key.code {
+            KeyCode::Char('j') if control => TimelineAction::SubMove(1),
+            KeyCode::Char('k') if control => TimelineAction::SubMove(-1),
+            KeyCode::Char('j') | KeyCode::Down => TimelineAction::Move(1),
+            KeyCode::Char('k') | KeyCode::Up => TimelineAction::Move(-1),
+            KeyCode::PageDown => {
+                TimelineAction::Scroll(crate::tui::screens::half_page(self.viewport))
             }
-        }
-
-        let delta = match key.code {
-            KeyCode::Char('j') | KeyCode::Down => 1,
-            KeyCode::Char('k') | KeyCode::Up => -1,
-            KeyCode::PageDown | KeyCode::PageUp => {
-                let delta = crate::tui::screens::half_page(self.viewport)
-                    * if key.code == KeyCode::PageUp { -1 } else { 1 };
-                return Some(Action::Detail(DetailAction::OverviewScroll(delta)));
+            KeyCode::PageUp => {
+                TimelineAction::Scroll(-crate::tui::screens::half_page(self.viewport))
             }
             _ => return None,
         };
-        Some(Action::Detail(DetailAction::OverviewMove(delta)))
+        Some(action.into())
     }
-    fn update(&mut self, action: DetailAction, _: &Self::Context<'_>) -> Option<Action> {
+    fn update(&mut self, action: TimelineAction, _: &Self::Context<'_>) -> Option<Effect> {
         match action {
-            DetailAction::OverviewScroll(delta) => {
+            TimelineAction::Scroll(delta) => {
                 self.scroll = scroll(self.scroll, delta);
                 self.reveal_selection = false;
             }
-            DetailAction::OverviewMove(delta) => {
+            TimelineAction::Move(delta) => {
                 if self.item_count <= 1 {
                     self.scroll = scroll(self.scroll, delta);
                 } else {
@@ -489,7 +480,7 @@ impl Component for Timeline {
                     }
                 }
             }
-            DetailAction::OverviewSubMove(delta) => {
+            TimelineAction::SubMove(delta) => {
                 let next = step_index(self.sub, delta, self.block_len);
                 if next != self.sub {
                     self.selected = None;
@@ -498,7 +489,6 @@ impl Component for Timeline {
                 self.reveal_selection = next != self.sub;
                 self.sub = next;
             }
-            _ => {}
         }
         None
     }

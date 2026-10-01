@@ -1,5 +1,5 @@
 use crate::{
-    app::action::Action,
+    app::action::{Action, Effect},
     tui::{
         component::{Component, saturating_u16, scroll},
         theme, widgets,
@@ -35,7 +35,7 @@ impl Component for HelpDialog {
         };
         Some(Action::HelpScroll(delta))
     }
-    fn update(&mut self, delta: i16, _: &Self::Context<'_>) -> Option<Action> {
+    fn update(&mut self, delta: i16, _: &Self::Context<'_>) -> Option<Effect> {
         self.scroll = scroll(self.scroll, delta).min(self.max_scroll);
         None
     }

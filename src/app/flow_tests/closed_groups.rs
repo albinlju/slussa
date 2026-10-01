@@ -44,7 +44,7 @@ fn merged_cursor(app: &App) -> Option<String> {
 
 fn switch_to(app: &mut App, filter: StatusFilter) {
     app.state.ui.list.filter = filter;
-    app.apply(Action::List(ListAction::FilterChanged));
+    app.apply(Action::Effect(Effect::LoadView));
 }
 
 /// Start the app the way `run` does, then look at the merged PRs.

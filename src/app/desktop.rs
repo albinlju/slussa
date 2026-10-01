@@ -1,7 +1,7 @@
 //! Desktop integration uses argument arrays and stdin, never interpolated shell commands.
 use super::{
     App,
-    action::{Action, LinkAction},
+    action::{LinkAction, TaskResult},
     store::{LoadState, Notice},
 };
 use std::{
@@ -41,7 +41,7 @@ impl App {
             ),
             false,
         ));
-        let tx = self.action_tx.clone();
+        let tx = self.results_tx.clone();
         tokio::spawn(async move {
             let result = tokio::task::spawn_blocking(move || perform(kind, &url)).await;
             let result = match result {
@@ -49,7 +49,7 @@ impl App {
                 Ok(Err(error)) => Err(format!("PR #{pr_id}: {error}")),
                 Err(_) => Err(format!("PR #{pr_id}: desktop operation failed")),
             };
-            let _ = tx.send(Action::LinkFinished(result));
+            let _ = tx.send(TaskResult::LinkFinished(result));
         });
     }
 }

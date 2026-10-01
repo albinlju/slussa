@@ -95,7 +95,9 @@ fn commit_drilldown_uses_an_independent_diff_instance() {
     };
     data.commit_diffs
         .insert("abcdef123456".into(), LoadState::Loaded(diff.clone()));
-    app.apply(Action::Detail(DetailAction::SelectTab(DetailTab::Commits)));
+    app.apply(Action::Detail(DetailAction::Nav(NavAction::SelectTab(
+        DetailTab::Commits,
+    ))));
     press(&mut app, KeyCode::Enter);
     assert_eq!(
         app.state.ui.detail.commits.open_commit.as_deref(),
@@ -126,7 +128,7 @@ fn commit_component_emits_a_pr_scoped_load_request() {
         .commits
         .update(CommitsAction::Open, &ctx);
     assert!(
-        matches!(effect, Some(Action::LoadCommitDiff { pr_id: 42, oid }) if oid == "abcdef123456")
+        matches!(effect, Some(Effect::LoadCommitDiff { pr_id: 42, oid }) if oid == "abcdef123456")
     );
     assert!(
         app.state
@@ -170,7 +172,10 @@ async fn rapid_keys_open_the_latest_selection_and_capture_editor_text() {
         KeyCode::Char('c'),
         KeyCode::Char('q'),
     ] {
-        assert!(!app.handle_key(KeyEvent::new(key, KeyModifiers::NONE)));
+        assert_eq!(
+            app.handle_key(KeyEvent::new(key, KeyModifiers::NONE)),
+            Next::Continue
+        );
     }
     assert!(matches!(app.state.screen, Screen::Detail { pr_id: 44, .. }));
     assert_eq!(app.state.ui.detail.editor.draft.as_ref().unwrap().text, "q");
@@ -209,10 +214,10 @@ fn invalid_link_is_rejected_before_starting_desktop_work() {
     if let LoadState::Loaded(prs) = &mut app.state.store.cache.prs {
         prs[0].url = Some("file:///tmp/local".into());
     }
-    app.apply(Action::PrLink {
+    app.apply(Action::Effect(Effect::PrLink {
         pr_id: 42,
         kind: LinkAction::Open,
-    });
+    }));
     assert!(!app.state.store.link_pending);
     assert!(app.state.store.notice.as_ref().unwrap().error);
     assert!(app.state.store.operations.is_empty());
@@ -221,14 +226,14 @@ fn invalid_link_is_rejected_before_starting_desktop_work() {
 #[tokio::test(flavor = "current_thread")]
 async fn link_completion_keeps_navigation_and_reports_failure_without_blocking_pr_work() {
     let mut app = app();
-    app.apply(Action::PrLink {
+    app.apply(Action::Effect(Effect::PrLink {
         pr_id: 42,
         kind: LinkAction::Copy,
-    });
+    }));
     assert!(app.state.store.link_pending);
     detail(&mut app, DetailTab::Overview);
-    app.apply(Action::LinkFinished(Err(
-        "PR #42: clipboard unavailable".into()
+    app.apply_result(TaskResult::LinkFinished(Err(
+        "PR #42: clipboard unavailable".into(),
     )));
     assert!(!app.state.store.link_pending);
     assert!(app.state.store.notice.as_ref().unwrap().error);
@@ -257,7 +262,7 @@ fn refreshed_lists_keep_pr_and_commit_identity() {
     let mut new = prs[0].clone();
     new.id = 44;
     prs.insert(0, new);
-    app.apply(Action::Loaded(LoadedAction::Prs {
+    app.apply_result(TaskResult::Loaded(LoadedAction::Prs {
         group: crate::domain::pr::PrGroup::Open,
         after: None,
         result: Ok(crate::domain::pr::PrBatch { prs, more: None }),
@@ -276,7 +281,7 @@ fn refreshed_lists_keep_pr_and_commit_identity() {
     let mut new = commits[0].clone();
     new.oid = "new".into();
     commits.insert(0, new);
-    app.apply(Action::Loaded(LoadedAction::Commits(42, Ok(commits))));
+    app.apply_result(TaskResult::Loaded(LoadedAction::Commits(42, Ok(commits))));
     assert_eq!(app.state.ui.detail.commits.selected, 2);
 }
 
@@ -295,7 +300,7 @@ fn returning_to_a_pr_restores_its_tab_focus_and_search() {
         .cache
         .details
         .insert(43, other.store.cache.details.remove(&42).unwrap());
-    app.apply(Action::Navigate(Screen::List));
+    app.apply(Action::Effect(Effect::Navigate(Screen::List)));
     app.apply(Action::List(ListAction::OpenPr(43)));
     assert_eq!(
         app.state.screen,

@@ -1,5 +1,5 @@
 use crate::{
-    app::action::{Action, DetailAction},
+    app::action::{Action, Effect, ReviewAction},
     tui::{
         component::{Component, saturating_u16, step_index},
         theme,
@@ -162,16 +162,12 @@ fn render(frame: &mut Frame<'_>, ctx: &ReviewContext<'_>, dialog: &mut ReviewDia
     );
 }
 
-const fn key_to_action(code: KeyCode) -> Option<Action> {
+const fn key_to_action(code: KeyCode) -> Option<ReviewAction> {
     match code {
-        KeyCode::Left | KeyCode::Up | KeyCode::Char('h' | 'k') => {
-            Some(Action::Detail(DetailAction::ReviewMove(-1)))
-        }
-        KeyCode::Right | KeyCode::Down | KeyCode::Char('j' | 'l') => {
-            Some(Action::Detail(DetailAction::ReviewMove(1)))
-        }
-        KeyCode::Enter => Some(Action::Detail(DetailAction::ReviewSelect)),
-        KeyCode::Esc => Some(Action::Detail(DetailAction::CloseReviewPicker)),
+        KeyCode::Left | KeyCode::Up | KeyCode::Char('h' | 'k') => Some(ReviewAction::Move(-1)),
+        KeyCode::Right | KeyCode::Down | KeyCode::Char('j' | 'l') => Some(ReviewAction::Move(1)),
+        KeyCode::Enter => Some(ReviewAction::Select),
+        KeyCode::Esc => Some(ReviewAction::Close),
         _ => None,
     }
 }
@@ -214,32 +210,30 @@ impl ReviewDialog {
 
 impl Component for ReviewDialog {
     type Context<'a> = ReviewContext<'a>;
-    type Message = DetailAction;
+    type Message = ReviewAction;
     fn handle_key(&self, key: KeyEvent, ctx: &Self::Context<'_>) -> Option<Action> {
         if key.code == KeyCode::Tab && ctx.pending.is_some_and(|r| !r.comments.is_empty()) {
-            return Some(Action::Detail(DetailAction::ReviewPreview));
+            return Some(ReviewAction::Preview.into());
         }
         if self.preview && key.code == KeyCode::Enter {
             return None;
         }
-        key_to_action(key.code)
+        key_to_action(key.code).map(Action::from)
     }
-    fn update(&mut self, action: DetailAction, ctx: &ReviewContext<'_>) -> Option<Action> {
+    fn update(&mut self, action: ReviewAction, ctx: &ReviewContext<'_>) -> Option<Effect> {
         match action {
-            DetailAction::ReviewPreview => {
-                self.preview = !self.preview;
-                None
-            }
-            DetailAction::ReviewMove(delta) => {
+            ReviewAction::Preview => self.preview = !self.preview,
+            ReviewAction::Move(delta) => {
                 if self.preview {
                     self.scroll = crate::tui::component::scroll(self.scroll, delta);
                 } else {
                     self.cursor = step_index(self.cursor, delta, ctx.options.len());
                 }
-                None
             }
-            other => Some(Action::Detail(other)),
+            // Closing and choosing are the screen's: it holds the dialog.
+            ReviewAction::Select | ReviewAction::Close => {}
         }
+        None
     }
     fn render(&mut self, frame: &mut Frame<'_>, area: Rect, ctx: &ReviewContext<'_>) {
         render(frame, ctx, self, area);

@@ -1,5 +1,5 @@
 use crate::{
-    app::action::{Action, SearchAction},
+    app::action::{Action, Effect, SearchAction},
     domain::{commit::Commit, pr::PullRequest},
     tui::{component::Component, widgets},
 };
@@ -58,7 +58,7 @@ impl Component for SearchInput {
             _ => None,
         }
     }
-    fn update(&mut self, action: SearchAction, _: &SearchContext) -> Option<Action> {
+    fn update(&mut self, action: SearchAction, _: &SearchContext) -> Option<Effect> {
         match action {
             SearchAction::Open => self.open = true,
             SearchAction::Confirm => self.open = false,

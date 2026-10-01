@@ -1,7 +1,7 @@
 pub use crate::app::reviews::CommentDraft;
 use crate::{
     app::{
-        action::{Action, DetailAction},
+        action::{Action, EditorAction, Effect},
         reviews::CommentTarget,
     },
     tui::{
@@ -92,44 +92,44 @@ impl CommentEditor {
 }
 impl Component for CommentEditor {
     type Context<'a> = bool;
-    type Message = DetailAction;
+    type Message = EditorAction;
     fn handle_key(&self, key: KeyEvent, _: &bool) -> Option<Action> {
         if !self.is_open() {
             return None;
         }
         if self.discard_confirm {
             return match key.code {
-                KeyCode::Enter => Some(Action::Detail(DetailAction::CommentDiscardConfirm)),
-                KeyCode::Esc => Some(Action::Detail(DetailAction::CommentKeep)),
+                KeyCode::Enter => Some(EditorAction::DiscardConfirm.into()),
+                KeyCode::Esc => Some(EditorAction::Keep.into()),
                 _ => None,
             };
         }
         let control = key.modifiers.contains(KeyModifiers::CONTROL);
         let action = match key.code {
-            KeyCode::Char('s') if control => DetailAction::CommentSubmit,
-            KeyCode::Char('x') if control => DetailAction::CommentDiscard,
+            KeyCode::Char('s') if control => EditorAction::Submit,
+            KeyCode::Char('x') if control => EditorAction::Discard,
             KeyCode::Char(c) if !control && !key.modifiers.contains(KeyModifiers::ALT) => {
-                DetailAction::CommentType(c)
+                EditorAction::Type(c)
             }
-            KeyCode::Enter => DetailAction::CommentType('\n'),
-            KeyCode::Left => DetailAction::CommentMove(-1),
-            KeyCode::Right => DetailAction::CommentMove(1),
-            KeyCode::Up => DetailAction::CommentVertical(-1),
-            KeyCode::Down => DetailAction::CommentVertical(1),
-            KeyCode::Home => DetailAction::CommentHome,
-            KeyCode::End => DetailAction::CommentEnd,
-            KeyCode::Delete => DetailAction::CommentDelete,
-            KeyCode::Backspace => DetailAction::CommentBackspace,
-            KeyCode::Esc => DetailAction::CommentCancel,
+            KeyCode::Enter => EditorAction::Type('\n'),
+            KeyCode::Left => EditorAction::Move(-1),
+            KeyCode::Right => EditorAction::Move(1),
+            KeyCode::Up => EditorAction::Vertical(-1),
+            KeyCode::Down => EditorAction::Vertical(1),
+            KeyCode::Home => EditorAction::Home,
+            KeyCode::End => EditorAction::End,
+            KeyCode::Delete => EditorAction::Delete,
+            KeyCode::Backspace => EditorAction::Backspace,
+            KeyCode::Esc => EditorAction::Cancel,
             _ => return None,
         };
-        Some(Action::Detail(action))
+        Some(action.into())
     }
-    fn update(&mut self, action: DetailAction, _: &bool) -> Option<Action> {
+    fn update(&mut self, action: EditorAction, _: &bool) -> Option<Effect> {
         let pos = self.position();
         match action {
-            DetailAction::CommentType(c) => self.insert_text(&c.to_string()),
-            DetailAction::CommentMove(delta) => {
+            EditorAction::Type(c) => self.insert_text(&c.to_string()),
+            EditorAction::Move(delta) => {
                 if let Some(draft) = &self.draft {
                     self.cursor = Some(if delta < 0 {
                         draft.text[..pos]
@@ -141,13 +141,13 @@ impl Component for CommentEditor {
                     });
                 }
             }
-            DetailAction::CommentVertical(delta) => self.move_vertical(delta),
-            DetailAction::CommentHome => {
+            EditorAction::Vertical(delta) => self.move_vertical(delta),
+            EditorAction::Home => {
                 if let Some(draft) = &self.draft {
                     self.cursor = Some(draft.text[..pos].rfind('\n').map_or(0, |i| i + 1));
                 }
             }
-            DetailAction::CommentEnd => {
+            EditorAction::End => {
                 if let Some(draft) = &self.draft {
                     self.cursor = Some(
                         draft.text[pos..]
@@ -156,7 +156,7 @@ impl Component for CommentEditor {
                     );
                 }
             }
-            DetailAction::CommentBackspace => {
+            EditorAction::Backspace => {
                 if let Some(draft) = &mut self.draft
                     && let Some((prev, _)) = draft.text[..pos].char_indices().next_back()
                 {
@@ -164,23 +164,24 @@ impl Component for CommentEditor {
                     self.cursor = Some(prev);
                 }
             }
-            DetailAction::CommentDelete => {
+            EditorAction::Delete => {
                 if let Some(draft) = &mut self.draft
                     && pos < draft.text.len()
                 {
                     draft.text.remove(pos);
                 }
             }
-            DetailAction::CommentCancel => {
+            EditorAction::Cancel => {
                 self.suspended = true;
                 if self.draft.as_ref().is_some_and(|d| d.text.is_empty()) {
                     self.draft = None;
                 }
             }
-            DetailAction::CommentDiscard => self.discard_confirm = true,
-            DetailAction::CommentKeep => self.discard_confirm = false,
-            DetailAction::CommentDiscardConfirm => *self = Self::default(),
-            other => return Some(Action::Detail(other)),
+            EditorAction::Discard => self.discard_confirm = true,
+            EditorAction::Keep => self.discard_confirm = false,
+            EditorAction::DiscardConfirm => *self = Self::default(),
+            // Sending is the screen's: it knows the PR the draft belongs to.
+            EditorAction::Submit => {}
         }
         None
     }
@@ -399,6 +400,7 @@ fn visual_lines(text: &str, cursor: usize, width: usize) -> (Vec<Line<'static>>,
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::app::action::DetailAction;
     fn editor(text: &str) -> CommentEditor {
         CommentEditor {
             draft: Some(CommentDraft {
@@ -411,40 +413,42 @@ mod tests {
     #[test]
     fn multiline_editing_and_paste_do_not_submit_or_trigger_shortcuts() {
         let mut e = editor("å🦀");
-        e.update(DetailAction::CommentMove(-1), &false);
+        e.update(EditorAction::Move(-1), &false);
         e.insert_text("x\r\ny\tq\u{1b}");
         assert_eq!(e.draft.as_ref().unwrap().text, "åx\ny    q🦀");
-        e.update(DetailAction::CommentDelete, &false);
-        e.update(DetailAction::CommentHome, &false);
-        e.update(DetailAction::CommentVertical(-1), &false);
+        e.update(EditorAction::Delete, &false);
+        e.update(EditorAction::Home, &false);
+        e.update(EditorAction::Vertical(-1), &false);
         e.insert_text("A");
         assert_eq!(e.draft.as_ref().unwrap().text, "Aåx\ny    q");
         assert!(matches!(
             e.handle_key(KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE), &false),
-            Some(Action::Detail(DetailAction::CommentType('\n')))
+            Some(Action::Detail(DetailAction::Editor(EditorAction::Type(
+                '\n'
+            ))))
         ));
         assert!(matches!(
             e.handle_key(
                 KeyEvent::new(KeyCode::Char('s'), KeyModifiers::CONTROL),
                 &false
             ),
-            Some(Action::Detail(DetailAction::CommentSubmit))
+            Some(Action::Detail(DetailAction::Editor(EditorAction::Submit)))
         ));
     }
     #[test]
     fn escape_keeps_work_and_discard_requires_confirmation() {
         let mut e = editor("keep");
-        e.update(DetailAction::CommentCancel, &false);
+        e.update(EditorAction::Cancel, &false);
         assert!(!e.is_open());
         assert_eq!(e.draft.as_ref().unwrap().text, "keep");
         e.suspended = false;
-        e.update(DetailAction::CommentDiscard, &false);
+        e.update(EditorAction::Discard, &false);
         e.insert_text("ignored");
         assert_eq!(e.draft.as_ref().unwrap().text, "keep");
-        e.update(DetailAction::CommentKeep, &false);
+        e.update(EditorAction::Keep, &false);
         assert!(e.is_open());
-        e.update(DetailAction::CommentDiscard, &false);
-        e.update(DetailAction::CommentDiscardConfirm, &false);
+        e.update(EditorAction::Discard, &false);
+        e.update(EditorAction::DiscardConfirm, &false);
         assert!(e.draft.is_none());
     }
     #[test]

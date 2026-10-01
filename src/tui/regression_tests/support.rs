@@ -3,7 +3,7 @@
 pub(super) use crate::tui::*;
 pub(super) use crate::{
     app::{
-        action::{CommitsAction, DetailAction, DiffAction, ListAction},
+        action::*,
         navigation::Screen,
         reviews::CommentTarget,
         state::*,
@@ -110,7 +110,7 @@ pub(super) fn rendered_text(terminal: &Terminal<TestBackend>) -> String {
 pub(super) fn local_key(state: &mut AppState, code: KeyCode) {
     if let Some(action) = key_to_action(state, KeyEvent::new(code, KeyModifiers::NONE)) {
         let effect = state.ui.update(action, &state.store, state.screen);
-        if let Some(Action::Navigate(screen)) = effect {
+        if let Some(Effect::Navigate(screen)) = effect {
             state.screen = screen;
         }
     }

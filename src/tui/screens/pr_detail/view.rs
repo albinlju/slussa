@@ -299,26 +299,46 @@ impl DetailView<'_> {
 }
 
 impl DetailView<'_> {
+    /// Whether the provider supports what the action asks for. An action that
+    /// needs no capability is always supported.
     pub fn supports_action(&self, action: crate::app::action::DetailAction) -> bool {
-        use crate::{app::action::DetailAction as A, domain::capabilities::Feature as F};
+        use crate::{
+            app::action::{DetailAction as A, MergeAction, NavAction, PrAction, ReviewAction},
+            domain::capabilities::Feature as F,
+        };
         let caps = &self.store.capabilities;
         match action {
-            A::OpenReviewPicker
-            | A::ReviewSelect
-            | A::StartReview
-            | A::FinishReview
-            | A::AbandonReview
-            | A::RemovePendingComment => caps.reviews(),
-            A::OpenMergePicker | A::MergeSelect => !caps.merge_strategies.is_empty(),
-            A::OpenDecline => caps.supports(F::ClosePr),
-            A::OpenReopen => caps.supports(F::ReopenPr),
-            A::OpenComment => self.detail.editor.draft.is_some() || self.comment_target().is_some(),
-            A::OpenReply => self.reply_target().is_some(),
-            A::EditComment => caps.supports(F::EditComments),
-            A::DeleteComment => caps.supports(F::DeleteComments),
-            A::ResolveThread => caps.supports(F::ResolveThreads),
-            A::SelectTab(tab) => tab.supported_by(caps),
-            _ => true,
+            A::Pr(action) => match action {
+                PrAction::OpenReviewPicker
+                | PrAction::StartReview
+                | PrAction::FinishReview
+                | PrAction::AbandonReview
+                | PrAction::RemovePendingComment => caps.reviews(),
+                PrAction::OpenMergePicker => !caps.merge_strategies.is_empty(),
+                PrAction::OpenDecline => caps.supports(F::ClosePr),
+                PrAction::OpenReopen => caps.supports(F::ReopenPr),
+                PrAction::OpenComment => {
+                    self.detail.editor.draft.is_some() || self.comment_target().is_some()
+                }
+                PrAction::OpenReply => self.reply_target().is_some(),
+                PrAction::EditComment => caps.supports(F::EditComments),
+                PrAction::DeleteComment => caps.supports(F::DeleteComments),
+                PrAction::ResolveThread => caps.supports(F::ResolveThreads),
+            },
+            A::Review(ReviewAction::Select) => caps.reviews(),
+            A::Merge(MergeAction::Select) => !caps.merge_strategies.is_empty(),
+            A::Nav(NavAction::SelectTab(tab)) => tab.supported_by(caps),
+            A::Review(ReviewAction::Move(_) | ReviewAction::Preview | ReviewAction::Close)
+            | A::Merge(MergeAction::Move(_) | MergeAction::Close)
+            | A::Nav(
+                NavAction::Back | NavAction::NextTab | NavAction::PrevTab | NavAction::ToggleHelp,
+            )
+            | A::Description(_)
+            | A::BuildsScroll(_)
+            | A::Timeline(_)
+            | A::Error(_)
+            | A::Confirm(_)
+            | A::Editor(_) => true,
         }
     }
 }

@@ -28,9 +28,9 @@ fn queued_review_survives_navigation_without_crossing_prs() {
     app.state.store.cache.details.insert(43, data);
     app.apply(Action::List(ListAction::OpenPr(43)));
     assert!(app.state.detail_view().pending_review().is_none());
-    app.apply(Action::Detail(DetailAction::StartReview));
+    app.apply(Action::Detail(DetailAction::Pr(PrAction::StartReview)));
     assert!(app.state.store.reviews[&43].comments.is_empty());
-    app.apply(Action::Detail(DetailAction::AbandonReview));
+    app.apply(Action::Detail(DetailAction::Pr(PrAction::AbandonReview)));
     assert_eq!(app.state.store.reviews[&42].comments.len(), 1);
 }
 
@@ -113,16 +113,16 @@ fn review_and_merge_dialogs_both_suspend_background_refresh() {
     let mut app = app();
     detail(&mut app, DetailTab::Overview);
     for action in [
-        DetailAction::OpenReviewPicker,
-        DetailAction::OpenMergePicker,
+        DetailAction::Pr(PrAction::OpenReviewPicker),
+        DetailAction::Pr(PrAction::OpenMergePicker),
     ] {
         app.apply(Action::Detail(action));
         assert!(app.state.ui.modal_open(&app.state.store, app.state.screen));
         // A regression would attempt to spawn a provider task without a runtime.
-        app.apply(Action::Refresh);
+        app.apply(Action::Effect(Effect::Refresh));
         assert!(app.state.store.fetches.is_empty());
-        app.apply(Action::Detail(DetailAction::CloseReviewPicker));
-        app.apply(Action::Detail(DetailAction::CloseMergePicker));
+        app.apply(Action::Detail(DetailAction::Review(ReviewAction::Close)));
+        app.apply(Action::Detail(DetailAction::Merge(MergeAction::Close)));
     }
 }
 
@@ -133,25 +133,27 @@ fn detail_emits_resolved_commands_and_retains_submission_payload() {
     press(&mut app, KeyCode::Char('c'));
     press(&mut app, KeyCode::Char('å'));
     let command = app.state.ui.update(
-        Action::Detail(DetailAction::CommentSubmit),
+        Action::Detail(DetailAction::Editor(EditorAction::Submit)),
         &app.state.store,
         app.state.screen,
     );
-    assert!(matches!(command, Some(Action::Command {
+    assert!(matches!(command, Some(Effect::Command {
         pr_id: 42, command: Command::SubmitComment { target: CommentTarget::Pr, text }
     }) if text == "å"));
     assert_eq!(app.state.ui.detail.editor.draft.as_ref().unwrap().text, "å");
     press(&mut app, KeyCode::Esc);
-    app.apply(Action::Detail(DetailAction::OpenDecline));
-    app.apply(Action::Detail(DetailAction::ConfirmMove(-1)));
+    app.apply(Action::Detail(DetailAction::Pr(PrAction::OpenDecline)));
+    app.apply(Action::Detail(DetailAction::Confirm(ConfirmAction::Move(
+        -1,
+    ))));
     let command = app.state.ui.update(
-        Action::Detail(DetailAction::SubmitConfirm),
+        Action::Detail(DetailAction::Confirm(ConfirmAction::Accept)),
         &app.state.store,
         app.state.screen,
     );
     assert!(matches!(
         command,
-        Some(Action::Command {
+        Some(Effect::Command {
             pr_id: 42,
             command: Command::Decline
         })
