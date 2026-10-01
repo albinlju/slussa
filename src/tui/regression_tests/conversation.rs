@@ -338,3 +338,55 @@ fn overview_reveals_selected_reply_and_allows_scrolling_long_text() {
         Some(11)
     );
 }
+
+#[test]
+fn a_thread_taller_than_the_diff_pane_is_shown_from_its_first_row() {
+    use crate::domain::comment::{Comment, CommentThread, ThreadAnchor};
+    let mut state = fixture();
+    state.screen = Screen::Detail {
+        pr_id: 42,
+        tab: DetailTab::Diff,
+    };
+    let paragraphs: Vec<String> = (1..=30).map(|n| format!("Paragraph {n}.")).collect();
+    state.store.cache.details.get_mut(&42).unwrap().activity = LoadState::Loaded(Activity {
+        comments: vec![],
+        events: vec![],
+        threads: vec![CommentThread {
+            comments: vec![Comment {
+                id: Some(10),
+                author: User {
+                    username: "alice".into(),
+                },
+                content: format!("TOP_OF_THREAD\n\n{}", paragraphs.join("\n\n")),
+                created: chrono::Utc::now(),
+                reactions: vec![],
+                reply_to: Some(10),
+            }],
+            reply_to: Some(10),
+            anchor: Some(ThreadAnchor {
+                revision: None,
+                path: "src/main.rs".into(),
+                line: Some(1),
+                old_line: None,
+                resolved: false,
+                node_id: Some("thread-10".into()),
+            }),
+        }],
+    });
+    let mut terminal = Terminal::new(TestBackend::new(100, 20)).unwrap();
+    terminal.draw(|frame| render(frame, &mut state)).unwrap();
+    // Into the file's code, then down to the thread under its line.
+    local_key(&mut state, KeyCode::Char('j'));
+    terminal.draw(|frame| render(frame, &mut state)).unwrap();
+    local_key(&mut state, KeyCode::Enter);
+    terminal.draw(|frame| render(frame, &mut state)).unwrap();
+    for _ in 0..2 {
+        local_key(&mut state, KeyCode::Char('j'));
+        terminal.draw(|frame| render(frame, &mut state)).unwrap();
+    }
+    assert_eq!(state.ui.detail.diff.pane_reply, Some(10), "on the thread");
+
+    let text = rendered_text(&terminal);
+    assert!(text.contains("TOP_OF_THREAD"), "{text}");
+    assert!(!text.contains("Paragraph 30."), "it does not fit: {text}");
+}

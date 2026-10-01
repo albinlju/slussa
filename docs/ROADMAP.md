@@ -445,7 +445,10 @@ Kept as one line each; the detail is in git history.
   server's refusal and not as a missing login; a failed account lookup at
   startup says why; diff paths with spaces, quotes or non-ASCII letters are
   read whole (they were cut at the first space, which also misplaced a comment
-  on such a file); a test build has no `gh` unless a fake is installed.
+  on such a file); a test build has no `gh` unless a fake is installed; a
+  thread taller than the diff pane is shown from its first row, as in the
+  Overview (it was scrolled to its last row); a terminal that fails to start
+  is handed back out of raw mode.
 - **README** (what it is, providers, install, usage, keys, config, develop) and
   a demo gif recorded against a real repository.
 - **Readable GraphQL:** templates in `providers/github/graphql.rs`, compacted
