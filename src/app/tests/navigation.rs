@@ -100,7 +100,7 @@ fn commit_drilldown_uses_an_independent_diff_instance() {
     press(&mut app, KeyCode::Enter);
     assert_eq!(
         app.state.ui.detail.commits.open_commit(),
-        Some("abcdef123456")
+        Some(&"abcdef123456".into())
     );
     app.state
         .ui
@@ -132,7 +132,7 @@ fn commit_component_emits_a_pr_scoped_load_request() {
         .commits
         .update(CommitsAction::Open, &ctx);
     assert!(
-        matches!(effect, Some(Effect::LoadCommitDiff { pr_id: PrId(42), oid }) if oid == "abcdef123456")
+        matches!(effect, Some(Effect::LoadCommitDiff { pr_id: PrId(42), oid }) if oid.as_str() == "abcdef123456")
     );
     assert!(
         app.state

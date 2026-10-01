@@ -281,7 +281,7 @@ fn commit_list_returns_to_the_same_viewport_after_opening_a_commit() {
         .commits = LoadState::Loaded(
         (0..40)
             .map(|n| Commit {
-                oid: format!("{n:07x}"),
+                oid: CommitOid(format!("{n:07x}")),
                 headline: format!("Commit number {n}"),
                 author_name: "alice".into(),
                 authored_at: chrono::Utc::now(),

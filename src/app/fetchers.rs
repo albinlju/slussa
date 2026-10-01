@@ -10,6 +10,7 @@ use crate::{
     },
     domain::{
         comment::{CommentKey, ThreadHandle},
+        commit::CommitOid,
         pr::{MergeStrategy, PrGroup, PrId},
         review::{ReviewComment, ReviewVerdict},
     },
@@ -176,7 +177,7 @@ impl App {
         );
     }
 
-    pub(super) fn spawn_load_commit_diff(&mut self, pr_id: PrId, oid: String) {
+    pub(super) fn spawn_load_commit_diff(&mut self, pr_id: PrId, oid: CommitOid) {
         let key = FetchKey::CommitDiff(pr_id, oid.clone());
         let Some(ticket) = self.state.store.begin_fetch(key) else {
             return;

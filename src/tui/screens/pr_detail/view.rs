@@ -7,6 +7,7 @@ use crate::{
     },
     domain::{
         comment::{Comment, CommentId, CommentKey, CommentKind, ThreadHandle},
+        commit::CommitOid,
         diff::FileDiff,
         pr::{Mergeability, PrId, PrStatus, PullRequest},
         review::ReviewVerdict,
@@ -46,7 +47,7 @@ impl<'a> DetailContext<'a> {
     }
 }
 
-pub fn diff_files<'a>(data: Option<&'a PrData>, commit: Option<&str>) -> &'a [FileDiff] {
+pub fn diff_files<'a>(data: Option<&'a PrData>, commit: Option<&CommitOid>) -> &'a [FileDiff] {
     data.and_then(|data| data.diff_for(commit))
         .and_then(LoadState::loaded)
         .map_or(&[], |diff| diff.files.as_slice())

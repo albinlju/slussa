@@ -3,7 +3,7 @@ use crate::{
     domain::{
         activity::Activity,
         ci::Build,
-        commit::Commit,
+        commit::{Commit, CommitOid},
         diff::Diff,
         pr::{Mergeability, PrBatch, PrGroup, PrId, PrInfo},
     },
@@ -41,7 +41,7 @@ pub enum Effect {
     LoadView,
     LoadCommitDiff {
         pr_id: PrId,
-        oid: String,
+        oid: CommitOid,
     },
     PrLink {
         pr_id: PrId,
@@ -311,7 +311,7 @@ pub enum Read {
     Activity(PrId, Result<Activity, FetchError>),
     Mergeability(PrId, Result<Mergeability, FetchError>),
     Info(PrId, Result<PrInfo, FetchError>),
-    CommitDiff(PrId, String, Result<Diff, FetchError>),
+    CommitDiff(PrId, CommitOid, Result<Diff, FetchError>),
 }
 
 impl Read {

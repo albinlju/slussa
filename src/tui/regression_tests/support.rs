@@ -13,7 +13,7 @@ pub(super) use crate::{
         activity::Activity,
         ci::CiSummary,
         comment::{CommentId, ThreadHandle},
-        commit::Commit,
+        commit::{Commit, CommitOid},
         diff::*,
         pr::*,
         user::User,

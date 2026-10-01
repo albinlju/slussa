@@ -1,7 +1,7 @@
 use chrono::{DateTime, Utc};
 use serde::Deserialize;
 
-use crate::domain::commit::Commit;
+use crate::domain::commit::{Commit, CommitOid};
 use crate::domain::pr::PrId;
 use crate::providers::error::FetchError;
 
@@ -42,7 +42,7 @@ pub fn fetch_commits(pr_number: PrId) -> Result<Vec<Commit>, FetchError> {
 
 fn map_commit(c: GqlCommit) -> Commit {
     Commit {
-        oid: c.oid,
+        oid: CommitOid(c.oid),
         headline: c.message_headline,
         author_name: c.author.and_then(|a| a.name).unwrap_or_default(),
         authored_at: c.authored_date,

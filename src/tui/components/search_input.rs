@@ -28,7 +28,7 @@ impl SearchInput {
     }
 
     fn matches_commit(&self, c: &Commit) -> bool {
-        self.matches(&c.oid) || self.matches(&c.headline)
+        self.matches(c.oid.as_str()) || self.matches(&c.headline)
     }
 
     pub fn filter_commits<'a>(&self, commits: &'a [Commit]) -> Vec<&'a Commit> {

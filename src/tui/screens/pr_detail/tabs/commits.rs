@@ -4,7 +4,11 @@ use crate::{
         reviews::PendingComment,
         store::{LoadState, PrData},
     },
-    domain::{comment::CommentThread, commit::Commit, pr::PrId},
+    domain::{
+        comment::CommentThread,
+        commit::{Commit, CommitOid},
+        pr::PrId,
+    },
     tui::{
         component::{Component, step_index},
         components::{
@@ -86,7 +90,7 @@ fn commit_row(commit: &Commit, is_last: bool, now: DateTime<Utc>, width: usize) 
             Span::styled(age, Style::default().fg(theme.muted)),
         ]
     };
-    let oid_cell = format!("{}  ", short_oid(&commit.oid));
+    let oid_cell = format!("{}  ", commit.oid.short());
     let headline = commit.headline.clone();
 
     let left = vec![
@@ -130,7 +134,12 @@ pub fn render_commit_diff(
     );
 }
 
-fn render_commit_banner(frame: &mut Frame<'_>, pr_data: Option<&PrData>, oid: &str, area: Rect) {
+fn render_commit_banner(
+    frame: &mut Frame<'_>,
+    pr_data: Option<&PrData>,
+    oid: &CommitOid,
+    area: Rect,
+) {
     let theme = theme::current();
     let block = Block::default()
         .borders(Borders::BOTTOM)
@@ -142,7 +151,7 @@ fn render_commit_banner(frame: &mut Frame<'_>, pr_data: Option<&PrData>, oid: &s
         Some(LoadState::Loaded(c)) => c.as_slice(),
         _ => &[],
     };
-    let found = commits.iter().enumerate().find(|(_, c)| c.oid == oid);
+    let found = commits.iter().enumerate().find(|(_, c)| &c.oid == oid);
     let total = commits.len();
 
     let mut left = vec![
@@ -151,7 +160,7 @@ fn render_commit_banner(frame: &mut Frame<'_>, pr_data: Option<&PrData>, oid: &s
             Style::default().fg(theme.decorative),
         ),
         Span::styled(
-            short_oid(oid),
+            oid.short(),
             Style::default()
                 .fg(theme.decorative)
                 .add_modifier(Modifier::BOLD),
@@ -181,10 +190,6 @@ fn render_commit_banner(frame: &mut Frame<'_>, pr_data: Option<&PrData>, oid: &s
     frame.render_widget(Paragraph::new(line), inner);
 }
 
-fn short_oid(oid: &str) -> String {
-    oid.chars().take(7).collect()
-}
-
 #[derive(Debug, Default)]
 pub struct CommitList {
     pub selected: usize,
@@ -201,7 +206,7 @@ enum CommitsView {
     #[default]
     List,
     Diff {
-        oid: String,
+        oid: CommitOid,
         viewer: Box<DiffViewer>,
     },
 }
@@ -301,7 +306,7 @@ impl Component for CommitList {
 
 impl CommitList {
     /// The commit whose diff is open, if one is.
-    pub fn open_commit(&self) -> Option<&str> {
+    pub const fn open_commit(&self) -> Option<&CommitOid> {
         match &self.view {
             CommitsView::List => None,
             CommitsView::Diff { oid, .. } => Some(oid),
@@ -360,7 +365,7 @@ mod tests {
     fn commit_rows_prioritize_title_in_narrow_views() {
         let now = Utc::now();
         let commit = Commit {
-            oid: "abcdef123456".into(),
+            oid: CommitOid("abcdef123456".into()),
             headline: "Fix 非常に長い headline with more details".into(),
             author_name: "a-very-long-author-name".into(),
             authored_at: now,

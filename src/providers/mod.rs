@@ -26,7 +26,7 @@ use crate::domain::{
     activity::Activity,
     ci::Build,
     comment::{CommentId, CommentKey, ThreadHandle},
-    commit::Commit,
+    commit::{Commit, CommitOid},
     diff::Diff,
     pr::{MergeStrategy, Mergeability, PrBatch, PrGroup, PrId, PrInfo},
     review::{ReviewComment, ReviewVerdict},
@@ -64,10 +64,10 @@ impl Provider {
         }
     }
 
-    pub fn fetch_commit_diff(&self, oid: &str) -> Result<Diff, FetchError> {
+    pub fn fetch_commit_diff(&self, oid: &CommitOid) -> Result<Diff, FetchError> {
         match self {
-            Self::GitHub => github::fetch_commit_diff(oid),
-            Self::BitbucketDc(c) => bitbucket_dc::fetch_commit_diff(c, oid),
+            Self::GitHub => github::fetch_commit_diff(oid.as_str()),
+            Self::BitbucketDc(c) => bitbucket_dc::fetch_commit_diff(c, oid.as_str()),
         }
     }
 

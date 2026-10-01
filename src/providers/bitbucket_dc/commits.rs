@@ -1,7 +1,7 @@
 use serde::Deserialize;
 
 use super::{Config, ms_to_utc};
-use crate::domain::commit::Commit;
+use crate::domain::commit::{Commit, CommitOid};
 use crate::domain::pr::PrId;
 use crate::providers::bitbucket_dc::http::get_all;
 use crate::providers::error::FetchError;
@@ -35,7 +35,7 @@ pub fn fetch_commits(config: &Config, pr_id: PrId) -> Result<Vec<Commit>, FetchE
 
 fn map_commit(c: BbCommit) -> Commit {
     Commit {
-        oid: c.id,
+        oid: CommitOid(c.id),
         headline: c.message.lines().next().unwrap_or("").to_string(),
         author_name: c.author.display_name.unwrap_or(c.author.name),
         authored_at: ms_to_utc(c.author_timestamp),

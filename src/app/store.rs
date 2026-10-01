@@ -23,7 +23,7 @@ use crate::{
         activity::Activity,
         capabilities::{Capabilities, Feature},
         ci::Build,
-        commit::Commit,
+        commit::{Commit, CommitOid},
         diff::Diff,
         pr::{Mergeability, PrGroup, PrId, PrInfo, PrStatus, PullRequest},
         user::Username,
@@ -125,7 +125,7 @@ pub struct PrData {
     pub mergeability: LoadState<Mergeability>,
     /// Description and labels, for a provider whose list leaves them out.
     pub info: LoadState<PrInfo>,
-    pub commit_diffs: HashMap<String, LoadState<Diff>>,
+    pub commit_diffs: HashMap<CommitOid, LoadState<Diff>>,
 }
 
 #[derive(Debug, Default)]
@@ -194,7 +194,7 @@ impl PrData {
 }
 
 impl PrData {
-    pub fn diff_for(&self, commit: Option<&str>) -> Option<&LoadState<Diff>> {
+    pub fn diff_for(&self, commit: Option<&CommitOid>) -> Option<&LoadState<Diff>> {
         match commit {
             Some(oid) => self.commit_diffs.get(oid),
             None => Some(&self.diff),
@@ -291,7 +291,7 @@ pub enum FetchKey {
     Activity(PrId),
     Mergeability(PrId),
     Info(PrId),
-    CommitDiff(PrId, String),
+    CommitDiff(PrId, CommitOid),
 }
 
 /// How many open PRs are read without being asked to, and how many each `L`
