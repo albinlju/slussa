@@ -1,7 +1,7 @@
 use crate::{
     app::action::{Action, DetailAction},
     tui::{
-        component::{Component, step_index},
+        component::{Component, saturating_u16, step_index},
         theme,
     },
 };
@@ -56,9 +56,9 @@ fn render(frame: &mut Frame<'_>, ctx: &ReviewContext<'_>, dialog: &mut ReviewDia
                 }
             }
         }
-        dialog.scroll = dialog
-            .scroll
-            .min(lines.len().saturating_sub(body.height as usize) as u16);
+        dialog.scroll = dialog.scroll.min(saturating_u16(
+            lines.len().saturating_sub(body.height as usize),
+        ));
         frame.render_widget(
             ratatui::widgets::Paragraph::new(lines).scroll((dialog.scroll, 0)),
             body,

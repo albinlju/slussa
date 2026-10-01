@@ -1,6 +1,9 @@
 use crate::{
     app::action::{Action, DetailAction},
-    tui::{component::Component, theme, widgets},
+    tui::{
+        component::{Component, saturating_u16},
+        theme, widgets,
+    },
 };
 use ratatui::{Frame, layout::Rect, style::Style, text::Line, widgets::Paragraph};
 
@@ -17,10 +20,10 @@ impl ErrorDialog {
             frame,
             area,
             "Error",
-            (width, lines.len() as u16),
+            (width, saturating_u16(lines.len())),
             &[("j/k", "scroll"), ("Esc / Enter", "close")],
         );
-        self.max_scroll = lines.len().saturating_sub(body.height as usize) as u16;
+        self.max_scroll = saturating_u16(lines.len().saturating_sub(body.height as usize));
         self.scroll = self.scroll.min(self.max_scroll);
         frame.render_widget(
             Paragraph::new(lines.into_iter().map(Line::raw).collect::<Vec<_>>())

@@ -4,7 +4,10 @@ use crate::{
         action::{Action, DetailAction},
         reviews::CommentTarget,
     },
-    tui::{component::Component, theme},
+    tui::{
+        component::{Component, saturating_u16},
+        theme,
+    },
 };
 use ratatui::{
     Frame,
@@ -241,7 +244,7 @@ impl CommentEditor {
                 _ => "post comment",
             },
         );
-        let footer_height = hints.len() as u16 + 1;
+        let footer_height = saturating_u16(hints.len()).saturating_add(1);
         let mut body = Rect {
             height: inner.height.saturating_sub(footer_height),
             ..inner
@@ -283,13 +286,14 @@ impl CommentEditor {
             frame.render_widget(
                 Paragraph::new(lines)
                     .style(Style::default().fg(theme.fg))
-                    .scroll((self.scroll as u16, 0)),
+                    .scroll((saturating_u16(self.scroll), 0)),
                 body,
             );
             if !sending {
                 frame.set_cursor_position((
-                    body.x + col as u16,
-                    body.y + (row - self.scroll) as u16,
+                    body.x.saturating_add(saturating_u16(col)),
+                    body.y
+                        .saturating_add(saturating_u16(row.saturating_sub(self.scroll))),
                 ));
             }
         }

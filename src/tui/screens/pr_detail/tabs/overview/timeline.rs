@@ -9,7 +9,7 @@ use crate::{
         event::{EventKind, TimelineEvent},
     },
     tui::{
-        component::{Component, scroll, step_index},
+        component::{Component, saturating_u16, scroll, scroll_to_item, step_index},
         screens::pr_detail::view::{CommentRef, ThreadRef},
         theme, widgets,
     },
@@ -150,15 +150,16 @@ fn render_timeline(
             .is_some_and(|new| old.id == new.id && old.review == new.review)
     }) && let (Some(before), Some(after)) = (ui.selected_row, selected_row)
     {
-        ui.scroll = (usize::from(ui.scroll)
-            .saturating_add(after)
-            .saturating_sub(before))
-        .min(u16::MAX as usize) as u16;
+        ui.scroll = saturating_u16(
+            usize::from(ui.scroll)
+                .saturating_add(after)
+                .saturating_sub(before),
+        );
     }
     ui.selected_row = selected_row;
 
     let viewport = area.height as usize;
-    let max_scroll = content.len().saturating_sub(viewport) as u16;
+    let max_scroll = saturating_u16(content.len().saturating_sub(viewport));
     let scroll = if ui.reveal_selection {
         focused.map_or(ui.scroll, |n| {
             let range = n
@@ -184,19 +185,6 @@ fn render_timeline(
         let bar = widgets::scrollbar(ui.scroll, max_scroll, scrollbar_area.height);
         frame.render_widget(Paragraph::new(bar), scrollbar_area);
     }
-}
-
-fn scroll_to_item(scroll: u16, start: usize, span: usize, total: usize, viewport: usize) -> u16 {
-    let max_scroll = total.saturating_sub(viewport) as u16;
-    let start = start as u16;
-    let end = start + (span.max(1).min(viewport.max(1)) as u16) - 1;
-    let mut s = scroll.min(max_scroll);
-    if start < s {
-        s = start;
-    } else if viewport > 0 && end >= s + viewport as u16 {
-        s = end.saturating_sub(viewport as u16 - 1);
-    }
-    s.min(max_scroll)
 }
 
 enum TimelineItem<'a> {

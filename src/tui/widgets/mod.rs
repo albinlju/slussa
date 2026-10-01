@@ -5,7 +5,7 @@ pub mod table;
 use crate::{
     app::store::LoadState,
     domain::comment::Reaction,
-    tui::{format, layout, theme},
+    tui::{component::saturating_u16, format, layout, theme},
 };
 use chrono::{DateTime, Utc};
 use ratatui::{
@@ -103,7 +103,7 @@ pub(super) fn scrolled_paragraph(
     viewport: &mut u16,
     area: Rect,
 ) {
-    let max_scroll = lines.len().saturating_sub(area.height as usize) as u16;
+    let max_scroll = saturating_u16(lines.len().saturating_sub(area.height as usize));
     *scroll = (*scroll).min(max_scroll);
     *viewport = area.height;
 

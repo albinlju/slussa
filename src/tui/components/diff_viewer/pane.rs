@@ -99,7 +99,7 @@ pub(super) fn render(
     }
 
     let visible = body_area.height as usize;
-    let max_scroll = lines.len().saturating_sub(visible) as u16;
+    let max_scroll = crate::tui::component::saturating_u16(lines.len().saturating_sub(visible));
     let scroll = scroll_to_cursor(current_scroll, cursor, lines.len(), visible);
 
     let paragraph = Paragraph::new(lines).scroll((scroll, 0));
@@ -529,7 +529,7 @@ fn highlight_row(line: Line<'static>, row_w: usize) -> Line<'static> {
 }
 
 fn scroll_to_cursor(current: u16, cursor: Option<&NavItem>, total: usize, visible: usize) -> u16 {
-    let max_scroll = total.saturating_sub(visible) as u16;
+    let max_scroll = crate::tui::component::saturating_u16(total.saturating_sub(visible));
     let mut scroll = current.min(max_scroll) as usize;
     if let Some(m) = cursor {
         let top = m.rendered_row;
@@ -540,7 +540,7 @@ fn scroll_to_cursor(current: u16, cursor: Option<&NavItem>, total: usize, visibl
             scroll = bottom + 1 - visible;
         }
     }
-    (scroll as u16).min(max_scroll)
+    crate::tui::component::saturating_u16(scroll).min(max_scroll)
 }
 
 #[cfg(test)]
