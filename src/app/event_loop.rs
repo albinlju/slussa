@@ -164,8 +164,8 @@ impl App {
             TaskResult::LinkFinished(result) => {
                 self.state.store.link_pending = false;
                 self.state.store.notice = Some(match result {
-                    Ok(message) => store::Notice::new(message, false),
-                    Err(message) => store::Notice::new(message, true),
+                    Ok(message) => store::Notice::info(message),
+                    Err(message) => store::Notice::error(message),
                 });
             }
         }

@@ -86,10 +86,10 @@ impl App {
         }
         match result {
             Ok(()) => {
-                self.state.store.notice = Some(Notice::new(
-                    format!("PR #{pr_id} · {}", operation.done_label()),
-                    false,
-                ));
+                self.state.store.notice = Some(Notice::info(format!(
+                    "PR #{pr_id} · {}",
+                    operation.done_label()
+                )));
                 self.state.store.uncertain_submissions.remove(&pr_id);
                 self.state.store.errors.remove(&pr_id);
                 // Show the new status at once; the refetch below confirms it.
@@ -152,10 +152,10 @@ impl App {
             Ok(batch) if group == PrGroup::Open => self.adopt_open_page(continuation, batch),
             Ok(batch) => self.adopt_group(group, older, batch),
             Err(error) if older => {
-                self.state.store.notice = Some(Notice::new(
-                    format!("Couldn't load older PRs: {}", error.user_message()),
-                    true,
-                ));
+                self.state.store.notice = Some(Notice::error(format!(
+                    "Couldn't load older PRs: {}",
+                    error.user_message()
+                )));
             }
             // The open group is the list itself: a first failure shows as a
             // failed list, a failed refresh keeps what is there.
@@ -164,14 +164,11 @@ impl App {
             }
             // A closed group never read before has no data to keep, so say so.
             Err(error) if !self.state.store.group_loaded(group) => {
-                self.state.store.notice = Some(Notice::new(
-                    format!(
-                        "Couldn't load {} PRs: {}",
-                        group.label(),
-                        error.user_message()
-                    ),
-                    true,
-                ));
+                self.state.store.notice = Some(Notice::error(format!(
+                    "Couldn't load {} PRs: {}",
+                    group.label(),
+                    error.user_message()
+                )));
             }
             // A failed refresh of a group already read is recorded in
             // `refresh_failures` above.
@@ -315,7 +312,7 @@ impl App {
         prs.sort_by_key(|pr| PrGroup::of(&pr.status));
         store.cache.prs = LoadState::Loaded(prs);
         if let Some(message) = notice {
-            store.notice = Some(Notice::new(message, false));
+            store.notice = Some(Notice::info(message));
         }
     }
 

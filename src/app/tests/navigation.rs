@@ -223,7 +223,10 @@ fn invalid_link_is_rejected_before_starting_desktop_work() {
         kind: LinkAction::Open,
     }));
     assert!(!app.state.store.link_pending);
-    assert!(app.state.store.notice.as_ref().unwrap().error);
+    assert_eq!(
+        app.state.store.notice.as_ref().unwrap().kind,
+        crate::app::store::NoticeKind::Error
+    );
     assert!(app.state.store.operations.is_empty());
 }
 
@@ -240,7 +243,10 @@ async fn link_completion_keeps_navigation_and_reports_failure_without_blocking_p
         "PR #42: clipboard unavailable".into(),
     )));
     assert!(!app.state.store.link_pending);
-    assert!(app.state.store.notice.as_ref().unwrap().error);
+    assert_eq!(
+        app.state.store.notice.as_ref().unwrap().kind,
+        crate::app::store::NoticeKind::Error
+    );
     assert!(app.state.store.errors.is_empty());
     assert!(app.state.store.operations.is_empty());
     assert_eq!(

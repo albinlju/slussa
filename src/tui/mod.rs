@@ -67,10 +67,9 @@ pub fn render(frame: &mut Frame<'_>, state: &mut AppState) {
             frame.render_widget(ratatui::widgets::Clear, footer);
             frame.render_widget(
                 ratatui::widgets::Paragraph::new(format!("  {}", notice.message)).style(
-                    ratatui::style::Style::default().fg(if notice.error {
-                        theme::current().error
-                    } else {
-                        theme::current().accent
+                    ratatui::style::Style::default().fg(match notice.kind {
+                        crate::app::store::NoticeKind::Error => theme::current().error,
+                        crate::app::store::NoticeKind::Info => theme::current().accent,
                     }),
                 ),
                 footer,

@@ -199,7 +199,7 @@ async fn successful_mutation_reports_which_pr_changed() {
         .insert(42, crate::app::store::Operation::Merge);
     finish_write(&mut app, 42, Ok(()));
     let notice = app.state.store.notice.as_ref().unwrap();
-    assert!(!notice.error);
+    assert_eq!(notice.kind, crate::app::store::NoticeKind::Info);
     assert!(notice.message.contains("42"));
     assert!(notice.message.contains("merged"));
 }

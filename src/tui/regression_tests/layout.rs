@@ -182,9 +182,8 @@ fn notice_replaces_entire_footer_and_normal_hints_return_afterward() {
         state.screen = screen;
         let mut terminal = Terminal::new(TestBackend::new(100, 30)).unwrap();
         terminal.draw(|f| render(f, &mut state)).unwrap();
-        state.store.notice = Some(crate::app::store::Notice::new(
+        state.store.notice = Some(crate::app::store::Notice::info(
             "PR #42: link copied".into(),
-            false,
         ));
         terminal.draw(|f| render(f, &mut state)).unwrap();
         let footer: String = (0..100)

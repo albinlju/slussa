@@ -26,21 +26,18 @@ impl App {
             return;
         };
         if let Err(message) = validate_url(&url) {
-            self.state.store.notice = Some(Notice::new(message, true));
+            self.state.store.notice = Some(Notice::error(message));
             return;
         }
         self.state.store.link_pending = true;
-        self.state.store.notice = Some(Notice::new(
-            format!(
-                "{} PR #{pr_id}…",
-                if kind == LinkAction::Open {
-                    "Opening"
-                } else {
-                    "Copying link for"
-                }
-            ),
-            false,
-        ));
+        self.state.store.notice = Some(Notice::info(format!(
+            "{} PR #{pr_id}…",
+            if kind == LinkAction::Open {
+                "Opening"
+            } else {
+                "Copying link for"
+            }
+        )));
         self.spawn_fetch(
             move || perform(kind, &url),
             move |returned| {

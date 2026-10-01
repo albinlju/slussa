@@ -412,22 +412,40 @@ impl Store {
     }
 }
 
+/// What a notice tells: that something went through, or that it did not.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum NoticeKind {
+    Info,
+    Error,
+}
+
 #[derive(Debug)]
 pub struct Notice {
     pub message: String,
-    pub error: bool,
+    pub kind: NoticeKind,
     created: std::time::Instant,
 }
 impl Notice {
-    pub fn new(message: String, error: bool) -> Self {
+    pub fn info(message: String) -> Self {
+        Self::new(message, NoticeKind::Info)
+    }
+    pub fn error(message: String) -> Self {
+        Self::new(message, NoticeKind::Error)
+    }
+    fn new(message: String, kind: NoticeKind) -> Self {
         Self {
             message,
-            error,
+            kind,
             created: std::time::Instant::now(),
         }
     }
+    /// A failure stays long enough to be read.
     pub fn visible(&self) -> bool {
-        self.created.elapsed() < std::time::Duration::from_secs(if self.error { 5 } else { 2 })
+        let seconds = match self.kind {
+            NoticeKind::Info => 2,
+            NoticeKind::Error => 5,
+        };
+        self.created.elapsed() < std::time::Duration::from_secs(seconds)
     }
 }
 
