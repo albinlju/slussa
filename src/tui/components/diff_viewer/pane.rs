@@ -5,7 +5,7 @@ use crate::{
         diff::{Diff, DiffLine, FileDiff},
     },
     tui::{
-        components::diff_viewer::DiffViewer,
+        components::diff_viewer::{DiffViewer, FocusedNav, NavTarget, PaneNav},
         icons, layout,
         screens::pr_detail::view::ThreadRef,
         theme,
@@ -41,12 +41,6 @@ pub(super) fn render(
 
     let bounded = ui_diff.focused_file.min(diff.files.len().saturating_sub(1));
     let Some(file) = diff.files.get(bounded) else {
-        ui_diff.pane_item_count = 0;
-        ui_diff.pane_matches = Vec::new();
-        ui_diff.pane_anchor = None;
-        ui_diff.pane_reply = None;
-        ui_diff.pane_thread = None;
-        ui_diff.pane_pending = None;
         return;
     };
     let (adds, dels) = file_stats.get(bounded).copied().unwrap_or((0, 0));
@@ -120,21 +114,24 @@ pub(super) fn render(
         frame.render_widget(Paragraph::new(bar), layout::scrollbar_area(body_area));
     }
 
-    ui_diff.pane_anchor = cursor.map(|m| {
-        let (line, removed) = m.anchor();
-        CommentAnchor {
-            revision: diff.revision.clone(),
-            path: file.path.clone(),
-            line,
-            removed,
+    let focused = cursor.map(|item| {
+        let (line, removed) = item.anchor();
+        FocusedNav {
+            anchor: CommentAnchor {
+                revision: diff.revision.clone(),
+                path: file.path.clone(),
+                line,
+                removed,
+            },
+            target: item.target(),
         }
     });
-    ui_diff.pane_reply = cursor.and_then(NavItem::reply_to);
-    ui_diff.pane_thread = cursor.and_then(NavItem::thread_ref);
-    ui_diff.pane_pending = cursor.and_then(NavItem::pending_index);
     ui_diff.pane_scroll = scroll;
-    ui_diff.pane_item_count = nav_items.len();
-    ui_diff.pane_matches = matches;
+    ui_diff.pane = PaneNav {
+        item_count: nav_items.len(),
+        matches,
+        focused,
+    };
 }
 
 enum NavKind {
@@ -172,33 +169,20 @@ impl NavItem {
         }
     }
 
-    const fn reply_to(&self) -> Option<u64> {
-        match self.kind {
-            NavKind::Thread { reply_to, .. } => reply_to,
-            NavKind::Line { .. } | NavKind::Pending { .. } => None,
-        }
-    }
-
-    const fn pending_index(&self) -> Option<usize> {
-        match self.kind {
-            NavKind::Pending { index, .. } => Some(index),
-            NavKind::Line { .. } | NavKind::Thread { .. } => None,
-        }
-    }
-
-    fn thread_ref(&self) -> Option<ThreadRef> {
+    fn target(&self) -> NavTarget {
         match &self.kind {
+            NavKind::Line { .. } => NavTarget::Line,
             NavKind::Thread {
                 reply_to,
                 node_id,
                 resolved,
                 ..
-            } => Some(ThreadRef {
+            } => NavTarget::Thread(ThreadRef {
                 node_id: node_id.clone(),
                 comment_id: *reply_to,
                 resolved: *resolved,
             }),
-            NavKind::Line { .. } | NavKind::Pending { .. } => None,
+            NavKind::Pending { index, .. } => NavTarget::Pending(*index),
         }
     }
 }

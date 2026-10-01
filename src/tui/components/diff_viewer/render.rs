@@ -22,7 +22,8 @@ pub(super) fn render(
     author: &str,
     area: Rect,
 ) {
-    ui_diff.clear_targets();
+    // Until a pane is drawn below, there is nothing in it to act on.
+    ui_diff.pane = super::PaneNav::default();
     let Some(diff) = widgets::loaded_or_placeholder(frame, diff_state, "diff", area) else {
         return;
     };

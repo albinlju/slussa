@@ -70,7 +70,7 @@ fn diff_search_focus_and_match_wrapping_are_local() {
     press(&mut app, KeyCode::Char('j'));
     press(&mut app, KeyCode::Enter);
     assert_eq!(app.state.ui.detail.diff.focus, DiffFocus::Pane);
-    app.state.ui.detail.diff.pane_matches = vec![2, 5];
+    app.state.ui.detail.diff.pane.matches = vec![2, 5];
     app.state.ui.detail.diff.pane_search.query = "new".into();
     press(&mut app, KeyCode::Char('n'));
     assert_eq!(app.state.ui.detail.diff.pane_cursor, 2);
@@ -108,7 +108,8 @@ fn commit_drilldown_uses_an_independent_diff_instance() {
         .commits
         .diff_mut()
         .unwrap()
-        .pane_item_count = 5;
+        .pane
+        .item_count = 5;
     app.apply(Action::Diff(DiffAction::MovePaneCursor(2)));
     assert_eq!(app.state.ui.detail.commits.diff().unwrap().pane_cursor, 2);
     assert_eq!(app.state.ui.detail.diff.pane_cursor, 7);

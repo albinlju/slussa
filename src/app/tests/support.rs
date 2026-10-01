@@ -11,7 +11,7 @@ pub(super) use crate::{
     tui::{
         self,
         component::Component,
-        components::diff_viewer::DiffFocus,
+        components::diff_viewer::{DiffFocus, FocusedNav, NavTarget},
         screens::pr_detail::{
             dialogs::{
                 confirm::{ConfirmDialog, ConfirmKind},

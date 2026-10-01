@@ -242,9 +242,9 @@ impl PrDetailScreen {
                 }
                 Command::AbandonReview
             }
-            PrAction::RemovePendingComment => {
-                Command::RemovePendingComment(self.surface(ctx.tab).diff_viewer()?.pane_pending?)
-            }
+            PrAction::RemovePendingComment => Command::RemovePendingComment(
+                self.surface(ctx.tab).diff_viewer()?.focused_pending()?,
+            ),
             PrAction::OpenMergePicker => {
                 if !ctx.store.capabilities.merge_strategies.is_empty() {
                     self.overlay = Some(Overlay::Merge(MergeDialog::default()));

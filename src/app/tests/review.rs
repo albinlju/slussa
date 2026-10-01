@@ -8,12 +8,7 @@ fn queued_review_survives_navigation_without_crossing_prs() {
     detail(&mut app, DetailTab::Diff);
     press(&mut app, KeyCode::Char('v'));
     app.state.ui.detail.diff.focus = DiffFocus::Pane;
-    app.state.ui.detail.diff.pane_anchor = Some(CommentAnchor {
-        revision: None,
-        path: "src/main.rs".into(),
-        line: 1,
-        removed: false,
-    });
+    app.state.ui.detail.diff.pane.focused = Some(FocusedNav::on(NavTarget::Line));
     press(&mut app, KeyCode::Char('c'));
     for c in "Please explain".chars() {
         press(&mut app, KeyCode::Char(c));
@@ -155,7 +150,7 @@ fn reply_shortcut_in_diff_opens_editor_for_the_focused_thread() {
     let mut app = app();
     detail(&mut app, DetailTab::Diff);
     app.state.ui.detail.diff.focus = DiffFocus::Pane;
-    app.state.ui.detail.diff.pane_reply = Some(987);
+    app.state.ui.detail.diff.pane.focused = Some(FocusedNav::on_thread(987));
     press(&mut app, KeyCode::Char('r'));
     assert!(matches!(
         app.state.ui.detail.editor.target().unwrap(),

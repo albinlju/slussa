@@ -141,7 +141,7 @@ pub(in crate::tui) fn key_to_action(
         && code == KeyCode::Char('d')
         && surface
             .diff_viewer()
-            .is_some_and(|viewer| viewer.pane_pending.is_some())
+            .is_some_and(|viewer| viewer.focused_pending().is_some())
     {
         return Some(Action::Detail(DetailAction::Pr(
             PrAction::RemovePendingComment,

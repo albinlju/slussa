@@ -13,7 +13,7 @@ pub(super) use crate::{
     tui::{
         components::{
             comment_editor::{CommentDraft, CommentEditor, EditorView},
-            diff_viewer::DiffFocus,
+            diff_viewer::{DiffFocus, FocusedNav, NavTarget, PaneNav},
             help_dialog::HelpDialog,
         },
         screens::pr_detail::{

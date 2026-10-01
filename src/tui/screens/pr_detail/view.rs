@@ -195,7 +195,7 @@ impl<'a> DetailView<'a> {
     pub const fn focused_thread(&self) -> Option<&'a ThreadRef> {
         match self.surface() {
             Surface::Overview => self.detail.overview.timeline.thread.as_ref(),
-            Surface::Diff(viewer) | Surface::CommitDiff(viewer) => viewer.pane_thread.as_ref(),
+            Surface::Diff(viewer) | Surface::CommitDiff(viewer) => viewer.focused_thread(),
             Surface::Description | Surface::CommitList | Surface::Builds => None,
         }
     }
@@ -259,7 +259,7 @@ impl<'a> DetailView<'a> {
                 .reply
                 .map(CommentTarget::Reply),
             Surface::Diff(view) | Surface::CommitDiff(view) => (view.focus == DiffFocus::Pane)
-                .then_some(view.pane_reply)
+                .then(|| view.focused_reply())
                 .flatten()
                 .map(CommentTarget::Reply),
             Surface::Description | Surface::CommitList | Surface::Builds => None,
@@ -270,7 +270,7 @@ impl<'a> DetailView<'a> {
         if view.focus != DiffFocus::Pane {
             return None;
         }
-        if let Some(parent) = view.pane_reply {
+        if let Some(parent) = view.focused_reply() {
             return self
                 .store
                 .capabilities
@@ -284,7 +284,7 @@ impl<'a> DetailView<'a> {
         {
             return None;
         }
-        view.pane_anchor.clone().map(CommentTarget::Line)
+        view.focused_anchor().cloned().map(CommentTarget::Line)
     }
 }
 

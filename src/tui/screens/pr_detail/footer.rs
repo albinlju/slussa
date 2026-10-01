@@ -71,11 +71,9 @@ fn footer_actions(state: &DetailView<'_>, tab: DetailTab) -> Vec<Hint> {
             "v: finish draft ({})",
             review.comments.len()
         ))];
-        if state
-            .surface()
-            .diff_viewer()
-            .is_some_and(|viewer| viewer.pane_pending.is_some() && viewer.focus == DiffFocus::Pane)
-        {
+        if state.surface().diff_viewer().is_some_and(|viewer| {
+            viewer.focused_pending().is_some() && viewer.focus == DiffFocus::Pane
+        }) {
             parts.push(Hint::on("d: remove pending"));
         }
         let target = state.comment_target();
@@ -150,7 +148,7 @@ fn footer_actions(state: &DetailView<'_>, tab: DetailTab) -> Vec<Hint> {
             return hints;
         }
         let mut hints = vec![Hint::on("esc: files")];
-        if let Some(thread) = view.pane_thread.as_ref().filter(|thread| thread.resolved)
+        if let Some(thread) = view.focused_thread().filter(|thread| thread.resolved)
             && let Some(id) = thread.comment_id
         {
             hints.insert(
@@ -213,7 +211,7 @@ fn active_search(
     };
     match view.focus {
         DiffFocus::Tree => tree_search_prompt(&view.tree_search, state.diff_files(), width),
-        DiffFocus::Pane => pane_search_prompt(&view.pane_search, view.pane_matches.len(), width),
+        DiffFocus::Pane => pane_search_prompt(&view.pane_search, view.pane.matches.len(), width),
     }
 }
 

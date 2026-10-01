@@ -7,7 +7,10 @@ use crate::{
     },
     domain::{capabilities::Feature, pr::PrStatus},
     tui::{
-        components::diff_viewer::DiffFocus, key_to_action, regression_tests::fixture, render,
+        components::diff_viewer::{DiffFocus, FocusedNav, NavTarget},
+        key_to_action,
+        regression_tests::fixture,
+        render,
         screens::pr_detail::tabs::DetailTab,
     },
 };
@@ -211,13 +214,12 @@ fn a_pr_that_is_not_in_the_list_gives_no_context_and_only_the_way_out() {
     assert!(!state.ui.detail.editor.has_draft());
 }
 
-/// The Commits list, reached after the Diff tab was left with its pane on a
-/// thread and on a queued comment, and with a review in progress.
-fn commit_list_after_the_diff_pane() -> AppState {
+/// The Commits list, reached after the Diff tab was left with its pane on
+/// `focused`, and with a review in progress.
+fn commit_list_after_the_diff_pane(focused: FocusedNav) -> AppState {
     let mut state = overview_of(PrStatus::Open);
     state.ui.detail.diff.focus = DiffFocus::Pane;
-    state.ui.detail.diff.pane_reply = Some(7);
-    state.ui.detail.diff.pane_pending = Some(0);
+    state.ui.detail.diff.pane.focused = Some(focused);
     state.store.reviews.entry(42).or_default();
     state.screen = Screen::Detail {
         pr_id: 42,
@@ -228,7 +230,7 @@ fn commit_list_after_the_diff_pane() -> AppState {
 
 #[test]
 fn the_commit_list_does_not_reply_to_the_thread_the_diff_tab_left_focused() {
-    let state = commit_list_after_the_diff_pane();
+    let state = commit_list_after_the_diff_pane(FocusedNav::on_thread(7));
     let r = key_to_action(
         &state,
         KeyEvent::new(KeyCode::Char('r'), KeyModifiers::NONE),
@@ -243,20 +245,20 @@ fn the_commit_list_does_not_reply_to_the_thread_the_diff_tab_left_focused() {
 
 #[test]
 fn the_commit_list_footer_offers_only_keys_that_work_there() {
-    let mut state = commit_list_after_the_diff_pane();
+    let mut state = commit_list_after_the_diff_pane(FocusedNav::on_thread(7));
+    let footer = footer_of(&mut state);
+    assert!(footer.contains("v: finish draft"), "{footer}");
+    assert!(!footer.contains("r: reply"), "{footer}");
+    let mut state = commit_list_after_the_diff_pane(FocusedNav::on(NavTarget::Pending(0)));
     let footer = footer_of(&mut state);
     assert!(footer.contains("v: finish draft"), "{footer}");
     assert!(!footer.contains("d: remove pending"), "{footer}");
-    assert!(!footer.contains("r: reply"), "{footer}");
 
-    // On the diff itself both are offered, as before.
+    // On the diff itself the queued comment can be removed, as before.
     state.screen = Screen::Detail {
         pr_id: 42,
         tab: DetailTab::Diff,
     };
-    state.ui.detail.diff.focus = DiffFocus::Pane;
-    state.ui.detail.diff.pane_reply = Some(7);
-    state.ui.detail.diff.pane_pending = Some(0);
     let d = key_to_action(
         &state,
         KeyEvent::new(KeyCode::Char('d'), KeyModifiers::NONE),

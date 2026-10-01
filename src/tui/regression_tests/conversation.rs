@@ -145,7 +145,7 @@ fn compact_diff_switches_panels_and_keeps_file_selection() {
     assert!(text.contains("Code"));
     assert!(text.contains("old"));
     assert!(text.contains("esc: files"));
-    assert!(state.ui.detail.diff.pane_anchor.is_some());
+    assert!(state.ui.detail.diff.focused_anchor().is_some());
     local_key(&mut state, KeyCode::Esc);
     terminal.draw(|f| render(f, &mut state)).unwrap();
     assert_eq!(state.ui.detail.diff.focus, DiffFocus::Tree);
@@ -162,18 +162,34 @@ fn unloaded_diff_cannot_reuse_a_previous_comment_target() {
         tab: DetailTab::Diff,
     };
     state.ui.detail.diff.focus = DiffFocus::Pane;
-    state.ui.detail.diff.pane_anchor = Some(CommentAnchor {
-        revision: None,
-        path: "old.rs".into(),
-        line: 20,
-        removed: false,
-    });
+    state.ui.detail.diff.pane = PaneNav {
+        item_count: 30,
+        matches: vec![3, 9],
+        focused: Some(FocusedNav {
+            anchor: CommentAnchor {
+                revision: None,
+                path: "old.rs".into(),
+                line: 20,
+                removed: false,
+            },
+            target: NavTarget::Line,
+        }),
+    };
+    state.ui.detail.diff.pane_cursor = 5;
+    state.ui.detail.diff.pane_search.query = "old".into();
     state.store.cache.details.get_mut(&42).unwrap().diff =
         LoadState::Failed(crate::providers::FetchError::Network("offline".into()));
     let mut terminal = Terminal::new(TestBackend::new(40, 12)).unwrap();
     terminal.draw(|f| render(f, &mut state)).unwrap();
     assert!(state.detail_view().comment_target().is_none());
     assert!(rendered_text(&terminal).contains("F: retry"));
+    // Nor do the keys move over rows that are no longer on screen.
+    for code in [KeyCode::Char('j'), KeyCode::Char('n'), KeyCode::PageDown] {
+        local_key(&mut state, code);
+        assert_eq!(state.ui.detail.diff.pane_cursor, 5, "{code:?}");
+    }
+    assert_eq!(state.ui.detail.diff.pane.item_count, 0);
+    assert!(state.ui.detail.diff.pane.matches.is_empty());
 }
 
 #[test]
@@ -227,14 +243,14 @@ fn diff_fold_keeps_target_and_shows_the_next_action() {
         );
         assert!(folded.contains("space: expand thread"));
         assert!(!folded.contains("Keep the error context."));
-        assert_eq!(state.ui.detail.diff.pane_reply, Some(10));
+        assert_eq!(state.ui.detail.diff.focused_reply(), Some(10));
         local_key(&mut state, KeyCode::Char(' '));
         terminal.draw(|frame| render(frame, &mut state)).unwrap();
         let expanded = rendered_text(&terminal);
         assert!(expanded.contains("⌄ 1 comment · ✓ resolved"));
         assert!(expanded.contains("space: collapse thread"));
         assert!(expanded.contains("Keep the error context."));
-        assert_eq!(state.ui.detail.diff.pane_reply, Some(10));
+        assert_eq!(state.ui.detail.diff.focused_reply(), Some(10));
         local_key(&mut state, KeyCode::Char(' '));
         terminal.draw(|frame| render(frame, &mut state)).unwrap();
         assert_eq!(rendered_text(&terminal), folded);
@@ -386,7 +402,11 @@ fn a_thread_taller_than_the_diff_pane_is_shown_from_its_first_row() {
         local_key(&mut state, KeyCode::Char('j'));
         terminal.draw(|frame| render(frame, &mut state)).unwrap();
     }
-    assert_eq!(state.ui.detail.diff.pane_reply, Some(10), "on the thread");
+    assert_eq!(
+        state.ui.detail.diff.focused_reply(),
+        Some(10),
+        "on the thread"
+    );
 
     let text = rendered_text(&terminal);
     assert!(text.contains("TOP_OF_THREAD"), "{text}");
