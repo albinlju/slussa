@@ -8,7 +8,8 @@ use crate::{
         widgets::{
             self,
             comment_code::{diff_snippet, suggestion_box},
-            comment_fold::Folds,
+            comment_fold::{Fold, Folds},
+            comment_frame::{bracket, framed, header_line, prefix_gutter, status_rule},
             comment_meta::{self, Roles},
             markdown,
         },
@@ -25,6 +26,12 @@ fn anchor_pos(thread: &CommentThread) -> Option<usize> {
     thread.anchor.as_ref()?.line.map(LineRef::number)
 }
 
+/// A thread drawn in the diff, and the rows in it that open or fold a comment.
+pub(in crate::tui) struct InlineThread {
+    pub lines: Vec<Line<'static>>,
+    pub folds: Vec<Fold>,
+}
+
 pub(in crate::tui) fn render_inline_thread(
     thread: &CommentThread,
     width: u16,
@@ -33,13 +40,16 @@ pub(in crate::tui) fn render_inline_thread(
     anchor_text: Option<&str>,
     roles: Roles<'_>,
     expanded: bool,
-) -> Vec<Line<'static>> {
+) -> InlineThread {
     let theme = theme::current();
     let frame = if active { theme.accent } else { theme.divider };
 
     // A resolved thread collapses to a one-line summary until expanded (`space`).
     if thread.resolved() && !expanded {
-        return vec![collapse_summary(thread, false, active, width, roles)];
+        return InlineThread {
+            lines: vec![collapse_summary(thread, false, active, width, roles)],
+            folds: Vec::new(),
+        };
     }
 
     let pos = anchor_pos(thread).zip(anchor_text);
@@ -54,8 +64,13 @@ pub(in crate::tui) fn render_inline_thread(
     } else if !has_suggestion {
         out.push(status_rule(status_label(thread.resolved()), width, frame));
     }
-    out.extend(conversation(thread, pos, width, now, roles, frame, None, false).0);
-    out
+    let before = out.len();
+    let (lines, _, mut folds) = conversation(thread, pos, width, now, roles, frame, None, false);
+    out.extend(lines);
+    for fold in &mut folds {
+        fold.row += before;
+    }
+    InlineThread { lines: out, folds }
 }
 
 /// Keep disclosure/count stable between states; secondary metadata yields first
@@ -96,16 +111,6 @@ fn collapse_summary(
     Line::from(widgets::truncate_to_width(spans, width as usize))
 }
 
-fn status_rule(label: Vec<Span<'static>>, width: u16, color: Color) -> Line<'static> {
-    let style = Style::default().fg(color);
-    let label_w: usize = label.iter().map(Span::width).sum();
-    let fill = (width as usize).saturating_sub(label_w + 3).max(1);
-    let mut spans = vec![Span::styled(format!("{} ", "─".repeat(fill)), style)];
-    spans.extend(label);
-    spans.push(Span::styled(" ─", style));
-    Line::from(spans)
-}
-
 pub(in crate::tui) fn comment_box(
     comment: &Comment,
     width: u16,
@@ -128,7 +133,8 @@ pub(in crate::tui) fn comment_box(
             None,
             width.saturating_sub(2),
             roles.folds,
-        ),
+        )
+        .0,
         width,
         frame,
         theme.divider,
@@ -224,7 +230,7 @@ pub(in crate::tui) fn comment_thread_box(
     // The header carries the first comment's author + time, so the conversation
     // skips its meta line to avoid repeating it.
     let offset = out.len();
-    let (lines, selected_range) =
+    let (lines, selected_range, _) =
         conversation(thread, pos, width, now, roles, frame, selected, true);
     out.extend(lines);
     let selected_range = selected_range.map(|range| {
@@ -237,51 +243,6 @@ pub(in crate::tui) fn comment_thread_box(
     Some((out, selected_range))
 }
 
-fn header_line(left: Vec<Span<'static>>, right: Vec<Span<'static>>, width: u16) -> Line<'static> {
-    let width = width as usize;
-    if width == 0 {
-        return Line::default();
-    }
-    if right.is_empty() {
-        return Line::from(widgets::truncate_to_width(left, width));
-    }
-    // Reserve room for status/time without letting metadata hide the author
-    // entirely in very narrow panes. Measure terminal columns, not bytes.
-    let left_min = 12.min(width / 2);
-    let right = widgets::truncate_to_width(right, width.saturating_sub(left_min).max(1));
-    let right_width: usize = right.iter().map(Span::width).sum();
-    let left_width = width.saturating_sub(right_width + 1);
-    let left = if left_width == 0 {
-        Vec::new()
-    } else {
-        widgets::truncate_to_width(left, left_width)
-    };
-    if left.is_empty() {
-        return Line::from(right);
-    }
-    Line::from(widgets::justify_between(left, right, width))
-}
-
-/// `left` colours the vertical edge (accent marks focus); `rule` colours the
-/// top/bottom — kept muted so focus only lights up the left border.
-fn bracket(body: Vec<Line<'static>>, width: u16, left: Color, rule: Color) -> Vec<Line<'static>> {
-    let left_style = Style::default().fg(left);
-    let rule_line = |corner: &str| {
-        Line::from(Span::styled(
-            format!("{corner}{}", "─".repeat((width as usize).saturating_sub(1))),
-            Style::default().fg(rule),
-        ))
-    };
-    let mut out = vec![rule_line("┌")];
-    for line in body {
-        let mut spans = vec![Span::styled("| ", left_style)];
-        spans.extend(line.spans);
-        out.push(Line::from(spans).style(line.style));
-    }
-    out.push(rule_line("└"));
-    out
-}
-
 #[expect(clippy::too_many_arguments, reason = "render inputs; see ROADMAP")]
 fn conversation(
     thread: &CommentThread,
@@ -292,12 +253,17 @@ fn conversation(
     frame: Color,
     selected: Option<usize>,
     skip_first_meta: bool,
-) -> (Vec<Line<'static>>, Option<std::ops::Range<usize>>) {
+) -> (
+    Vec<Line<'static>>,
+    Option<std::ops::Range<usize>>,
+    Vec<Fold>,
+) {
     let theme = theme::current();
     let style = Style::default().fg(frame);
     let last = thread.comments.len().saturating_sub(1);
     let mut out: Vec<Line<'static>> = Vec::new();
     let mut selected_range = None;
+    let mut folds: Vec<Fold> = Vec::new();
     for (i, comment) in thread.comments.iter().enumerate() {
         // The first comment's author/time live in the box header when requested.
         let suppress = skip_first_meta && i == 0;
@@ -316,20 +282,19 @@ fn conversation(
             } else {
                 status_label(thread.resolved())
             };
-            out.extend(framed(
-                meta,
-                label,
-                comment_body(
-                    comment,
-                    thread.kind(),
-                    anchor,
-                    width.saturating_sub(2),
-                    roles.folds,
-                ),
-                width,
-                frame,
-                theme.divider,
-            ));
+            let (body, fold) = comment_body(
+                comment,
+                thread.kind(),
+                anchor,
+                width.saturating_sub(2),
+                roles.folds,
+            );
+            // The frame's top line comes first.
+            folds.extend(fold.map(|f| Fold {
+                row: out.len() + 1 + f.row,
+                ..f
+            }));
+            out.extend(framed(meta, label, body, width, frame, theme.divider));
             if selected == Some(i) {
                 selected_range = Some(start..out.len());
             }
@@ -353,65 +318,25 @@ fn conversation(
         } else {
             out.push(prefix_gutter(Line::from(meta), head, style));
         }
-        for line in comment_body(
+        let (body, fold) = comment_body(
             comment,
             thread.kind(),
             anchor,
             width.saturating_sub(2),
             roles.folds,
-        ) {
+        );
+        folds.extend(fold.map(|f| Fold {
+            row: out.len() + f.row,
+            ..f
+        }));
+        for line in body {
             out.push(prefix_gutter(line, body_gutter, style));
         }
         if selected == Some(i) {
             selected_range = Some(start..out.len());
         }
     }
-    (out, selected_range)
-}
-
-fn prefix_gutter(line: Line<'static>, gutter: &'static str, style: Style) -> Line<'static> {
-    let mut spans = vec![Span::styled(gutter, style)];
-    spans.extend(line.spans);
-    Line::from(spans).style(line.style)
-}
-
-pub(super) fn framed(
-    left: Vec<Span<'static>>,
-    right: Vec<Span<'static>>,
-    body: Vec<Line<'static>>,
-    width: u16,
-    left_color: Color,
-    rule: Color,
-) -> Vec<Line<'static>> {
-    let style = Style::default().fg(rule);
-    let left_style = Style::default().fg(left_color);
-    let w = width as usize;
-    let left_w: usize = left.iter().map(Span::width).sum();
-    let right_w: usize = right.iter().map(Span::width).sum();
-
-    let mut top = vec![Span::styled("┌─ ", style)];
-    top.extend(left);
-    if right_w == 0 {
-        let fill = w.saturating_sub(left_w + 4).max(1);
-        top.push(Span::styled(format!(" {}", "─".repeat(fill)), style));
-    } else {
-        let fill = w.saturating_sub(left_w + right_w + 7).max(1);
-        top.push(Span::styled(format!(" {} ", "─".repeat(fill)), style));
-        top.extend(right);
-        top.push(Span::styled(" ─", style));
-    }
-
-    let mut out = vec![Line::from(top)];
-    for line in body {
-        let mut spans = vec![Span::styled("| ", left_style)];
-        spans.extend(line.spans);
-        out.push(Line::from(spans).style(line.style));
-    }
-    out.push(Line::from(Span::styled(
-        format!("└{}", "─".repeat(w.saturating_sub(1))),
-        style,
-    )));
-    out
+    (out, selected_range, folds)
 }
 
 fn status_label(resolved: bool) -> Vec<Span<'static>> {
@@ -446,13 +371,15 @@ fn comment_body(
     anchor: Option<(usize, &str)>,
     text_w: u16,
     folds: Folds<'_>,
-) -> Vec<Line<'static>> {
+) -> (Vec<Line<'static>>, Option<Fold>) {
     let (prose, suggestions) = split_suggestions(&comment.content);
     let mut lines: Vec<Line<'static>> = Vec::new();
-    if !prose.trim().is_empty() {
+    let folded = (!prose.trim().is_empty()).then(|| {
         let key = comment.id.map(|id| CommentKey { id, kind });
-        lines.extend(folds.apply(key, paint_fg(markdown::render_no_margin(&prose, text_w))));
-    }
+        folds.apply(key, paint_fg(markdown::render_no_margin(&prose, text_w)))
+    });
+    let fold = folded.as_ref().and_then(|folded| folded.fold);
+    lines.extend(folded.into_iter().flat_map(|folded| folded.lines));
     for suggestion in &suggestions {
         lines.push(Line::raw(""));
         lines.extend(suggestion_box(anchor, suggestion, text_w));
@@ -461,7 +388,7 @@ fn comment_body(
         lines.push(Line::raw(""));
         lines.push(line);
     }
-    lines
+    (lines, fold)
 }
 
 fn paint_fg(lines: Vec<Line<'static>>) -> Vec<Line<'static>> {
@@ -478,37 +405,4 @@ fn paint_fg(lines: Vec<Line<'static>>) -> Vec<Line<'static>> {
             Line::from(spans).style(style)
         })
         .collect()
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn long_headers_keep_status_and_time_visible_without_overflow() {
-        let left = vec![Span::styled(
-            "@reviewer commented on src/非常に長いパス/component.rs:123",
-            Style::default().fg(theme::current().link),
-        )];
-        let right = vec![
-            Span::styled("unresolved", Style::default().fg(theme::current().warning)),
-            Span::raw(" · 5 min"),
-        ];
-        for width in [0, 1, 8, 20, 40, 80, 120] {
-            let line = header_line(left.clone(), right.clone(), width);
-            assert!(line.width() <= width as usize);
-            if width >= 40 {
-                assert!(line.to_string().ends_with("unresolved · 5 min"));
-                assert_eq!(
-                    line.spans[line.spans.len() - 2].style.fg,
-                    Some(theme::current().warning)
-                );
-            }
-            if width == 40 {
-                assert!(line.to_string().starts_with("@reviewer"));
-                assert!(line.to_string().contains('…'));
-            }
-            assert!(header_line(left.clone(), vec![], width).width() <= width as usize);
-        }
-    }
 }

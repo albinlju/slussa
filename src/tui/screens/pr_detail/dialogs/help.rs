@@ -11,7 +11,7 @@ const HELP_KEYS: &[(&str, &str)] = &[
     ("enter", "open / view"),
     (
         "space",
-        "toggle fold; open / fold a long comment (Overview)",
+        "toggle fold: a folder, a resolved thread, a long comment (its fold row)",
     ),
     ("/", "search"),
     ("n/N", "next/prev match"),

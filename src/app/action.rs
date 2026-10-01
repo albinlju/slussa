@@ -297,6 +297,8 @@ pub enum DiffAction {
     EnterPane,
     FocusTree,
     ToggleThreadExpand,
+    /// `space` on a fold row: open or fold that comment.
+    ToggleCommentFold,
 }
 
 #[derive(Debug, Clone, Copy)]

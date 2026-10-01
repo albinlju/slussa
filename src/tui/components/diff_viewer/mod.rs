@@ -1,7 +1,9 @@
 pub(crate) mod file_tree;
 mod keys;
+mod nav;
 mod pane;
 mod render;
+mod threads;
 mod tree;
 mod viewer;
 

@@ -154,7 +154,16 @@ fn footer_actions(state: &DetailView<'_>, tab: DetailTab) -> Vec<Hint> {
             return hints;
         }
         let mut hints = vec![Hint::on("esc: files")];
-        if let Some(thread) = view.focused_thread().filter(|thread| thread.resolved)
+        if let Some(key) = view.focused_fold() {
+            hints.insert(
+                0,
+                Hint::on(if view.opened_comments.contains(&key) {
+                    "space: fold comment"
+                } else {
+                    "space: expand comment"
+                }),
+            );
+        } else if let Some(thread) = view.focused_thread().filter(|thread| thread.resolved)
             && let Some(id) = thread.comment_id
         {
             hints.insert(

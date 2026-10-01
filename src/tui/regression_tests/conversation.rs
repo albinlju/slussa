@@ -174,6 +174,7 @@ fn unloaded_diff_cannot_reuse_a_previous_comment_target() {
                 removed: false,
             },
             target: NavTarget::Line,
+            fold: None,
         }),
     };
     state.ui.detail.diff.pane_cursor = 5;

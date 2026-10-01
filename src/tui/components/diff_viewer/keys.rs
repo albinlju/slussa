@@ -33,7 +33,9 @@ fn pane_key(code: KeyCode, view: &super::DiffViewer) -> Option<DiffAction> {
     match code {
         KeyCode::Char('n') if searching => Some(DiffAction::JumpMatch(1)),
         KeyCode::Char('N') if searching => Some(DiffAction::JumpMatch(-1)),
-        // Expand/collapse the focused resolved thread.
+        // On a fold row: open or fold its comment. On a thread: expand or collapse
+        // it, when it is resolved.
+        KeyCode::Char(' ') if view.focused_fold().is_some() => Some(DiffAction::ToggleCommentFold),
         KeyCode::Char(' ') if view.focused_thread().is_some() => {
             Some(DiffAction::ToggleThreadExpand)
         }

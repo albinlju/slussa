@@ -1,15 +1,17 @@
+use super::{
+    nav::{NavItem, NavKind},
+    threads::{ThreadDraw, push_thread},
+};
 use crate::{
     app::reviews::{CommentAnchor, PendingComment},
     domain::{
-        comment::{CommentId, CommentThread, ThreadHandle},
+        comment::{CommentId, CommentThread},
         diff::{Diff, DiffLine, FileDiff, LineRef},
     },
     tui::{
-        components::diff_viewer::{DiffViewer, FocusedNav, NavTarget, PaneNav},
-        icons, layout,
-        screens::pr_detail::view::ThreadRef,
-        theme,
-        widgets::{self, comment::render_inline_thread, comment_meta::Roles, markdown},
+        components::diff_viewer::{DiffViewer, FocusedNav, PaneNav},
+        icons, layout, theme,
+        widgets::{self, comment_fold::Folds, comment_meta::Roles, markdown},
     },
 };
 use chrono::Utc;
@@ -22,7 +24,7 @@ use ratatui::{
 };
 use std::collections::{HashMap, HashSet};
 
-const DIFF_GUTTER: &str = "  ";
+pub(super) const DIFF_GUTTER: &str = "  ";
 const DIFF_GUTTER_COLS: u16 = 2;
 
 #[expect(clippy::too_many_arguments, reason = "render inputs; see ROADMAP")]
@@ -70,7 +72,12 @@ pub(super) fn render(
         body_area.width,
         active,
         query,
-        roles,
+        Roles {
+            folds: Folds::Long {
+                opened: &ui_diff.opened_comments,
+            },
+            ..roles
+        },
         &ui_diff.expanded_threads,
     );
     let cursor = active.and_then(|i| nav_items.get(i));
@@ -85,7 +92,7 @@ pub(super) fn render(
     render_pane_header(frame, &file.path, adds, dels, cursor, header_inner);
 
     if let Some(m) = cursor
-        && matches!(m.kind, NavKind::Line { .. })
+        && matches!(m.kind, NavKind::Line { .. } | NavKind::Fold { .. })
         && let Some(line) = lines.get_mut(m.rendered_row)
     {
         *line = highlight_row(std::mem::take(line), body_area.width as usize);
@@ -124,6 +131,7 @@ pub(super) fn render(
                 removed,
             },
             target: item.target(),
+            fold: item.fold(),
         }
     });
     ui_diff.pane_scroll = scroll;
@@ -132,59 +140,6 @@ pub(super) fn render(
         matches,
         focused,
     };
-}
-
-enum NavKind {
-    Line {
-        line: usize,
-        removed: bool,
-    },
-    Thread {
-        line: usize,
-        removed: bool,
-        reply_to: Option<CommentId>,
-        handle: Option<ThreadHandle>,
-        resolved: bool,
-    },
-    /// A queued (not-yet-posted) review comment — `index` into the pending review.
-    Pending {
-        line: usize,
-        removed: bool,
-        index: usize,
-    },
-}
-
-struct NavItem {
-    rendered_row: usize,
-    row_span: usize,
-    kind: NavKind,
-}
-
-impl NavItem {
-    const fn anchor(&self) -> (usize, bool) {
-        match self.kind {
-            NavKind::Line { line, removed }
-            | NavKind::Thread { line, removed, .. }
-            | NavKind::Pending { line, removed, .. } => (line, removed),
-        }
-    }
-
-    fn target(&self) -> NavTarget {
-        match &self.kind {
-            NavKind::Line { .. } => NavTarget::Line,
-            NavKind::Thread {
-                reply_to,
-                handle,
-                resolved,
-                ..
-            } => NavTarget::Thread(ThreadRef {
-                handle: handle.clone(),
-                comment_id: *reply_to,
-                resolved: *resolved,
-            }),
-            NavKind::Pending { index, .. } => NavTarget::Pending(*index),
-        }
-    }
 }
 
 struct DiffBody {
@@ -246,31 +201,20 @@ fn build_diff_body(
                 comments_at.get(&new_no)
             };
             for thread in threads_here.into_iter().flatten() {
-                let idx = nav_items.len();
-                let start = lines.len();
-                // Resolved threads stay collapsed unless the user expanded this one.
-                let is_expanded = thread.reply_to.is_none_or(|id| expanded.contains(&id));
-                let span = push_thread_lines(
+                push_thread(
                     &mut lines,
+                    &mut nav_items,
                     thread,
-                    thread_width,
-                    now,
-                    active == Some(idx),
-                    diff_line.content(),
-                    roles,
-                    is_expanded,
-                );
-                nav_items.push(NavItem {
-                    rendered_row: start,
-                    row_span: span,
-                    kind: NavKind::Thread {
-                        line,
-                        removed,
-                        reply_to: thread.reply_to,
-                        handle: thread.anchor.as_ref().and_then(|a| a.handle.clone()),
-                        resolved: thread.resolved(),
+                    (line, removed),
+                    &ThreadDraw {
+                        width: thread_width,
+                        now,
+                        active,
+                        anchor_text: diff_line.content(),
+                        roles,
+                        expanded: thread.reply_to.is_none_or(|id| expanded.contains(&id)),
                     },
-                });
+                );
             }
 
             let pending_here = if removed {
@@ -413,37 +357,6 @@ fn push_pending_lines(
     count
 }
 
-#[expect(clippy::too_many_arguments, reason = "render inputs; see ROADMAP")]
-fn push_thread_lines(
-    lines: &mut Vec<Line<'static>>,
-    thread: &CommentThread,
-    thread_width: u16,
-    now: chrono::DateTime<Utc>,
-    active: bool,
-    anchor_text: &str,
-    roles: Roles<'_>,
-    expanded: bool,
-) -> usize {
-    let rendered = render_inline_thread(
-        thread,
-        thread_width,
-        now,
-        active,
-        Some(anchor_text),
-        roles,
-        expanded,
-    );
-    let count = rendered.len();
-    for tline in rendered {
-        let line_style = tline.style;
-        let mut spans: Vec<Span<'static>> = Vec::with_capacity(tline.spans.len() + 1);
-        spans.push(Span::raw(DIFF_GUTTER));
-        spans.extend(tline.spans);
-        lines.push(Line::from(spans).style(line_style));
-    }
-    count
-}
-
 fn render_pane_header(
     frame: &mut Frame<'_>,
     path: &str,
@@ -458,7 +371,9 @@ fn render_pane_header(
     let position = cursor.map(|m| {
         let (line, removed) = m.anchor();
         match m.kind {
-            NavKind::Thread { .. } => format!("  {} L{line}", icons::COMMENT),
+            NavKind::Thread(_) | NavKind::Fold { .. } => {
+                format!("  {} L{line}", icons::COMMENT)
+            }
             NavKind::Pending { .. } => format!("  {} L{line} (pending)", icons::COMMENT),
             NavKind::Line { .. } if removed => format!("  L{line} (old)"),
             NavKind::Line { .. } => format!("  L{line}"),

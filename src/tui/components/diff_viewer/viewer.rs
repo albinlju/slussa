@@ -9,7 +9,7 @@ use crate::{
         store::LoadState,
     },
     domain::{
-        comment::{CommentId, CommentThread},
+        comment::{CommentId, CommentKey, CommentThread},
         diff::{Diff, FileDiff},
     },
     tui::{
@@ -42,9 +42,11 @@ pub struct DiffViewer {
     pub pane_search: SearchInput,
     /// What the pane drew last, for the keys to act on.
     pub pane: PaneNav,
-    /// Root-comment ids of resolved threads the user has expanded (otherwise
-    /// resolved threads render collapsed in the diff).
+    /// Root-comment ids of resolved threads the reader has expanded (otherwise a
+    /// resolved thread is one line).
     pub expanded_threads: HashSet<CommentId>,
+    /// The long comments the reader has opened with their fold row.
+    pub opened_comments: HashSet<CommentKey>,
     pub focus: DiffFocus,
 }
 
@@ -68,6 +70,9 @@ pub struct FocusedNav {
     /// The line it is on or attached to: where a new comment would go.
     pub anchor: CommentAnchor,
     pub target: NavTarget,
+    /// The comment whose fold row the cursor is on, if it is on one; the target
+    /// is then its thread.
+    pub fold: Option<CommentKey>,
 }
 
 #[cfg(test)]
@@ -82,6 +87,7 @@ impl FocusedNav {
                 removed: false,
             },
             target,
+            fold: None,
         }
     }
 
@@ -130,6 +136,7 @@ impl Component for DiffViewer {
             DiffAction::EnterPane => self.diff_enter_pane(files),
             DiffAction::FocusTree => self.focus = DiffFocus::Tree,
             DiffAction::ToggleThreadExpand => self.diff_toggle_thread_expand(),
+            DiffAction::ToggleCommentFold => self.diff_toggle_comment_fold(),
         }
         None
     }
@@ -193,6 +200,7 @@ impl DiffViewer {
         }
     }
 
+    /// `space` on a resolved thread: one line, or the whole thread.
     fn diff_toggle_thread_expand(&mut self) {
         let Some(id) = self.focused_reply() else {
             return;
@@ -200,6 +208,21 @@ impl DiffViewer {
         if !self.expanded_threads.insert(id) {
             self.expanded_threads.remove(&id);
         }
+    }
+
+    /// `space` on a fold row: open that comment, or fold it again.
+    fn diff_toggle_comment_fold(&mut self) {
+        let Some(key) = self.focused_fold() else {
+            return;
+        };
+        if !self.opened_comments.insert(key) {
+            self.opened_comments.remove(&key);
+        }
+    }
+
+    /// The comment whose fold row the pane cursor is on.
+    pub fn focused_fold(&self) -> Option<CommentKey> {
+        self.pane.focused.as_ref().and_then(|focused| focused.fold)
     }
 
     pub(crate) const fn focus_file(&mut self, file_index: usize) {
