@@ -9,10 +9,12 @@ for AI-generated PRs: triage, check intent, approve or merge.
 - **Two views only: the PR list and the PR.** New capability appears as a
   better default, a column, a marker or one key inside those views. Never a new
   screen, dashboard or sidebar. A feature that cannot be explained in one
-  sentence and reached in one keypress is not ready.
+  sentence and reached in one keypress is not ready. Agent-facing subcommands
+  are not views; they print and exit.
 - **Provider and process calls block and run off the UI thread**, through
   `App::spawn_fetch`. No async HTTP, no ad hoc threads, nothing started from
-  rendering or key handling.
+  rendering or key handling. A headless subcommand has no UI thread and may call
+  the provider directly, one call after another and outside the Tokio runtime.
 - **No new panics in non-test code.** No `unwrap`, `expect`, `panic!`,
   `unreachable!` or indexing that can go out of bounds; clippy refuses them.
   Return an error, or restructure so the case cannot occur. An exception is an

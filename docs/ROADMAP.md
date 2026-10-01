@@ -65,6 +65,8 @@ What this rules out:
 - **Being a dashboard.** No third view, no configurable panes, no widget grid.
   gh-dash already exists; slussa wins by being the one you do not have to
   configure or learn.
+- **Agents deciding.** An agent may read and propose through the CLI; approving
+  and merging stay human.
 
 Priority order for anything new: attention signals in the list → AI-review
 integration → act-on-suggestion / merge path → agent handoff → diff ergonomics →
@@ -214,6 +216,67 @@ back on refresh.
   (PR-level browser opening is implemented).
 - [ ] **Copy additional references** — SHA / branch / permalink to a line.
 - [ ] **Linked issues / cross-references** — "closes #123", shown and openable.
+
+#### The other direction: an agent calling slussa
+
+Handoff above sends context *to* an agent. The reverse is an agent that triages
+or checks a PR by calling slussa itself. `gh` already gives an agent raw data;
+slussa adds what it computes: why a PR needs the human (the attention reason) and
+why a merge is blocked, the same on both providers. The rule that keeps this in
+step with the positioning: **agents may read and propose; only the human
+decides.** No new view: these are non-interactive subcommands that print and exit.
+
+- [ ] **Fail clearly without a terminal.** Today `slussa` run without a TTY does the
+  network preflight, then exits 1 with the operating system's own message
+  (`couldn't start the terminal UI: Device not configured`) and a few escape bytes
+  on stdout, which an agent cannot tell from any other failure. Check for a TTY
+  first: print a message that names the subcommands and exit 2, before anything
+  touches the network. The CLI integration tests that run `slussa` with no
+  arguments expect the preflight messages and need adjusting. Small, and worth
+  doing whether or not the rest is built.
+- [ ] **`slussa <number>` (or a PR URL)** starts the TUI on that PR. The natural
+  landing point when an agent says "PR 123 is ready for you"; it complements
+  *Jump to PR by number* inside the TUI.
+- [ ] **`slussa list --json`** — open PRs in the TUI's order with the "Needs you"
+  reason (reuses `domain::attention`). Output has `"schema": 1`, snake_case
+  identifiers (`ci_failed`, not "CI failed") and flat usernames; errors go to
+  stderr as JSON, never mixed into stdout. The JSON types are separate from the
+  domain types, so internal changes do not change the output. A headless command
+  never asks for input: it connects with `preflight::connect` and fails when the
+  account is not logged in, instead of going through `cli::connect`, which starts
+  the interactive `gh auth login`.
+- [ ] **`slussa blocked <number>`** — why the PR cannot be merged: the provider's
+  reasons from `Mergeability` (`Conflicts` or `Blocked`), plus CI and review
+  state, which are separate from it. Exit 0 mergeable, 3 not mergeable, 1 error,
+  2 usage; what `Unknown` should give is still to decide. One function defines
+  "not mergeable" once.
+- [ ] **Exit codes that mean something** — `kind()` on `FetchError` and
+  `PreflightError` (see *Error classification for the caller* in Engineering):
+  retryable, needs auth, not found, invalid.
+- [ ] **`slussa threads <number> --unresolved`** — unresolved threads with file and
+  line, and finding state once *Finding state per thread* exists.
+- [ ] **`slussa context <number>`** — one compact text package for an LLM (title,
+  description, unresolved threads, CI, blockers). It is the package *Send to
+  agent* needs too, so build it once; it needs a size rule for long threads and
+  diffs.
+- [ ] **Agents propose, the human decides** — `slussa draft comment …` and
+  `slussa review import …` put proposals in a local inbox that the TUI shows
+  marked as AI, and you send, edit or discard each. Depends on *AI-authored
+  comments marked* and on a store separate from the draft file, which the TUI
+  holds locked for as long as it runs (`DraftStorage`) and rewrites whole when its
+  content changes, so a second process cannot write into it. Needs de-duplication (a content hash or finding ID) and
+  anchors that carry their `DiffRevision`. This is the part nobody else has;
+  build it after the marker.
+- [ ] **`slussa agent-instructions`** — prints how an agent should use slussa, as a
+  short snippet for AGENTS.md or a skill. A CLI plus this is simpler than an MCP
+  server for a local tool built on `gh` and `git`; revisit MCP later (it is also
+  the trigger for a `slussa-core`).
+
+Left out on purpose: `wait --ci` (`gh pr checks --watch` does it) and approve or
+merge for agents. The JSON is a public contract, so keep it marked experimental
+(`"schema": 1`) until it is used. GitHub first: Bitbucket is in maintenance, and
+these commands go through the same provider code but are not planned to be tested
+against it.
 
 ### 5. Diff ergonomics
 
