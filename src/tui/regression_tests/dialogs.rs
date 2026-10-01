@@ -12,18 +12,19 @@ fn extracted_dialogs_render_and_keep_their_key_bindings() {
         };
         let (label, close) = match dialog {
             "confirm" => {
-                state.ui.detail.confirm = Some(ConfirmDialog::new(ConfirmKind::Decline));
+                state.ui.detail.overlay =
+                    Some(Overlay::Confirm(ConfirmDialog::new(ConfirmKind::Decline)));
                 (
                     "Close / decline this PR?",
                     DetailAction::Confirm(ConfirmAction::Close),
                 )
             }
             "review" => {
-                state.ui.detail.review_picker = Some(ReviewDialog::default());
+                state.ui.detail.overlay = Some(Overlay::Review(ReviewDialog::default()));
                 ("Submit review", DetailAction::Review(ReviewAction::Close))
             }
             "merge" => {
-                state.ui.detail.merge_picker = Some(MergeDialog::default());
+                state.ui.detail.overlay = Some(Overlay::Merge(MergeDialog::default()));
                 ("Merge this PR", DetailAction::Merge(MergeAction::Close))
             }
             "error" => {
@@ -31,7 +32,7 @@ fn extracted_dialogs_render_and_keep_their_key_bindings() {
                 ("Request failed", DetailAction::Error(ErrorAction::Dismiss))
             }
             "help" => {
-                state.ui.detail.help_open = true;
+                state.ui.detail.overlay = Some(Overlay::Help(HelpDialog::default()));
                 ("Help", DetailAction::Nav(NavAction::ToggleHelp))
             }
             other => panic!("no such dialog in this test: {other}"),
@@ -156,15 +157,16 @@ fn dialog_footers_and_review_choices_remain_visible_with_large_queue() {
             );
             let expected = match kind {
                 "review" => {
-                    state.ui.detail.review_picker = Some(ReviewDialog::default());
+                    state.ui.detail.overlay = Some(Overlay::Review(ReviewDialog::default()));
                     "Approve"
                 }
                 "merge" => {
-                    state.ui.detail.merge_picker = Some(MergeDialog::default());
+                    state.ui.detail.overlay = Some(Overlay::Merge(MergeDialog::default()));
                     "Merge commit"
                 }
                 _ => {
-                    state.ui.detail.confirm = Some(ConfirmDialog::new(ConfirmKind::Decline));
+                    state.ui.detail.overlay =
+                        Some(Overlay::Confirm(ConfirmDialog::new(ConfirmKind::Decline)));
                     "Yes"
                 }
             };
@@ -218,7 +220,7 @@ fn long_error_scrolls_without_dismissing_or_acting_on_the_pr() {
     let text = rendered_text(&terminal);
     assert!(text.contains("END_OF_ERROR"));
     assert!(text.contains("Esc / Enter close"));
-    assert!(state.ui.detail.review_picker.is_none());
+    assert!(state.ui.detail.review_picker().is_none());
     assert!(matches!(
         key(&state, KeyCode::Esc),
         Action::Detail(DetailAction::Error(ErrorAction::Dismiss))
@@ -333,19 +335,11 @@ fn mutation_dialogs_show_pr_and_target_even_with_a_long_source_branch() {
                 prs[0].source_branch = "feature/".repeat(20);
             }
             if merge {
-                state.ui.detail.merge_picker = Some(MergeDialog::default());
+                state.ui.detail.overlay = Some(Overlay::Merge(MergeDialog::default()));
             } else {
-                state.ui.detail.confirm = Some(ConfirmDialog::new(ConfirmKind::Decline));
-                assert!(
-                    state
-                        .ui
-                        .detail
-                        .confirm
-                        .as_ref()
-                        .unwrap()
-                        .accepted()
-                        .is_none()
-                );
+                state.ui.detail.overlay =
+                    Some(Overlay::Confirm(ConfirmDialog::new(ConfirmKind::Decline)));
+                assert!(state.ui.detail.confirm().unwrap().accepted().is_none());
             }
             let mut terminal = Terminal::new(TestBackend::new(width, 16)).unwrap();
             terminal.draw(|frame| render(frame, &mut state)).unwrap();
@@ -393,9 +387,14 @@ fn resumed_editor_and_delete_dialog_identify_the_comment() {
             id: 7,
             review: true,
         })
-        .with_context("@alice: Original comment".into());
+        .with_preview("@alice: Original comment".into());
+        let pr = PrSummary {
+            label: "PR #42 · Component migration".into(),
+            target_branch: "main",
+            source_branch: "feature",
+        };
         terminal
-            .draw(|frame| dialog.render(frame, frame.area(), &()))
+            .draw(|frame| dialog.render(frame, frame.area(), &pr))
             .unwrap();
         assert!(rendered_text(&terminal).contains("@alice: Original comment"));
     }

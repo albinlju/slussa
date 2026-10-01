@@ -83,9 +83,9 @@ fn read_only_capabilities_block_shortcuts_commands_and_optional_loads() {
         press(&mut app, KeyCode::Char(ch));
     }
     assert!(app.state.ui.detail.editor.draft.is_none());
-    assert!(app.state.ui.detail.review_picker.is_none());
-    assert!(app.state.ui.detail.merge_picker.is_none());
-    assert!(app.state.ui.detail.confirm.is_none());
+    assert!(app.state.ui.detail.review_picker().is_none());
+    assert!(app.state.ui.detail.merge_picker().is_none());
+    assert!(app.state.ui.detail.confirm().is_none());
     assert_eq!(
         app.state.screen,
         Screen::Detail {

@@ -42,7 +42,7 @@ fn unsupported_features_are_hidden_from_content_footer_and_help() {
     };
     state.store.capabilities = Capabilities::default();
     for help_open in [false, true] {
-        state.ui.detail.help_open = help_open;
+        state.ui.detail.overlay = help_open.then(|| Overlay::Help(HelpDialog::default()));
         let mut terminal = Terminal::new(TestBackend::new(150, 50)).unwrap();
         terminal.draw(|frame| render(frame, &mut state)).unwrap();
         let text: String = terminal
@@ -78,7 +78,7 @@ fn unsupported_features_are_hidden_from_content_footer_and_help() {
             assert!(text.contains("1-4"));
         }
     }
-    state.ui.detail.help_open = false;
+    state.ui.detail.overlay = None;
     state.store.capabilities.features.insert(Feature::Builds);
     let mut terminal = Terminal::new(TestBackend::new(150, 50)).unwrap();
     terminal.draw(|frame| render(frame, &mut state)).unwrap();
@@ -122,7 +122,7 @@ fn help_scroll_reaches_last_action_in_small_terminal() {
         pr_id: 42,
         tab: DetailTab::Overview,
     };
-    state.ui.detail.help_open = true;
+    state.ui.detail.overlay = Some(Overlay::Help(HelpDialog::default()));
     let mut terminal = Terminal::new(TestBackend::new(40, 12)).unwrap();
     terminal.draw(|f| render(f, &mut state)).unwrap();
     for _ in 0..8 {

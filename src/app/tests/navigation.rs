@@ -204,7 +204,7 @@ fn help_in_both_screens_captures_keys_and_restores_navigation() {
         }
         assert!(!app.state.ui.list.search.open);
         assert!(app.state.ui.detail.editor.draft.is_none());
-        assert!(app.state.ui.detail.merge_picker.is_none());
+        assert!(app.state.ui.detail.merge_picker().is_none());
         assert_eq!(app.state.ui.list.selected, selected);
         press(&mut app, KeyCode::Esc);
         assert!(!app.state.ui.modal_open(&app.state.store, screen));

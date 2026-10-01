@@ -1,9 +1,6 @@
 use crate::{
     app::action::{Action, ConfirmAction, Effect},
-    tui::{
-        component::{Component, step_index},
-        theme,
-    },
+    tui::{component::Component, screens::pr_detail::dialogs::PrSummary, theme},
 };
 use ratatui::{
     Frame,
@@ -36,33 +33,57 @@ impl ConfirmKind {
     }
 }
 
-const CONFIRM_OPTIONS: [&str; 2] = ["Yes", "No"];
+/// The two answers. The default differs by what is asked: see
+/// `ConfirmKind::default_choice`.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum Choice {
+    Yes,
+    No,
+}
 
-fn render(
-    frame: &mut Frame<'_>,
-    kind: ConfirmKind,
-    cursor: usize,
-    context: &str,
-    target_branch: Option<&str>,
-    area: Rect,
-) {
+impl ConfirmKind {
+    /// What Enter does if nothing is moved. Yes only where the action is
+    /// routine and easy to undo; a new kind has to say which it is.
+    const fn default_choice(self) -> Choice {
+        match self {
+            Self::Reopen | Self::DeleteComment { .. } => Choice::Yes,
+            Self::Decline | Self::DiscardReview => Choice::No,
+        }
+    }
+
+    const fn labels(self) -> [&'static str; 2] {
+        match self {
+            Self::DiscardReview => ["Discard review", "Keep reviewing"],
+            Self::DeleteComment { .. } | Self::Decline | Self::Reopen => ["Yes", "No"],
+        }
+    }
+}
+
+fn render(frame: &mut Frame<'_>, dialog: &ConfirmDialog, pr: &PrSummary<'_>, area: Rect) {
     let theme = theme::current();
     let selected = Style::default()
         .bg(theme.highlight_bg)
         .add_modifier(Modifier::BOLD);
     let normal = Style::default().fg(theme.muted);
+    let kind = dialog.kind;
+    // What the question is about: the PR, or the comment to delete.
+    let (context, target_branch) = match kind {
+        ConfirmKind::Decline => (Some(pr.label.as_str()), Some(pr.target_branch)),
+        // Reopening states no target: nothing is lost or merged by it.
+        ConfirmKind::Reopen => (Some(pr.label.as_str()), None),
+        ConfirmKind::DeleteComment { .. } => (dialog.preview.as_deref(), None),
+        ConfirmKind::DiscardReview => (None, None),
+    };
 
     let mut lines = vec![
         Line::from(Span::styled(kind.prompt(), Style::default().fg(theme.fg))),
         Line::default(),
     ];
-    if !context.is_empty() {
-        for (index, line) in context.lines().take(3).enumerate() {
-            lines.insert(
-                1 + index,
-                Line::styled(line.to_owned(), Style::default().fg(theme.muted)),
-            );
-        }
+    for (index, line) in context.into_iter().flat_map(str::lines).take(3).enumerate() {
+        lines.insert(
+            1 + index,
+            Line::styled(line.to_owned(), Style::default().fg(theme.muted)),
+        );
     }
     if let Some(branch) = target_branch {
         let index = lines.len() - 1;
@@ -80,12 +101,11 @@ fn render(
         );
         lines.insert(index + 1, Line::styled("Closes without merging", normal));
     }
-    let options = if kind == ConfirmKind::DiscardReview {
-        ["Discard review", "Keep reviewing"]
-    } else {
-        CONFIRM_OPTIONS
+    let cursor = match dialog.choice {
+        Choice::Yes => 0,
+        Choice::No => 1,
     };
-    for (i, label) in options.iter().enumerate() {
+    for (i, label) in kind.labels().iter().enumerate() {
         let marker = if i == cursor { "▶ " } else { "  " };
         let style = if i == cursor { selected } else { normal };
         lines.push(Line::from(vec![
@@ -111,39 +131,24 @@ const fn key_to_action(code: KeyCode) -> Option<ConfirmAction> {
 #[derive(Debug)]
 pub struct ConfirmDialog {
     kind: ConfirmKind,
-    cursor: usize,
-    context: String,
-    target_branch: Option<String>,
+    choice: Choice,
+    /// The comment a delete is asked about.
+    preview: Option<String>,
 }
 impl ConfirmDialog {
-    pub fn new(kind: ConfirmKind) -> Self {
+    pub const fn new(kind: ConfirmKind) -> Self {
         Self {
             kind,
-            cursor: usize::from(matches!(
-                kind,
-                ConfirmKind::DiscardReview | ConfirmKind::Decline
-            )),
-            context: String::new(),
-            target_branch: None,
+            choice: kind.default_choice(),
+            preview: None,
         }
     }
-    pub fn with_context(mut self, context: String) -> Self {
-        self.context = context;
+    pub fn with_preview(mut self, preview: String) -> Self {
+        self.preview = Some(preview);
         self
     }
-    pub fn set_pr_context(&mut self, context: String, target_branch: &str) {
-        match self.kind {
-            ConfirmKind::Decline => {
-                self.context = context;
-                self.target_branch = Some(target_branch.to_owned());
-            }
-            // Reopening states no target: nothing is lost or merged by it.
-            ConfirmKind::Reopen => self.context = context,
-            ConfirmKind::DeleteComment { .. } | ConfirmKind::DiscardReview => {}
-        }
-    }
     pub fn accepted(&self) -> Option<ConfirmKind> {
-        (self.cursor == 0).then_some(self.kind)
+        (self.choice == Choice::Yes).then_some(self.kind)
     }
     #[cfg(test)]
     pub const fn kind(&self) -> ConfirmKind {
@@ -153,28 +158,28 @@ impl ConfirmDialog {
 
 impl Component for ConfirmDialog {
     type Input<'a> = ();
-    type View<'a> = ();
+    /// The PR the question is asked on.
+    type View<'a> = PrSummary<'a>;
     type Message = ConfirmAction;
     fn handle_key(&self, key: KeyEvent, (): &()) -> Option<Action> {
         key_to_action(key.code).map(Action::from)
     }
     fn update(&mut self, action: ConfirmAction, (): &()) -> Option<Effect> {
         match action {
-            ConfirmAction::Move(delta) => self.cursor = step_index(self.cursor, delta, 2),
+            ConfirmAction::Move(delta) => {
+                self.choice = match delta.signum() {
+                    -1 => Choice::Yes,
+                    1 => Choice::No,
+                    _ => self.choice,
+                };
+            }
             // Closing and accepting are the screen's: it holds the dialog.
             ConfirmAction::Accept | ConfirmAction::Close => {}
         }
         None
     }
-    fn render(&mut self, frame: &mut Frame<'_>, area: Rect, (): &()) {
-        render(
-            frame,
-            self.kind,
-            self.cursor,
-            &self.context,
-            self.target_branch.as_deref(),
-            area,
-        );
+    fn render(&mut self, frame: &mut Frame<'_>, area: Rect, pr: &PrSummary<'_>) {
+        render(frame, self, pr, area);
     }
 }
 
@@ -200,7 +205,14 @@ mod tests {
         use ratatui::{Terminal, backend::TestBackend};
         let mut terminal = Terminal::new(TestBackend::new(70, 20)).unwrap();
         terminal
-            .draw(|frame| dialog.render(frame, frame.area(), &()))
+            .draw(|frame| {
+                let pr = PrSummary {
+                    label: "PR #7 · Fix it".into(),
+                    target_branch: "main",
+                    source_branch: "feature",
+                };
+                dialog.render(frame, frame.area(), &pr);
+            })
             .unwrap();
         let buffer = terminal.backend().buffer();
         (0..20)
@@ -211,9 +223,7 @@ mod tests {
 
     #[test]
     fn the_reopen_dialog_names_the_pr_and_does_not_talk_about_closing() {
-        let mut dialog = ConfirmDialog::new(ConfirmKind::Reopen);
-        dialog.set_pr_context("PR #7 · Fix it".into(), "main");
-        let text = drawn(&mut dialog);
+        let text = drawn(&mut ConfirmDialog::new(ConfirmKind::Reopen));
 
         assert!(text.contains("Reopen this PR?"), "{text}");
         assert!(text.contains("PR #7 · Fix it"), "{text}");
@@ -223,15 +233,31 @@ mod tests {
     }
 
     #[test]
-    fn reopening_shows_the_pr_but_no_closing_target() {
-        let mut dialog = ConfirmDialog::new(ConfirmKind::Reopen);
-        dialog.set_pr_context("PR #7 · Fix it".into(), "main");
-        assert_eq!(dialog.context, "PR #7 · Fix it");
-        assert_eq!(dialog.target_branch, None);
+    fn declining_names_the_target_and_a_delete_shows_the_comment_not_the_pr() {
+        let text = drawn(&mut ConfirmDialog::new(ConfirmKind::Decline));
+        assert!(text.contains("PR #7 · Fix it"), "{text}");
+        assert!(text.contains("Target: main"), "{text}");
+        assert!(text.contains("Closes without merging"), "{text}");
 
-        let mut decline = ConfirmDialog::new(ConfirmKind::Decline);
-        decline.set_pr_context("PR #7 · Fix it".into(), "main");
-        assert_eq!(decline.target_branch.as_deref(), Some("main"));
+        let kind = ConfirmKind::DeleteComment {
+            id: 3,
+            review: false,
+        };
+        let text = drawn(&mut ConfirmDialog::new(kind).with_preview("@ann: typo".into()));
+        assert!(text.contains("@ann: typo"), "{text}");
+        assert!(!text.contains("PR #7"), "{text}");
         assert_eq!(ConfirmKind::Reopen.prompt(), "Reopen this PR?");
+    }
+
+    #[test]
+    fn moving_picks_an_answer_and_only_yes_accepts() {
+        let mut dialog = ConfirmDialog::new(ConfirmKind::Decline);
+        assert_eq!(dialog.accepted(), None);
+        dialog.update(ConfirmAction::Move(-1), &());
+        assert_eq!(dialog.accepted(), Some(ConfirmKind::Decline));
+        dialog.update(ConfirmAction::Move(-1), &());
+        assert_eq!(dialog.accepted(), Some(ConfirmKind::Decline));
+        dialog.update(ConfirmAction::Move(5), &());
+        assert_eq!(dialog.accepted(), None);
     }
 }

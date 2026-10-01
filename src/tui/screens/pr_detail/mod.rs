@@ -19,9 +19,13 @@ use crate::{
         component::Component,
         components::{
             diff_viewer::DiffViewer,
+            help_dialog::HelpDialog,
             search_input::{SearchInput, SearchKind},
         },
-        screens::pr_detail::tabs::commits::CommitList,
+        screens::pr_detail::{
+            dialogs::{confirm::ConfirmDialog, merge::MergeDialog, review::ReviewDialog},
+            tabs::commits::CommitList,
+        },
     },
 };
 use ratatui::{Frame, layout::Rect};
@@ -52,19 +56,26 @@ impl<'a> Surface<'a> {
         }
     }
 }
+/// The dialog in front of the PR screen. There is one or none: opening one
+/// replaces whatever was there, so two can never be open at once and the keys
+/// and the drawing cannot disagree about which is on top.
+#[derive(Debug)]
+pub enum Overlay {
+    Help(HelpDialog),
+    Confirm(ConfirmDialog),
+    Review(ReviewDialog),
+    Merge(MergeDialog),
+}
+
 #[derive(Debug, Default)]
 pub struct PrDetailScreen {
     pub overview: tabs::overview::Overview,
     pub builds: tabs::builds::Builds,
     pub description: tabs::description::Description,
-    pub confirm: Option<dialogs::confirm::ConfirmDialog>,
-    pub review_picker: Option<dialogs::review::ReviewDialog>,
-    pub merge_picker: Option<dialogs::merge::MergeDialog>,
+    pub overlay: Option<Overlay>,
     pub diff: DiffViewer,
     pub commits: CommitList,
     pub error: dialogs::error::ErrorDialog,
-    pub help_open: bool,
-    pub help: crate::tui::components::help_dialog::HelpDialog,
     pub editor: crate::tui::components::comment_editor::CommentEditor,
     pr_id: Option<u64>,
     pub active_tab: tabs::DetailTab,
@@ -96,11 +107,32 @@ impl PrDetailScreen {
         }
     }
     pub const fn modal_open(&self) -> bool {
-        self.confirm.is_some()
-            || self.review_picker.is_some()
-            || self.merge_picker.is_some()
-            || self.help_open
-            || self.editor.is_open()
+        self.overlay.is_some() || self.editor.is_open()
+    }
+
+    pub const fn help_open(&self) -> bool {
+        matches!(self.overlay, Some(Overlay::Help(_)))
+    }
+
+    pub const fn confirm(&self) -> Option<&ConfirmDialog> {
+        match &self.overlay {
+            Some(Overlay::Confirm(dialog)) => Some(dialog),
+            Some(Overlay::Help(_) | Overlay::Review(_) | Overlay::Merge(_)) | None => None,
+        }
+    }
+
+    pub const fn review_picker(&self) -> Option<&ReviewDialog> {
+        match &self.overlay {
+            Some(Overlay::Review(dialog)) => Some(dialog),
+            Some(Overlay::Help(_) | Overlay::Confirm(_) | Overlay::Merge(_)) | None => None,
+        }
+    }
+
+    pub const fn merge_picker(&self) -> Option<&MergeDialog> {
+        match &self.overlay {
+            Some(Overlay::Merge(dialog)) => Some(dialog),
+            Some(Overlay::Help(_) | Overlay::Confirm(_) | Overlay::Review(_)) | None => None,
+        }
     }
 
     /// What the content area shows on `tab`.
@@ -201,12 +233,17 @@ impl PrDetailScreen {
     ) -> Option<Effect> {
         let tab = match action {
             NavAction::Back => {
-                self.help_open = false;
+                if self.help_open() {
+                    self.overlay = None;
+                }
                 return Some(Effect::Navigate(Screen::List));
             }
             NavAction::ToggleHelp => {
-                self.help_open = !self.help_open;
-                self.help = crate::tui::components::help_dialog::HelpDialog::default();
+                self.overlay = if self.help_open() {
+                    None
+                } else {
+                    Some(Overlay::Help(HelpDialog::default()))
+                };
                 return None;
             }
             NavAction::NextTab => tab.step(1, &ctx.store.capabilities),

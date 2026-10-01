@@ -201,11 +201,14 @@ impl Ui {
                 None
             }
             Action::HelpScroll(delta) => {
-                let (open, help) = match screen {
-                    Screen::List => (self.list.help_open, &mut self.list.help),
-                    Screen::Detail { .. } => (self.detail.help_open, &mut self.detail.help),
+                let help = match screen {
+                    Screen::List => self.list.help_open.then_some(&mut self.list.help),
+                    Screen::Detail { .. } => match &mut self.detail.overlay {
+                        Some(pr_detail::Overlay::Help(help)) => Some(help),
+                        _ => None,
+                    },
                 };
-                if open {
+                if let Some(help) = help {
                     help.update(delta, &());
                 }
                 None

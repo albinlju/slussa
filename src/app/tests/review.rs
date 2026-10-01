@@ -66,8 +66,7 @@ fn own_pr_review_gate_and_decline_cancel_are_preserved() {
         app.state
             .ui
             .detail
-            .review_picker
-            .as_ref()
+            .review_picker()
             .map(ReviewDialog::cursor),
         Some(2)
     );
@@ -81,17 +80,12 @@ fn own_pr_review_gate_and_decline_cancel_are_preserved() {
     press(&mut app, KeyCode::Esc);
     press(&mut app, KeyCode::Char('x'));
     assert_eq!(
-        app.state
-            .ui
-            .detail
-            .confirm
-            .as_ref()
-            .map(ConfirmDialog::kind),
+        app.state.ui.detail.confirm().map(ConfirmDialog::kind),
         Some(ConfirmKind::Decline)
     );
     press(&mut app, KeyCode::Char('l'));
     press(&mut app, KeyCode::Enter);
-    assert!(app.state.ui.detail.confirm.is_none());
+    assert!(app.state.ui.detail.confirm().is_none());
     assert!(!app.state.store.operations.contains_key(&42));
 }
 
@@ -101,11 +95,11 @@ fn review_picker_captures_keys_before_diff_search() {
     detail(&mut app, DetailTab::Diff);
     press(&mut app, KeyCode::Char('v'));
     press(&mut app, KeyCode::Char('v'));
-    assert!(app.state.ui.detail.review_picker.is_some());
+    assert!(app.state.ui.detail.review_picker().is_some());
     press(&mut app, KeyCode::Char('/'));
     assert!(!app.state.ui.detail.diff.tree_search.open);
     press(&mut app, KeyCode::Esc);
-    assert!(app.state.ui.detail.review_picker.is_none());
+    assert!(app.state.ui.detail.review_picker().is_none());
     assert!(app.state.store.reviews.contains_key(&42));
 }
 
@@ -159,7 +153,7 @@ fn detail_emits_resolved_commands_and_retains_submission_payload() {
             command: Command::Decline
         })
     ));
-    assert!(app.state.ui.detail.confirm.is_none());
+    assert!(app.state.ui.detail.confirm().is_none());
 }
 
 #[test]
@@ -223,7 +217,7 @@ fn pending_review_can_be_finished_from_every_tab_that_shows_the_hint() {
         detail(&mut app, tab);
         app.state.store.reviews.entry(42).or_default();
         press(&mut app, KeyCode::Char('v'));
-        assert!(app.state.ui.detail.review_picker.is_some(), "{tab:?}");
+        assert!(app.state.ui.detail.review_picker().is_some(), "{tab:?}");
     }
 }
 
@@ -248,7 +242,7 @@ fn discarding_a_populated_review_requires_explicit_confirmation() {
     );
     press(&mut app, KeyCode::Char('V'));
     assert_eq!(
-        app.state.ui.detail.confirm.as_ref().unwrap().kind(),
+        app.state.ui.detail.confirm().unwrap().kind(),
         ConfirmKind::DiscardReview
     );
     // Enter defaults to keeping the review, not removing it.
@@ -317,7 +311,7 @@ fn comment_lookup_keeps_review_and_pr_ids_separate() {
     app.state.ui.detail.editor = tui::components::comment_editor::CommentEditor::default();
     press(&mut app, KeyCode::Char('d'));
     assert_eq!(
-        app.state.ui.detail.confirm.as_ref().unwrap().kind(),
+        app.state.ui.detail.confirm().unwrap().kind(),
         ConfirmKind::DeleteComment {
             id: 7,
             review: true

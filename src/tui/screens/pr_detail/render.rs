@@ -14,7 +14,8 @@ use crate::{
         components::{comment_editor::EditorView, diff_viewer::DiffContext},
         layout,
         screens::pr_detail::{
-            DetailContext, DetailView, PrDetailScreen,
+            DetailContext, DetailView, Overlay, PrDetailScreen,
+            dialogs::{PrSummary, merge::MergeView},
             tabs::{DetailTab, commits, description::DescriptionView, overview::OverviewContext},
         },
         theme,
@@ -259,35 +260,33 @@ pub(super) fn render(
             },
         );
     }
-    if ui.help_open {
-        ui.help.render(
+    match &mut ui.overlay {
+        Some(Overlay::Help(help)) => help.render(
             frame,
             area,
             &dialogs::help::entries(&ctx.store.capabilities, pr.url.is_some()).as_slice(),
-        );
-    }
-    if let Some(dialog) = &mut ui.confirm {
-        dialog.set_pr_context(format!("PR #{} · {}", pr.id, pr.title), &pr.target_branch);
-        dialog.render(frame, area, &());
-    }
-    if let Some(dialog) = &mut ui.review_picker {
-        dialog.render(frame, area, &review_ctx);
-    }
-    if let Some(dialog) = &mut ui.merge_picker {
-        dialog.pr_label = format!("PR #{} · {}", pr.id, pr.title);
-        dialog.target_branch.clone_from(&pr.target_branch);
-        dialog.source_branch.clone_from(&pr.source_branch);
-        dialog.blockers = match pr_data.map(|data| &data.mergeability) {
-            Some(LoadState::Loaded(status)) if status.state != Mergeability::Mergeable => {
-                status.blockers.clone()
-            }
-            _ => Vec::new(),
-        };
-        dialog.render(
-            frame,
-            area,
-            &ctx.store.capabilities.merge_strategies.as_slice(),
-        );
+        ),
+        Some(Overlay::Confirm(dialog)) => dialog.render(frame, area, &PrSummary::of(pr)),
+        Some(Overlay::Review(dialog)) => dialog.render(frame, area, &review_ctx),
+        Some(Overlay::Merge(dialog)) => {
+            // What stands in the way of a merge, as far as the provider said.
+            let blockers = match pr_data.and_then(|data| data.mergeability.loaded()) {
+                Some(status) if status.state != Mergeability::Mergeable => {
+                    status.blockers.as_slice()
+                }
+                Some(_) | None => &[],
+            };
+            dialog.render(
+                frame,
+                area,
+                &MergeView {
+                    strategies: &ctx.store.capabilities.merge_strategies,
+                    pr: PrSummary::of(pr),
+                    blockers,
+                },
+            );
+        }
+        None => {}
     }
     if let Some(msg) = ctx.store.errors.get(&pr_id) {
         ui.error.render(frame, area, &msg.as_str());

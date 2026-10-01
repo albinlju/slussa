@@ -1,5 +1,5 @@
 use super::{
-    DetailContext, DetailView, PrDetailScreen,
+    DetailContext, DetailView, Overlay, PrDetailScreen,
     dialogs::{
         confirm::{ConfirmDialog, ConfirmKind},
         merge::MergeDialog,
@@ -38,6 +38,10 @@ impl PrDetailScreen {
         let editors = std::mem::take(&mut self.editors);
         let mut navigation = std::mem::take(&mut self.navigation);
         let position = navigation.remove(&pr_id).unwrap_or_default();
+        let mut editors = editors;
+        let editor = editors.remove(&pr_id).unwrap_or_default();
+        // Every field is named: one added later has to say what opening a PR
+        // does to it, instead of being reset by a `..Self::default()`.
         *self = Self {
             pr_id: Some(pr_id),
             editors,
@@ -48,9 +52,10 @@ impl PrDetailScreen {
             description: position.description,
             diff: position.diff,
             commits: position.commits,
-            ..Self::default()
+            editor,
+            overlay: None,
+            error: super::dialogs::error::ErrorDialog::default(),
         };
-        self.editor = self.editors.remove(&pr_id).unwrap_or_default();
     }
 
     /// An acknowledgement affects only the editor that submitted the payload.
@@ -86,6 +91,17 @@ impl PrDetailScreen {
         }
     }
 
+    fn ask(&mut self, dialog: ConfirmDialog) {
+        self.overlay = Some(Overlay::Confirm(dialog));
+    }
+
+    /// Close the dialog if it is the one the message came from.
+    fn close(&mut self, is_this: impl FnOnce(&Overlay) -> bool) {
+        if self.overlay.as_ref().is_some_and(is_this) {
+            self.overlay = None;
+        }
+    }
+
     const fn command(pr_id: u64, command: Command) -> Effect {
         Effect::Command { pr_id, command }
     }
@@ -98,15 +114,19 @@ impl PrDetailScreen {
     pub(super) fn confirm_action(&mut self, action: ConfirmAction, pr_id: u64) -> Option<Effect> {
         match action {
             ConfirmAction::Move(_) => {
-                self.confirm.as_mut()?.update(action, &());
+                if let Some(Overlay::Confirm(dialog)) = &mut self.overlay {
+                    dialog.update(action, &());
+                }
                 None
             }
             ConfirmAction::Close => {
-                self.confirm = None;
+                self.close(|overlay| matches!(overlay, Overlay::Confirm(_)));
                 None
             }
             ConfirmAction::Accept => {
-                let command = match self.confirm.take()?.accepted()? {
+                let accepted = self.confirm()?.accepted();
+                self.overlay = None;
+                let command = match accepted? {
                     ConfirmKind::Decline => Command::Decline,
                     ConfirmKind::Reopen => Command::Reopen,
                     ConfirmKind::DiscardReview => Command::AbandonReview,
@@ -131,19 +151,20 @@ impl PrDetailScreen {
                     options: self.view(ctx).review_context().options,
                     pending: ctx.store.reviews.get(&pr_id),
                 };
-                self.review_picker.as_mut()?.update(action, &review_ctx);
+                if let Some(Overlay::Review(dialog)) = &mut self.overlay {
+                    dialog.update(action, &review_ctx);
+                }
                 None
             }
             ReviewAction::Close => {
-                self.review_picker = None;
+                self.close(|overlay| matches!(overlay, Overlay::Review(_)));
                 None
             }
             ReviewAction::Select => {
                 let verdict = self
-                    .review_picker
-                    .as_ref()?
+                    .review_picker()?
                     .selected(&self.view(ctx).review_context())?;
-                self.review_picker = None;
+                self.overlay = None;
                 if verdict.needs_body() {
                     self.open_draft(Some(CommentTarget::Review { verdict }));
                     return None;
@@ -168,15 +189,19 @@ impl PrDetailScreen {
         let strategies = ctx.store.capabilities.merge_strategies.as_slice();
         match action {
             MergeAction::Move(_) => {
-                self.merge_picker.as_mut()?.update(action, &strategies);
+                if let Some(Overlay::Merge(dialog)) = &mut self.overlay {
+                    dialog.update(action, &strategies);
+                }
                 None
             }
             MergeAction::Close => {
-                self.merge_picker = None;
+                self.close(|overlay| matches!(overlay, Overlay::Merge(_)));
                 None
             }
             MergeAction::Select => {
-                let strategy = self.merge_picker.take()?.selected(strategies)?;
+                let strategy = self.merge_picker()?.selected(strategies);
+                self.overlay = None;
+                let strategy = strategy?;
                 Some(Self::command(pr_id, Command::Merge(strategy)))
             }
         }
@@ -204,12 +229,14 @@ impl PrDetailScreen {
     ) -> Option<Effect> {
         let command = match action {
             PrAction::OpenReviewPicker => {
-                self.review_picker = Some(ReviewDialog::new(&self.view(ctx).review_context()));
+                let dialog = ReviewDialog::new(&self.view(ctx).review_context());
+                self.overlay = Some(Overlay::Review(dialog));
                 return None;
             }
             PrAction::FinishReview => {
                 if ctx.store.reviews.contains_key(&pr_id) {
-                    self.review_picker = Some(ReviewDialog::new(&self.view(ctx).review_context()));
+                    let dialog = ReviewDialog::new(&self.view(ctx).review_context());
+                    self.overlay = Some(Overlay::Review(dialog));
                 }
                 return None;
             }
@@ -221,7 +248,7 @@ impl PrDetailScreen {
                     .get(&pr_id)
                     .is_some_and(|review| !review.comments.is_empty())
                 {
-                    self.confirm = Some(ConfirmDialog::new(ConfirmKind::DiscardReview));
+                    self.ask(ConfirmDialog::new(ConfirmKind::DiscardReview));
                     return None;
                 }
                 Command::AbandonReview
@@ -231,16 +258,16 @@ impl PrDetailScreen {
             }
             PrAction::OpenMergePicker => {
                 if !ctx.store.capabilities.merge_strategies.is_empty() {
-                    self.merge_picker = Some(MergeDialog::default());
+                    self.overlay = Some(Overlay::Merge(MergeDialog::default()));
                 }
                 return None;
             }
             PrAction::OpenDecline => {
-                self.confirm = Some(ConfirmDialog::new(ConfirmKind::Decline));
+                self.ask(ConfirmDialog::new(ConfirmKind::Decline));
                 return None;
             }
             PrAction::OpenReopen => {
-                self.confirm = Some(ConfirmDialog::new(ConfirmKind::Reopen));
+                self.ask(ConfirmDialog::new(ConfirmKind::Reopen));
                 return None;
             }
             PrAction::OpenComment => {
@@ -275,12 +302,12 @@ impl PrDetailScreen {
                 let selected = self.view(ctx).editable_selected()?;
                 let comment = self.view(ctx).find_comment(selected.id?, selected.review)?;
                 let preview = format!("@{}: {}", comment.author.username, comment.content);
-                self.confirm = Some(
+                self.ask(
                     ConfirmDialog::new(ConfirmKind::DeleteComment {
                         id: selected.id?,
                         review: selected.review,
                     })
-                    .with_context(preview),
+                    .with_preview(preview),
                 );
                 return None;
             }

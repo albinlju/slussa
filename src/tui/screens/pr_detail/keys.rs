@@ -5,7 +5,7 @@ use crate::{
     tui::{
         component::Component,
         components::diff_viewer::DiffFocus,
-        screens::pr_detail::{Surface, tabs::DetailTab},
+        screens::pr_detail::{Overlay, Surface, tabs::DetailTab},
     },
 };
 use ratatui::crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
@@ -38,27 +38,23 @@ pub(in crate::tui) fn key_to_action(
     // muscle memory) don't accidentally trigger comment/approve actions.
     let plain = key.modifiers.is_empty();
 
-    if let Some(dialog) = &state.detail.confirm {
-        return dialog.handle_key(key, &());
+    match &state.detail.overlay {
+        Some(Overlay::Confirm(dialog)) => return dialog.handle_key(key, &()),
+        Some(Overlay::Review(dialog)) => return dialog.handle_key(key, &state.review_context()),
+        Some(Overlay::Merge(dialog)) => {
+            return dialog.handle_key(key, &state.store.capabilities.merge_strategies.as_slice());
+        }
+        Some(Overlay::Help(help)) => {
+            return if matches!(code, KeyCode::Esc | KeyCode::Char('?')) {
+                Some(Action::from(NavAction::ToggleHelp))
+            } else {
+                help.handle_key(key, &())
+            };
+        }
+        None => {}
     }
-
-    if let Some(dialog) = &state.detail.review_picker {
-        return dialog.handle_key(key, &state.review_context());
-    }
-
-    if let Some(dialog) = &state.detail.merge_picker {
-        return dialog.handle_key(key, &state.store.capabilities.merge_strategies.as_slice());
-    }
-
     if code == KeyCode::Char('?') {
         return Some(Action::from(NavAction::ToggleHelp));
-    }
-    if state.detail.help_open {
-        return if code == KeyCode::Esc {
-            Some(Action::from(NavAction::ToggleHelp))
-        } else {
-            state.detail.help.handle_key(key, &())
-        };
     }
 
     if plain && state.has_pr_link() {

@@ -56,7 +56,7 @@ fn filter_and_confirmation_capture_navigation() {
         pr_id: 42,
         tab: DetailTab::Overview,
     };
-    state.ui.detail.confirm = Some(ConfirmDialog::new(ConfirmKind::Decline));
+    state.ui.detail.overlay = Some(Overlay::Confirm(ConfirmDialog::new(ConfirmKind::Decline)));
     assert!(matches!(
         key(&state, KeyCode::Enter),
         Action::Detail(DetailAction::Confirm(ConfirmAction::Accept))
@@ -95,7 +95,7 @@ fn link_shortcuts_target_selected_pr_and_never_escape_editor_or_help() {
             })
         ));
     }
-    state.ui.detail.help_open = true;
+    state.ui.detail.overlay = Some(Overlay::Help(HelpDialog::default()));
     assert!(
         key_to_action(
             &state,
@@ -103,7 +103,7 @@ fn link_shortcuts_target_selected_pr_and_never_escape_editor_or_help() {
         )
         .is_none()
     );
-    state.ui.detail.help_open = false;
+    state.ui.detail.overlay = None;
     state.ui.detail.editor.draft = Some(CommentDraft {
         target: CommentTarget::Pr,
         text: String::new(),
