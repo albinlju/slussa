@@ -34,9 +34,10 @@ struct TerminalGuard {
 
 impl TerminalGuard {
     fn enter() -> std::io::Result<Self> {
-        let guard = Self {
-            terminal: ratatui::try_init()?,
-        };
+        // `try_init` turns raw mode on before the steps that can still fail, and
+        // there is no guard yet to undo that, so a failure restores here.
+        let terminal = ratatui::try_init().inspect_err(|_| ratatui::restore())?;
+        let guard = Self { terminal };
         // If this fails the guard is dropped, which restores the terminal.
         crossterm::execute!(std::io::stdout(), crossterm::event::EnableBracketedPaste)?;
         Ok(guard)
@@ -77,9 +78,6 @@ fn run_tui(session: Session) -> ExitCode {
         let mut guard = match TerminalGuard::enter() {
             Ok(guard) => guard,
             Err(err) => {
-                // `try_init` turns raw mode on before the steps that can still
-                // fail, so hand the terminal back before saying why.
-                ratatui::restore();
                 eprintln!("slussa: couldn't start the terminal UI: {err}");
                 return ExitCode::from(1);
             }
