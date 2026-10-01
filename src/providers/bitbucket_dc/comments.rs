@@ -1,12 +1,12 @@
 use serde::Deserialize;
 
 use super::{Config, http};
-use crate::domain::{diff::LineRef, review::ReviewComment};
+use crate::domain::{diff::LineRef, pr::PrId, review::ReviewComment};
 use crate::providers::error::FetchError;
 
 pub fn post_comment(
     config: &Config,
-    pr_id: u64,
+    pr_id: PrId,
     comment: &ReviewComment,
 ) -> Result<(), FetchError> {
     let ReviewComment {
@@ -43,7 +43,7 @@ pub fn post_comment(
     http::post_json(&config.repo.base_url, &endpoint, &config.pat, &body)
 }
 
-pub fn post_pr_comment(config: &Config, pr_id: u64, text: &str) -> Result<(), FetchError> {
+pub fn post_pr_comment(config: &Config, pr_id: PrId, text: &str) -> Result<(), FetchError> {
     let endpoint = format!(
         "/rest/api/1.0/projects/{}/repos/{}/pull-requests/{pr_id}/comments",
         config.repo.project_key, config.repo.repo_slug,
@@ -54,7 +54,7 @@ pub fn post_pr_comment(config: &Config, pr_id: u64, text: &str) -> Result<(), Fe
 
 pub fn reply_comment(
     config: &Config,
-    pr_id: u64,
+    pr_id: PrId,
     parent: u64,
     text: &str,
 ) -> Result<(), FetchError> {
@@ -68,7 +68,7 @@ pub fn reply_comment(
 
 pub fn edit_comment(
     config: &Config,
-    pr_id: u64,
+    pr_id: PrId,
     comment_id: u64,
     text: &str,
 ) -> Result<(), FetchError> {
@@ -84,7 +84,7 @@ pub fn edit_comment(
     )
 }
 
-pub fn delete_comment(config: &Config, pr_id: u64, comment_id: u64) -> Result<(), FetchError> {
+pub fn delete_comment(config: &Config, pr_id: PrId, comment_id: u64) -> Result<(), FetchError> {
     let version = comment_version(config, pr_id, comment_id)?;
     let path = format!(
         "{}?version={version}",
@@ -95,7 +95,7 @@ pub fn delete_comment(config: &Config, pr_id: u64, comment_id: u64) -> Result<()
 
 pub fn set_thread_resolved(
     config: &Config,
-    pr_id: u64,
+    pr_id: PrId,
     comment_id: u64,
     resolved: bool,
 ) -> Result<(), FetchError> {
@@ -110,14 +110,14 @@ pub fn set_thread_resolved(
     )
 }
 
-fn comment_path(config: &Config, pr_id: u64, comment_id: u64) -> String {
+fn comment_path(config: &Config, pr_id: PrId, comment_id: u64) -> String {
     format!(
         "/rest/api/1.0/projects/{}/repos/{}/pull-requests/{pr_id}/comments/{comment_id}",
         config.repo.project_key, config.repo.repo_slug,
     )
 }
 
-fn comment_version(config: &Config, pr_id: u64, comment_id: u64) -> Result<u32, FetchError> {
+fn comment_version(config: &Config, pr_id: PrId, comment_id: u64) -> Result<u32, FetchError> {
     #[derive(Deserialize)]
     struct VersionOnly {
         version: u32,

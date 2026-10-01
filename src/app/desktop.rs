@@ -4,6 +4,7 @@ use super::{
     action::{LinkAction, TaskResult},
     store::{LoadState, Notice},
 };
+use crate::domain::pr::PrId;
 use std::{
     io::{self, Write},
     process::{Command, Stdio},
@@ -11,7 +12,7 @@ use std::{
 };
 
 impl App {
-    pub(super) fn pr_link(&mut self, pr_id: u64, kind: LinkAction) {
+    pub(super) fn pr_link(&mut self, pr_id: PrId, kind: LinkAction) {
         if self.state.store.link_pending {
             return;
         }

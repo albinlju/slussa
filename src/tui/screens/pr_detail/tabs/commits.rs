@@ -4,7 +4,7 @@ use crate::{
         reviews::PendingComment,
         store::{LoadState, PrData},
     },
-    domain::{comment::CommentThread, commit::Commit},
+    domain::{comment::CommentThread, commit::Commit, pr::PrId},
     tui::{
         component::{Component, step_index},
         components::{
@@ -214,12 +214,12 @@ pub struct CommitContext<'a> {
 
 /// The commits to move between, and the PR a commit's diff is asked for.
 pub struct CommitInput<'a> {
-    pub pr_id: u64,
+    pub pr_id: PrId,
     pub commits: &'a [Commit],
 }
 
 impl<'a> CommitInput<'a> {
-    pub fn new(pr_id: u64, data: Option<&'a PrData>) -> Self {
+    pub fn new(pr_id: PrId, data: Option<&'a PrData>) -> Self {
         Self {
             pr_id,
             commits: data

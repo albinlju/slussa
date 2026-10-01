@@ -7,7 +7,7 @@ fn extracted_dialogs_render_and_keep_their_key_bindings() {
     for dialog in ["confirm", "review", "merge", "error", "help"] {
         let mut state = fixture();
         state.screen = Screen::Detail {
-            pr_id: 42,
+            pr_id: PrId(42),
             tab: DetailTab::Overview,
         };
         let (label, close) = match dialog {
@@ -28,7 +28,7 @@ fn extracted_dialogs_render_and_keep_their_key_bindings() {
                 ("Merge this PR", DetailAction::Merge(MergeAction::Close))
             }
             "error" => {
-                state.store.errors.insert(42, "Request failed".into());
+                state.store.errors.insert(PrId(42), "Request failed".into());
                 ("Request failed", DetailAction::Error(ErrorAction::Dismiss))
             }
             "help" => {
@@ -103,7 +103,7 @@ fn multiline_editor_scrolls_to_cursor_and_keeps_controls_visible() {
     for (width, height) in [(100, 30), (40, 12)] {
         let mut state = fixture();
         state.screen = Screen::Detail {
-            pr_id: 42,
+            pr_id: PrId(42),
             tab: DetailTab::Overview,
         };
         state.ui.detail.editor = CommentEditor::start(
@@ -135,11 +135,11 @@ fn dialog_footers_and_review_choices_remain_visible_with_large_queue() {
         for kind in ["review", "merge", "confirm"] {
             let mut state = fixture();
             state.screen = Screen::Detail {
-                pr_id: 42,
+                pr_id: PrId(42),
                 tab: DetailTab::Overview,
             };
             state.store.reviews.insert(
-                42,
+                PrId(42),
                 PendingReview {
                     comments: (0..100)
                         .map(|_| PendingComment {
@@ -188,7 +188,7 @@ fn dialog_footers_and_review_choices_remain_visible_with_large_queue() {
             assert!(!text.contains("v: finish"));
             local_key(&mut state, KeyCode::Esc);
             assert!(!state.ui.detail.modal_open());
-            assert_eq!(state.store.reviews[&42].comments.len(), 100);
+            assert_eq!(state.store.reviews[&PrId(42)].comments.len(), 100);
         }
     }
 }
@@ -197,11 +197,11 @@ fn dialog_footers_and_review_choices_remain_visible_with_large_queue() {
 fn long_error_scrolls_without_dismissing_or_acting_on_the_pr() {
     let mut state = fixture();
     state.screen = Screen::Detail {
-        pr_id: 42,
+        pr_id: PrId(42),
         tab: DetailTab::Overview,
     };
     state.store.errors.insert(
-        42,
+        PrId(42),
         format!("{}END_OF_ERROR", "Long failure details.\n".repeat(40)),
     );
     let mut terminal = Terminal::new(TestBackend::new(24, 8)).unwrap();
@@ -232,11 +232,11 @@ fn review_preview_shows_full_comments_without_submitting() {
     use crate::app::reviews::CommentAnchor;
     let mut state = fixture();
     state.screen = Screen::Detail {
-        pr_id: 42,
+        pr_id: PrId(42),
         tab: DetailTab::Overview,
     };
     state.store.reviews.insert(
-        42,
+        PrId(42),
         crate::app::reviews::PendingReview {
             comments: (0..4)
                 .map(|index| crate::app::reviews::PendingComment {
@@ -272,7 +272,7 @@ fn review_preview_shows_full_comments_without_submitting() {
     terminal.draw(|frame| render(frame, &mut state)).unwrap();
     assert!(rendered_text(&terminal).contains("Approve"));
     local_key(&mut state, KeyCode::Esc);
-    assert_eq!(state.store.reviews[&42].comments.len(), 4);
+    assert_eq!(state.store.reviews[&PrId(42)].comments.len(), 4);
     assert!(state.store.operations.is_empty());
 }
 
@@ -323,7 +323,7 @@ fn mutation_dialogs_show_pr_and_target_even_with_a_long_source_branch() {
         for merge in [false, true] {
             let mut state = fixture();
             state.screen = Screen::Detail {
-                pr_id: 42,
+                pr_id: PrId(42),
                 tab: DetailTab::Overview,
             };
             if let LoadState::Loaded(prs) = &mut state.store.cache.prs {

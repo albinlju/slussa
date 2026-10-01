@@ -1,8 +1,9 @@
 use super::{Config, json_diff};
 use crate::domain::diff::Diff;
+use crate::domain::pr::PrId;
 use crate::providers::error::FetchError;
 
-pub fn fetch_diff(config: &Config, pr_id: u64) -> Result<Diff, FetchError> {
+pub fn fetch_diff(config: &Config, pr_id: PrId) -> Result<Diff, FetchError> {
     json_diff::fetch(config, pr_id)
 }
 

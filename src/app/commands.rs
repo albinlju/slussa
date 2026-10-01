@@ -4,9 +4,10 @@ use crate::app::{
     reviews::{CommentTarget, PendingComment},
     store::{Operation, WriteTicket},
 };
+use crate::domain::pr::PrId;
 
 impl App {
-    pub(super) fn execute(&mut self, pr_id: u64, command: Command) {
+    pub(super) fn execute(&mut self, pr_id: PrId, command: Command) {
         if !command.supported_by(&self.state.store.capabilities) {
             self.state.store.errors.insert(
                 pr_id,
@@ -85,14 +86,14 @@ impl App {
     /// the drafts so an interrupted request is known about after a restart.
     /// `None` when another write is pending for the PR, or the journal could
     /// not be written; nothing is sent then.
-    fn begin_write(&mut self, pr_id: u64, operation: Operation) -> Option<WriteTicket> {
+    fn begin_write(&mut self, pr_id: PrId, operation: Operation) -> Option<WriteTicket> {
         let ticket = self.state.store.begin_write(pr_id, operation)?;
         self.checkpoint_submission(pr_id).then_some(ticket)
     }
 
     fn submit_review_verdict(
         &mut self,
-        pr_id: u64,
+        pr_id: PrId,
         verdict: crate::domain::review::ReviewVerdict,
         body: String,
     ) {

@@ -8,7 +8,7 @@ use crate::{
     domain::{
         comment::{Comment, CommentKey, CommentKind, ThreadHandle},
         diff::FileDiff,
-        pr::{Mergeability, PrStatus, PullRequest},
+        pr::{Mergeability, PrId, PrStatus, PullRequest},
         review::ReviewVerdict,
     },
     tui::{
@@ -23,7 +23,7 @@ use crate::{
 #[derive(Clone, Copy)]
 pub struct DetailContext<'a> {
     pub store: &'a Store,
-    pub pr_id: u64,
+    pub pr_id: PrId,
     pub tab: DetailTab,
     pub pr: &'a PullRequest,
     pub data: Option<&'a PrData>,
@@ -33,7 +33,7 @@ pub struct DetailContext<'a> {
 impl<'a> DetailContext<'a> {
     /// `None` when the PR is not in the list. The list keeps the PR that is
     /// open (`App::adopt_group`), so that means there is nothing to show.
-    pub fn new(store: &'a Store, pr_id: u64, tab: DetailTab) -> Option<Self> {
+    pub fn new(store: &'a Store, pr_id: PrId, tab: DetailTab) -> Option<Self> {
         let pr = store.cache.prs.loaded()?.iter().find(|pr| pr.id == pr_id)?;
         Some(Self {
             store,
@@ -57,7 +57,7 @@ pub fn diff_files<'a>(data: Option<&'a PrData>, commit: Option<&str>) -> &'a [Fi
 pub struct DetailView<'a> {
     pub detail: &'a PrDetailScreen,
     pub store: &'a Store,
-    pub pr_id: u64,
+    pub pr_id: PrId,
     pub tab: DetailTab,
     pub pr: &'a PullRequest,
     pub data: Option<&'a PrData>,

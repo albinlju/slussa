@@ -10,7 +10,7 @@ use crate::{
     },
     domain::{
         comment::{CommentKey, ThreadHandle},
-        pr::{MergeStrategy, PrGroup},
+        pr::{MergeStrategy, PrGroup, PrId},
         review::{ReviewComment, ReviewVerdict},
     },
     providers::FetchError,
@@ -140,7 +140,7 @@ impl App {
         }
     }
 
-    pub(super) fn spawn_load_commits(&mut self, pr_id: u64) {
+    pub(super) fn spawn_load_commits(&mut self, pr_id: PrId) {
         let Some(ticket) = self.state.store.begin_fetch(FetchKey::Commits(pr_id)) else {
             return;
         };
@@ -152,7 +152,7 @@ impl App {
         );
     }
 
-    pub(super) fn spawn_load_diff(&mut self, pr_id: u64) {
+    pub(super) fn spawn_load_diff(&mut self, pr_id: PrId) {
         let Some(ticket) = self.state.store.begin_fetch(FetchKey::Diff(pr_id)) else {
             return;
         };
@@ -164,7 +164,7 @@ impl App {
         );
     }
 
-    pub(super) fn spawn_load_builds(&mut self, pr_id: u64) {
+    pub(super) fn spawn_load_builds(&mut self, pr_id: PrId) {
         let Some(ticket) = self.state.store.begin_fetch(FetchKey::Builds(pr_id)) else {
             return;
         };
@@ -176,7 +176,7 @@ impl App {
         );
     }
 
-    pub(super) fn spawn_load_commit_diff(&mut self, pr_id: u64, oid: String) {
+    pub(super) fn spawn_load_commit_diff(&mut self, pr_id: PrId, oid: String) {
         let key = FetchKey::CommitDiff(pr_id, oid.clone());
         let Some(ticket) = self.state.store.begin_fetch(key) else {
             return;
@@ -190,7 +190,7 @@ impl App {
         );
     }
 
-    pub(super) fn spawn_load_activity(&mut self, pr_id: u64) {
+    pub(super) fn spawn_load_activity(&mut self, pr_id: PrId) {
         let Some(ticket) = self.state.store.begin_fetch(FetchKey::Activity(pr_id)) else {
             return;
         };
@@ -202,7 +202,7 @@ impl App {
         );
     }
 
-    pub(super) fn spawn_load_mergeability(&mut self, pr_id: u64) {
+    pub(super) fn spawn_load_mergeability(&mut self, pr_id: PrId) {
         let Some(ticket) = self.state.store.begin_fetch(FetchKey::Mergeability(pr_id)) else {
             return;
         };
@@ -215,7 +215,7 @@ impl App {
     }
 
     /// The description and labels of one PR, when the provider's list omits them.
-    pub(super) fn spawn_load_info(&mut self, pr_id: u64) {
+    pub(super) fn spawn_load_info(&mut self, pr_id: PrId) {
         let Some(ticket) = self.state.store.begin_fetch(FetchKey::Info(pr_id)) else {
             return;
         };
@@ -328,7 +328,7 @@ impl App {
         }
     }
 
-    pub(super) fn reload_after_mutation(&mut self, pr_id: u64) {
+    pub(super) fn reload_after_mutation(&mut self, pr_id: PrId) {
         self.reload_resource(FetchKey::Activity(pr_id));
         for group in PrGroup::ALL {
             if group == PrGroup::Open || self.state.store.group_loaded(group) {

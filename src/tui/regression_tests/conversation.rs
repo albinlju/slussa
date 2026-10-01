@@ -8,7 +8,7 @@ fn timeline_keeps_thread_selection_and_sidebar_is_responsive() {
     let mut state = fixture();
     state.store.current_user = "alice".into();
     state.screen = Screen::Detail {
-        pr_id: 42,
+        pr_id: PrId(42),
         tab: DetailTab::Overview,
     };
     let comments = (10..12)
@@ -23,7 +23,13 @@ fn timeline_keeps_thread_selection_and_sidebar_is_responsive() {
             reply_to: Some(10),
         })
         .collect();
-    state.store.cache.details.get_mut(&42).unwrap().activity = LoadState::Loaded(Activity {
+    state
+        .store
+        .cache
+        .details
+        .get_mut(&PrId(42))
+        .unwrap()
+        .activity = LoadState::Loaded(Activity {
         comments: vec![],
         events: vec![],
         threads: vec![CommentThread {
@@ -41,7 +47,7 @@ fn timeline_keeps_thread_selection_and_sidebar_is_responsive() {
     // Activity can arrive before the diff. Do not show cards that will grow
     // when snippets arrive; a failed diff must still let the discussion be read.
     let loaded_diff = std::mem::replace(
-        &mut state.store.cache.details.get_mut(&42).unwrap().diff,
+        &mut state.store.cache.details.get_mut(&PrId(42)).unwrap().diff,
         LoadState::Loading,
     );
     let mut terminal = Terminal::new(TestBackend::new(100, 30)).unwrap();
@@ -49,11 +55,11 @@ fn timeline_keeps_thread_selection_and_sidebar_is_responsive() {
     let loading = rendered_text(&terminal);
     assert!(loading.contains("Loading code context"));
     assert!(!loading.contains("Comment 10"));
-    state.store.cache.details.get_mut(&42).unwrap().diff =
+    state.store.cache.details.get_mut(&PrId(42)).unwrap().diff =
         LoadState::Failed(crate::providers::FetchError::Network("offline".into()));
     terminal.draw(|frame| render(frame, &mut state)).unwrap();
     assert!(rendered_text(&terminal).contains("Comment 10"));
-    state.store.cache.details.get_mut(&42).unwrap().diff = loaded_diff;
+    state.store.cache.details.get_mut(&PrId(42)).unwrap().diff = loaded_diff;
     let mut preview = String::new();
     for width in [100, 80, 40] {
         let mut terminal = Terminal::new(TestBackend::new(width, 30)).unwrap();
@@ -119,7 +125,7 @@ fn timeline_keeps_thread_selection_and_sidebar_is_responsive() {
 fn compact_diff_switches_panels_and_keeps_file_selection() {
     let mut state = fixture();
     state.screen = Screen::Detail {
-        pr_id: 42,
+        pr_id: PrId(42),
         tab: DetailTab::Diff,
     };
     let mut terminal = Terminal::new(TestBackend::new(40, 12)).unwrap();
@@ -146,7 +152,7 @@ fn unloaded_diff_cannot_reuse_a_previous_comment_target() {
     use crate::app::reviews::CommentAnchor;
     let mut state = fixture();
     state.screen = Screen::Detail {
-        pr_id: 42,
+        pr_id: PrId(42),
         tab: DetailTab::Diff,
     };
     state.ui.detail.diff.focus = DiffFocus::Pane;
@@ -165,7 +171,7 @@ fn unloaded_diff_cannot_reuse_a_previous_comment_target() {
     };
     state.ui.detail.diff.pane_cursor = 5;
     state.ui.detail.diff.pane_search.query = "old".into();
-    state.store.cache.details.get_mut(&42).unwrap().diff =
+    state.store.cache.details.get_mut(&PrId(42)).unwrap().diff =
         LoadState::Failed(crate::providers::FetchError::Network("offline".into()));
     let mut terminal = Terminal::new(TestBackend::new(40, 12)).unwrap();
     terminal.draw(|f| render(f, &mut state)).unwrap();
@@ -186,10 +192,16 @@ fn diff_fold_keeps_target_and_shows_the_next_action() {
     for width in [40, 100] {
         let mut state = fixture();
         state.screen = Screen::Detail {
-            pr_id: 42,
+            pr_id: PrId(42),
             tab: DetailTab::Diff,
         };
-        state.store.cache.details.get_mut(&42).unwrap().activity = LoadState::Loaded(Activity {
+        state
+            .store
+            .cache
+            .details
+            .get_mut(&PrId(42))
+            .unwrap()
+            .activity = LoadState::Loaded(Activity {
             comments: vec![],
             events: vec![],
             threads: vec![CommentThread {
@@ -249,7 +261,7 @@ fn overview_reveals_selected_reply_and_allows_scrolling_long_text() {
     use crate::domain::comment::{Comment, CommentThread};
     let mut state = fixture();
     state.screen = Screen::Detail {
-        pr_id: 42,
+        pr_id: PrId(42),
         tab: DetailTab::Overview,
     };
     let now = chrono::Utc::now();
@@ -263,7 +275,13 @@ fn overview_reveals_selected_reply_and_allows_scrolling_long_text() {
         reactions: vec![],
         reply_to: Some(10),
     };
-    state.store.cache.details.get_mut(&42).unwrap().activity = LoadState::Loaded(Activity {
+    state
+        .store
+        .cache
+        .details
+        .get_mut(&PrId(42))
+        .unwrap()
+        .activity = LoadState::Loaded(Activity {
         comments: vec![comment(20, "Another discussion".into())],
         events: vec![],
         threads: vec![CommentThread {
@@ -314,8 +332,13 @@ fn overview_reveals_selected_reply_and_allows_scrolling_long_text() {
             })
     };
     let before = reply_row(&terminal);
-    if let LoadState::Loaded(activity) =
-        &mut state.store.cache.details.get_mut(&42).unwrap().activity
+    if let LoadState::Loaded(activity) = &mut state
+        .store
+        .cache
+        .details
+        .get_mut(&PrId(42))
+        .unwrap()
+        .activity
     {
         let mut newer = comment(30, "New discussion arrived".into());
         newer.created = now + chrono::Duration::seconds(10);
@@ -332,8 +355,13 @@ fn overview_reveals_selected_reply_and_allows_scrolling_long_text() {
     assert_eq!(state.ui.detail.overview.timeline.cursor, 2);
     assert_eq!(state.ui.detail.overview.timeline.sub, 2);
     assert_eq!(before, reply_row(&terminal));
-    if let LoadState::Loaded(activity) =
-        &mut state.store.cache.details.get_mut(&42).unwrap().activity
+    if let LoadState::Loaded(activity) = &mut state
+        .store
+        .cache
+        .details
+        .get_mut(&PrId(42))
+        .unwrap()
+        .activity
     {
         activity.threads[0].comments.retain(|c| c.id != Some(11));
     }
@@ -349,11 +377,17 @@ fn a_thread_taller_than_the_diff_pane_is_shown_from_its_first_row() {
     use crate::domain::comment::{Comment, CommentThread, ThreadAnchor};
     let mut state = fixture();
     state.screen = Screen::Detail {
-        pr_id: 42,
+        pr_id: PrId(42),
         tab: DetailTab::Diff,
     };
     let paragraphs: Vec<String> = (1..=30).map(|n| format!("Paragraph {n}.")).collect();
-    state.store.cache.details.get_mut(&42).unwrap().activity = LoadState::Loaded(Activity {
+    state
+        .store
+        .cache
+        .details
+        .get_mut(&PrId(42))
+        .unwrap()
+        .activity = LoadState::Loaded(Activity {
         comments: vec![],
         events: vec![],
         threads: vec![CommentThread {
@@ -404,10 +438,16 @@ fn a_reply_being_written_names_the_comment_it_answers() {
     use crate::domain::comment::{Comment, CommentThread};
     let mut state = fixture();
     state.screen = Screen::Detail {
-        pr_id: 42,
+        pr_id: PrId(42),
         tab: DetailTab::Overview,
     };
-    state.store.cache.details.get_mut(&42).unwrap().activity = LoadState::Loaded(Activity {
+    state
+        .store
+        .cache
+        .details
+        .get_mut(&PrId(42))
+        .unwrap()
+        .activity = LoadState::Loaded(Activity {
         comments: vec![],
         events: vec![],
         threads: vec![CommentThread {

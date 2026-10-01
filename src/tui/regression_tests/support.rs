@@ -39,7 +39,7 @@ pub(crate) fn fixture() -> AppState {
     let mut state = AppState::default();
     state.store.cache.prs = LoadState::Loaded(vec![PullRequest {
         url: Some("https://example.com/team/project/pull/42".into()),
-        id: 42,
+        id: PrId(42),
         title: "Component migration".into(),
         description: Some("Review **this change**.".into()),
         author: User {
@@ -59,7 +59,7 @@ pub(crate) fn fixture() -> AppState {
         updated: now,
     }]);
     state.store.cache.details.insert(
-        42,
+        PrId(42),
         PrData {
             diff: LoadState::Loaded(Diff {
                 revision: None,

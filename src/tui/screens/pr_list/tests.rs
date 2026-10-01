@@ -8,7 +8,7 @@ use crate::{
     },
     domain::{
         ci::CiSummary,
-        pr::{PrGroup, PrStatus, PullRequest},
+        pr::{PrGroup, PrId, PrStatus, PullRequest},
         review::{Reviewer, ReviewerState},
         user::{User, Username},
     },
@@ -33,7 +33,7 @@ fn reviewer(name: &str, state: ReviewerState) -> Reviewer {
 fn pr(id: u64, author: &str, ci: CiSummary, reviewers: Vec<Reviewer>) -> PullRequest {
     PullRequest {
         url: None,
-        id,
+        id: PrId(id),
         title: format!("Change {id}"),
         description: None,
         author: User {
@@ -112,7 +112,7 @@ fn ids_while(
 ) -> Vec<u64> {
     list.filtered_prs(&context(prs, &viewer.into(), arriving))
         .iter()
-        .map(|pr| pr.id)
+        .map(|pr| pr.id.0)
         .collect()
 }
 

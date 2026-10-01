@@ -5,7 +5,7 @@ use crate::{
         ci::Build,
         commit::Commit,
         diff::Diff,
-        pr::{Mergeability, PrBatch, PrGroup, PrInfo},
+        pr::{Mergeability, PrBatch, PrGroup, PrId, PrInfo},
     },
     providers::{FetchError, ReviewError},
     tui::screens::pr_detail::tabs::DetailTab,
@@ -34,26 +34,26 @@ pub enum Effect {
     Navigate(crate::app::navigation::Screen),
     /// Force a re-fetch of the active view now (`F`).
     Refresh,
-    OpenPr(u64),
+    OpenPr(PrId),
     /// Read the next older page of each closed group the view shows.
     LoadOlder,
     /// The list shows another view, which may need PRs not read yet.
     LoadView,
     LoadCommitDiff {
-        pr_id: u64,
+        pr_id: PrId,
         oid: String,
     },
     PrLink {
-        pr_id: u64,
+        pr_id: PrId,
         kind: LinkAction,
     },
     Command {
-        pr_id: u64,
+        pr_id: PrId,
         command: Command,
     },
     /// Close the error shown on this PR.
     DismissError {
-        pr_id: u64,
+        pr_id: PrId,
     },
 }
 
@@ -103,7 +103,7 @@ pub enum ListAction {
     ToggleSort,
     LoadOlder,
     MoveSelection(i16),
-    OpenPr(u64),
+    OpenPr(PrId),
     OpenFilterPicker,
     CloseFilterPicker,
     FilterPickerNext,
@@ -305,13 +305,13 @@ pub enum Read {
         after: Option<String>,
         result: Result<PrBatch, FetchError>,
     },
-    Commits(u64, Result<Vec<Commit>, FetchError>),
-    Diff(u64, Result<Diff, FetchError>),
-    Builds(u64, Result<Vec<Build>, FetchError>),
-    Activity(u64, Result<Activity, FetchError>),
-    Mergeability(u64, Result<Mergeability, FetchError>),
-    Info(u64, Result<PrInfo, FetchError>),
-    CommitDiff(u64, String, Result<Diff, FetchError>),
+    Commits(PrId, Result<Vec<Commit>, FetchError>),
+    Diff(PrId, Result<Diff, FetchError>),
+    Builds(PrId, Result<Vec<Build>, FetchError>),
+    Activity(PrId, Result<Activity, FetchError>),
+    Mergeability(PrId, Result<Mergeability, FetchError>),
+    Info(PrId, Result<PrInfo, FetchError>),
+    CommitDiff(PrId, String, Result<Diff, FetchError>),
 }
 
 impl Read {

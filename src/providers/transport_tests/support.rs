@@ -7,7 +7,7 @@ pub(super) use crate::providers::{
 pub(super) use crate::{
     domain::{
         diff::{DiffRevision, LineRef},
-        pr::{MergeStrategy, Mergeability, PrGroup, PrStatus},
+        pr::{MergeStrategy, Mergeability, PrGroup, PrId, PrStatus},
         review::{ReviewComment, ReviewVerdict, ReviewerState},
     },
     test_support::{FakeGh, InstalledGh, MockHttp, Route, gh_closed_pr, gh_list_page, gh_pr},

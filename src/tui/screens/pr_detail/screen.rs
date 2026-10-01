@@ -7,6 +7,7 @@ use crate::{
         },
         navigation::Screen,
     },
+    domain::pr::PrId,
     tui::{
         component::Component,
         components::{
@@ -67,11 +68,11 @@ pub struct PrDetailScreen {
     pub commits: CommitList,
     pub error: dialogs::error::ErrorDialog,
     pub editor: crate::tui::components::comment_editor::CommentEditor,
-    pub(super) pr_id: Option<u64>,
+    pub(super) pr_id: Option<PrId>,
     pub active_tab: tabs::DetailTab,
-    pub(super) navigation: std::collections::HashMap<u64, DetailNavigation>,
+    pub(super) navigation: std::collections::HashMap<PrId, DetailNavigation>,
     pub(super) editors:
-        std::collections::HashMap<u64, crate::tui::components::comment_editor::CommentEditor>,
+        std::collections::HashMap<PrId, crate::tui::components::comment_editor::CommentEditor>,
 }
 
 /// Where the user was in a PR, kept while another PR is open.
@@ -88,7 +89,7 @@ pub(super) struct DetailNavigation {
 impl PrDetailScreen {
     pub fn reconcile_commits(
         &mut self,
-        pr_id: u64,
+        pr_id: PrId,
         old: &[crate::domain::commit::Commit],
         new: &[crate::domain::commit::Commit],
     ) {
@@ -219,7 +220,7 @@ impl PrDetailScreen {
     fn navigate(
         &mut self,
         action: NavAction,
-        pr_id: u64,
+        pr_id: PrId,
         tab: tabs::DetailTab,
         ctx: &DetailContext<'_>,
     ) -> Option<Effect> {

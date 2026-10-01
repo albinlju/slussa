@@ -28,7 +28,7 @@ use crate::domain::{
     comment::{CommentKey, ThreadHandle},
     commit::Commit,
     diff::Diff,
-    pr::{MergeStrategy, Mergeability, PrBatch, PrGroup, PrInfo},
+    pr::{MergeStrategy, Mergeability, PrBatch, PrGroup, PrId, PrInfo},
     review::{ReviewComment, ReviewVerdict},
     user::Username,
 };
@@ -50,14 +50,14 @@ impl Provider {
         }
     }
 
-    pub fn fetch_commits(&self, pr_id: u64) -> Result<Vec<Commit>, FetchError> {
+    pub fn fetch_commits(&self, pr_id: PrId) -> Result<Vec<Commit>, FetchError> {
         match self {
             Self::GitHub => github::fetch_commits(pr_id),
             Self::BitbucketDc(c) => bitbucket_dc::fetch_commits(c, pr_id),
         }
     }
 
-    pub fn fetch_diff(&self, pr_id: u64) -> Result<Diff, FetchError> {
+    pub fn fetch_diff(&self, pr_id: PrId) -> Result<Diff, FetchError> {
         match self {
             Self::GitHub => github::fetch_diff(pr_id),
             Self::BitbucketDc(c) => bitbucket_dc::fetch_diff(c, pr_id),
@@ -71,21 +71,21 @@ impl Provider {
         }
     }
 
-    pub fn fetch_builds(&self, pr_id: u64) -> Result<Vec<Build>, FetchError> {
+    pub fn fetch_builds(&self, pr_id: PrId) -> Result<Vec<Build>, FetchError> {
         match self {
             Self::GitHub => github::fetch_builds(pr_id),
             Self::BitbucketDc(c) => bitbucket_dc::fetch_builds(c, pr_id),
         }
     }
 
-    pub fn fetch_activity(&self, pr_id: u64) -> Result<Activity, FetchError> {
+    pub fn fetch_activity(&self, pr_id: PrId) -> Result<Activity, FetchError> {
         match self {
             Self::GitHub => github::fetch_activity(pr_id),
             Self::BitbucketDc(c) => bitbucket_dc::fetch_activity(c, pr_id),
         }
     }
 
-    pub fn fetch_mergeability(&self, pr_id: u64) -> Result<Mergeability, FetchError> {
+    pub fn fetch_mergeability(&self, pr_id: PrId) -> Result<Mergeability, FetchError> {
         match self {
             Self::GitHub => github::fetch_mergeability(pr_id),
             Self::BitbucketDc(c) => bitbucket_dc::fetch_mergeability(c, pr_id),
@@ -93,7 +93,7 @@ impl Provider {
     }
 
     /// The description and labels of one PR, for a provider whose list omits them.
-    pub fn fetch_info(&self, pr_id: u64) -> Result<PrInfo, FetchError> {
+    pub fn fetch_info(&self, pr_id: PrId) -> Result<PrInfo, FetchError> {
         match self {
             Self::GitHub => github::fetch_info(pr_id),
             Self::BitbucketDc(_) => Err(FetchError::Unsupported(
@@ -102,7 +102,7 @@ impl Provider {
         }
     }
 
-    pub fn merge(&self, pr_id: u64, strategy: MergeStrategy) -> Result<(), FetchError> {
+    pub fn merge(&self, pr_id: PrId, strategy: MergeStrategy) -> Result<(), FetchError> {
         if !self.capabilities().merge_strategies.contains(&strategy) {
             return Err(FetchError::Unsupported(
                 "This merge strategy is not supported by the connected provider.".into(),
@@ -115,7 +115,7 @@ impl Provider {
     }
 
     /// Decline (Bitbucket) / close (GitHub) the PR without merging.
-    pub fn decline(&self, pr_id: u64) -> Result<(), FetchError> {
+    pub fn decline(&self, pr_id: PrId) -> Result<(), FetchError> {
         match self {
             Self::GitHub => github::decline(pr_id),
             Self::BitbucketDc(c) => bitbucket_dc::decline(c, pr_id),
@@ -123,7 +123,7 @@ impl Provider {
     }
 
     /// Reopen a PR that was closed or declined without being merged.
-    pub fn reopen(&self, pr_id: u64) -> Result<(), FetchError> {
+    pub fn reopen(&self, pr_id: PrId) -> Result<(), FetchError> {
         match self {
             Self::GitHub => github::reopen(pr_id),
             Self::BitbucketDc(c) => bitbucket_dc::reopen(c, pr_id),
@@ -181,21 +181,21 @@ impl Provider {
         }
     }
 
-    pub fn post_comment(&self, pr_id: u64, comment: &ReviewComment) -> Result<(), FetchError> {
+    pub fn post_comment(&self, pr_id: PrId, comment: &ReviewComment) -> Result<(), FetchError> {
         match self {
             Self::GitHub => github::post_comment(pr_id, comment),
             Self::BitbucketDc(c) => bitbucket_dc::post_comment(c, pr_id, comment),
         }
     }
 
-    pub fn post_pr_comment(&self, pr_id: u64, body: &str) -> Result<(), FetchError> {
+    pub fn post_pr_comment(&self, pr_id: PrId, body: &str) -> Result<(), FetchError> {
         match self {
             Self::GitHub => github::post_pr_comment(pr_id, body),
             Self::BitbucketDc(c) => bitbucket_dc::post_pr_comment(c, pr_id, body),
         }
     }
 
-    pub fn reply_comment(&self, pr_id: u64, parent: u64, body: &str) -> Result<(), FetchError> {
+    pub fn reply_comment(&self, pr_id: PrId, parent: u64, body: &str) -> Result<(), FetchError> {
         match self {
             Self::GitHub => github::reply_comment(pr_id, parent, body),
             Self::BitbucketDc(c) => bitbucket_dc::reply_comment(c, pr_id, parent, body),
@@ -206,7 +206,7 @@ impl Provider {
     /// endpoints, so the key says which it is; Bitbucket uses one for both.
     pub fn edit_comment(
         &self,
-        pr_id: u64,
+        pr_id: PrId,
         comment: CommentKey,
         body: &str,
     ) -> Result<(), FetchError> {
@@ -216,7 +216,7 @@ impl Provider {
         }
     }
 
-    pub fn delete_comment(&self, pr_id: u64, comment: CommentKey) -> Result<(), FetchError> {
+    pub fn delete_comment(&self, pr_id: PrId, comment: CommentKey) -> Result<(), FetchError> {
         match self {
             Self::GitHub => github::delete_comment(comment),
             Self::BitbucketDc(c) => bitbucket_dc::delete_comment(c, pr_id, comment.id),
@@ -226,7 +226,7 @@ impl Provider {
     /// Resolve or reopen a thread, addressed the way this provider read it.
     pub fn set_thread_resolved(
         &self,
-        pr_id: u64,
+        pr_id: PrId,
         thread: &ThreadHandle,
         resolved: bool,
     ) -> Result<(), FetchError> {
@@ -248,7 +248,7 @@ impl Provider {
     /// `v` review flow). With no comments this is the same as `submit_review`.
     pub fn submit_full_review(
         &self,
-        pr_id: u64,
+        pr_id: PrId,
         verdict: ReviewVerdict,
         body: &str,
         user: &str,
@@ -301,7 +301,7 @@ mod capability_tests {
         assert!(github.merge_strategies.contains(&MergeStrategy::Squash));
         assert_eq!(bb.merge_strategies, vec![MergeStrategy::Merge]);
         // These must reject locally, before trying authentication or the network.
-        assert!(bitbucket.merge(1, MergeStrategy::Squash).is_err());
-        assert!(github::submit_review(1, ReviewVerdict::Unapprove, "").is_err());
+        assert!(bitbucket.merge(PrId(1), MergeStrategy::Squash).is_err());
+        assert!(github::submit_review(PrId(1), ReviewVerdict::Unapprove, "").is_err());
     }
 }

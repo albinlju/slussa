@@ -1,12 +1,13 @@
 use crate::domain::{
     comment::{Comment, CommentKey, CommentKind},
     diff::LineRef,
+    pr::PrId,
     review::ReviewComment,
 };
 use crate::providers::error::FetchError;
 use crate::providers::github::{COMMENT_FIELDS, GqlComment, map_gql_comment};
 
-pub fn fetch_comments(pr_number: u64) -> Result<Vec<Comment>, FetchError> {
+pub fn fetch_comments(pr_number: PrId) -> Result<Vec<Comment>, FetchError> {
     let nodes: Vec<GqlComment> =
         super::pagination::pr_nodes(pr_number, "comments", COMMENT_FIELDS)?;
     Ok(nodes
@@ -26,7 +27,7 @@ pub(super) const fn side(line: LineRef) -> &'static str {
     }
 }
 
-pub fn post_comment(pr_number: u64, comment: &ReviewComment) -> Result<(), FetchError> {
+pub fn post_comment(pr_number: PrId, comment: &ReviewComment) -> Result<(), FetchError> {
     let ReviewComment {
         revision,
         path,
@@ -54,7 +55,7 @@ pub fn post_comment(pr_number: u64, comment: &ReviewComment) -> Result<(), Fetch
     Ok(())
 }
 
-pub fn post_pr_comment(pr_number: u64, body: &str) -> Result<(), FetchError> {
+pub fn post_pr_comment(pr_number: PrId, body: &str) -> Result<(), FetchError> {
     super::cli::run_gh(&[
         "api",
         "--method",
@@ -66,7 +67,7 @@ pub fn post_pr_comment(pr_number: u64, body: &str) -> Result<(), FetchError> {
     Ok(())
 }
 
-pub fn reply_comment(pr_number: u64, parent: u64, body: &str) -> Result<(), FetchError> {
+pub fn reply_comment(pr_number: PrId, parent: u64, body: &str) -> Result<(), FetchError> {
     super::cli::run_gh(&[
         "api",
         "--method",
@@ -120,7 +121,7 @@ pub fn set_thread_resolved(node_id: &str, resolved: bool) -> Result<(), FetchErr
     Ok(())
 }
 
-pub(super) fn head_sha(pr_number: u64) -> Result<String, FetchError> {
+pub(super) fn head_sha(pr_number: PrId) -> Result<String, FetchError> {
     let out = super::cli::run_gh(&[
         "api",
         &format!("repos/{{owner}}/{{repo}}/pulls/{pr_number}"),
@@ -131,7 +132,7 @@ pub(super) fn head_sha(pr_number: u64) -> Result<String, FetchError> {
 }
 
 pub(super) fn diff_revision(
-    pr_number: u64,
+    pr_number: PrId,
 ) -> Result<crate::domain::diff::DiffRevision, FetchError> {
     #[derive(serde::Deserialize)]
     struct Ref {

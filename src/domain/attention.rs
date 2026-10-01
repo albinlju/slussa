@@ -65,7 +65,7 @@ pub fn attention(pr: &PullRequest, viewer: &Username) -> Option<Attention> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::domain::{review::Reviewer, user::User};
+    use crate::domain::{pr::PrId, review::Reviewer, user::User};
     use chrono::Utc;
 
     fn reviewer(name: &str, state: ReviewerState) -> Reviewer {
@@ -80,7 +80,7 @@ mod tests {
     fn pr(author: &str, ci: CiSummary, reviewers: Vec<Reviewer>) -> PullRequest {
         PullRequest {
             url: None,
-            id: 1,
+            id: PrId(1),
             title: "t".into(),
             description: None,
             author: User {

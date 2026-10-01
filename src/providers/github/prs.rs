@@ -2,7 +2,7 @@ use chrono::{DateTime, Utc};
 use serde::Deserialize;
 
 use crate::domain::ci::CiSummary;
-use crate::domain::pr::{PrBatch, PrGroup, PrInfo, PrStatus, PullRequest};
+use crate::domain::pr::{PrBatch, PrGroup, PrId, PrInfo, PrStatus, PullRequest};
 use crate::domain::review::{Reviewer, ReviewerState};
 use crate::domain::user::User;
 use crate::providers::error::FetchError;
@@ -180,7 +180,7 @@ fn complete(mut prs: Vec<GhPr>) -> Result<Vec<PullRequest>, FetchError> {
 }
 
 /// The description and labels of one PR.
-pub fn fetch_info(pr: u64) -> Result<PrInfo, FetchError> {
+pub fn fetch_info(pr: PrId) -> Result<PrInfo, FetchError> {
     #[derive(Deserialize)]
     struct Fields {
         id: String,
@@ -218,7 +218,7 @@ fn map_pr(gh: GhPr) -> PullRequest {
 
     PullRequest {
         url: gh.url,
-        id: gh.number,
+        id: PrId(gh.number),
         title: gh.title,
         description: None,
         author: User {

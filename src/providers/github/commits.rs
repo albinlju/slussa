@@ -2,6 +2,7 @@ use chrono::{DateTime, Utc};
 use serde::Deserialize;
 
 use crate::domain::commit::Commit;
+use crate::domain::pr::PrId;
 use crate::providers::error::FetchError;
 
 #[derive(Debug, Deserialize)]
@@ -30,7 +31,7 @@ struct GqlGitActor {
     name: Option<String>,
 }
 
-pub fn fetch_commits(pr_number: u64) -> Result<Vec<Commit>, FetchError> {
+pub fn fetch_commits(pr_number: PrId) -> Result<Vec<Commit>, FetchError> {
     let nodes: Vec<GqlCommitNode> = super::pagination::pr_nodes(
         pr_number,
         "commits",

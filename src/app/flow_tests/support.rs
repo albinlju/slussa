@@ -7,7 +7,7 @@ pub(super) use crate::app::{
     store::{FetchKey, LoadState, OpenChain},
 };
 pub(super) use crate::{
-    domain::pr::PrGroup,
+    domain::pr::{PrGroup, PrId},
     providers::Provider,
     test_support::{FakeGh, gh_closed_pr, gh_list_page, gh_pr},
     tui::screens::pr_list::StatusFilter,
@@ -72,7 +72,7 @@ pub(super) fn any_connection() -> String {
 
 pub(super) fn loaded_ids(app: &App) -> Vec<u64> {
     match &app.state.store.cache.prs {
-        LoadState::Loaded(prs) => prs.iter().map(|pr| pr.id).collect(),
+        LoadState::Loaded(prs) => prs.iter().map(|pr| pr.id.0).collect(),
         other => panic!("PR list is not loaded: {other:?}"),
     }
 }

@@ -5,7 +5,7 @@ use crate::{
         navigation::Screen,
         store::{LoadState, Notice, OpenChain, Operation, PrData, WriteTicket},
     },
-    domain::pr::{PrBatch, PrGroup, PullRequest},
+    domain::pr::{PrBatch, PrGroup, PrId, PullRequest},
     providers::FetchError,
     tui::screens::pr_list::ListContext,
 };
@@ -316,7 +316,7 @@ impl App {
         }
     }
 
-    fn pr_data_mut(&mut self, pr_id: u64) -> &mut PrData {
+    fn pr_data_mut(&mut self, pr_id: PrId) -> &mut PrData {
         self.state.store.cache.details.entry(pr_id).or_default()
     }
 }

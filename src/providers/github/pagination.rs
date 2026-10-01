@@ -1,10 +1,11 @@
 use super::{cli, graphql};
+use crate::domain::pr::PrId;
 use crate::providers::FetchError;
 use serde::{Deserialize, de::DeserializeOwned};
 use serde_json::Value;
 
 pub(super) fn pr_nodes<T: DeserializeOwned>(
-    pr: u64,
+    pr: PrId,
     field: &str,
     selection: &str,
 ) -> Result<Vec<T>, FetchError> {

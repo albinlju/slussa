@@ -4,6 +4,7 @@ use crate::{
         navigation::Screen,
         state::AppState,
     },
+    domain::pr::PrId,
     tui::components::search_input::{SearchInput, SearchKind},
 };
 use component::Component;
@@ -167,7 +168,7 @@ pub struct Ui {
 }
 
 impl Ui {
-    pub fn open_pr(&mut self, pr_id: u64) {
+    pub fn open_pr(&mut self, pr_id: PrId) {
         self.list.search = SearchInput::default();
         self.detail.open(pr_id);
     }

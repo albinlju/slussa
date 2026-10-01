@@ -117,10 +117,24 @@ impl MergeStrategy {
     }
 }
 
+/// A pull request's number in its repository. A type of its own, so that it
+/// cannot be passed where a comment's id is expected, or the other way round.
+#[derive(
+    Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, serde::Serialize, serde::Deserialize,
+)]
+#[serde(transparent)]
+pub struct PrId(pub u64);
+
+impl std::fmt::Display for PrId {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        self.0.fmt(f)
+    }
+}
+
 #[derive(Debug, Clone)]
 pub struct PullRequest {
     pub url: Option<String>,
-    pub id: u64,
+    pub id: PrId,
     pub title: String,
     pub description: Option<String>,
     pub author: User,

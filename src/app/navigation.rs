@@ -1,10 +1,11 @@
 use crate::{
     app::{App, store::FetchKey},
+    domain::pr::PrId,
     tui::screens::pr_detail::tabs::DetailTab,
 };
 
 impl App {
-    pub(super) fn open_pr(&mut self, pr_id: u64) {
+    pub(super) fn open_pr(&mut self, pr_id: PrId) {
         self.state.ui.open_pr(pr_id);
         self.state.screen = Screen::Detail {
             pr_id,
@@ -29,7 +30,7 @@ pub enum Screen {
     #[default]
     List,
     Detail {
-        pr_id: u64,
+        pr_id: PrId,
         tab: DetailTab,
     },
 }

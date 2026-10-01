@@ -31,11 +31,11 @@ async fn opening_a_pr_reads_its_description_and_labels_once() {
     assert_eq!(loaded_ids(&app), vec![1]);
     assert_eq!(info_reads(&gh.calls()), 0, "the list does not read them");
 
-    app.apply(Action::List(ListAction::OpenPr(1)));
-    app.apply(Action::List(ListAction::OpenPr(1)));
+    app.apply(Action::List(ListAction::OpenPr(PrId(1))));
+    app.apply(Action::List(ListAction::OpenPr(PrId(1))));
     settle(&mut app).await;
 
-    let info = match &app.state.store.cache.details[&1].info {
+    let info = match &app.state.store.cache.details[&PrId(1)].info {
         LoadState::Loaded(info) => info.clone(),
         other => panic!("expected the info to be loaded, got {other:?}"),
     };

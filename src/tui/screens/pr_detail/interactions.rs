@@ -11,6 +11,7 @@ use crate::{
         action::{Command, ConfirmAction, Effect, MergeAction, PrAction, ReviewAction},
         reviews::CommentTarget,
     },
+    domain::pr::PrId,
     tui::{
         component::Component,
         components::comment_editor::{CommentDraft, CommentEditor},
@@ -19,7 +20,7 @@ use crate::{
 
 impl PrDetailScreen {
     /// Keep navigation and unfinished editors scoped to their PR for this session.
-    pub fn open(&mut self, pr_id: u64) {
+    pub fn open(&mut self, pr_id: PrId) {
         if let Some(previous) = self.pr_id {
             self.navigation.insert(
                 previous,
@@ -59,7 +60,7 @@ impl PrDetailScreen {
     }
 
     /// An acknowledgement affects only the editor that submitted the payload.
-    pub fn submission_finished(&mut self, pr_id: u64, success: bool) {
+    pub fn submission_finished(&mut self, pr_id: PrId, success: bool) {
         let editor = if self.pr_id == Some(pr_id) {
             Some(&mut self.editor)
         } else {
@@ -94,16 +95,16 @@ impl PrDetailScreen {
         }
     }
 
-    const fn command(pr_id: u64, command: Command) -> Effect {
+    const fn command(pr_id: PrId, command: Command) -> Effect {
         Effect::Command { pr_id, command }
     }
 
-    pub(super) fn dismiss_error(&mut self, pr_id: u64) -> Effect {
+    pub(super) fn dismiss_error(&mut self, pr_id: PrId) -> Effect {
         self.error = super::dialogs::error::ErrorDialog::default();
         Effect::DismissError { pr_id }
     }
 
-    pub(super) fn confirm_action(&mut self, action: ConfirmAction, pr_id: u64) -> Option<Effect> {
+    pub(super) fn confirm_action(&mut self, action: ConfirmAction, pr_id: PrId) -> Option<Effect> {
         match action {
             ConfirmAction::Move(_) => {
                 if let Some(Overlay::Confirm(dialog)) = &mut self.overlay {
@@ -132,7 +133,7 @@ impl PrDetailScreen {
     pub(super) fn review_action(
         &mut self,
         action: ReviewAction,
-        pr_id: u64,
+        pr_id: PrId,
         ctx: &DetailContext<'_>,
     ) -> Option<Effect> {
         match action {
@@ -173,7 +174,7 @@ impl PrDetailScreen {
     pub(super) fn merge_action(
         &mut self,
         action: MergeAction,
-        pr_id: u64,
+        pr_id: PrId,
         ctx: &DetailContext<'_>,
     ) -> Option<Effect> {
         let strategies = ctx.store.capabilities.merge_strategies.as_slice();
@@ -197,7 +198,7 @@ impl PrDetailScreen {
         }
     }
 
-    pub(super) fn submit_editor(&self, pr_id: u64) -> Option<Effect> {
+    pub(super) fn submit_editor(&self, pr_id: PrId) -> Option<Effect> {
         let CommentDraft { target, text } = self.editor.draft()?;
         // A blank draft is not a comment: Ctrl+S does nothing until it has text.
         let text = crate::domain::comment::NonBlank::new(text)?;
@@ -210,7 +211,7 @@ impl PrDetailScreen {
     pub(super) fn pr_action(
         &mut self,
         action: PrAction,
-        pr_id: u64,
+        pr_id: PrId,
         ctx: &DetailContext<'_>,
     ) -> Option<Effect> {
         let command = match action {
@@ -293,7 +294,7 @@ impl PrDetailScreen {
 }
 
 impl PrDetailScreen {
-    pub fn draft_snapshot(&self) -> std::collections::BTreeMap<u64, CommentDraft> {
+    pub fn draft_snapshot(&self) -> std::collections::BTreeMap<PrId, CommentDraft> {
         let mut drafts: std::collections::BTreeMap<_, _> = self
             .editors
             .iter()
@@ -307,7 +308,7 @@ impl PrDetailScreen {
         }
         drafts
     }
-    pub fn restore_drafts(&mut self, drafts: std::collections::BTreeMap<u64, CommentDraft>) {
+    pub fn restore_drafts(&mut self, drafts: std::collections::BTreeMap<PrId, CommentDraft>) {
         self.editors = drafts
             .into_iter()
             .map(|(id, draft)| (id, CommentEditor::restored(draft)))

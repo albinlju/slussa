@@ -12,7 +12,7 @@ pub mod remote;
 
 use chrono::{DateTime, TimeZone, Utc};
 
-use crate::domain::pr::Mergeability;
+use crate::domain::pr::{Mergeability, PrId};
 use crate::domain::review::{ReviewComment, ReviewVerdict};
 use crate::domain::user::Username;
 use crate::providers::error::{FetchError, ReviewError};
@@ -35,7 +35,7 @@ pub fn current_user(config: &Config) -> Result<Username, FetchError> {
 
 pub fn submit_review(
     config: &Config,
-    pr_id: u64,
+    pr_id: PrId,
     verdict: ReviewVerdict,
     body: &str,
     user: &str,
@@ -70,7 +70,7 @@ pub fn submit_review(
 /// earlier posts remain, and the surfaced error is whichever step failed.
 pub fn submit_full_review(
     config: &Config,
-    pr_id: u64,
+    pr_id: PrId,
     verdict: ReviewVerdict,
     body: &str,
     user: &str,
@@ -116,7 +116,7 @@ fn publish_steps<T>(
     })
 }
 
-pub fn fetch_mergeability(config: &Config, pr_id: u64) -> Result<Mergeability, FetchError> {
+pub fn fetch_mergeability(config: &Config, pr_id: PrId) -> Result<Mergeability, FetchError> {
     #[derive(serde::Deserialize)]
     #[serde(rename_all = "camelCase")]
     struct Status {
@@ -161,7 +161,7 @@ pub fn fetch_mergeability(config: &Config, pr_id: u64) -> Result<Mergeability, F
 
 /// Bitbucket's merge/decline endpoints take the PR's current version for
 /// optimistic locking, so read it fresh before either.
-fn pr_version(config: &Config, pr_id: u64) -> Result<u64, FetchError> {
+fn pr_version(config: &Config, pr_id: PrId) -> Result<u64, FetchError> {
     #[derive(serde::Deserialize)]
     struct PrVersion {
         version: u64,
@@ -174,7 +174,7 @@ fn pr_version(config: &Config, pr_id: u64) -> Result<u64, FetchError> {
     Ok(pr.version)
 }
 
-pub fn merge(config: &Config, pr_id: u64) -> Result<(), FetchError> {
+pub fn merge(config: &Config, pr_id: PrId) -> Result<(), FetchError> {
     // Strategy is the repo's configured default.
     let version = pr_version(config, pr_id)?;
     let endpoint = format!(
@@ -189,7 +189,7 @@ pub fn merge(config: &Config, pr_id: u64) -> Result<(), FetchError> {
     )
 }
 
-pub fn reopen(config: &Config, pr_id: u64) -> Result<(), FetchError> {
+pub fn reopen(config: &Config, pr_id: PrId) -> Result<(), FetchError> {
     let version = pr_version(config, pr_id)?;
     let endpoint = format!(
         "/rest/api/1.0/projects/{}/repos/{}/pull-requests/{pr_id}/reopen?version={version}",
@@ -203,7 +203,7 @@ pub fn reopen(config: &Config, pr_id: u64) -> Result<(), FetchError> {
     )
 }
 
-pub fn decline(config: &Config, pr_id: u64) -> Result<(), FetchError> {
+pub fn decline(config: &Config, pr_id: PrId) -> Result<(), FetchError> {
     let version = pr_version(config, pr_id)?;
     let endpoint = format!(
         "/rest/api/1.0/projects/{}/repos/{}/pull-requests/{pr_id}/decline?version={version}",

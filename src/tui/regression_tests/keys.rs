@@ -7,10 +7,10 @@ fn keyboard_routes_list_diff_commit_and_editor() {
     let mut state = fixture();
     assert!(matches!(
         key(&state, KeyCode::Enter),
-        Action::List(ListAction::OpenPr(42))
+        Action::List(ListAction::OpenPr(PrId(42)))
     ));
     state.screen = Screen::Detail {
-        pr_id: 42,
+        pr_id: PrId(42),
         tab: DetailTab::Diff,
     };
     assert!(matches!(
@@ -23,7 +23,7 @@ fn keyboard_routes_list_diff_commit_and_editor() {
         Action::Diff(DiffAction::FocusTree)
     ));
     state.screen = Screen::Detail {
-        pr_id: 42,
+        pr_id: PrId(42),
         tab: DetailTab::Commits,
     };
     assert!(matches!(
@@ -52,7 +52,7 @@ fn filter_and_confirmation_capture_navigation() {
         Action::List(ListAction::FilterPickerNext)
     ));
     state.screen = Screen::Detail {
-        pr_id: 42,
+        pr_id: PrId(42),
         tab: DetailTab::Overview,
     };
     state.ui.detail.overlay = Some(Overlay::Confirm(ConfirmDialog::new(ConfirmKind::Decline)));
@@ -72,7 +72,7 @@ fn link_shortcuts_target_selected_pr_and_never_escape_editor_or_help() {
     let mut state = fixture();
     if let LoadState::Loaded(prs) = &mut state.store.cache.prs {
         let mut second = prs[0].clone();
-        second.id = 43;
+        second.id = PrId(43);
         second.title = "Different PR".into();
         prs.push(second);
     }
@@ -80,16 +80,19 @@ fn link_shortcuts_target_selected_pr_and_never_escape_editor_or_help() {
     assert!(matches!(
         key(&state, KeyCode::Char('y')),
         Action::Effect(Effect::PrLink {
-            pr_id: 43,
+            pr_id: PrId(43),
             kind: LinkAction::Copy
         })
     ));
     for tab in DetailTab::ALL {
-        state.screen = Screen::Detail { pr_id: 42, tab };
+        state.screen = Screen::Detail {
+            pr_id: PrId(42),
+            tab,
+        };
         assert!(matches!(
             key(&state, KeyCode::Char('o')),
             Action::Effect(Effect::PrLink {
-                pr_id: 42,
+                pr_id: PrId(42),
                 kind: LinkAction::Open
             })
         ));
@@ -116,7 +119,7 @@ fn missing_pr_link_hides_shortcuts_and_help_entries_in_both_screens() {
     for screen in [
         Screen::List,
         Screen::Detail {
-            pr_id: 42,
+            pr_id: PrId(42),
             tab: DetailTab::Overview,
         },
     ] {

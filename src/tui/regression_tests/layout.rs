@@ -6,8 +6,11 @@ use super::support::*;
 fn screens_preserve_rendered_output() {
     let mut output = String::new();
     for (width, height) in [(100, 30), (40, 12)] {
-        for screen in std::iter::once(Screen::List)
-            .chain(DetailTab::ALL.map(|tab| Screen::Detail { pr_id: 42, tab }))
+        for screen in
+            std::iter::once(Screen::List).chain(DetailTab::ALL.map(|tab| Screen::Detail {
+                pr_id: PrId(42),
+                tab,
+            }))
         {
             let mut state = fixture();
             state.screen = screen;
@@ -37,7 +40,7 @@ fn unsupported_features_are_hidden_from_content_footer_and_help() {
     use crate::domain::capabilities::{Capabilities, Feature};
     let mut state = fixture();
     state.screen = Screen::Detail {
-        pr_id: 42,
+        pr_id: PrId(42),
         tab: DetailTab::Overview,
     };
     state.store.capabilities = Capabilities::default();
@@ -119,7 +122,7 @@ fn compact_list_keeps_title_and_help_visible() {
 fn help_scroll_reaches_last_action_in_small_terminal() {
     let mut state = fixture();
     state.screen = Screen::Detail {
-        pr_id: 42,
+        pr_id: PrId(42),
         tab: DetailTab::Overview,
     };
     state.ui.detail.overlay = Some(Overlay::Help(HelpDialog::default()));
@@ -142,7 +145,7 @@ fn help_scroll_reaches_last_action_in_small_terminal() {
     assert_eq!(
         state.screen,
         Screen::Detail {
-            pr_id: 42,
+            pr_id: PrId(42),
             tab: DetailTab::Overview
         }
     );
@@ -152,7 +155,10 @@ fn help_scroll_reaches_last_action_in_small_terminal() {
 fn compact_detail_tabs_always_show_the_active_tab() {
     for tab in DetailTab::ALL {
         let mut state = fixture();
-        state.screen = Screen::Detail { pr_id: 42, tab };
+        state.screen = Screen::Detail {
+            pr_id: PrId(42),
+            tab,
+        };
         let mut terminal = Terminal::new(TestBackend::new(40, 12)).unwrap();
         terminal.draw(|f| render(f, &mut state)).unwrap();
         let text: String = terminal
@@ -174,7 +180,7 @@ fn notice_replaces_entire_footer_and_normal_hints_return_afterward() {
     for screen in [
         Screen::List,
         Screen::Detail {
-            pr_id: 42,
+            pr_id: PrId(42),
             tab: DetailTab::Overview,
         },
     ] {
@@ -205,11 +211,11 @@ fn empty_searches_offer_recovery_in_list_files_and_commits() {
     for screen in [
         Screen::List,
         Screen::Detail {
-            pr_id: 42,
+            pr_id: PrId(42),
             tab: DetailTab::Diff,
         },
         Screen::Detail {
-            pr_id: 42,
+            pr_id: PrId(42),
             tab: DetailTab::Commits,
         },
     ] {
@@ -238,10 +244,10 @@ fn builds_scroll_to_last_check_in_a_short_terminal() {
     use crate::domain::ci::{Build, BuildState};
     let mut state = fixture();
     state.screen = Screen::Detail {
-        pr_id: 42,
+        pr_id: PrId(42),
         tab: DetailTab::Builds,
     };
-    state.store.cache.details.get_mut(&42).unwrap().builds = LoadState::Loaded(
+    state.store.cache.details.get_mut(&PrId(42)).unwrap().builds = LoadState::Loaded(
         (0..30)
             .map(|i| Build {
                 name: format!("check-{i:02}"),
@@ -263,10 +269,16 @@ fn builds_scroll_to_last_check_in_a_short_terminal() {
 fn commit_list_returns_to_the_same_viewport_after_opening_a_commit() {
     let mut state = fixture();
     state.screen = Screen::Detail {
-        pr_id: 42,
+        pr_id: PrId(42),
         tab: DetailTab::Commits,
     };
-    state.store.cache.details.get_mut(&42).unwrap().commits = LoadState::Loaded(
+    state
+        .store
+        .cache
+        .details
+        .get_mut(&PrId(42))
+        .unwrap()
+        .commits = LoadState::Loaded(
         (0..40)
             .map(|n| Commit {
                 oid: format!("{n:07x}"),
@@ -301,10 +313,10 @@ fn commit_list_returns_to_the_same_viewport_after_opening_a_commit() {
 fn wide_description_can_pan_to_hidden_content_and_resets_when_resized() {
     let mut state = fixture();
     state.screen = Screen::Detail {
-        pr_id: 42,
+        pr_id: PrId(42),
         tab: DetailTab::Description,
     };
-    if let Some(data) = state.store.cache.details.get_mut(&42) {
+    if let Some(data) = state.store.cache.details.get_mut(&PrId(42)) {
         data.info = LoadState::Loaded(PrInfo {
             description: Some(format!("```\n{}END_OF_CODE\n```", "x".repeat(100))),
             labels: vec![],
@@ -322,7 +334,7 @@ fn wide_description_can_pan_to_hidden_content_and_resets_when_resized() {
     assert_eq!(
         state.screen,
         Screen::Detail {
-            pr_id: 42,
+            pr_id: PrId(42),
             tab: DetailTab::Description
         }
     );

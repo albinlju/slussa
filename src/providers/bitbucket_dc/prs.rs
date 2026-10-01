@@ -3,7 +3,7 @@ use serde::Deserialize;
 use super::{Config, ms_to_utc};
 use crate::domain::{
     ci::CiSummary,
-    pr::{PrBatch, PrGroup, PrStatus, PullRequest},
+    pr::{PrBatch, PrGroup, PrId, PrStatus, PullRequest},
     review::{Reviewer, ReviewerState},
     user::User,
 };
@@ -127,7 +127,7 @@ fn map_pr(bb: BbPr) -> PullRequest {
 
     PullRequest {
         url: bb.links.web.into_iter().next().map(|link| link.href),
-        id: bb.id,
+        id: PrId(bb.id),
         title: bb.title,
         description: bb.description,
         author: map_user(bb.author.user),

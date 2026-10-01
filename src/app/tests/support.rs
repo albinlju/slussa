@@ -7,7 +7,10 @@ pub(super) use crate::{
         reviews::{CommentAnchor, CommentTarget},
         store::{LoadState, WriteTicket},
     },
-    domain::comment::{CommentKey, CommentKind, ThreadHandle},
+    domain::{
+        comment::{CommentKey, CommentKind, ThreadHandle},
+        pr::PrId,
+    },
     providers::{FetchError, Provider},
     tui::{
         self,
@@ -26,7 +29,7 @@ pub(super) use ratatui::crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
 
 /// End the write pending for `pr_id` with `result`, as its worker would. With
 /// none pending there is no write to end.
-pub(super) fn finish_write(app: &mut App, pr_id: u64, result: Result<(), WriteError>) {
+pub(super) fn finish_write(app: &mut App, pr_id: PrId, result: Result<(), WriteError>) {
     let Some(&operation) = app.state.store.operations.get(&pr_id) else {
         return;
     };
@@ -61,7 +64,7 @@ pub(super) fn add_pr(app: &mut App, id: u64) {
         panic!("the fixture's list is loaded");
     };
     let mut pr = prs[0].clone();
-    pr.id = id;
+    pr.id = PrId(id);
     prs.push(pr);
 }
 
@@ -70,7 +73,7 @@ pub(super) fn press(app: &mut App, code: KeyCode) {
 }
 
 pub(super) fn detail(app: &mut App, tab: DetailTab) {
-    app.apply(Action::List(ListAction::OpenPr(42)));
+    app.apply(Action::List(ListAction::OpenPr(PrId(42))));
     app.apply(Action::Detail(DetailAction::Nav(NavAction::SelectTab(tab))));
 }
 

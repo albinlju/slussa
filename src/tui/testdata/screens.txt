@@ -29,7 +29,7 @@
 │                                                                                                  │
 └──────────────────────────────────────────────────────────────────────────────────────────────────┘
   enter: open  /: search  f: filter                                                         ?: help
-100x30 Detail { pr_id: 42, tab: Description }
+100x30 Detail { pr_id: PrId(42), tab: Description }
 ┌──────────────────────────────────────────────────────────────────────────────────────────────────┐
 │  #42 Component migration                                                                         │
 │                                                                                                  │
@@ -60,7 +60,7 @@
 │                                                                                                  │
 └──────────────────────────────────────────────────────────────────────────────────────────────────┘
   h/l: tabs  j/k: scroll  a: submit review  v: start review  m: merge  x: decline           ?: help
-100x30 Detail { pr_id: 42, tab: Overview }
+100x30 Detail { pr_id: PrId(42), tab: Overview }
 ┌──────────────────────────────────────────────────────────────────────────────────────────────────┐
 │  #42 Component migration                                                                         │
 │                                                                                                  │
@@ -91,7 +91,7 @@
 │                                                                 │                                │
 └──────────────────────────────────────────────────────────────────────────────────────────────────┘
   c: comment  a: submit review  v: start review  m: merge  x: decline                       ?: help
-100x30 Detail { pr_id: 42, tab: Diff }
+100x30 Detail { pr_id: PrId(42), tab: Diff }
 ┌──────────────────────────────────────────────────────────────────────────────────────────────────┐
 │  #42 Component migration                                                                         │
 │                                                                                                  │
@@ -122,7 +122,7 @@
 │  ╰──────────────────────╯ ╰───────────────────────────────────────────────────────────────────╯  │
 └──────────────────────────────────────────────────────────────────────────────────────────────────┘
   enter: toggle folder  /: files  h/l: tabs                                                 ?: help
-100x30 Detail { pr_id: 42, tab: Commits }
+100x30 Detail { pr_id: PrId(42), tab: Commits }
 ┌──────────────────────────────────────────────────────────────────────────────────────────────────┐
 │  #42 Component migration                                                                         │
 │                                                                                                  │
@@ -153,7 +153,7 @@
 │                                                                                                  │
 └──────────────────────────────────────────────────────────────────────────────────────────────────┘
   enter: open  /: search                                                                    ?: help
-100x30 Detail { pr_id: 42, tab: Builds }
+100x30 Detail { pr_id: PrId(42), tab: Builds }
 ┌──────────────────────────────────────────────────────────────────────────────────────────────────┐
 │  #42 Component migration                                                                         │
 │                                                                                                  │
@@ -197,7 +197,7 @@
 │                                      │
 └──────────────────────────────────────┘
   enter: open  /: search        ?: help
-40x12 Detail { pr_id: 42, tab: Description }
+40x12 Detail { pr_id: PrId(42), tab: Description }
 ┌──────────────────────────────────────┐
 │ #42 Component migration              │
 │  Open  @alice    ✓ mergeable         │
@@ -210,7 +210,7 @@
 │                                      │
 └──────────────────────────────────────┘
   h/l: tabs  j/k: scroll        ?: help
-40x12 Detail { pr_id: 42, tab: Overview }
+40x12 Detail { pr_id: PrId(42), tab: Overview }
 ┌──────────────────────────────────────┐
 │ #42 Component migration              │
 │  Open  @alice    ✓ mergeable         │
@@ -223,7 +223,7 @@
 │                                      │
 └──────────────────────────────────────┘
   c: comment  a: submit review  ?: help
-40x12 Detail { pr_id: 42, tab: Diff }
+40x12 Detail { pr_id: PrId(42), tab: Diff }
 ┌──────────────────────────────────────┐
 │ #42 Component migration              │
 │  Open  @alice    ✓ mergeable         │
@@ -236,7 +236,7 @@
 │╰────────────────────────────────────╯│
 └──────────────────────────────────────┘
   enter: toggle folder          ?: help
-40x12 Detail { pr_id: 42, tab: Commits }
+40x12 Detail { pr_id: PrId(42), tab: Commits }
 ┌──────────────────────────────────────┐
 │ #42 Component migration              │
 │  Open  @alice    ✓ mergeable         │
@@ -249,7 +249,7 @@
 │                                      │
 └──────────────────────────────────────┘
   enter: open  /: search        ?: help
-40x12 Detail { pr_id: 42, tab: Builds }
+40x12 Detail { pr_id: PrId(42), tab: Builds }
 ┌──────────────────────────────────────┐
 │ #42 Component migration              │
 │  Open  @alice    ✓ mergeable         │

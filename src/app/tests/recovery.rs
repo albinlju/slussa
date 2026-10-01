@@ -60,17 +60,17 @@ async fn interrupted_send_is_journaled_and_success_clears_recovery_data() {
     press(&mut first, KeyCode::Char('c'));
     first.apply(Action::Paste("send me".into()));
     send_comment(&mut first);
-    assert!(first.state.store.operations.contains_key(&42));
+    assert!(first.state.store.operations.contains_key(&PrId(42)));
     drop(first);
     let mut second = app();
     attach_recovery(&mut second, &root);
     assert!(second.state.store.operations.is_empty());
-    assert!(second.state.store.errors[&42].contains("may have reached"));
+    assert!(second.state.store.errors[&PrId(42)].contains("may have reached"));
     detail(&mut second, DetailTab::Overview);
     press(&mut second, KeyCode::Esc); // acknowledge interrupted request notice
     press(&mut second, KeyCode::Char('c'));
     send_comment(&mut second);
-    finish_write(&mut second, 42, Ok(()));
+    finish_write(&mut second, PrId(42), Ok(()));
     drop(second);
     let mut third = app();
     attach_recovery(&mut third, &root);
@@ -100,7 +100,7 @@ fn journal_failure_prevents_remote_submission_and_keeps_editor() {
     send_comment(&mut app);
     assert!(app.state.store.operations.is_empty());
     assert_eq!(app.state.ui.detail.editor.text().unwrap(), "keep me");
-    assert!(app.state.store.errors[&42].starts_with("Not sent:"));
+    assert!(app.state.store.errors[&PrId(42)].starts_with("Not sent:"));
     assert!(
         std::fs::read(&file)
             .unwrap()

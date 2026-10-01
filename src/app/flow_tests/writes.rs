@@ -2,7 +2,7 @@
 
 use super::support::*;
 
-fn submit_pr_comment(app: &mut App, pr_id: u64, text: &str) {
+fn submit_pr_comment(app: &mut App, pr_id: PrId, text: &str) {
     app.apply(Action::Effect(Effect::Command {
         pr_id,
         command: Command::SubmitComment {
@@ -21,9 +21,9 @@ async fn a_comment_is_sent_once_and_followed_by_a_refetch() {
         .install();
     let mut app = app();
 
-    submit_pr_comment(&mut app, 1, "hello");
+    submit_pr_comment(&mut app, PrId(1), "hello");
     assert!(
-        app.state.store.operations.contains_key(&1),
+        app.state.store.operations.contains_key(&PrId(1)),
         "the write is pending until the provider answers"
     );
     settle(&mut app).await;
@@ -67,13 +67,13 @@ async fn a_failed_comment_is_reported_on_its_pr_and_not_followed_by_a_refetch() 
         .install();
     let mut app = app();
 
-    submit_pr_comment(&mut app, 1, "hello");
+    submit_pr_comment(&mut app, PrId(1), "hello");
     settle(&mut app).await;
 
     assert_eq!(gh.calls().len(), 1, "no refetch after a failed write");
-    assert!(app.state.store.errors.contains_key(&1));
+    assert!(app.state.store.errors.contains_key(&PrId(1)));
     assert!(
-        app.state.store.uncertain_submissions.contains(&1),
+        app.state.store.uncertain_submissions.contains(&PrId(1)),
         "an ambiguous failure is remembered so the user checks before retrying"
     );
     assert!(app.state.store.operations.is_empty());
@@ -88,8 +88,8 @@ async fn a_second_write_to_the_same_pr_is_ignored_while_one_is_pending() {
         .install();
     let mut app = app();
 
-    submit_pr_comment(&mut app, 1, "first");
-    submit_pr_comment(&mut app, 1, "second");
+    submit_pr_comment(&mut app, PrId(1), "first");
+    submit_pr_comment(&mut app, PrId(1), "second");
     settle(&mut app).await;
 
     let posts: Vec<_> = gh
@@ -101,7 +101,7 @@ async fn a_second_write_to_the_same_pr_is_ignored_while_one_is_pending() {
     assert!(posts[0].ends_with("body=first"));
 }
 
-fn reopen(app: &mut App, pr_id: u64) {
+fn reopen(app: &mut App, pr_id: PrId) {
     app.apply(Action::Effect(Effect::Command {
         pr_id,
         command: Command::Reopen,
@@ -117,9 +117,9 @@ async fn reopening_is_sent_once_reported_and_followed_by_a_refetch() {
         .install();
     let mut app = app();
 
-    reopen(&mut app, 1);
+    reopen(&mut app, PrId(1));
     assert!(
-        app.state.store.operations.contains_key(&1),
+        app.state.store.operations.contains_key(&PrId(1)),
         "pending until the provider answers"
     );
     settle(&mut app).await;
@@ -153,12 +153,12 @@ async fn a_refused_reopen_is_reported_on_its_pr_without_a_refetch() {
         .install();
     let mut app = app();
 
-    reopen(&mut app, 1);
+    reopen(&mut app, PrId(1));
     settle(&mut app).await;
 
     assert_eq!(gh.calls().len(), 1, "no refetch after a failed write");
     assert!(
-        app.state.store.errors[&1].contains("head branch was deleted"),
+        app.state.store.errors[&PrId(1)].contains("head branch was deleted"),
         "{:?}",
         app.state.store.errors
     );
@@ -181,7 +181,7 @@ async fn a_line_comment_on_an_unknown_revision_is_refused_before_anything_is_sen
     let mut app = app();
 
     app.apply(Action::Effect(Effect::Command {
-        pr_id: 1,
+        pr_id: PrId(1),
         command: Command::SubmitComment {
             target: CommentTarget::Line(anchor_without_a_revision()),
             text: "note".into(),
@@ -190,7 +190,7 @@ async fn a_line_comment_on_an_unknown_revision_is_refused_before_anything_is_sen
     settle(&mut app).await;
 
     assert!(gh.calls().is_empty(), "{:?}", gh.calls());
-    let error = &app.state.store.errors[&1];
+    let error = &app.state.store.errors[&PrId(1)];
     assert!(
         error.contains("Reload the diff before commenting"),
         "{error}"
@@ -207,7 +207,7 @@ async fn a_review_with_a_comment_on_an_unknown_revision_is_refused_whole() {
     let gh = FakeGh::new().on("api", "{}").install();
     let mut app = app();
     app.state.store.reviews.insert(
-        1,
+        PrId(1),
         PendingReview {
             submitted_summary: None,
             comments: vec![PendingComment {
@@ -218,7 +218,7 @@ async fn a_review_with_a_comment_on_an_unknown_revision_is_refused_whole() {
     );
 
     app.apply(Action::Effect(Effect::Command {
-        pr_id: 1,
+        pr_id: PrId(1),
         command: Command::SubmitReview {
             verdict: crate::domain::review::ReviewVerdict::Comment,
             body: "summary".into(),
@@ -227,11 +227,11 @@ async fn a_review_with_a_comment_on_an_unknown_revision_is_refused_whole() {
     settle(&mut app).await;
 
     assert!(gh.calls().is_empty(), "{:?}", gh.calls());
-    let error = &app.state.store.errors[&1];
+    let error = &app.state.store.errors[&PrId(1)];
     assert!(error.contains("recreate comments"), "{error}");
     assert!(app.state.store.uncertain_submissions.is_empty());
     assert_eq!(
-        app.state.store.reviews[&1].comments.len(),
+        app.state.store.reviews[&PrId(1)].comments.len(),
         1,
         "the queued comment is kept"
     );

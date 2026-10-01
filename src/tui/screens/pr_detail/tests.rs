@@ -5,7 +5,10 @@ use crate::{
         state::AppState,
         store::LoadState,
     },
-    domain::{capabilities::Feature, pr::PrStatus},
+    domain::{
+        capabilities::Feature,
+        pr::{PrId, PrStatus},
+    },
     tui::{
         components::diff_viewer::{DiffFocus, FocusedNav, NavTarget},
         key_to_action,
@@ -24,7 +27,7 @@ use ratatui::{
 fn overview_of(status: PrStatus) -> AppState {
     let mut state = fixture();
     state.screen = Screen::Detail {
-        pr_id: 42,
+        pr_id: PrId(42),
         tab: DetailTab::Overview,
     };
     let LoadState::Loaded(prs) = &mut state.store.cache.prs else {
@@ -82,7 +85,10 @@ fn x_does_not_reopen_where_the_provider_cannot() {
 }
 
 fn on_tab(mut state: AppState, tab: DetailTab) -> AppState {
-    state.screen = Screen::Detail { pr_id: 42, tab };
+    state.screen = Screen::Detail {
+        pr_id: PrId(42),
+        tab,
+    };
     state
 }
 
@@ -186,13 +192,13 @@ fn the_footer_offers_reopen_only_for_a_declined_pr() {
 fn a_pr_that_is_not_in_the_list_gives_no_context_and_only_the_way_out() {
     use crate::{app::action::Effect, tui::screens::pr_detail::DetailContext};
     let mut state = overview_of(PrStatus::Open);
-    assert!(DetailContext::new(&state.store, 42, DetailTab::Overview).is_some());
+    assert!(DetailContext::new(&state.store, PrId(42), DetailTab::Overview).is_some());
 
     state.screen = Screen::Detail {
-        pr_id: 7,
+        pr_id: PrId(7),
         tab: DetailTab::Overview,
     };
-    assert!(DetailContext::new(&state.store, 7, DetailTab::Overview).is_none());
+    assert!(DetailContext::new(&state.store, PrId(7), DetailTab::Overview).is_none());
     let key = |code| key_to_action(&state, KeyEvent::new(code, KeyModifiers::NONE));
     assert!(matches!(
         key(KeyCode::Char('q')),
@@ -220,9 +226,9 @@ fn commit_list_after_the_diff_pane(focused: FocusedNav) -> AppState {
     let mut state = overview_of(PrStatus::Open);
     state.ui.detail.diff.focus = DiffFocus::Pane;
     state.ui.detail.diff.pane.focused = Some(focused);
-    state.store.reviews.entry(42).or_default();
+    state.store.reviews.entry(PrId(42)).or_default();
     state.screen = Screen::Detail {
-        pr_id: 42,
+        pr_id: PrId(42),
         tab: DetailTab::Commits,
     };
     state
@@ -256,7 +262,7 @@ fn the_commit_list_footer_offers_only_keys_that_work_there() {
 
     // On the diff itself the queued comment can be removed, as before.
     state.screen = Screen::Detail {
-        pr_id: 42,
+        pr_id: PrId(42),
         tab: DetailTab::Diff,
     };
     let d = key_to_action(

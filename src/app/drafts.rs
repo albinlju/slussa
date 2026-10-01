@@ -10,7 +10,10 @@ use super::{
     preflight::Session,
     reviews::{CommentDraft, PendingReview},
 };
-use crate::{domain::user::Username, providers::Provider};
+use crate::{
+    domain::{pr::PrId, user::Username},
+    providers::Provider,
+};
 use serde::{Deserialize, Serialize};
 use std::{
     collections::{BTreeMap, BTreeSet},
@@ -21,9 +24,9 @@ use std::{
 
 #[derive(Debug, Default, Serialize, Deserialize)]
 pub struct Snapshot {
-    pub editors: BTreeMap<u64, CommentDraft>,
-    pub reviews: BTreeMap<u64, PendingReview>,
-    pub interrupted: BTreeSet<u64>,
+    pub editors: BTreeMap<PrId, CommentDraft>,
+    pub reviews: BTreeMap<PrId, PendingReview>,
+    pub interrupted: BTreeSet<PrId>,
 }
 #[derive(Serialize, Deserialize)]
 struct Envelope {
@@ -233,7 +236,7 @@ impl App {
         }
     }
     /// Journal the uncertain outcome before any remote write can start.
-    pub(super) fn checkpoint_submission(&mut self, pr_id: u64) -> bool {
+    pub(super) fn checkpoint_submission(&mut self, pr_id: PrId) -> bool {
         if self.save_drafts() {
             return true;
         }
@@ -301,14 +304,14 @@ mod tests {
         let snapshot = Snapshot {
             editors: [
                 (
-                    1,
+                    PrId(1),
                     CommentDraft {
                         target: CommentTarget::Reply(789),
                         text: "å\n🦀".into(),
                     },
                 ),
                 (
-                    2,
+                    PrId(2),
                     CommentDraft {
                         target: CommentTarget::Line(anchor.clone()),
                         text: "line".into(),
@@ -317,7 +320,7 @@ mod tests {
             ]
             .into(),
             reviews: [(
-                2,
+                PrId(2),
                 PendingReview {
                     submitted_summary: Some("already sent".into()),
                     comments: vec![PendingComment {
@@ -327,7 +330,7 @@ mod tests {
                 },
             )]
             .into(),
-            interrupted: [2].into(),
+            interrupted: [PrId(2)].into(),
         };
         storage.save(snapshot).unwrap();
         assert!(DraftStorage::open(&root, "repo/account-a".into()).is_err());
@@ -335,13 +338,13 @@ mod tests {
         assert!(other.editors.is_empty());
         drop(storage);
         let (mut storage, restored) = reopen(&root, "repo/account-a").unwrap();
-        assert_eq!(restored.editors[&1].text, "å\n🦀");
+        assert_eq!(restored.editors[&PrId(1)].text, "å\n🦀");
         assert!(matches!(
-            restored.editors[&1].target,
+            restored.editors[&PrId(1)].target,
             CommentTarget::Reply(789)
         ));
         assert_eq!(
-            restored.reviews[&2].comments[0]
+            restored.reviews[&PrId(2)].comments[0]
                 .anchor
                 .revision
                 .as_ref()
@@ -350,10 +353,10 @@ mod tests {
             "head"
         );
         assert_eq!(
-            restored.reviews[&2].submitted_summary.as_deref(),
+            restored.reviews[&PrId(2)].submitted_summary.as_deref(),
             Some("already sent")
         );
-        assert!(restored.interrupted.contains(&2));
+        assert!(restored.interrupted.contains(&PrId(2)));
         storage.save(Snapshot::default()).unwrap();
         drop(storage);
         let (storage, cleared) = reopen(&root, "repo/account-a").unwrap();
@@ -381,19 +384,25 @@ mod tests {
     fn version_1_draft_file_is_read_and_written_back_unchanged() {
         let envelope: Envelope = serde_json::from_str(VERSION_1).unwrap();
         let editors = &envelope.snapshot.editors;
-        assert!(matches!(editors[&1].target, CommentTarget::Reply(789)));
-        assert!(matches!(&editors[&2].target, CommentTarget::Line(a) if a.line == 42));
-        assert!(matches!(editors[&3].target, CommentTarget::Pr));
         assert!(matches!(
-            editors[&4].target,
+            editors[&PrId(1)].target,
+            CommentTarget::Reply(789)
+        ));
+        assert!(matches!(&editors[&PrId(2)].target, CommentTarget::Line(a) if a.line == 42));
+        assert!(matches!(editors[&PrId(3)].target, CommentTarget::Pr));
+        assert!(matches!(
+            editors[&PrId(4)].target,
             CommentTarget::Edit(CommentKey {
                 id: 5,
                 kind: CommentKind::Review
             })
         ));
-        assert!(matches!(editors[&5].target, CommentTarget::Review { .. }));
+        assert!(matches!(
+            editors[&PrId(5)].target,
+            CommentTarget::Review { .. }
+        ));
         assert!(
-            envelope.snapshot.reviews[&2].comments[0]
+            envelope.snapshot.reviews[&PrId(2)].comments[0]
                 .anchor
                 .revision
                 .is_none()
@@ -429,7 +438,7 @@ mod tests {
         let old = fs::read(&storage.path).unwrap();
         fs::create_dir(storage.path.with_extension("tmp")).unwrap();
         let snapshot = Snapshot {
-            interrupted: [42].into(),
+            interrupted: [PrId(42)].into(),
             ..Snapshot::default()
         };
         assert!(storage.save(snapshot).is_err());

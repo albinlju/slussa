@@ -3,10 +3,11 @@ use crate::domain::{
     activity::Activity,
     comment::{Comment, CommentThread},
     event::TimelineEvent,
+    pr::PrId,
 };
 use crate::providers::error::FetchError;
 
-pub fn fetch(pr_number: u64) -> Result<Activity, FetchError> {
+pub fn fetch(pr_number: PrId) -> Result<Activity, FetchError> {
     timed(pr_number, "activity", || {
         fetch_parts(
             || {
@@ -25,14 +26,14 @@ pub fn fetch(pr_number: u64) -> Result<Activity, FetchError> {
 }
 
 fn timed<T>(
-    pr_number: u64,
+    pr_number: PrId,
     part: &str,
     fetch: impl FnOnce() -> Result<T, FetchError>,
 ) -> Result<T, FetchError> {
     let started = std::time::Instant::now();
     let result = fetch();
     tracing::info!(
-        pr_number,
+        pr_number = pr_number.0,
         part,
         elapsed_ms = started.elapsed().as_millis(),
         success = result.is_ok(),

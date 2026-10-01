@@ -15,19 +15,19 @@ fn queued_review_survives_navigation_without_crossing_prs() {
     }
     send_comment(&mut app);
     assert_eq!(
-        app.state.store.reviews[&42].comments[0].text,
+        app.state.store.reviews[&PrId(42)].comments[0].text,
         "Please explain"
     );
     // Opening another PR uses already cached data and never contacts a provider.
-    let data = app.state.store.cache.details.remove(&42).unwrap();
-    app.state.store.cache.details.insert(43, data);
+    let data = app.state.store.cache.details.remove(&PrId(42)).unwrap();
+    app.state.store.cache.details.insert(PrId(43), data);
     add_pr(&mut app, 43);
-    app.apply(Action::List(ListAction::OpenPr(43)));
+    app.apply(Action::List(ListAction::OpenPr(PrId(43))));
     assert!(app.state.detail_view().pending_review().is_none());
     app.apply(Action::Detail(DetailAction::Pr(PrAction::StartReview)));
-    assert!(app.state.store.reviews[&43].comments.is_empty());
+    assert!(app.state.store.reviews[&PrId(43)].comments.is_empty());
     app.apply(Action::Detail(DetailAction::Pr(PrAction::AbandonReview)));
-    assert_eq!(app.state.store.reviews[&42].comments.len(), 1);
+    assert_eq!(app.state.store.reviews[&PrId(42)].comments.len(), 1);
 }
 
 #[test]
@@ -75,7 +75,7 @@ fn own_pr_review_gate_and_decline_cancel_are_preserved() {
     press(&mut app, KeyCode::Char('l'));
     press(&mut app, KeyCode::Enter);
     assert!(app.state.ui.detail.confirm().is_none());
-    assert!(!app.state.store.operations.contains_key(&42));
+    assert!(!app.state.store.operations.contains_key(&PrId(42)));
 }
 
 #[test]
@@ -89,7 +89,7 @@ fn review_picker_captures_keys_before_diff_search() {
     assert!(!app.state.ui.detail.diff.tree_search.open);
     press(&mut app, KeyCode::Esc);
     assert!(app.state.ui.detail.review_picker().is_none());
-    assert!(app.state.store.reviews.contains_key(&42));
+    assert!(app.state.store.reviews.contains_key(&PrId(42)));
 }
 
 #[test]
@@ -122,7 +122,7 @@ fn detail_emits_resolved_commands_and_retains_submission_payload() {
         app.state.screen,
     );
     assert!(matches!(command, Some(Effect::Command {
-        pr_id: 42, command: Command::SubmitComment { target: CommentTarget::Pr, text }
+        pr_id: PrId(42), command: Command::SubmitComment { target: CommentTarget::Pr, text }
     }) if text.as_str() == "å"));
     assert_eq!(app.state.ui.detail.editor.text().unwrap(), "å");
     press(&mut app, KeyCode::Esc);
@@ -138,7 +138,7 @@ fn detail_emits_resolved_commands_and_retains_submission_payload() {
     assert!(matches!(
         command,
         Some(Effect::Command {
-            pr_id: 42,
+            pr_id: PrId(42),
             command: Command::Decline
         })
     ));
@@ -192,14 +192,14 @@ fn review_options_follow_capabilities_and_keep_own_pr_restrictions() {
             .any(|(v, reason)| *v == ReviewVerdict::Approve && reason.is_some())
     );
     app.execute(
-        42,
+        PrId(42),
         Command::SubmitReview {
             verdict: ReviewVerdict::Approve,
             body: String::new(),
         },
     );
     assert!(app.state.store.operations.is_empty());
-    assert!(app.state.store.errors[&42].contains("unavailable"));
+    assert!(app.state.store.errors[&PrId(42)].contains("unavailable"));
 }
 
 #[test]
@@ -207,7 +207,7 @@ fn pending_review_can_be_finished_from_every_tab_that_shows_the_hint() {
     for tab in DetailTab::ALL {
         let mut app = app();
         detail(&mut app, tab);
-        app.state.store.reviews.entry(42).or_default();
+        app.state.store.reviews.entry(PrId(42)).or_default();
         press(&mut app, KeyCode::Char('v'));
         assert!(app.state.ui.detail.review_picker().is_some(), "{tab:?}");
     }
@@ -218,7 +218,7 @@ fn discarding_a_populated_review_requires_explicit_confirmation() {
     let mut app = app();
     detail(&mut app, DetailTab::Overview);
     app.state.store.reviews.insert(
-        42,
+        PrId(42),
         crate::app::reviews::PendingReview {
             comments: vec![crate::app::reviews::PendingComment {
                 anchor: CommentAnchor {
@@ -239,14 +239,14 @@ fn discarding_a_populated_review_requires_explicit_confirmation() {
     );
     // Enter defaults to keeping the review, not removing it.
     press(&mut app, KeyCode::Enter);
-    assert_eq!(app.state.store.reviews[&42].comments.len(), 1);
+    assert_eq!(app.state.store.reviews[&PrId(42)].comments.len(), 1);
     press(&mut app, KeyCode::Char('V'));
     press(&mut app, KeyCode::Esc);
-    assert_eq!(app.state.store.reviews[&42].comments.len(), 1);
+    assert_eq!(app.state.store.reviews[&PrId(42)].comments.len(), 1);
     press(&mut app, KeyCode::Char('V'));
     press(&mut app, KeyCode::Char('k'));
     press(&mut app, KeyCode::Enter);
-    assert!(!app.state.store.reviews.contains_key(&42));
+    assert!(!app.state.store.reviews.contains_key(&PrId(42)));
 }
 
 #[test]
@@ -269,7 +269,13 @@ fn comment_lookup_keeps_review_and_pr_ids_separate() {
         reactions: vec![],
         reply_to: None,
     };
-    app.state.store.cache.details.get_mut(&42).unwrap().activity = LoadState::Loaded(Activity {
+    app.state
+        .store
+        .cache
+        .details
+        .get_mut(&PrId(42))
+        .unwrap()
+        .activity = LoadState::Loaded(Activity {
         comments: vec![comment("other", "PR comment")],
         events: vec![],
         threads: vec![CommentThread {

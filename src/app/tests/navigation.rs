@@ -20,7 +20,7 @@ fn navigation_and_search_keep_the_same_keyboard_flow() {
     assert_eq!(
         app.state.screen,
         Screen::Detail {
-            pr_id: 42,
+            pr_id: PrId(42),
             tab: DetailTab::Description
         }
     );
@@ -28,7 +28,7 @@ fn navigation_and_search_keep_the_same_keyboard_flow() {
     assert_eq!(
         app.state.screen,
         Screen::Detail {
-            pr_id: 42,
+            pr_id: PrId(42),
             tab: DetailTab::Overview
         }
     );
@@ -88,7 +88,7 @@ fn commit_drilldown_uses_an_independent_diff_instance() {
     let mut app = app();
     detail(&mut app, DetailTab::Diff);
     app.state.ui.detail.diff.pane_cursor = 7;
-    let data = app.state.store.cache.details.get_mut(&42).unwrap();
+    let data = app.state.store.cache.details.get_mut(&PrId(42)).unwrap();
     let LoadState::Loaded(diff) = &data.diff else {
         panic!()
     };
@@ -122,8 +122,8 @@ fn commit_drilldown_uses_an_independent_diff_instance() {
 fn commit_component_emits_a_pr_scoped_load_request() {
     let mut app = app();
     let ctx = tui::screens::pr_detail::tabs::commits::CommitInput::new(
-        42,
-        app.state.store.cache.details.get(&42),
+        PrId(42),
+        app.state.store.cache.details.get(&PrId(42)),
     );
     let effect = app
         .state
@@ -132,7 +132,7 @@ fn commit_component_emits_a_pr_scoped_load_request() {
         .commits
         .update(CommitsAction::Open, &ctx);
     assert!(
-        matches!(effect, Some(Effect::LoadCommitDiff { pr_id: 42, oid }) if oid == "abcdef123456")
+        matches!(effect, Some(Effect::LoadCommitDiff { pr_id: PrId(42), oid }) if oid == "abcdef123456")
     );
     assert!(
         app.state
@@ -163,9 +163,9 @@ async fn rapid_keys_open_the_latest_selection_and_capture_editor_text() {
     let mut app = app();
     if let LoadState::Loaded(prs) = &mut app.state.store.cache.prs {
         let mut second = prs[0].clone();
-        second.id = 43;
+        second.id = PrId(43);
         let mut third = prs[0].clone();
-        third.id = 44;
+        third.id = PrId(44);
         prs.extend([second, third]);
     }
     for key in [
@@ -181,7 +181,13 @@ async fn rapid_keys_open_the_latest_selection_and_capture_editor_text() {
             Next::Continue
         );
     }
-    assert!(matches!(app.state.screen, Screen::Detail { pr_id: 44, .. }));
+    assert!(matches!(
+        app.state.screen,
+        Screen::Detail {
+            pr_id: PrId(44),
+            ..
+        }
+    ));
     assert_eq!(app.state.ui.detail.editor.text().unwrap(), "q");
 }
 
@@ -219,7 +225,7 @@ fn invalid_link_is_rejected_before_starting_desktop_work() {
         prs[0].url = Some("file:///tmp/local".into());
     }
     app.apply(Action::Effect(Effect::PrLink {
-        pr_id: 42,
+        pr_id: PrId(42),
         kind: LinkAction::Open,
     }));
     assert!(!app.state.store.link_pending);
@@ -234,7 +240,7 @@ fn invalid_link_is_rejected_before_starting_desktop_work() {
 async fn link_completion_keeps_navigation_and_reports_failure_without_blocking_pr_work() {
     let mut app = app();
     app.apply(Action::Effect(Effect::PrLink {
-        pr_id: 42,
+        pr_id: PrId(42),
         kind: LinkAction::Copy,
     }));
     assert!(app.state.store.link_pending);
@@ -252,7 +258,7 @@ async fn link_completion_keeps_navigation_and_reports_failure_without_blocking_p
     assert_eq!(
         app.state.screen,
         Screen::Detail {
-            pr_id: 42,
+            pr_id: PrId(42),
             tab: DetailTab::Overview
         }
     );
@@ -265,12 +271,12 @@ fn refreshed_lists_keep_pr_and_commit_identity() {
         panic!()
     };
     let mut second = prs[0].clone();
-    second.id = 43;
+    second.id = PrId(43);
     prs.push(second);
     app.state.store.cache.prs = LoadState::Loaded(prs.clone());
     app.state.ui.list.selected = 1;
     let mut new = prs[0].clone();
-    new.id = 44;
+    new.id = PrId(44);
     prs.insert(0, new);
     app.apply_result(TaskResult::Read(Read::Prs {
         group: crate::domain::pr::PrGroup::Open,
@@ -279,7 +285,7 @@ fn refreshed_lists_keep_pr_and_commit_identity() {
     }));
     assert_eq!(app.state.ui.list.selected, 2);
     detail(&mut app, DetailTab::Commits);
-    let data = app.state.store.cache.details.get_mut(&42).unwrap();
+    let data = app.state.store.cache.details.get_mut(&PrId(42)).unwrap();
     let LoadState::Loaded(mut commits) = std::mem::take(&mut data.commits) else {
         panic!()
     };
@@ -291,7 +297,7 @@ fn refreshed_lists_keep_pr_and_commit_identity() {
     let mut new = commits[0].clone();
     new.oid = "new".into();
     commits.insert(0, new);
-    app.apply_result(TaskResult::Read(Read::Commits(42, Ok(commits))));
+    app.apply_result(TaskResult::Read(Read::Commits(PrId(42), Ok(commits))));
     assert_eq!(app.state.ui.detail.commits.selected, 2);
 }
 
@@ -305,26 +311,25 @@ fn returning_to_a_pr_restores_its_tab_focus_and_search() {
     app.state.ui.detail.diff.pane_cursor = 5;
     app.state.ui.detail.overview.timeline.scroll = 7;
     let mut other = tui::regression_tests::fixture();
-    app.state
-        .store
-        .cache
-        .details
-        .insert(43, other.store.cache.details.remove(&42).unwrap());
+    app.state.store.cache.details.insert(
+        PrId(43),
+        other.store.cache.details.remove(&PrId(42)).unwrap(),
+    );
     app.apply(Action::Effect(Effect::Navigate(Screen::List)));
     add_pr(&mut app, 43);
-    app.apply(Action::List(ListAction::OpenPr(43)));
+    app.apply(Action::List(ListAction::OpenPr(PrId(43))));
     assert_eq!(
         app.state.screen,
         Screen::Detail {
-            pr_id: 43,
+            pr_id: PrId(43),
             tab: DetailTab::Description
         }
     );
-    app.apply(Action::List(ListAction::OpenPr(42)));
+    app.apply(Action::List(ListAction::OpenPr(PrId(42))));
     assert_eq!(
         app.state.screen,
         Screen::Detail {
-            pr_id: 42,
+            pr_id: PrId(42),
             tab: DetailTab::Diff
         }
     );

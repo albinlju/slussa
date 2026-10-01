@@ -3,6 +3,7 @@ use serde::Deserialize;
 use crate::domain::{
     comment::{CommentThread, ThreadAnchor, ThreadHandle},
     diff::LineRef,
+    pr::PrId,
 };
 use crate::providers::error::FetchError;
 use crate::providers::github::{COMMENT_FIELDS, GqlComment, map_gql_comment};
@@ -58,7 +59,7 @@ const THREAD_FIELDS: &str = r"
     }
 ";
 
-pub fn fetch_review_threads(pr_number: u64) -> Result<Vec<CommentThread>, FetchError> {
+pub fn fetch_review_threads(pr_number: PrId) -> Result<Vec<CommentThread>, FetchError> {
     let fields = format!("{COMMENT_FIELDS} commit {{ oid }} originalCommit {{ oid }}");
     // Keep the nested page modest: a PR page can contain 100 review threads.
     let nodes: Vec<GqlThread> = super::pagination::pr_nodes(

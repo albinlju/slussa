@@ -1,5 +1,6 @@
 use crate::{
     domain::ci::{Build, BuildState},
+    domain::pr::PrId,
     providers::FetchError,
 };
 use chrono::{DateTime, Utc};
@@ -19,7 +20,7 @@ struct Status {
     state: String,
 }
 
-pub fn fetch_builds(pr_number: u64) -> Result<Vec<Build>, FetchError> {
+pub fn fetch_builds(pr_number: PrId) -> Result<Vec<Build>, FetchError> {
     let head = super::comments::head_sha(pr_number)?;
     let checks: Vec<Check> = pages(
         &format!("repos/{{owner}}/{{repo}}/commits/{head}/check-runs?per_page=100"),

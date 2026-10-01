@@ -25,7 +25,7 @@ use serde::Deserialize;
 use serde::de::DeserializeOwned;
 
 use crate::domain::comment::{Comment, Reaction};
-use crate::domain::pr::{MergeStrategy, Mergeability};
+use crate::domain::pr::{MergeStrategy, Mergeability, PrId};
 use crate::domain::review::{ReviewComment, ReviewVerdict};
 use crate::domain::user::{User, Username};
 use crate::providers::error::FetchError;
@@ -36,7 +36,7 @@ pub fn current_user() -> Result<Username, FetchError> {
         .ok_or_else(|| FetchError::ParseFailed("gh named no login".into()))
 }
 
-pub fn fetch_mergeability(pr_number: u64) -> Result<Mergeability, FetchError> {
+pub fn fetch_mergeability(pr_number: PrId) -> Result<Mergeability, FetchError> {
     #[derive(Deserialize)]
     #[serde(rename_all = "camelCase")]
     struct MergeFields {
@@ -79,7 +79,7 @@ fn merge_status(mergeable: &str, state: &str, review_decision: Option<&str>) -> 
     }
 }
 
-pub fn merge(pr_number: u64, strategy: MergeStrategy) -> Result<(), FetchError> {
+pub fn merge(pr_number: PrId, strategy: MergeStrategy) -> Result<(), FetchError> {
     let method = match strategy {
         MergeStrategy::Merge => "merge",
         MergeStrategy::Squash => "squash",
@@ -98,7 +98,7 @@ pub fn merge(pr_number: u64, strategy: MergeStrategy) -> Result<(), FetchError> 
 
 /// Reopen a closed PR. GitHub refuses when the head branch is gone or the PR
 /// was merged; that message reaches the user as it is.
-pub fn reopen(pr_number: u64) -> Result<(), FetchError> {
+pub fn reopen(pr_number: PrId) -> Result<(), FetchError> {
     cli::run_gh(&[
         "api",
         "--method",
@@ -110,7 +110,7 @@ pub fn reopen(pr_number: u64) -> Result<(), FetchError> {
     Ok(())
 }
 
-pub fn decline(pr_number: u64) -> Result<(), FetchError> {
+pub fn decline(pr_number: PrId) -> Result<(), FetchError> {
     // GitHub has no "decline" — closing the PR is the equivalent.
     cli::run_gh(&[
         "api",
@@ -134,7 +134,11 @@ const fn review_event(verdict: ReviewVerdict) -> Option<&'static str> {
     }
 }
 
-pub fn submit_review(pr_number: u64, verdict: ReviewVerdict, body: &str) -> Result<(), FetchError> {
+pub fn submit_review(
+    pr_number: PrId,
+    verdict: ReviewVerdict,
+    body: &str,
+) -> Result<(), FetchError> {
     let Some(event) = review_event(verdict) else {
         return Err(FetchError::Unsupported(
             "This review verdict is not supported by GitHub.".into(),
@@ -156,7 +160,7 @@ pub fn submit_review(pr_number: u64, verdict: ReviewVerdict, body: &str) -> Resu
 /// reviews endpoint takes a `comments` array, fed as JSON on stdin since `-f`
 /// flags can't express it.
 pub fn submit_full_review(
-    pr_number: u64,
+    pr_number: PrId,
     verdict: ReviewVerdict,
     body: &str,
     comments: &[ReviewComment],
@@ -211,7 +215,7 @@ fn review_payload(
 
 pub(super) fn run_pr_graphql<P: DeserializeOwned>(
     query: &str,
-    pr_number: u64,
+    pr_number: PrId,
 ) -> Result<P, FetchError> {
     let resp: GqlResponse<P> = cli::run_gh_json(&[
         "api",

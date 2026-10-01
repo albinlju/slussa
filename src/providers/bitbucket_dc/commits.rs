@@ -2,6 +2,7 @@ use serde::Deserialize;
 
 use super::{Config, ms_to_utc};
 use crate::domain::commit::Commit;
+use crate::domain::pr::PrId;
 use crate::providers::bitbucket_dc::http::get_all;
 use crate::providers::error::FetchError;
 
@@ -23,7 +24,7 @@ struct BbAuthor {
     display_name: Option<String>,
 }
 
-pub fn fetch_commits(config: &Config, pr_id: u64) -> Result<Vec<Commit>, FetchError> {
+pub fn fetch_commits(config: &Config, pr_id: PrId) -> Result<Vec<Commit>, FetchError> {
     let path = format!(
         "/rest/api/1.0/projects/{}/repos/{}/pull-requests/{pr_id}/commits?limit=100",
         config.repo.project_key, config.repo.repo_slug

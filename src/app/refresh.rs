@@ -1,6 +1,6 @@
 use crate::{
     app::{App, navigation::Screen},
-    domain::pr::PrGroup,
+    domain::pr::{PrGroup, PrId},
     tui::screens::pr_detail::tabs::DetailTab,
 };
 use std::time::{Duration, Instant};
@@ -60,7 +60,7 @@ impl App {
         self.full_refreshed = Instant::now();
     }
 
-    fn refresh_detail_view(&mut self, pr_id: u64, tab: DetailTab) {
+    fn refresh_detail_view(&mut self, pr_id: PrId, tab: DetailTab) {
         match tab {
             DetailTab::Overview => self.spawn_load_activity(pr_id),
             DetailTab::Diff => self.spawn_load_diff(pr_id),

@@ -75,7 +75,7 @@ fn github_merge_status_reads_the_state_and_explains_a_block() {
         let installed = FakeGh::new()
             .on("graphql", &gh_merge_fields(mergeable, state, decision))
             .install();
-        let status = Provider::GitHub.fetch_mergeability(7).unwrap();
+        let status = Provider::GitHub.fetch_mergeability(PrId(7)).unwrap();
 
         assert!(
             same_state(&status, &expected),
@@ -109,7 +109,7 @@ fn bitbucket_merge_checks_become_blockers_with_the_servers_words() {
         {"summaryMessage": "At least 1 approval is required", "detailedMessage": "y"}
     ]});
     let server = MockHttp::start(vec![Route::get(&merge_url(9), 200, &blocked.to_string())]);
-    let status = bitbucket(&server).fetch_mergeability(9).unwrap();
+    let status = bitbucket(&server).fetch_mergeability(PrId(9)).unwrap();
 
     assert_eq!(
         status,
@@ -141,7 +141,7 @@ fn bitbucket_merge_status_covers_conflict_clean_and_a_veto_without_words() {
     ];
     for (body, expected, reason) in cases {
         let server = MockHttp::start(vec![Route::get(&merge_url(9), 200, &body.to_string())]);
-        let status = bitbucket(&server).fetch_mergeability(9).unwrap();
+        let status = bitbucket(&server).fetch_mergeability(PrId(9)).unwrap();
 
         assert!(same_state(&status, &expected), "{body}: {status:?}");
         assert_eq!(
@@ -175,7 +175,7 @@ fn bitbucket_refused_merge_reports_the_vetoes() {
         ),
     ]);
     let error = bitbucket(&server)
-        .merge(9, MergeStrategy::Merge)
+        .merge(PrId(9), MergeStrategy::Merge)
         .unwrap_err();
 
     assert_eq!(

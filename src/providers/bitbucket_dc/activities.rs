@@ -7,6 +7,7 @@ use crate::domain::user::User;
 use crate::domain::{
     comment::{Comment, CommentThread, Reaction, ThreadAnchor, ThreadHandle},
     diff::LineRef,
+    pr::PrId,
 };
 use crate::providers::bitbucket_dc::http::get_all;
 use crate::providers::error::FetchError;
@@ -106,7 +107,7 @@ struct BbUser {
     name: String,
 }
 
-pub fn fetch(config: &Config, pr_id: u64) -> Result<Activity, FetchError> {
+pub fn fetch(config: &Config, pr_id: PrId) -> Result<Activity, FetchError> {
     let path = format!(
         "/rest/api/1.0/projects/{}/repos/{}/pull-requests/{pr_id}/activities?limit=100",
         config.repo.project_key, config.repo.repo_slug

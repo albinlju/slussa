@@ -25,7 +25,7 @@ use crate::{
         ci::Build,
         commit::Commit,
         diff::Diff,
-        pr::{Mergeability, PrGroup, PrInfo, PrStatus, PullRequest},
+        pr::{Mergeability, PrGroup, PrId, PrInfo, PrStatus, PullRequest},
         user::Username,
     },
     providers::FetchError,
@@ -38,12 +38,12 @@ pub struct Store {
     pub link_pending: bool,
     pub notice: Option<Notice>,
     pub draft_error: Option<String>,
-    pub uncertain_submissions: std::collections::BTreeSet<u64>,
-    pub operations: HashMap<u64, Operation>,
-    pub errors: HashMap<u64, String>,
+    pub uncertain_submissions: std::collections::BTreeSet<PrId>,
+    pub operations: HashMap<PrId, Operation>,
+    pub errors: HashMap<PrId, String>,
     pub fetches: HashSet<FetchKey>,
     pub reload_after_fetch: HashSet<FetchKey>,
-    pub reviews: HashMap<u64, crate::app::reviews::PendingReview>,
+    pub reviews: HashMap<PrId, crate::app::reviews::PendingReview>,
     pub cache: Cache,
     /// What has been read of each group of PRs.
     pub groups: HashMap<PrGroup, GroupState>,
@@ -111,7 +111,7 @@ pub struct GroupState {
 #[derive(Debug, Default)]
 pub struct Cache {
     pub prs: LoadState<Vec<PullRequest>>,
-    pub details: HashMap<u64, PrData>,
+    pub details: HashMap<PrId, PrData>,
 }
 
 #[derive(Debug, Default)]
@@ -259,12 +259,12 @@ impl FetchTicket {
 /// write takes it, and it comes back with the result to say which write ended.
 #[derive(Debug)]
 pub struct WriteTicket {
-    pr_id: u64,
+    pr_id: PrId,
     operation: Operation,
 }
 
 impl WriteTicket {
-    pub const fn pr_id(&self) -> u64 {
+    pub const fn pr_id(&self) -> PrId {
         self.pr_id
     }
 
@@ -274,7 +274,7 @@ impl WriteTicket {
 
     /// The ticket of a write already recorded, for a test that plays its worker.
     #[cfg(test)]
-    pub const fn pending(pr_id: u64, operation: Operation) -> Self {
+    pub const fn pending(pr_id: PrId, operation: Operation) -> Self {
         Self { pr_id, operation }
     }
 }
@@ -283,13 +283,13 @@ impl WriteTicket {
 pub enum FetchKey {
     /// One group of PRs, read first or, for a closed group, one page further.
     Prs(PrGroup),
-    Commits(u64),
-    Diff(u64),
-    Builds(u64),
-    Activity(u64),
-    Mergeability(u64),
-    Info(u64),
-    CommitDiff(u64, String),
+    Commits(PrId),
+    Diff(PrId),
+    Builds(PrId),
+    Activity(PrId),
+    Mergeability(PrId),
+    Info(PrId),
+    CommitDiff(PrId, String),
 }
 
 /// How many open PRs are read without being asked to, and how many each `L`
@@ -360,7 +360,7 @@ impl Store {
 
     /// Record a write for the PR. `None` while another is pending for it: one
     /// write per PR at a time, so its payload and review queue stay as sent.
-    pub fn begin_write(&mut self, pr_id: u64, operation: Operation) -> Option<WriteTicket> {
+    pub fn begin_write(&mut self, pr_id: PrId, operation: Operation) -> Option<WriteTicket> {
         match self.operations.entry(pr_id) {
             std::collections::hash_map::Entry::Occupied(_) => None,
             std::collections::hash_map::Entry::Vacant(slot) => {
