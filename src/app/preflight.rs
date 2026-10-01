@@ -98,14 +98,15 @@ pub enum PreflightError {
 /// `auth login` stores a Bitbucket Data Center token. For the hosts known not to
 /// be one, this says what to do instead, so nothing is asked for or stored.
 pub fn login_redirect(host: &str) -> Option<String> {
-    match host {
-        "github.com" => Some(
+    match HostKind::named(host)? {
+        HostKind::GitHub => Some(
             "GitHub uses the `gh` CLI, so there is no token to store here.\n\
              Run `gh auth login`."
                 .into(),
         ),
-        "bitbucket.org" => Some(PreflightError::BitbucketCloudUnsupported.to_string()),
-        _ => None,
+        HostKind::BitbucketCloud => Some(PreflightError::BitbucketCloudUnsupported.to_string()),
+        // Never known by name: its token is what a login stores.
+        HostKind::BitbucketDc => None,
     }
 }
 
@@ -154,16 +155,21 @@ enum HostKind {
     BitbucketDc,
 }
 
-fn classify_host(host: &str, remote: &str) -> Result<HostKind, PreflightError> {
-    if host == "github.com" {
-        return Ok(HostKind::GitHub);
+impl HostKind {
+    /// The hosts known by name. Any other host is asked whether it is a
+    /// Bitbucket Data Center.
+    fn named(host: &str) -> Option<Self> {
+        match host {
+            "github.com" => Some(Self::GitHub),
+            "bitbucket.org" => Some(Self::BitbucketCloud),
+            _ => None,
+        }
     }
-    classify_bitbucket(host, remote)
 }
 
-fn classify_bitbucket(host: &str, remote: &str) -> Result<HostKind, PreflightError> {
-    if host == "bitbucket.org" {
-        return Ok(HostKind::BitbucketCloud);
+fn classify_host(host: &str, remote: &str) -> Result<HostKind, PreflightError> {
+    if let Some(kind) = HostKind::named(host) {
+        return Ok(kind);
     }
     match bitbucket_dc::is_instance(&bitbucket_dc::remote::base_url(remote, host)) {
         Ok(true) => Ok(HostKind::BitbucketDc),
