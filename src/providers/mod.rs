@@ -285,7 +285,7 @@ mod capability_tests {
                 project_key: "TEST".into(),
                 repo_slug: "test".into(),
             },
-            pat: String::new(),
+            pat: bitbucket_dc::auth::Pat::new(String::new()),
         });
         let bb = bitbucket.capabilities();
         assert!(!github.can_submit_verdict(ReviewVerdict::Unapprove, false));

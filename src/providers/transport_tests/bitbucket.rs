@@ -387,3 +387,22 @@ fn bitbucket_refusing_a_reopen_shows_the_servers_reason() {
         "Only declined pull requests can be reopened"
     );
 }
+
+#[test]
+fn bitbucket_token_is_sent_as_a_bearer_and_never_printed() {
+    let server = MockHttp::start(vec![Route::get(
+        &format!("{PR_BASE}/9/merge"),
+        200,
+        &json!({"canMerge": true, "conflicted": false}).to_string(),
+    )]);
+    let provider = bitbucket(&server);
+    provider.fetch_mergeability(9).unwrap();
+    assert_eq!(
+        server.requests()[0].headers["authorization"],
+        "Bearer secret-token"
+    );
+
+    let printed = format!("{provider:?}");
+    assert!(!printed.contains("secret-token"), "{printed}");
+    assert!(printed.contains("redacted"), "{printed}");
+}

@@ -44,6 +44,6 @@ pub(super) fn bitbucket(server: &MockHttp) -> Provider {
             project_key: "PROJ".into(),
             repo_slug: "repo".into(),
         },
-        pat: "secret-token".into(),
+        pat: crate::providers::bitbucket_dc::auth::Pat::new("secret-token".into()),
     })
 }

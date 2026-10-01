@@ -6,10 +6,31 @@ use super::{APP_PROPERTIES_PATH, http};
 
 pub(crate) const SERVICE: &str = "slussa";
 
-pub fn load_pat(host: &str) -> Option<String> {
+/// A Bitbucket HTTP access token. It cannot be printed by accident: `Debug`
+/// hides it, and only `expose` hands it out, for the request header.
+#[derive(Clone)]
+pub struct Pat(String);
+
+impl Pat {
+    pub const fn new(token: String) -> Self {
+        Self(token)
+    }
+
+    pub(super) fn expose(&self) -> &str {
+        &self.0
+    }
+}
+
+impl fmt::Debug for Pat {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.write_str("Pat(redacted)")
+    }
+}
+
+pub fn load_pat(host: &str) -> Option<Pat> {
     let entry = keyring::Entry::new(SERVICE, host).ok()?;
     match entry.get_password() {
-        Ok(pat) => Some(pat),
+        Ok(pat) => Some(Pat::new(pat)),
         Err(keyring::Error::NoEntry) => None,
         Err(e) => {
             tracing::warn!("keyring lookup failed for {host}: {e}");

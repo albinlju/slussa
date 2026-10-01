@@ -227,7 +227,7 @@ pub struct RepoLocation {
 #[derive(Clone, Debug)]
 pub struct Config {
     pub repo: RepoLocation,
-    pub pat: String,
+    pub pat: auth::Pat,
 }
 
 fn ms_to_utc(ms: i64) -> DateTime<Utc> {
