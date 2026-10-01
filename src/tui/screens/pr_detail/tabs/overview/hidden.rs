@@ -102,6 +102,7 @@ mod tests {
         comment::Comment,
         user::{AccountKind, User},
     };
+    use crate::tui::widgets::comment_fold::Folds;
 
     fn comment(name: &str, account: AccountKind) -> Comment {
         Comment {
@@ -135,6 +136,7 @@ mod tests {
         let roles = Roles {
             pr_author: "alice",
             markers: &markers,
+            folds: Folds::Open,
         };
         let mut run = HiddenRun::default();
         assert!(run.line(AuthorFilter::Humans, 100).is_none());
@@ -176,6 +178,7 @@ mod tests {
         let roles = Roles {
             pr_author: "alice",
             markers: &markers,
+            folds: Folds::Open,
         };
         let mut run = HiddenRun::default();
         run.add_thread(&thread(vec![]), roles);

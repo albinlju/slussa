@@ -1,13 +1,13 @@
 use super::blocks::{Hidden, TimelineItem, build_blocks, focusable_count, timeline_rail};
-use crate::tui::widgets::comment_meta::Roles;
+use crate::tui::widgets::{comment_fold::Folds, comment_meta::Roles};
 use crate::{
     app::{
         action::{Action, Effect, TimelineAction},
         store::{LoadState, PrData},
     },
     domain::{
-        authorship::AuthorFilter,
-        comment::{Comment, CommentId, CommentKind, CommentThread},
+        authorship::{AiMarkers, AuthorFilter},
+        comment::{Comment, CommentId, CommentKey, CommentKind, CommentThread},
     },
     tui::{
         component::{Component, saturating_u16, scroll, scroll_to_item, step_index},
@@ -21,14 +21,15 @@ use ratatui::{
     layout::Rect,
     widgets::Paragraph,
 };
-use std::cmp::Reverse;
+use std::{cmp::Reverse, collections::HashSet};
 
 const TIMELINE_RIGHT_PAD: u16 = 3;
 const RAIL_WIDTH: u16 = 3;
 
 pub struct TimelineContext<'a> {
     pub data: Option<&'a PrData>,
-    pub roles: Roles<'a>,
+    pub pr_author: &'a str,
+    pub markers: &'a AiMarkers,
     pub scrollbar: Rect,
 }
 
@@ -36,7 +37,7 @@ fn render_timeline(
     frame: &mut Frame<'_>,
     pr_data: Option<&PrData>,
     ui: &mut Timeline,
-    roles: Roles<'_>,
+    (pr_author, markers): (&str, &AiMarkers),
     area: Rect,
     scrollbar_area: Rect,
 ) {
@@ -51,6 +52,14 @@ fn render_timeline(
         frame.render_widget(widgets::empty_state("(no activity)"), area);
         return;
     }
+
+    let roles = Roles {
+        pr_author,
+        markers,
+        folds: Folds::Long {
+            opened: &ui.expanded,
+        },
+    };
 
     // What the filter leaves, and what it hides: the events stay, and the hidden
     // comments come back as a dimmed line where they were.
@@ -205,6 +214,8 @@ pub struct Timeline {
     pub selected: Option<CommentRef>,
     pub viewport: u16,
     pub filter: AuthorFilter,
+    /// The long comments the reader has opened with `space`.
+    pub expanded: HashSet<CommentKey>,
     reveal_selection: bool,
     selected_row: Option<usize>,
 }
@@ -256,8 +267,18 @@ impl Component for Timeline {
                 // From the top, with the cursor on the first comment left.
                 *self = Self {
                     filter: self.filter.next(),
+                    expanded: std::mem::take(&mut self.expanded),
                     ..Self::default()
                 };
+            }
+            TimelineAction::ToggleFold => {
+                if let Some(key) = self.selected.and_then(CommentRef::key)
+                    && !self.expanded.remove(&key)
+                {
+                    self.expanded.insert(key);
+                }
+                // Keep the comment the reader is on in view as it grows or shrinks.
+                self.reveal_selection = true;
             }
             TimelineAction::SubMove(delta) => {
                 let next = step_index(self.sub, delta, self.block_len);
@@ -272,6 +293,13 @@ impl Component for Timeline {
         None
     }
     fn render(&mut self, frame: &mut Frame<'_>, area: Rect, ctx: &TimelineContext<'_>) {
-        render_timeline(frame, ctx.data, self, ctx.roles, area, ctx.scrollbar);
+        render_timeline(
+            frame,
+            ctx.data,
+            self,
+            (ctx.pr_author, ctx.markers),
+            area,
+            ctx.scrollbar,
+        );
     }
 }

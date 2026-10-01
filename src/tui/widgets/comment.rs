@@ -1,12 +1,14 @@
 use crate::{
     domain::{
-        comment::{Comment, CommentThread, split_suggestions},
-        diff::{Diff, DiffLine, LineRef},
+        comment::{Comment, CommentKey, CommentKind, CommentThread, split_suggestions},
+        diff::{Diff, LineRef},
     },
     tui::{
         format, theme,
         widgets::{
             self,
+            comment_code::{diff_snippet, suggestion_box},
+            comment_fold::Folds,
             comment_meta::{self, Roles},
             markdown,
         },
@@ -120,7 +122,13 @@ pub(in crate::tui) fn comment_box(
     );
     let mut out = vec![header];
     out.extend(bracket(
-        comment_body(comment, None, width.saturating_sub(2)),
+        comment_body(
+            comment,
+            CommentKind::Conversation,
+            None,
+            width.saturating_sub(2),
+            roles.folds,
+        ),
         width,
         frame,
         theme.divider,
@@ -311,7 +319,13 @@ fn conversation(
             out.extend(framed(
                 meta,
                 label,
-                comment_body(comment, anchor, width.saturating_sub(2)),
+                comment_body(
+                    comment,
+                    thread.kind(),
+                    anchor,
+                    width.saturating_sub(2),
+                    roles.folds,
+                ),
                 width,
                 frame,
                 theme.divider,
@@ -339,7 +353,13 @@ fn conversation(
         } else {
             out.push(prefix_gutter(Line::from(meta), head, style));
         }
-        for line in comment_body(comment, anchor, width.saturating_sub(2)) {
+        for line in comment_body(
+            comment,
+            thread.kind(),
+            anchor,
+            width.saturating_sub(2),
+            roles.folds,
+        ) {
             out.push(prefix_gutter(line, body_gutter, style));
         }
         if selected == Some(i) {
@@ -355,7 +375,7 @@ fn prefix_gutter(line: Line<'static>, gutter: &'static str, style: Style) -> Lin
     Line::from(spans).style(line.style)
 }
 
-fn framed(
+pub(super) fn framed(
     left: Vec<Span<'static>>,
     right: Vec<Span<'static>>,
     body: Vec<Line<'static>>,
@@ -422,13 +442,16 @@ fn align_snippet(lines: Vec<Line<'static>>) -> Vec<Line<'static>> {
 
 fn comment_body(
     comment: &Comment,
+    kind: CommentKind,
     anchor: Option<(usize, &str)>,
     text_w: u16,
+    folds: Folds<'_>,
 ) -> Vec<Line<'static>> {
     let (prose, suggestions) = split_suggestions(&comment.content);
     let mut lines: Vec<Line<'static>> = Vec::new();
     if !prose.trim().is_empty() {
-        lines.extend(paint_fg(markdown::render_no_margin(&prose, text_w)));
+        let key = comment.id.map(|id| CommentKey { id, kind });
+        lines.extend(folds.apply(key, paint_fg(markdown::render_no_margin(&prose, text_w))));
     }
     for suggestion in &suggestions {
         lines.push(Line::raw(""));
@@ -455,156 +478,6 @@ fn paint_fg(lines: Vec<Line<'static>>) -> Vec<Line<'static>> {
             Line::from(spans).style(style)
         })
         .collect()
-}
-
-fn suggestion_box(
-    anchor: Option<(usize, &str)>,
-    suggestion: &str,
-    width: u16,
-) -> Vec<Line<'static>> {
-    let theme = theme::current();
-    let text_w = (width as usize).saturating_sub(2);
-    let new_lines: Vec<&str> = suggestion.lines().collect();
-
-    let start = anchor.map(|(n, _)| n);
-    let num_width = start.map_or(0, |n| {
-        (n + new_lines.len().saturating_sub(1)).to_string().len()
-    });
-    let mut rows: Vec<Line<'static>> = Vec::new();
-    if let Some((n, old)) = anchor {
-        rows.push(widgets::numbered_diff_row(
-            u32::try_from(n).ok(),
-            num_width,
-            "-",
-            old,
-            theme.diff_removed,
-            None,
-            theme.diff_removed,
-            text_w,
-        ));
-    }
-    for (i, new) in new_lines.iter().enumerate() {
-        rows.push(widgets::numbered_diff_row(
-            start.and_then(|n| u32::try_from(n + i).ok()),
-            num_width,
-            "+",
-            new,
-            theme.diff_added,
-            None,
-            theme.diff_added,
-            text_w,
-        ));
-    }
-
-    let title = vec![Span::styled(
-        "suggested change",
-        Style::default()
-            .fg(theme::current().fg)
-            .add_modifier(Modifier::BOLD),
-    )];
-    framed(
-        title,
-        Vec::new(),
-        rows,
-        width,
-        theme.suggestion,
-        theme.suggestion,
-    )
-}
-
-const SNIPPET_CONTEXT: usize = 3;
-
-fn diff_snippet(
-    diff: &Diff,
-    path: &str,
-    line: Option<LineRef>,
-    width: u16,
-) -> (Vec<Line<'static>>, Option<String>) {
-    struct Row<'a> {
-        dl: &'a DiffLine,
-        new_no: usize,
-        old_no: usize,
-        hunk: usize,
-    }
-
-    let theme = theme::current();
-    let Some(file) = diff.files.iter().find(|f| f.path == path) else {
-        return (Vec::new(), None);
-    };
-
-    let mut rows: Vec<Row<'_>> = Vec::new();
-    for (hunk_idx, hunk) in file.hunks.iter().enumerate() {
-        for (dl, new_no, old_no) in hunk.numbered_lines() {
-            rows.push(Row {
-                dl,
-                new_no,
-                old_no,
-                hunk: hunk_idx,
-            });
-        }
-    }
-
-    let anchor = rows.iter().position(|r| match line {
-        Some(LineRef::New(l)) => !matches!(r.dl, DiffLine::Removed(_)) && r.new_no == l,
-        Some(LineRef::Old(o)) => matches!(r.dl, DiffLine::Removed(_)) && r.old_no == o,
-        None => false,
-    });
-    let Some((anchor, anchor_row)) = anchor.and_then(|i| Some((i, rows.get(i)?))) else {
-        return (Vec::new(), None);
-    };
-    let anchor_text = anchor_row.dl.content().to_string();
-
-    let hunk_start = (0..anchor)
-        .rev()
-        .find(|&i| rows.get(i).is_some_and(|r| r.hunk != anchor_row.hunk))
-        .map_or(0, |i| i + 1);
-    let start = anchor.saturating_sub(SNIPPET_CONTEXT).max(hunk_start);
-    let window = rows.get(start..=anchor).unwrap_or_default();
-    let num_width = window
-        .iter()
-        .map(|r| r.new_no)
-        .max()
-        .unwrap_or(1)
-        .to_string()
-        .len();
-    let row_w = width as usize;
-
-    let lines: Vec<Line<'static>> = window
-        .iter()
-        .map(|r| match r.dl {
-            DiffLine::Added(c) => widgets::numbered_diff_row(
-                u32::try_from(r.new_no).ok(),
-                num_width,
-                "+",
-                c,
-                theme.diff_added,
-                None,
-                theme.diff_added,
-                row_w,
-            ),
-            DiffLine::Removed(c) => widgets::numbered_diff_row(
-                None,
-                num_width,
-                "-",
-                c,
-                theme.diff_removed,
-                None,
-                theme.diff_removed,
-                row_w,
-            ),
-            DiffLine::Context(c) => widgets::numbered_diff_row(
-                u32::try_from(r.new_no).ok(),
-                num_width,
-                " ",
-                c,
-                theme.muted,
-                None,
-                theme.diff_context,
-                row_w,
-            ),
-        })
-        .collect();
-    (lines, Some(anchor_text))
 }
 
 #[cfg(test)]

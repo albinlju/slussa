@@ -1,5 +1,5 @@
 use super::{dialogs, footer, header};
-use crate::tui::widgets::comment_meta::Roles;
+use crate::tui::widgets::{comment_fold::Folds, comment_meta::Roles};
 use crate::{
     app::{
         reviews::{PendingComment, PendingReview},
@@ -146,6 +146,7 @@ fn render_content(
                     roles: Roles {
                         pr_author: &pr.author.username,
                         markers: &ctx.store.ai_markers,
+                        folds: Folds::Open,
                     },
                 },
             );
@@ -160,6 +161,7 @@ fn render_content(
                     roles: Roles {
                         pr_author: &pr.author.username,
                         markers: &ctx.store.ai_markers,
+                        folds: Folds::Open,
                     },
                 },
             );

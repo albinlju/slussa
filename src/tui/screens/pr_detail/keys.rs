@@ -139,6 +139,9 @@ pub(in crate::tui) fn key_to_action(
         {
             return Some(Action::from(TimelineAction::CycleFilter));
         }
+        if plain && code == KeyCode::Char(' ') {
+            return Some(Action::from(TimelineAction::ToggleFold));
+        }
         if plain && code == KeyCode::Char('e') {
             return Some(Action::from(PrAction::EditComment));
         }

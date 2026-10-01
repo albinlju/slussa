@@ -201,6 +201,8 @@ pub enum TimelineAction {
     SubMove(i16),
     /// Show all comments, only people's, or only the agents'.
     CycleFilter,
+    /// Open or fold the long comment the cursor is on.
+    ToggleFold,
 }
 
 #[derive(Debug, Clone, Copy)]
