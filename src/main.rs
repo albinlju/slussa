@@ -37,7 +37,19 @@ fn run_tui(provider: Provider) -> ExitCode {
         }
     };
 
-    let current_user = provider.current_user().unwrap_or_default();
+    // Drafts are stored per account, and "is this mine?" needs one too. Without
+    // it the reason is shown here instead of a later, unrelated-looking failure.
+    let current_user = match provider.current_user() {
+        Ok(user) => user,
+        Err(err) => {
+            tracing::error!("couldn't identify the account: {err}");
+            eprintln!(
+                "slussa: couldn't identify the logged-in account: {}",
+                err.user_message()
+            );
+            return ExitCode::from(1);
+        }
+    };
 
     let result = rt.block_on(async move {
         let mut app = App::new(provider, current_user);
@@ -47,7 +59,13 @@ fn run_tui(provider: Provider) -> ExitCode {
             eprintln!("slussa: {err}");
             return ExitCode::from(1);
         }
-        let mut terminal = ratatui::init();
+        let mut terminal = match ratatui::try_init() {
+            Ok(terminal) => terminal,
+            Err(err) => {
+                eprintln!("slussa: couldn't start the terminal UI: {err}");
+                return ExitCode::from(1);
+            }
+        };
         let result =
             match crossterm::execute!(std::io::stdout(), crossterm::event::EnableBracketedPaste) {
                 Ok(()) => app.run(&mut terminal).await,

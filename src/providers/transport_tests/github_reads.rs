@@ -274,6 +274,30 @@ fn github_rejects_unparseable_output_and_graphql_errors() {
 }
 
 #[test]
+fn github_asking_who_is_logged_in_fails_instead_of_naming_nobody() {
+    let installed = FakeGh::new().on("api user", "\n").install();
+    let result = Provider::GitHub.current_user();
+    drop(installed);
+    assert!(
+        matches!(result, Err(FetchError::ParseFailed(_))),
+        "{result:?}"
+    );
+
+    let installed = FakeGh::new()
+        .fail("api user", 1, "gh: HTTP 401: Bad credentials")
+        .install();
+    let result = Provider::GitHub.current_user();
+    drop(installed);
+    assert!(
+        matches!(result, Err(FetchError::GhFailed { .. })),
+        "{result:?}"
+    );
+
+    let _installed = FakeGh::new().on("api user", "octocat\n").install();
+    assert_eq!(Provider::GitHub.current_user().unwrap(), "octocat");
+}
+
+#[test]
 fn github_older_prs_continue_from_the_cursor_and_report_when_they_end() {
     let gh = FakeGh::new()
         .on(

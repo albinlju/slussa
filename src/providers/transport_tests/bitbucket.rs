@@ -119,6 +119,22 @@ fn bitbucket_rejected_token_is_reported_as_not_authenticated() {
 }
 
 #[test]
+fn bitbucket_asking_who_is_logged_in_with_a_rejected_token_says_so() {
+    let server = MockHttp::start(vec![Route::get(
+        "/rest/api/1.0/application-properties",
+        401,
+        "",
+    )]);
+    let error = bitbucket(&server).current_user().unwrap_err();
+
+    assert!(
+        matches!(&error, FetchError::NotAuthenticated { host } if *host == server.host()),
+        "{error:?}"
+    );
+    assert!(error.user_message().contains("slussa auth login"));
+}
+
+#[test]
 fn bitbucket_server_error_keeps_status_and_body() {
     let body = json!({"errors": [{"message": "Repository is being migrated"}]}).to_string();
     let server = MockHttp::start(vec![Route::get(&open_url(0), 500, &body)]);

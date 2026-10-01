@@ -104,7 +104,7 @@ impl App {
                     self.save_drafts();
                     self.draw(terminal)?;
                 }
-                Some(Ok(event)) = events.next() => match event {
+                Some(event) = events.next() => match event? {
                     Event::Key(key) if key.kind == KeyEventKind::Press => {
                         if self.handle_key(key) { return Ok(()); }
                         self.draw(terminal)?;

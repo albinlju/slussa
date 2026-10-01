@@ -85,6 +85,8 @@ pub(super) fn current_user(base_url: &str, path: &str, pat: &str) -> Result<Stri
         tracing::warn!("http send failed: {e}");
         FetchError::Network(e.to_string())
     })?;
+    // A rejected token must say so, not "no X-AUSERNAME header".
+    let response = check_status(response, base_url, &url)?;
     // Bitbucket DC stamps the authenticated account on every response as
     // X-AUSERNAME; unauthenticated requests get "anonymous".
     response
