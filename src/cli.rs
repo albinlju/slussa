@@ -1,3 +1,4 @@
+use std::io::IsTerminal;
 use std::process::ExitCode;
 
 use crate::app::preflight::{self, PreflightError, Session};
@@ -38,6 +39,17 @@ pub fn dispatch(mut args: Vec<String>) -> Dispatch {
             return Dispatch::Done(ExitCode::from(2));
         }
         None => {}
+    }
+
+    // Before anything touches the network: the TUI needs a terminal on both
+    // ends, and a caller without one (an agent, a pipe, cron) is told which
+    // commands do not need it.
+    if !(std::io::stdin().is_terminal() && std::io::stdout().is_terminal()) {
+        eprintln!(
+            "slussa: the PR browser needs a terminal, and stdin or stdout is not one.\n\
+             Run it in a terminal; `slussa --help` lists the commands that print and exit."
+        );
+        return Dispatch::Done(ExitCode::from(2));
     }
 
     match connect() {
