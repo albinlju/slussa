@@ -25,7 +25,7 @@ fn truncate_cols(s: &str, max: usize) -> String {
 
 fn render(frame: &mut Frame<'_>, ctx: &ReviewContext<'_>, dialog: &mut ReviewDialog, area: Rect) {
     let cursor = dialog.cursor;
-    if dialog.preview {
+    if dialog.mode == ReviewMode::Comments {
         let body = crate::tui::widgets::dialog::frame(
             frame,
             area,
@@ -176,10 +176,21 @@ pub struct ReviewContext<'a> {
     pub options: Vec<(crate::domain::review::ReviewVerdict, Option<&'static str>)>,
     pub pending: Option<&'a crate::app::reviews::PendingReview>,
 }
+/// Which side of the dialog is showing. Tab switches.
+#[derive(Debug, Default, Clone, Copy, PartialEq, Eq)]
+enum ReviewMode {
+    /// The verdicts to choose from.
+    #[default]
+    Verdicts,
+    /// The queued comments, to read before submitting.
+    Comments,
+}
+
 #[derive(Debug, Default)]
 pub struct ReviewDialog {
     cursor: usize,
-    preview: bool,
+    mode: ReviewMode,
+    /// How far the comments are scrolled; kept while the dialog is open.
     scroll: u16,
 }
 impl ReviewDialog {
@@ -216,21 +227,29 @@ impl Component for ReviewDialog {
         if key.code == KeyCode::Tab && ctx.pending.is_some_and(|r| !r.comments.is_empty()) {
             return Some(ReviewAction::Preview.into());
         }
-        if self.preview && key.code == KeyCode::Enter {
-            return None;
+        let action = key_to_action(key.code)?;
+        match (self.mode, action) {
+            // Nothing is submitted from the list of comments.
+            (ReviewMode::Comments, ReviewAction::Select) => None,
+            (ReviewMode::Verdicts | ReviewMode::Comments, action) => Some(action.into()),
         }
-        key_to_action(key.code).map(Action::from)
     }
     fn update(&mut self, action: ReviewAction, ctx: &ReviewContext<'_>) -> Option<Effect> {
         match action {
-            ReviewAction::Preview => self.preview = !self.preview,
-            ReviewAction::Move(delta) => {
-                if self.preview {
-                    self.scroll = crate::tui::component::scroll(self.scroll, delta);
-                } else {
+            ReviewAction::Preview => {
+                self.mode = match self.mode {
+                    ReviewMode::Verdicts => ReviewMode::Comments,
+                    ReviewMode::Comments => ReviewMode::Verdicts,
+                };
+            }
+            ReviewAction::Move(delta) => match self.mode {
+                ReviewMode::Verdicts => {
                     self.cursor = step_index(self.cursor, delta, ctx.options.len());
                 }
-            }
+                ReviewMode::Comments => {
+                    self.scroll = crate::tui::component::scroll(self.scroll, delta);
+                }
+            },
             // Closing and choosing are the screen's: it holds the dialog.
             ReviewAction::Select | ReviewAction::Close => {}
         }
