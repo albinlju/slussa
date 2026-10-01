@@ -7,7 +7,7 @@ use crate::{
         store::PrData,
     },
     domain::{
-        authorship::AiMarkers,
+        authorship::{AiMarkers, AuthorFilter},
         capabilities::{Capabilities, Feature},
         pr::PullRequest,
     },
@@ -22,6 +22,15 @@ use timeline::{Timeline, TimelineContext};
 
 const SIDEBAR_WIDTH: u16 = 30;
 const SIDEBAR_BREAKPOINT: u16 = 64;
+
+/// Whether `f` is offered: when the PR has an agent's comment to filter on, or
+/// a filter is on already, which must not become impossible to turn off.
+pub fn offers_filter(markers: &AiMarkers, data: Option<&PrData>, current: AuthorFilter) -> bool {
+    current != AuthorFilter::All
+        || data
+            .and_then(|d| d.activity.loaded())
+            .is_some_and(|activity| markers.any_in(activity))
+}
 
 pub struct OverviewContext<'a> {
     pub pr: &'a PullRequest,

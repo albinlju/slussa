@@ -17,6 +17,7 @@ fn timeline_keeps_thread_selection_and_sidebar_is_responsive() {
             author: User {
                 username: "alice".into(),
             },
+            account: crate::domain::user::AccountKind::Person,
             content: format!("Comment {id}"),
             created: chrono::Utc::now(),
             reactions: vec![],
@@ -216,6 +217,7 @@ fn diff_fold_keeps_target_and_shows_the_next_action() {
                     author: User {
                         username: "alice".into(),
                     },
+                    account: crate::domain::user::AccountKind::Person,
                     content: "Keep the error context.".into(),
                     created: chrono::Utc::now(),
                     reactions: vec![],
@@ -276,6 +278,7 @@ fn overview_reveals_selected_reply_and_allows_scrolling_long_text() {
         author: User {
             username: "alice".into(),
         },
+        account: crate::domain::user::AccountKind::Person,
         content: text,
         created: now,
         reactions: vec![],
@@ -404,6 +407,7 @@ fn a_thread_taller_than_the_diff_pane_is_shown_from_its_first_row() {
                 author: User {
                     username: "alice".into(),
                 },
+                account: crate::domain::user::AccountKind::Person,
                 content: format!("TOP_OF_THREAD\n\n{}", paragraphs.join("\n\n")),
                 created: chrono::Utc::now(),
                 reactions: vec![],
@@ -464,6 +468,7 @@ fn a_reply_being_written_names_the_comment_it_answers() {
                 author: User {
                     username: "alice".into(),
                 },
+                account: crate::domain::user::AccountKind::Person,
                 content: "Why this name?\nSecond line".into(),
                 created: chrono::Utc::now(),
                 reactions: vec![],

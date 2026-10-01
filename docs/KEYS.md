@@ -40,7 +40,7 @@ connected provider does not support, so it can show fewer keys than this page.
 | `r` | reply |
 | `e` / `d` | edit / delete your own comment (`d` also removes a queued review comment) |
 | `R` | resolve or unresolve the thread |
-| `f` | in the Overview, show all comments, only people's or only an AI agent's; offered when `[ai] markers` is set in the config |
+| `f` | in the Overview, show all comments, only people's or only an AI agent's; offered when the PR has a comment by a bot account (GitHub) or one that starts with an `[ai] markers` line |
 | `^j` / `^k` | step between comments in a thread |
 | `o` / `y` | open the PR in the browser / copy its link |
 | `F` | refresh |

@@ -1,9 +1,13 @@
-//! Whether a comment was written by an AI agent. Agents often post with their
-//! owner's token, so the account says nothing; what they do leave is a fixed
-//! first line, such as `> **gator-agent**`, and that is what is matched here.
-//! The text is the same on every provider, so this needs nothing from one.
+//! Whether a comment was written by an AI agent. Two things say so: the
+//! account, when the provider marks it as a bot's (GitHub does), and a fixed
+//! first line such as `> **gator-agent**`, for an agent that posts with its
+//! owner's token. The second is configured; the first needs nothing.
 
-use super::comment::{Comment, CommentThread};
+use super::{
+    activity::Activity,
+    comment::{Comment, CommentThread},
+    user::AccountKind,
+};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Authorship {
@@ -57,8 +61,8 @@ impl AiMarker {
     }
 }
 
-/// The markers of the session, from the config. Empty when none is set, which
-/// means nothing is marked and the views have nothing to filter on.
+/// The first lines of the session's agents, from the config. Empty when none is
+/// set: bots' accounts are still recognised.
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub struct AiMarkers(Vec<AiMarker>);
 
@@ -73,13 +77,12 @@ impl AiMarkers {
         (Self(markers), dropped)
     }
 
-    pub const fn is_empty(&self) -> bool {
-        self.0.is_empty()
-    }
-
-    /// A comment is the agent's when its first line that has text begins with
-    /// one of the markers, whatever the case.
+    /// A comment is the agent's when its account is a bot's, or its first line
+    /// that has text begins with one of the markers, whatever the case.
     pub fn of_comment(&self, comment: &Comment) -> Authorship {
+        if comment.account == AccountKind::Bot {
+            return Authorship::Ai;
+        }
         let first = comment
             .content
             .lines()
@@ -90,6 +93,18 @@ impl AiMarkers {
             Some(line) if self.0.iter().any(|m| line.starts_with(&m.0)) => Authorship::Ai,
             Some(_) | None => Authorship::Human,
         }
+    }
+
+    /// Whether anything in the activity is an agent's.
+    pub fn any_in(&self, activity: &Activity) -> bool {
+        activity
+            .comments
+            .iter()
+            .any(|c| self.of_comment(c) == Authorship::Ai)
+            || activity
+                .threads
+                .iter()
+                .any(|t| self.of_thread(t) == Authorship::Ai)
     }
 
     /// A thread is the agent's when the comment that started it is.
@@ -112,6 +127,7 @@ mod tests {
             author: User {
                 username: "alice".into(),
             },
+            account: AccountKind::Person,
             content: content.into(),
             created: chrono::Utc::now(),
             reactions: vec![],
@@ -145,6 +161,20 @@ mod tests {
     }
 
     #[test]
+    fn a_bots_account_marks_a_comment_without_any_marker() {
+        let none = markers(&[]);
+        let mut by_bot = comment("Looks fine.");
+        by_bot.account = AccountKind::Bot;
+        assert_eq!(none.of_comment(&by_bot), Authorship::Ai);
+        let activity = |comments| Activity {
+            comments,
+            ..Activity::default()
+        };
+        assert!(none.any_in(&activity(vec![comment("hi"), by_bot])));
+        assert!(!none.any_in(&activity(vec![comment("hi")])));
+    }
+
+    #[test]
     fn the_filter_cycles_and_shows_what_it_names() {
         let mut seen = vec![AuthorFilter::default()];
         for _ in 0..3 {
@@ -170,14 +200,14 @@ mod tests {
     #[test]
     fn without_markers_nothing_is_marked_and_a_blank_one_matches_nothing() {
         let none = markers(&[]);
-        assert!(none.is_empty());
+        assert_eq!(none, AiMarkers::default());
         assert_eq!(
             none.of_comment(&comment("> **gator-agent**")),
             Authorship::Human
         );
 
         let (blank, dropped) = AiMarkers::from_config(&[String::new(), "  \n".into()]);
-        assert!(blank.is_empty());
+        assert_eq!(blank, AiMarkers::default());
         assert_eq!(dropped, 2);
         assert_eq!(blank.of_comment(&comment("anything")), Authorship::Human);
     }

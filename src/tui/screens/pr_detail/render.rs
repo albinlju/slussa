@@ -250,7 +250,11 @@ pub(super) fn render(
             &dialogs::help::entries(
                 &ctx.store.capabilities,
                 pr.url.is_some(),
-                !ctx.store.ai_markers.is_empty(),
+                super::tabs::overview::offers_filter(
+                    &ctx.store.ai_markers,
+                    pr_data,
+                    ui.overview.timeline.filter,
+                ),
             )
             .as_slice(),
         ),

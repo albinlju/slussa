@@ -3,6 +3,16 @@ pub struct User {
     pub username: String,
 }
 
+/// What kind of account wrote something, when the provider says. GitHub marks
+/// the accounts of apps and bots; Bitbucket Data Center does not, so its
+/// comments are all `Person`.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+pub enum AccountKind {
+    #[default]
+    Person,
+    Bot,
+}
+
 /// The account slussa acts as. Never empty: "is this mine?" compares against
 /// it, and a provider gives a deleted account an empty name, which an empty
 /// viewer would match. `parse` is the only way to make one.

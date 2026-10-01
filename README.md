@@ -106,15 +106,18 @@ theme = "graphite"   # graphite (default), slate, gruvbox, catppuccin, terminal
 sort = "attention"   # attention (default) or recent
 
 [ai]
-# A comment whose first line starts with one of these is an AI agent's.
+# Optional. For an agent that posts as a person: a comment whose first line
+# starts with one of these is its.
 markers = ["> **gator-agent**"]
 ```
 
 `SLUSSA_THEME` overrides the file.
 
-With `markers` set, `f` in the Overview shows all comments, only people's, or only
-the agents'. Without it nothing is marked and the key is not offered. Matching is
-by text, so it works on both providers and for agents that post with your own token.
+When a PR has comments by an AI agent, `f` in the Overview shows all comments, only
+people's, or only the agents'. On GitHub the agents are the bot accounts (CodeRabbit,
+for one), so this needs no setup. `markers` is for an agent that posts
+with your own token, which no account tells apart; it works on both providers.
+Bitbucket Data Center does not mark bot accounts, so there only `markers` applies.
 
 ## Documentation
 

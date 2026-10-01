@@ -226,6 +226,7 @@ fn map_comment(c: &BbComment) -> Comment {
     Comment {
         id,
         author: map_user(&c.author),
+        account: crate::domain::user::AccountKind::Person,
         content: c.text.clone(),
         created: ms_to_utc(c.created_date),
         reactions: map_reactions(&c.properties),

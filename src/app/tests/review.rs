@@ -264,6 +264,7 @@ fn comment_lookup_keeps_review_and_pr_ids_separate() {
         author: User {
             username: author.into(),
         },
+        account: crate::domain::user::AccountKind::Person,
         content: text.into(),
         created: chrono::Utc::now(),
         reactions: vec![],
