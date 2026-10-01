@@ -475,8 +475,10 @@ Kept as one line each; the detail is in git history.
   replied to the thread the Diff tab had left focused; the footer there offered
   two keys that did nothing; every failed write was marked "may have reached
   the server", also one refused before it was sent; keys moved the diff cursor
-  over rows no longer drawn. A printed Bitbucket provider would also have
-  included its token.
+  over rows no longer drawn; a Bitbucket verdict that failed with nothing
+  else sent was reported as a partly sent review; an HTTP 408 on a write was
+  read as a refusal. A printed Bitbucket provider would also have included
+  its token.
 - **Fixes from the 2026-10 quality review:** drafts are no longer synced to
   disk on every key typed in the editor; a Bitbucket 403 is shown as the
   server's refusal and not as a missing login; a failed account lookup at
