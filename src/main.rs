@@ -62,6 +62,9 @@ fn run_tui(provider: Provider) -> ExitCode {
         let mut terminal = match ratatui::try_init() {
             Ok(terminal) => terminal,
             Err(err) => {
+                // `try_init` turns raw mode on before the steps that can still
+                // fail, so hand the terminal back before saying why.
+                ratatui::restore();
                 eprintln!("slussa: couldn't start the terminal UI: {err}");
                 return ExitCode::from(1);
             }
