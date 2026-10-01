@@ -25,6 +25,14 @@ reviews:
           starts I/O from rendering or key handling.
         - Flag new `unwrap`, `expect`, `panic!` or `unreachable!` in non-test
           code, and any `#[allow]`: an exception is an `#[expect]` with a reason.
+        - Types before runtime checks. Flag a struct with a flag and optional
+          fields where an enum would hold the data in its variant, a rule checked
+          at each use where a newtype with one constructor would hold it, and a
+          call order that a ticket or a constructor could enforce. Flag a `_ =>`
+          arm on one of the project's own enums; it is fine on `KeyCode` and on
+          strings from a server.
+        - A change to how the types in `src/app/reviews.rs` are serialized
+          needs a new draft file version: an unreadable file stops the app.
         - Two views only (the PR list and the PR). Flag a new screen, dashboard
           or sidebar; new capability is a default, a column, a marker or a key.
         - Show only what the provider supports: unsupported actions are hidden,

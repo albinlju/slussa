@@ -1,13 +1,12 @@
 use crate::{
     app::{
-        navigation::Screen,
         reviews::CommentTarget,
         store::{LoadState, PrData},
     },
     domain::{capabilities::Feature, diff::FileDiff},
     tui::{
         components::{diff_viewer::DiffFocus, search_input::SearchInput},
-        screens::pr_detail::{DetailView, tabs::DetailTab},
+        screens::pr_detail::{DetailView, Surface, tabs::DetailTab},
         theme,
         widgets::{self, Hint},
     },
@@ -20,18 +19,13 @@ use ratatui::{
     widgets::Paragraph,
 };
 
-pub(super) fn render(
-    frame: &mut Frame<'_>,
-    state: &DetailView<'_>,
-    pr_data: Option<&PrData>,
-    tab: DetailTab,
-    area: Rect,
-) {
+pub(super) fn render(frame: &mut Frame<'_>, state: &DetailView<'_>, area: Rect) {
+    let (pr_data, tab) = (state.data, state.tab);
     let line = if state.detail.modal_open() || state.error().is_some() {
         Line::default()
     } else if state.operation_pending() {
         widgets::loading("sending…  Esc: back · q: quit")
-    } else if let Some(search) = active_search(state, pr_data, tab, area.width) {
+    } else if let Some(search) = active_search(state, pr_data, area.width) {
         search
     } else {
         widgets::footer(area.width, &footer_actions(state, tab), state.refreshing)
@@ -47,27 +41,25 @@ fn pr_action_hints(state: &DetailView<'_>) -> Vec<Hint> {
         parts.push(Hint::on("a: submit review"));
         parts.push(Hint::on("v: start review"));
     }
-    if let Screen::Detail { pr_id, .. } = state.screen {
-        if !state.store.capabilities.merge_strategies.is_empty() {
-            parts.push(match state.merge_blocked_reason(pr_id) {
-                None => Hint::on("m: merge"),
-                Some(reason) => Hint::off(format!("m: merge ({reason})")),
-            });
-        }
-        if state.pr_is_declined(pr_id) && state.store.capabilities.supports(Feature::ReopenPr) {
-            parts.push(Hint::on("x: reopen"));
-        } else if state.store.capabilities.supports(Feature::ClosePr) {
-            parts.push(match state.decline_blocked_reason(pr_id) {
-                None => Hint::on("x: decline"),
-                Some(reason) => Hint::off(format!("x: decline ({reason})")),
-            });
-        }
+    if !state.store.capabilities.merge_strategies.is_empty() {
+        parts.push(match state.merge_blocked_reason() {
+            None => Hint::on("m: merge"),
+            Some(reason) => Hint::off(format!("m: merge ({reason})")),
+        });
+    }
+    if state.pr_is_declined() && state.store.capabilities.supports(Feature::ReopenPr) {
+        parts.push(Hint::on("x: reopen"));
+    } else if state.store.capabilities.supports(Feature::ClosePr) {
+        parts.push(match state.decline_blocked_reason() {
+            None => Hint::on("x: decline"),
+            Some(reason) => Hint::off(format!("x: decline ({reason})")),
+        });
     }
     parts
 }
 
 fn footer_actions(state: &DetailView<'_>, tab: DetailTab) -> Vec<Hint> {
-    if state.detail.editor.draft.is_some() {
+    if state.detail.editor.has_draft() {
         return widgets::hints_on("c: resume draft");
     }
     // While a batched review is open, surface its state and finish/discard keys
@@ -79,10 +71,9 @@ fn footer_actions(state: &DetailView<'_>, tab: DetailTab) -> Vec<Hint> {
             "v: finish draft ({})",
             review.comments.len()
         ))];
-        if state.detail.active_diff_view().pane_pending.is_some()
-            && state.detail.active_diff_view().focus == DiffFocus::Pane
-            && matches!(tab, DetailTab::Diff | DetailTab::Commits)
-        {
+        if state.surface().diff_viewer().is_some_and(|viewer| {
+            viewer.focused_pending().is_some() && viewer.focus == DiffFocus::Pane
+        }) {
             parts.push(Hint::on("d: remove pending"));
         }
         let target = state.comment_target();
@@ -108,11 +99,7 @@ fn footer_actions(state: &DetailView<'_>, tab: DetailTab) -> Vec<Hint> {
         if state.reply_target().is_some() {
             parts.push(Hint::on("r: reply"));
         }
-        if state
-            .editable_selected()
-            .and_then(|comment| comment.id)
-            .is_some()
-        {
+        if state.editable_selected().is_some() {
             if state.store.capabilities.supports(Feature::EditComments) {
                 parts.push(Hint::on("e: edit"));
             }
@@ -123,7 +110,7 @@ fn footer_actions(state: &DetailView<'_>, tab: DetailTab) -> Vec<Hint> {
         if state.store.capabilities.supports(Feature::ResolveThreads)
             && let Some(thread) = state
                 .focused_thread()
-                .filter(|thread| thread.node_id.is_some() || thread.comment_id.is_some())
+                .filter(|thread| thread.handle.is_some())
         {
             parts.push(Hint::on(if thread.resolved {
                 "R: reopen thread"
@@ -134,17 +121,10 @@ fn footer_actions(state: &DetailView<'_>, tab: DetailTab) -> Vec<Hint> {
         parts.extend(pr_action_hints(state));
         return parts;
     }
-    if tab == DetailTab::Diff
-        || (tab == DetailTab::Commits && state.detail.commits.open_commit.is_some())
-    {
-        let view = state.detail.active_diff_view();
+    if let Some(view) = state.surface().diff_viewer() {
         if view.focus == DiffFocus::Tree {
-            let data = match state.screen {
-                Screen::Detail { pr_id, .. } => state.store.cache.details.get(&pr_id),
-                Screen::List => None,
-            };
             let rows = crate::tui::components::diff_viewer::file_tree::build_visible_rows(
-                tree_files(state, data),
+                state.diff_files(),
                 &view.collapsed,
                 &view.tree_search.query,
             );
@@ -164,7 +144,7 @@ fn footer_actions(state: &DetailView<'_>, tab: DetailTab) -> Vec<Hint> {
             return hints;
         }
         let mut hints = vec![Hint::on("esc: files")];
-        if let Some(thread) = view.pane_thread.as_ref().filter(|thread| thread.resolved)
+        if let Some(thread) = view.focused_thread().filter(|thread| thread.resolved)
             && let Some(id) = thread.comment_id
         {
             hints.insert(
@@ -185,7 +165,7 @@ fn footer_actions(state: &DetailView<'_>, tab: DetailTab) -> Vec<Hint> {
         if state.store.capabilities.supports(Feature::ResolveThreads)
             && let Some(thread) = state
                 .focused_thread()
-                .filter(|thread| thread.node_id.is_some() || thread.comment_id.is_some())
+                .filter(|thread| thread.handle.is_some())
         {
             hints.push(Hint::on(if thread.resolved {
                 "R: reopen thread"
@@ -209,27 +189,26 @@ fn footer_actions(state: &DetailView<'_>, tab: DetailTab) -> Vec<Hint> {
         }
         DetailTab::Commits => widgets::hints_on("enter: open  /: search"),
         DetailTab::Builds => widgets::hints_on("j/k: scroll  h/l: tabs"),
-        _ => Vec::new(),
+        // Both returned above with hints of their own.
+        DetailTab::Overview | DetailTab::Diff => Vec::new(),
     }
 }
 
 fn active_search(
     state: &DetailView<'_>,
     pr_data: Option<&PrData>,
-    tab: DetailTab,
     width: u16,
 ) -> Option<Line<'static>> {
-    let viewing_commit = state.detail.commits.open_commit.is_some();
-    if tab == DetailTab::Commits && !viewing_commit {
-        return commits_search_prompt(&state.detail.commits.search, pr_data, width);
-    }
-    if tab != DetailTab::Diff && !(tab == DetailTab::Commits && viewing_commit) {
-        return None;
-    }
-    let view = state.detail.active_diff_view();
+    let view = match state.surface() {
+        Surface::CommitList => {
+            return commits_search_prompt(&state.detail.commits.search, pr_data, width);
+        }
+        Surface::Diff(view) | Surface::CommitDiff(view) => view,
+        Surface::Description | Surface::Overview | Surface::Builds => return None,
+    };
     match view.focus {
-        DiffFocus::Tree => tree_search_prompt(&view.tree_search, tree_files(state, pr_data), width),
-        DiffFocus::Pane => pane_search_prompt(&view.pane_search, view.pane_matches.len(), width),
+        DiffFocus::Tree => tree_search_prompt(&view.tree_search, state.diff_files(), width),
+        DiffFocus::Pane => pane_search_prompt(&view.pane_search, view.pane.matches.len(), width),
     }
 }
 
@@ -288,11 +267,4 @@ fn pane_search_prompt(
         right,
         width as usize,
     )))
-}
-
-fn tree_files<'a>(state: &DetailView<'_>, pr_data: Option<&'a PrData>) -> &'a [FileDiff] {
-    match pr_data.and_then(|d| d.diff_for(state.detail.commits.open_commit.as_deref())) {
-        Some(LoadState::Loaded(diff)) => &diff.files,
-        _ => &[],
-    }
 }

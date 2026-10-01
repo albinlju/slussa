@@ -5,7 +5,9 @@ use super::support::*;
 #[test]
 fn github_merge_sends_the_chosen_strategy() {
     let installed = FakeGh::new().on("api", "{}").install();
-    Provider::GitHub.merge(7, MergeStrategy::Squash).unwrap();
+    Provider::GitHub
+        .merge(PrId(7), MergeStrategy::Squash)
+        .unwrap();
 
     assert_eq!(
         installed.calls(),
@@ -16,7 +18,7 @@ fn github_merge_sends_the_chosen_strategy() {
 #[test]
 fn github_decline_closes_the_pull_request() {
     let installed = FakeGh::new().on("api", "{}").install();
-    Provider::GitHub.decline(7).unwrap();
+    Provider::GitHub.decline(PrId(7)).unwrap();
 
     assert_eq!(
         installed.calls(),
@@ -28,7 +30,7 @@ fn github_decline_closes_the_pull_request() {
 fn github_pr_comment_passes_the_body_as_a_literal_argument() {
     let installed = FakeGh::new().on("api", "{}").install();
     let body = "thanks $(whoami) `id` \"quoted\" & more";
-    Provider::GitHub.post_pr_comment(7, body).unwrap();
+    Provider::GitHub.post_pr_comment(PrId(7), body).unwrap();
 
     assert_eq!(
         installed.calls(),
@@ -42,12 +44,12 @@ fn github_pr_comment_passes_the_body_as_a_literal_argument() {
 fn github_batched_review_is_one_call_with_the_comments_on_stdin() {
     let installed = FakeGh::new().on("api", "{}").install();
     let comments = [
-        review_comment(Some("abc"), 3, false),
-        review_comment(Some("abc"), 9, true),
+        review_comment("abc", 3, false),
+        review_comment("abc", 9, true),
     ];
     Provider::GitHub
         .submit_full_review(
-            7,
+            PrId(7),
             ReviewVerdict::RequestChanges,
             "please fix",
             "me",
@@ -78,25 +80,25 @@ fn github_batched_review_is_one_call_with_the_comments_on_stdin() {
 fn github_batched_review_refuses_unsafe_batches_without_calling_gh() {
     let installed = FakeGh::new().on("api", "{}").install();
     let mixed = [
-        review_comment(Some("abc"), 1, false),
-        review_comment(Some("def"), 2, false),
+        review_comment("abc", 1, false),
+        review_comment("def", 2, false),
     ];
-    let unknown = [review_comment(None, 1, false)];
-    for comments in [&mixed[..], &unknown[..]] {
-        let result =
-            Provider::GitHub.submit_full_review(7, ReviewVerdict::Comment, "", "me", comments);
-        assert!(
-            matches!(result, Err(FetchError::InvalidInput(_))),
-            "{result:?}"
-        );
-    }
+    let result =
+        Provider::GitHub.submit_full_review(PrId(7), ReviewVerdict::Comment, "", "me", &mixed);
+    assert!(
+        matches!(
+            result,
+            Err(ReviewError::Failed(FetchError::InvalidInput(_)))
+        ),
+        "{result:?}"
+    );
     assert!(installed.calls().is_empty(), "{:?}", installed.calls());
 }
 
 #[test]
 fn github_reopen_sets_the_state_back_to_open() {
     let installed = FakeGh::new().on("api", "{}").install();
-    Provider::GitHub.reopen(7).unwrap();
+    Provider::GitHub.reopen(PrId(7)).unwrap();
 
     assert_eq!(
         installed.calls(),
@@ -113,7 +115,7 @@ fn github_refusing_a_reopen_reaches_the_user_in_githubs_words() {
             "gh: Validation Failed: the head branch was deleted (HTTP 422)",
         )
         .install();
-    let error = Provider::GitHub.reopen(7).unwrap_err();
+    let error = Provider::GitHub.reopen(PrId(7)).unwrap_err();
 
     assert!(matches!(error, FetchError::GhFailed { .. }), "{error:?}");
     assert!(
@@ -121,4 +123,59 @@ fn github_refusing_a_reopen_reaches_the_user_in_githubs_words() {
         "{}",
         error.user_message()
     );
+}
+
+#[test]
+fn github_edits_and_deletes_a_comment_where_its_kind_lives() {
+    use crate::domain::comment::{CommentId, CommentKey, CommentKind};
+    let installed = FakeGh::new().on("api", "{}").install();
+    let review = CommentKey {
+        id: CommentId(11),
+        kind: CommentKind::Review,
+    };
+    let conversation = CommentKey {
+        id: CommentId(12),
+        kind: CommentKind::Conversation,
+    };
+    Provider::GitHub
+        .edit_comment(PrId(7), review, "new")
+        .unwrap();
+    Provider::GitHub
+        .edit_comment(PrId(7), conversation, "new")
+        .unwrap();
+    Provider::GitHub.delete_comment(PrId(7), review).unwrap();
+    Provider::GitHub
+        .delete_comment(PrId(7), conversation)
+        .unwrap();
+
+    assert_eq!(
+        installed.calls(),
+        vec![
+            "api --method PATCH repos/{owner}/{repo}/pulls/comments/11 -f body=new",
+            "api --method PATCH repos/{owner}/{repo}/issues/comments/12 -f body=new",
+            "api --method DELETE repos/{owner}/{repo}/pulls/comments/11",
+            "api --method DELETE repos/{owner}/{repo}/issues/comments/12",
+        ]
+    );
+}
+
+#[test]
+fn github_resolves_a_thread_by_its_node_id_and_refuses_another_providers_handle() {
+    use crate::domain::comment::{CommentId, ThreadHandle};
+    let installed = FakeGh::new().on("api", "{}").install();
+    Provider::GitHub
+        .set_thread_resolved(PrId(7), &ThreadHandle::NodeId("PRRT_1".into()), true)
+        .unwrap();
+    let calls = installed.calls();
+    assert_eq!(calls.len(), 1, "{calls:?}");
+    assert!(calls[0].contains("resolveReviewThread"), "{calls:?}");
+    assert!(calls[0].contains("PRRT_1"), "{calls:?}");
+
+    let refused = Provider::GitHub.set_thread_resolved(
+        PrId(7),
+        &ThreadHandle::RootComment(CommentId(3)),
+        true,
+    );
+    assert!(matches!(refused, Err(FetchError::InvalidInput(_))));
+    assert_eq!(installed.calls().len(), 1, "nothing was sent for it");
 }

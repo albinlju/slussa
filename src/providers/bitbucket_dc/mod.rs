@@ -12,9 +12,10 @@ pub mod remote;
 
 use chrono::{DateTime, TimeZone, Utc};
 
-use crate::domain::pr::{MergeStatus, Mergeability};
+use crate::domain::pr::{Mergeability, PrId};
 use crate::domain::review::{ReviewComment, ReviewVerdict};
-use crate::providers::error::FetchError;
+use crate::domain::user::Username;
+use crate::providers::error::{FetchError, ReviewError};
 
 pub use activities::fetch as fetch_activity;
 pub use builds::fetch_builds;
@@ -28,17 +29,17 @@ pub use prs::fetch_prs;
 
 pub(super) const APP_PROPERTIES_PATH: &str = "/rest/api/1.0/application-properties";
 
-pub fn current_user(config: &Config) -> Result<String, FetchError> {
+pub fn current_user(config: &Config) -> Result<Username, FetchError> {
     http::current_user(&config.repo.base_url, APP_PROPERTIES_PATH, &config.pat)
 }
 
 pub fn submit_review(
     config: &Config,
-    pr_id: u64,
+    pr_id: PrId,
     verdict: ReviewVerdict,
     body: &str,
     user: &str,
-) -> Result<(), FetchError> {
+) -> Result<(), ReviewError> {
     // Bitbucket has no review body — post any summary as a PR comment first.
     if !body.is_empty() {
         post_pr_comment(config, pr_id, body)?;
@@ -56,10 +57,16 @@ pub fn submit_review(
     );
     let payload = serde_json::json!({ "status": status });
     http::put_json(&config.repo.base_url, &endpoint, &config.pat, &payload).map_err(|source| {
-        FetchError::PartialReview {
-            posted_comments: 0,
-            summary_posted: !body.is_empty(),
-            source: Box::new(source),
+        // Without a summary the verdict is the only request: its failure is
+        // the whole failure, not part of one.
+        if body.is_empty() {
+            ReviewError::Failed(source)
+        } else {
+            ReviewError::Partial {
+                posted_comments: 0,
+                summary_posted: true,
+                source,
+            }
         }
     })
 }
@@ -69,22 +76,15 @@ pub fn submit_review(
 /// earlier posts remain, and the surfaced error is whichever step failed.
 pub fn submit_full_review(
     config: &Config,
-    pr_id: u64,
+    pr_id: PrId,
     verdict: ReviewVerdict,
     body: &str,
     user: &str,
     comments: &[ReviewComment],
-) -> Result<(), FetchError> {
-    let with_revisions: Vec<_> = comments
-        .iter()
-        .map(|c| c.revision.as_ref().map(|revision| (c, revision)))
-        .collect::<Option<_>>()
-        .ok_or_else(|| {
-            FetchError::InvalidInput("Comment revision is unknown; reload the diff.".into())
-        })?;
+) -> Result<(), ReviewError> {
     publish_steps(
-        &with_revisions,
-        |&(c, revision)| post_comment(config, pr_id, &c.path, c.line, c.removed, &c.body, revision),
+        comments,
+        |comment| post_comment(config, pr_id, comment),
         || submit_review(config, pr_id, verdict, body, user),
     )
 }
@@ -92,36 +92,39 @@ pub fn submit_full_review(
 fn publish_steps<T>(
     comments: &[T],
     mut post: impl FnMut(&T) -> Result<(), FetchError>,
-    finish: impl FnOnce() -> Result<(), FetchError>,
-) -> Result<(), FetchError> {
+    finish: impl FnOnce() -> Result<(), ReviewError>,
+) -> Result<(), ReviewError> {
     for (i, comment) in comments.iter().enumerate() {
         if let Err(source) = post(comment) {
-            return Err(FetchError::PartialReview {
+            return Err(ReviewError::Partial {
                 posted_comments: i,
                 summary_posted: false,
-                source: Box::new(source),
+                source,
             });
         }
     }
+    // Every comment arrived, whatever happened to the summary and the verdict.
     finish().map_err(|error| match error {
-        FetchError::PartialReview {
+        // With no comments before it, nothing arrived in part.
+        ReviewError::Failed(source) if comments.is_empty() => ReviewError::Failed(source),
+        ReviewError::Partial {
             summary_posted,
             source,
             ..
-        } => FetchError::PartialReview {
+        } => ReviewError::Partial {
             posted_comments: comments.len(),
             summary_posted,
             source,
         },
-        source => FetchError::PartialReview {
+        ReviewError::Failed(source) => ReviewError::Partial {
             posted_comments: comments.len(),
             summary_posted: false,
-            source: Box::new(source),
+            source,
         },
     })
 }
 
-pub fn fetch_mergeability(config: &Config, pr_id: u64) -> Result<MergeStatus, FetchError> {
+pub fn fetch_mergeability(config: &Config, pr_id: PrId) -> Result<Mergeability, FetchError> {
     #[derive(serde::Deserialize)]
     #[serde(rename_all = "camelCase")]
     struct Status {
@@ -156,23 +159,17 @@ pub fn fetch_mergeability(config: &Config, pr_id: u64) -> Result<MergeStatus, Fe
     };
     // A veto without a conflict is a merge check: approvals, builds, tasks.
     Ok(if status.conflicted {
-        MergeStatus::with(
-            Mergeability::Conflicts,
-            or_default("It has merge conflicts."),
-        )
+        Mergeability::Conflicts(or_default("It has merge conflicts."))
     } else if status.can_merge {
-        MergeStatus::new(Mergeability::Mergeable)
+        Mergeability::Mergeable
     } else {
-        MergeStatus::with(
-            Mergeability::Blocked,
-            or_default("Merge checks have not passed."),
-        )
+        Mergeability::Blocked(or_default("Merge checks have not passed."))
     })
 }
 
 /// Bitbucket's merge/decline endpoints take the PR's current version for
 /// optimistic locking, so read it fresh before either.
-fn pr_version(config: &Config, pr_id: u64) -> Result<u64, FetchError> {
+fn pr_version(config: &Config, pr_id: PrId) -> Result<u64, FetchError> {
     #[derive(serde::Deserialize)]
     struct PrVersion {
         version: u64,
@@ -185,7 +182,7 @@ fn pr_version(config: &Config, pr_id: u64) -> Result<u64, FetchError> {
     Ok(pr.version)
 }
 
-pub fn merge(config: &Config, pr_id: u64) -> Result<(), FetchError> {
+pub fn merge(config: &Config, pr_id: PrId) -> Result<(), FetchError> {
     // Strategy is the repo's configured default.
     let version = pr_version(config, pr_id)?;
     let endpoint = format!(
@@ -200,7 +197,7 @@ pub fn merge(config: &Config, pr_id: u64) -> Result<(), FetchError> {
     )
 }
 
-pub fn reopen(config: &Config, pr_id: u64) -> Result<(), FetchError> {
+pub fn reopen(config: &Config, pr_id: PrId) -> Result<(), FetchError> {
     let version = pr_version(config, pr_id)?;
     let endpoint = format!(
         "/rest/api/1.0/projects/{}/repos/{}/pull-requests/{pr_id}/reopen?version={version}",
@@ -214,7 +211,7 @@ pub fn reopen(config: &Config, pr_id: u64) -> Result<(), FetchError> {
     )
 }
 
-pub fn decline(config: &Config, pr_id: u64) -> Result<(), FetchError> {
+pub fn decline(config: &Config, pr_id: PrId) -> Result<(), FetchError> {
     let version = pr_version(config, pr_id)?;
     let endpoint = format!(
         "/rest/api/1.0/projects/{}/repos/{}/pull-requests/{pr_id}/decline?version={version}",
@@ -238,7 +235,7 @@ pub struct RepoLocation {
 #[derive(Clone, Debug)]
 pub struct Config {
     pub repo: RepoLocation,
-    pub pat: String,
+    pub pat: auth::Pat,
 }
 
 fn ms_to_utc(ms: i64) -> DateTime<Utc> {
@@ -263,7 +260,7 @@ mod submission_tests {
         );
         assert!(matches!(
             result,
-            Err(FetchError::PartialReview {
+            Err(ReviewError::Partial {
                 posted_comments: 2,
                 summary_posted: false,
                 ..
@@ -273,18 +270,36 @@ mod submission_tests {
             &[1, 2],
             |_| Ok(()),
             || {
-                Err(FetchError::PartialReview {
+                Err(ReviewError::Partial {
                     posted_comments: 0,
                     summary_posted: true,
-                    source: Box::new(FetchError::Network("offline".into())),
+                    source: FetchError::Network("offline".into()),
                 })
             },
         );
         assert!(matches!(
             result,
-            Err(FetchError::PartialReview {
+            Err(ReviewError::Partial {
                 posted_comments: 2,
                 summary_posted: true,
+                ..
+            })
+        ));
+    }
+
+    #[test]
+    fn a_failure_with_nothing_sent_before_it_is_not_a_partial_one() {
+        let offline = || Err(ReviewError::Failed(FetchError::Network("offline".into())));
+        let none: [u8; 0] = [];
+        let result = publish_steps(&none, |_| Ok(()), offline);
+        assert!(matches!(result, Err(ReviewError::Failed(_))), "{result:?}");
+        // With a comment posted first, the same failure leaves part of it sent.
+        let result = publish_steps(&[1], |_| Ok(()), offline);
+        assert!(matches!(
+            result,
+            Err(ReviewError::Partial {
+                posted_comments: 1,
+                summary_posted: false,
                 ..
             })
         ));

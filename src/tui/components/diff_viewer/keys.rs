@@ -34,7 +34,9 @@ fn pane_key(code: KeyCode, view: &super::DiffViewer) -> Option<DiffAction> {
         KeyCode::Char('n') if searching => Some(DiffAction::JumpMatch(1)),
         KeyCode::Char('N') if searching => Some(DiffAction::JumpMatch(-1)),
         // Expand/collapse the focused resolved thread.
-        KeyCode::Char(' ') if view.pane_thread.is_some() => Some(DiffAction::ToggleThreadExpand),
+        KeyCode::Char(' ') if view.focused_thread().is_some() => {
+            Some(DiffAction::ToggleThreadExpand)
+        }
         KeyCode::Enter | KeyCode::Left => Some(DiffAction::FocusTree),
         _ => None,
     }

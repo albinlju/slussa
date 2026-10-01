@@ -1,10 +1,25 @@
 use super::*;
 use crate::{
-    app::{state::AppState, store::FetchKey},
-    domain::user::User,
-    tui::{key_to_action, render},
+    app::{
+        action::{Action, Effect, ListAction},
+        navigation::Screen,
+        state::AppState,
+        store::{FetchKey, LoadState, OpenChain},
+    },
+    domain::{
+        ci::CiSummary,
+        pr::{PrGroup, PrId, PrStatus, PullRequest},
+        review::{Reviewer, ReviewerState},
+        user::{User, Username},
+    },
+    tui::{component::Component, components::help_dialog::HelpDialog, key_to_action, render},
 };
-use ratatui::{Terminal, backend::TestBackend, crossterm::event::KeyModifiers};
+use chrono::Utc;
+use ratatui::{
+    Terminal,
+    backend::TestBackend,
+    crossterm::event::{KeyCode, KeyEvent, KeyModifiers},
+};
 
 fn reviewer(name: &str, state: ReviewerState) -> Reviewer {
     Reviewer {
@@ -18,7 +33,7 @@ fn reviewer(name: &str, state: ReviewerState) -> Reviewer {
 fn pr(id: u64, author: &str, ci: CiSummary, reviewers: Vec<Reviewer>) -> PullRequest {
     PullRequest {
         url: None,
-        id,
+        id: PrId(id),
         title: format!("Change {id}"),
         description: None,
         author: User {
@@ -67,10 +82,37 @@ fn set_more(state: &mut AppState, group: PrGroup, more: bool) {
     state.store.groups.entry(group).or_default().more = more.then(|| "x".to_owned());
 }
 
+/// What the list is drawn from: `prs` as `viewer` sees them, with nothing
+/// loading unless `arriving` says the open pages are still coming in.
+fn context<'a>(
+    prs: &'a LoadState<Vec<PullRequest>>,
+    viewer: &'a Username,
+    arriving: bool,
+) -> ListContext<'a> {
+    ListContext {
+        prs,
+        refreshing: false,
+        viewer,
+        more: false,
+        loading_more: arriving,
+        view_loading: false,
+        arriving,
+    }
+}
+
 fn ids(list: &PrListScreen, prs: &LoadState<Vec<PullRequest>>, viewer: &str) -> Vec<u64> {
-    list.filtered_prs(prs, viewer)
+    ids_while(list, prs, viewer, false)
+}
+
+fn ids_while(
+    list: &PrListScreen,
+    prs: &LoadState<Vec<PullRequest>>,
+    viewer: &str,
+    arriving: bool,
+) -> Vec<u64> {
+    list.filtered_prs(&context(prs, &viewer.into(), arriving))
         .iter()
-        .map(|pr| pr.id)
+        .map(|pr| pr.id.0)
         .collect()
 }
 
@@ -110,17 +152,13 @@ fn attention_order_puts_what_needs_you_first_and_keeps_provider_order_otherwise(
 
 #[test]
 fn the_order_is_held_while_the_open_prs_are_read_and_applied_after() {
-    let mut list = PrListScreen {
-        hold_order: true,
-        ..PrListScreen::default()
-    };
+    let list = PrListScreen::default();
     assert_eq!(
-        ids(&list, &prs(), "me"),
+        ids_while(&list, &prs(), "me", true),
         [5, 4, 3, 2, 1],
         "rows stay where they arrived"
     );
-    list.hold_order = false;
-    assert_eq!(ids(&list, &prs(), "me"), [1, 3, 4, 5, 2]);
+    assert_eq!(ids_while(&list, &prs(), "me", false), [1, 3, 4, 5, 2]);
 }
 
 #[test]
@@ -142,14 +180,14 @@ fn the_heading_says_more_is_coming_while_the_open_prs_are_read() {
 }
 
 #[test]
-fn recent_order_and_an_unknown_viewer_leave_the_provider_order_alone() {
+fn recent_order_and_a_viewer_no_pr_involves_leave_the_provider_order_alone() {
     let recent = PrListScreen {
         sort: Sort::Recent,
         ..PrListScreen::default()
     };
     assert_eq!(ids(&recent, &prs(), "me"), [5, 4, 3, 2, 1]);
     let attention = PrListScreen::default();
-    assert_eq!(ids(&attention, &prs(), ""), [5, 4, 3, 2, 1]);
+    assert_eq!(ids(&attention, &prs(), "nobody"), [5, 4, 3, 2, 1]);
 }
 
 #[test]
@@ -177,14 +215,8 @@ fn filters_apply_before_ordering() {
 #[test]
 fn toggling_the_sort_follows_the_highlighted_pr() {
     let prs = prs();
-    let ctx = ListContext {
-        prs: &prs,
-        refreshing: false,
-        viewer: "me",
-        more: false,
-        loading_more: false,
-        view_loading: false,
-    };
+    let viewer = "me".into();
+    let ctx = context(&prs, &viewer, false);
     let mut list = PrListScreen {
         selected: 2,
         ..PrListScreen::default()
@@ -208,7 +240,7 @@ fn s_toggles_the_sort_and_help_lists_it() {
         KeyEvent::new(KeyCode::Char('s'), KeyModifiers::NONE),
     );
     assert!(matches!(action, Some(Action::List(ListAction::ToggleSort))));
-    assert!(HELP_KEYS.iter().any(|(key, _)| *key == "s"));
+    assert!(render::HELP_KEYS.iter().any(|(key, _)| *key == "s"));
 }
 
 #[test]
@@ -311,7 +343,7 @@ fn help_lists_load_older_only_when_it_applies() {
         let mut state = state("me");
         state.ui.list.filter = StatusFilter::All;
         set_more(&mut state, PrGroup::Merged, older);
-        state.ui.list.help_open = true;
+        state.ui.list.overlay = Some(ListOverlay::Help(HelpDialog::default()));
         let mut terminal = Terminal::new(TestBackend::new(100, 40)).unwrap();
         terminal.draw(|frame| render(frame, &mut state)).unwrap();
         let buffer = terminal.backend().buffer();
@@ -363,28 +395,39 @@ fn a_view_still_being_read_says_so_rather_than_claiming_to_be_empty() {
 #[test]
 fn choosing_another_view_asks_the_app_to_read_it_and_choosing_the_same_one_does_not() {
     let prs = prs();
-    let ctx = ListContext {
-        prs: &prs,
-        refreshing: false,
-        viewer: "me",
-        more: false,
-        loading_more: false,
-        view_loading: false,
-    };
+    let viewer = "me".into();
+    let ctx = context(&prs, &viewer, false);
     let mut list = PrListScreen {
-        filter_picker_cursor: StatusFilter::CYCLE
-            .iter()
-            .position(|&filter| filter == StatusFilter::Merged)
-            .unwrap(),
+        overlay: Some(ListOverlay::FilterPicker {
+            highlighted: StatusFilter::Merged,
+        }),
         ..PrListScreen::default()
     };
     let action = list.update(ListAction::ApplyFilter, &ctx);
-    assert!(matches!(
-        action,
-        Some(Action::List(ListAction::FilterChanged))
-    ));
+    assert!(matches!(action, Some(Effect::LoadView)));
     assert_eq!(list.filter, StatusFilter::Merged);
+    assert!(list.overlay.is_none(), "applying closes the picker");
 
+    // The picker opens on the filter in use; applying that reads nothing.
+    list.update(ListAction::OpenFilterPicker, &ctx);
     let again = list.update(ListAction::ApplyFilter, &ctx);
     assert!(again.is_none(), "an unchanged filter needs nothing read");
+
+    // With no picker open there is nothing to apply.
+    assert!(list.update(ListAction::ApplyFilter, &ctx).is_none());
+    assert_eq!(list.filter, StatusFilter::Merged);
+
+    // The picker stops at its ends instead of running past them.
+    list.update(ListAction::OpenFilterPicker, &ctx);
+    for _ in 0..9 {
+        list.update(ListAction::FilterPickerNext, &ctx);
+    }
+    list.update(ListAction::ApplyFilter, &ctx);
+    assert_eq!(list.filter, StatusFilter::All);
+    list.update(ListAction::OpenFilterPicker, &ctx);
+    for _ in 0..9 {
+        list.update(ListAction::FilterPickerPrev, &ctx);
+    }
+    list.update(ListAction::ApplyFilter, &ctx);
+    assert_eq!(list.filter, StatusFilter::Open);
 }

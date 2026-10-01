@@ -20,9 +20,6 @@ impl PrStatus {
     }
 }
 
-/// A slice of a repository's PRs that can be read on its own. `Open` holds open
-/// and draft PRs together, since a provider does not separate them when asked
-/// for the open ones.
 /// What a provider leaves out of the list because it is costly to read for
 /// every PR, and gives for one PR when it is opened.
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
@@ -31,6 +28,9 @@ pub struct PrInfo {
     pub labels: Vec<String>,
 }
 
+/// A slice of a repository's PRs that can be read on its own. `Open` holds open
+/// and draft PRs together, since a provider does not separate them when asked
+/// for the open ones.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub enum PrGroup {
     Open,
@@ -74,40 +74,32 @@ pub struct PrBatch {
     pub more: Option<String>,
 }
 
-/// Whether a PR can be merged into its target.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+/// Whether a PR can be merged into its target. What stands in the way is held
+/// by the state it belongs to, in words the provider gave or that were derived
+/// from its status fields, so a mergeable PR has no reasons to carry.
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Mergeability {
     Mergeable,
-    Conflicts,
+    Conflicts(Vec<String>),
     /// A provider rule stops the merge for a reason other than a conflict:
     /// missing approvals, required checks, a draft, a branch behind its base.
-    Blocked,
+    Blocked(Vec<String>),
     Unknown,
 }
 
-/// `Mergeability` plus, when something stands in the way, why in words the
-/// provider gave or that were derived from its status fields.
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct MergeStatus {
-    pub state: Mergeability,
-    pub blockers: Vec<String>,
-}
-
-impl MergeStatus {
-    pub const fn new(state: Mergeability) -> Self {
-        Self {
-            state,
-            blockers: Vec::new(),
+impl Mergeability {
+    /// Why it cannot be merged yet; empty when nothing is known to stand in
+    /// the way.
+    pub fn blockers(&self) -> &[String] {
+        match self {
+            Self::Conflicts(reasons) | Self::Blocked(reasons) => reasons,
+            Self::Mergeable | Self::Unknown => &[],
         }
-    }
-
-    pub const fn with(state: Mergeability, blockers: Vec<String>) -> Self {
-        Self { state, blockers }
     }
 }
 
 /// How to integrate a PR. Which ones are offered depends on the provider — see
-/// `Provider::merge_strategies` (GitHub allows all three; Bitbucket DC just merges).
+/// `Capabilities::merge_strategies` (GitHub allows all three; Bitbucket DC just merges).
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum MergeStrategy {
     Merge,
@@ -125,10 +117,24 @@ impl MergeStrategy {
     }
 }
 
+/// A pull request's number in its repository. A type of its own, so that it
+/// cannot be passed where a comment's id is expected, or the other way round.
+#[derive(
+    Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, serde::Serialize, serde::Deserialize,
+)]
+#[serde(transparent)]
+pub struct PrId(pub u64);
+
+impl std::fmt::Display for PrId {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        self.0.fmt(f)
+    }
+}
+
 #[derive(Debug, Clone)]
 pub struct PullRequest {
     pub url: Option<String>,
-    pub id: u64,
+    pub id: PrId,
     pub title: String,
     pub description: Option<String>,
     pub author: User,

@@ -1,11 +1,11 @@
 use crate::{
     app::reviews::{CommentAnchor, PendingComment},
     domain::{
-        comment::CommentThread,
-        diff::{Diff, DiffLine, FileDiff},
+        comment::{CommentId, CommentThread, ThreadHandle},
+        diff::{Diff, DiffLine, FileDiff, LineRef},
     },
     tui::{
-        components::diff_viewer::DiffViewer,
+        components::diff_viewer::{DiffViewer, FocusedNav, NavTarget, PaneNav},
         icons, layout,
         screens::pr_detail::view::ThreadRef,
         theme,
@@ -41,12 +41,6 @@ pub(super) fn render(
 
     let bounded = ui_diff.focused_file.min(diff.files.len().saturating_sub(1));
     let Some(file) = diff.files.get(bounded) else {
-        ui_diff.pane_item_count = 0;
-        ui_diff.pane_matches = Vec::new();
-        ui_diff.pane_anchor = None;
-        ui_diff.pane_reply = None;
-        ui_diff.pane_thread = None;
-        ui_diff.pane_pending = None;
         return;
     };
     let (adds, dels) = file_stats.get(bounded).copied().unwrap_or((0, 0));
@@ -120,21 +114,24 @@ pub(super) fn render(
         frame.render_widget(Paragraph::new(bar), layout::scrollbar_area(body_area));
     }
 
-    ui_diff.pane_anchor = cursor.map(|m| {
-        let (line, removed) = m.anchor();
-        CommentAnchor {
-            revision: diff.revision.clone(),
-            path: file.path.clone(),
-            line,
-            removed,
+    let focused = cursor.map(|item| {
+        let (line, removed) = item.anchor();
+        FocusedNav {
+            anchor: CommentAnchor {
+                revision: diff.revision.clone(),
+                path: file.path.clone(),
+                line,
+                removed,
+            },
+            target: item.target(),
         }
     });
-    ui_diff.pane_reply = cursor.and_then(NavItem::reply_to);
-    ui_diff.pane_thread = cursor.and_then(NavItem::thread_ref);
-    ui_diff.pane_pending = cursor.and_then(NavItem::pending_index);
     ui_diff.pane_scroll = scroll;
-    ui_diff.pane_item_count = nav_items.len();
-    ui_diff.pane_matches = matches;
+    ui_diff.pane = PaneNav {
+        item_count: nav_items.len(),
+        matches,
+        focused,
+    };
 }
 
 enum NavKind {
@@ -145,8 +142,8 @@ enum NavKind {
     Thread {
         line: usize,
         removed: bool,
-        reply_to: Option<u64>,
-        node_id: Option<String>,
+        reply_to: Option<CommentId>,
+        handle: Option<ThreadHandle>,
         resolved: bool,
     },
     /// A queued (not-yet-posted) review comment — `index` into the pending review.
@@ -172,33 +169,20 @@ impl NavItem {
         }
     }
 
-    const fn reply_to(&self) -> Option<u64> {
-        match self.kind {
-            NavKind::Thread { reply_to, .. } => reply_to,
-            NavKind::Line { .. } | NavKind::Pending { .. } => None,
-        }
-    }
-
-    const fn pending_index(&self) -> Option<usize> {
-        match self.kind {
-            NavKind::Pending { index, .. } => Some(index),
-            NavKind::Line { .. } | NavKind::Thread { .. } => None,
-        }
-    }
-
-    fn thread_ref(&self) -> Option<ThreadRef> {
+    fn target(&self) -> NavTarget {
         match &self.kind {
+            NavKind::Line { .. } => NavTarget::Line,
             NavKind::Thread {
                 reply_to,
-                node_id,
+                handle,
                 resolved,
                 ..
-            } => Some(ThreadRef {
-                node_id: node_id.clone(),
+            } => NavTarget::Thread(ThreadRef {
+                handle: handle.clone(),
                 comment_id: *reply_to,
                 resolved: *resolved,
             }),
-            NavKind::Line { .. } | NavKind::Pending { .. } => None,
+            NavKind::Pending { index, .. } => NavTarget::Pending(*index),
         }
     }
 }
@@ -219,7 +203,7 @@ fn build_diff_body(
     active: Option<usize>,
     query: &str,
     author: &str,
-    expanded: &HashSet<u64>,
+    expanded: &HashSet<CommentId>,
 ) -> DiffBody {
     let theme = theme::current();
     let mut lines: Vec<Line<'_>> = Vec::new();
@@ -283,7 +267,7 @@ fn build_diff_body(
                         line,
                         removed,
                         reply_to: thread.reply_to,
-                        node_id: thread.anchor.as_ref().and_then(|a| a.node_id.clone()),
+                        handle: thread.anchor.as_ref().and_then(|a| a.handle.clone()),
                         resolved: thread.resolved(),
                     },
                 });
@@ -350,10 +334,10 @@ fn index_comments<'a>(
         if anchor.path != path || !thread.matches_revision(revision) {
             continue;
         }
-        if let Some(line) = anchor.line {
-            by_new.entry(line).or_default().push(thread);
-        } else if let Some(old) = anchor.old_line {
-            by_old.entry(old).or_default().push(thread);
+        match anchor.line {
+            Some(LineRef::New(line)) => by_new.entry(line).or_default().push(thread),
+            Some(LineRef::Old(line)) => by_old.entry(line).or_default().push(thread),
+            None => {}
         }
     }
     (by_new, by_old)

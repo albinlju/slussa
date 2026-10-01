@@ -1,10 +1,11 @@
 use super::{cli, graphql};
+use crate::domain::pr::PrId;
 use crate::providers::FetchError;
 use serde::{Deserialize, de::DeserializeOwned};
 use serde_json::Value;
 
 pub(super) fn pr_nodes<T: DeserializeOwned>(
-    pr: u64,
+    pr: PrId,
     field: &str,
     selection: &str,
 ) -> Result<Vec<T>, FetchError> {
@@ -142,22 +143,31 @@ fn fetch_page<T: DeserializeOwned>(
     }
     args.extend(["-f", &query_arg]);
     let mut value: Value = cli::run_gh_json(&args)?;
-    if value.get("errors").is_some() {
-        return Err(FetchError::InvalidInput(
-            "GitHub returned an incomplete GraphQL response.".into(),
-        ));
+    if let Some(errors) = value.get("errors") {
+        return Err(FetchError::GraphQl(graphql_messages(errors)));
     }
     for key in path {
         value = value
             .get_mut(*key)
             .map(Value::take)
-            .ok_or_else(|| FetchError::ParseFailed(format!("Missing {key}")))?;
+            .ok_or_else(|| FetchError::ParseFailed(format!("Missing {key}").into()))?;
     }
     // Decoded as a whole: indexing into a value that turned out not to be an
     // object would panic.
     let page: Connection<T> =
-        serde_json::from_value(value).map_err(|e| FetchError::ParseFailed(e.to_string()))?;
+        serde_json::from_value(value).map_err(|e| FetchError::ParseFailed(e.into()))?;
     Ok((page.nodes, page.page_info))
+}
+
+/// What GitHub says went wrong, one message per error it lists.
+fn graphql_messages(errors: &Value) -> Vec<String> {
+    errors
+        .as_array()
+        .into_iter()
+        .flatten()
+        .filter_map(|error| error.get("message")?.as_str())
+        .map(str::to_owned)
+        .collect()
 }
 
 #[cfg(test)]

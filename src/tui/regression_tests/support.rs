@@ -3,17 +3,31 @@
 pub(super) use crate::tui::*;
 pub(super) use crate::{
     app::{
-        action::{CommitsAction, DetailAction, DiffAction, ListAction},
+        action::*,
         navigation::Screen,
         reviews::CommentTarget,
         state::*,
         store::{LoadState, PrData},
     },
-    domain::{activity::Activity, ci::CiSummary, commit::Commit, diff::*, pr::*, user::User},
+    domain::{
+        activity::Activity,
+        ci::CiSummary,
+        comment::{CommentId, ThreadHandle},
+        commit::{Commit, CommitOid},
+        diff::*,
+        pr::*,
+        user::User,
+    },
     tui::{
-        components::{comment_editor::CommentDraft, diff_viewer::DiffFocus},
+        components::{
+            comment_editor::{CommentDraft, CommentEditor, EditorView},
+            diff_viewer::{DiffFocus, FocusedNav, NavTarget, PaneNav},
+            help_dialog::HelpDialog,
+        },
         screens::pr_detail::{
+            Overlay,
             dialogs::{
+                PrSummary,
                 confirm::{ConfirmDialog, ConfirmKind},
                 merge::MergeDialog,
                 review::ReviewDialog,
@@ -30,7 +44,7 @@ pub(crate) fn fixture() -> AppState {
     let mut state = AppState::default();
     state.store.cache.prs = LoadState::Loaded(vec![PullRequest {
         url: Some("https://example.com/team/project/pull/42".into()),
-        id: 42,
+        id: PrId(42),
         title: "Component migration".into(),
         description: Some("Review **this change**.".into()),
         author: User {
@@ -50,7 +64,7 @@ pub(crate) fn fixture() -> AppState {
         updated: now,
     }]);
     state.store.cache.details.insert(
-        42,
+        PrId(42),
         PrData {
             diff: LoadState::Loaded(Diff {
                 revision: None,
@@ -80,7 +94,7 @@ pub(crate) fn fixture() -> AppState {
                 threads: vec![],
             }),
             builds: LoadState::Loaded(vec![]),
-            mergeability: LoadState::Loaded(MergeStatus::new(Mergeability::Mergeable)),
+            mergeability: LoadState::Loaded(Mergeability::Mergeable),
             info: LoadState::Loaded(PrInfo {
                 description: Some("Review **this change**.".into()),
                 labels: vec!["rust".into()],
@@ -110,7 +124,7 @@ pub(super) fn rendered_text(terminal: &Terminal<TestBackend>) -> String {
 pub(super) fn local_key(state: &mut AppState, code: KeyCode) {
     if let Some(action) = key_to_action(state, KeyEvent::new(code, KeyModifiers::NONE)) {
         let effect = state.ui.update(action, &state.store, state.screen);
-        if let Some(Action::Navigate(screen)) = effect {
+        if let Some(Effect::Navigate(screen)) = effect {
             state.screen = screen;
         }
     }

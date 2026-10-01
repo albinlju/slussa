@@ -1,8 +1,13 @@
-use crate::domain::comment::Comment;
+use crate::domain::{
+    comment::{Comment, CommentId, CommentKey, CommentKind},
+    diff::LineRef,
+    pr::PrId,
+    review::ReviewComment,
+};
 use crate::providers::error::FetchError;
 use crate::providers::github::{COMMENT_FIELDS, GqlComment, map_gql_comment};
 
-pub fn fetch_comments(pr_number: u64) -> Result<Vec<Comment>, FetchError> {
+pub fn fetch_comments(pr_number: PrId) -> Result<Vec<Comment>, FetchError> {
     let nodes: Vec<GqlComment> =
         super::pagination::pr_nodes(pr_number, "comments", COMMENT_FIELDS)?;
     Ok(nodes
@@ -14,16 +19,23 @@ pub fn fetch_comments(pr_number: u64) -> Result<Vec<Comment>, FetchError> {
         .collect())
 }
 
-pub fn post_comment(
-    pr_number: u64,
-    path: &str,
-    line: usize,
-    removed: bool,
-    body: &str,
-    revision: &crate::domain::diff::DiffRevision,
-) -> Result<(), FetchError> {
+/// GitHub's name for the side of the diff a line is on.
+pub(super) const fn side(line: LineRef) -> &'static str {
+    match line {
+        LineRef::Old(_) => "LEFT",
+        LineRef::New(_) => "RIGHT",
+    }
+}
+
+pub fn post_comment(pr_number: PrId, comment: &ReviewComment) -> Result<(), FetchError> {
+    let ReviewComment {
+        revision,
+        path,
+        line,
+        body,
+    } = comment;
     let commit_id = &revision.head;
-    let side = if removed { "LEFT" } else { "RIGHT" };
+    let (side, line) = (side(*line), line.number());
     super::cli::run_gh(&[
         "api",
         "--method",
@@ -43,7 +55,7 @@ pub fn post_comment(
     Ok(())
 }
 
-pub fn post_pr_comment(pr_number: u64, body: &str) -> Result<(), FetchError> {
+pub fn post_pr_comment(pr_number: PrId, body: &str) -> Result<(), FetchError> {
     super::cli::run_gh(&[
         "api",
         "--method",
@@ -55,7 +67,7 @@ pub fn post_pr_comment(pr_number: u64, body: &str) -> Result<(), FetchError> {
     Ok(())
 }
 
-pub fn reply_comment(pr_number: u64, parent: u64, body: &str) -> Result<(), FetchError> {
+pub fn reply_comment(pr_number: PrId, parent: CommentId, body: &str) -> Result<(), FetchError> {
     super::cli::run_gh(&[
         "api",
         "--method",
@@ -67,28 +79,32 @@ pub fn reply_comment(pr_number: u64, parent: u64, body: &str) -> Result<(), Fetc
     Ok(())
 }
 
-pub fn edit_comment(comment_id: u64, review: bool, body: &str) -> Result<(), FetchError> {
-    // Review (line) comments live under `pulls`, PR-level ones under `issues`.
-    let kind = if review { "pulls" } else { "issues" };
+/// Review comments live under `pulls`, comments on the PR under `issues`.
+fn comment_endpoint(comment: CommentKey) -> String {
+    let collection = match comment.kind {
+        CommentKind::Review => "pulls",
+        CommentKind::Conversation => "issues",
+    };
+    format!(
+        "repos/{{owner}}/{{repo}}/{collection}/comments/{}",
+        comment.id
+    )
+}
+
+pub fn edit_comment(comment: CommentKey, body: &str) -> Result<(), FetchError> {
     super::cli::run_gh(&[
         "api",
         "--method",
         "PATCH",
-        &format!("repos/{{owner}}/{{repo}}/{kind}/comments/{comment_id}"),
+        &comment_endpoint(comment),
         "-f",
         &format!("body={body}"),
     ])?;
     Ok(())
 }
 
-pub fn delete_comment(comment_id: u64, review: bool) -> Result<(), FetchError> {
-    let kind = if review { "pulls" } else { "issues" };
-    super::cli::run_gh(&[
-        "api",
-        "--method",
-        "DELETE",
-        &format!("repos/{{owner}}/{{repo}}/{kind}/comments/{comment_id}"),
-    ])?;
+pub fn delete_comment(comment: CommentKey) -> Result<(), FetchError> {
+    super::cli::run_gh(&["api", "--method", "DELETE", &comment_endpoint(comment)])?;
     Ok(())
 }
 
@@ -105,7 +121,7 @@ pub fn set_thread_resolved(node_id: &str, resolved: bool) -> Result<(), FetchErr
     Ok(())
 }
 
-pub(super) fn head_sha(pr_number: u64) -> Result<String, FetchError> {
+pub(super) fn head_sha(pr_number: PrId) -> Result<String, FetchError> {
     let out = super::cli::run_gh(&[
         "api",
         &format!("repos/{{owner}}/{{repo}}/pulls/{pr_number}"),
@@ -116,7 +132,7 @@ pub(super) fn head_sha(pr_number: u64) -> Result<String, FetchError> {
 }
 
 pub(super) fn diff_revision(
-    pr_number: u64,
+    pr_number: PrId,
 ) -> Result<crate::domain::diff::DiffRevision, FetchError> {
     #[derive(serde::Deserialize)]
     struct Ref {

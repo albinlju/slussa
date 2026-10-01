@@ -1,26 +1,30 @@
 use super::{
-    DetailContext, DetailView, PrDetailScreen,
+    DetailContext, DetailView, Overlay, PrDetailScreen,
     dialogs::{
         confirm::{ConfirmDialog, ConfirmKind},
-        review::ReviewDialog,
+        merge::MergeDialog,
+        review::{ReviewContext, ReviewDialog},
     },
 };
 use crate::{
     app::{
-        action::{Action, Command, DetailAction},
-        navigation::Screen,
+        action::{Command, ConfirmAction, Effect, MergeAction, PrAction, ReviewAction},
         reviews::CommentTarget,
     },
-    tui::components::comment_editor::{CommentDraft, CommentEditor},
+    domain::pr::PrId,
+    tui::{
+        component::Component,
+        components::comment_editor::{CommentDraft, CommentEditor},
+    },
 };
 
 impl PrDetailScreen {
     /// Keep navigation and unfinished editors scoped to their PR for this session.
-    pub fn open(&mut self, pr_id: u64) {
+    pub fn open(&mut self, pr_id: PrId) {
         if let Some(previous) = self.pr_id {
             self.navigation.insert(
                 previous,
-                super::DetailNavigation {
+                super::screen::DetailNavigation {
                     overview: std::mem::take(&mut self.overview),
                     builds: std::mem::take(&mut self.builds),
                     description: std::mem::take(&mut self.description),
@@ -35,6 +39,10 @@ impl PrDetailScreen {
         let editors = std::mem::take(&mut self.editors);
         let mut navigation = std::mem::take(&mut self.navigation);
         let position = navigation.remove(&pr_id).unwrap_or_default();
+        let mut editors = editors;
+        let editor = editors.remove(&pr_id).unwrap_or_default();
+        // Every field is named: one added later has to say what opening a PR
+        // does to it, instead of being reset by a `..Self::default()`.
         *self = Self {
             pr_id: Some(pr_id),
             editors,
@@ -45,215 +53,265 @@ impl PrDetailScreen {
             description: position.description,
             diff: position.diff,
             commits: position.commits,
-            ..Self::default()
+            editor,
+            overlay: None,
+            error: super::dialogs::error::ErrorDialog::default(),
         };
-        self.editor = self.editors.remove(&pr_id).unwrap_or_default();
     }
 
     /// An acknowledgement affects only the editor that submitted the payload.
-    pub fn submission_finished(&mut self, pr_id: u64, success: bool) {
+    pub fn submission_finished(&mut self, pr_id: PrId, success: bool) {
         let editor = if self.pr_id == Some(pr_id) {
             Some(&mut self.editor)
         } else {
             self.editors.get_mut(&pr_id)
         };
         if success && let Some(editor) = editor {
-            editor.draft = None;
+            editor.clear();
         }
     }
 
-    const fn view<'a>(&'a self, ctx: &'a DetailContext<'a>) -> DetailView<'a> {
-        DetailView {
-            detail: self,
-            store: ctx.store,
-            screen: ctx.screen,
-            refreshing: ctx.refreshing,
-        }
+    pub(super) const fn view<'a>(&'a self, ctx: &DetailContext<'a>) -> DetailView<'a> {
+        DetailView::new(self, ctx)
     }
 
     fn open_draft(&mut self, target: Option<CommentTarget>) {
-        if self.editor.draft.is_some() {
-            self.editor.resuming = true;
-            self.editor.suspended = false;
+        if self.editor.resume() {
             return;
         }
         if let Some(target) = target {
-            self.editor = CommentEditor {
-                draft: Some(CommentDraft {
-                    target,
-                    text: String::new(),
-                }),
-                ..CommentEditor::default()
-            };
+            self.editor = CommentEditor::start(target, String::new());
         }
     }
 
-    #[expect(
-        clippy::unreachable,
-        reason = "a component consumed these; the `Action` split removes the arm (ROADMAP)"
-    )]
-    pub(super) fn interaction(
-        &mut self,
-        action: DetailAction,
-        ctx: &DetailContext<'_>,
-    ) -> Option<Action> {
-        let Screen::Detail { pr_id, .. } = ctx.screen else {
-            return None;
-        };
-        let command = match action {
-            DetailAction::OpenReviewPicker => {
-                self.review_picker = Some(ReviewDialog::new(&self.view(ctx).review_context()));
-                return None;
-            }
-            DetailAction::FinishReview => {
-                if ctx.store.reviews.contains_key(&pr_id) {
-                    self.review_picker = Some(ReviewDialog::new(&self.view(ctx).review_context()));
+    fn ask(&mut self, dialog: ConfirmDialog) {
+        self.overlay = Some(Overlay::Confirm(dialog));
+    }
+
+    /// Close the dialog if it is the one the message came from.
+    fn close(&mut self, is_this: impl FnOnce(&Overlay) -> bool) {
+        if self.overlay.as_ref().is_some_and(is_this) {
+            self.overlay = None;
+        }
+    }
+
+    const fn command(pr_id: PrId, command: Command) -> Effect {
+        Effect::Command { pr_id, command }
+    }
+
+    pub(super) fn dismiss_error(&mut self, pr_id: PrId) -> Effect {
+        self.error = super::dialogs::error::ErrorDialog::default();
+        Effect::DismissError { pr_id }
+    }
+
+    pub(super) fn confirm_action(&mut self, action: ConfirmAction, pr_id: PrId) -> Option<Effect> {
+        match action {
+            ConfirmAction::Move(_) => {
+                if let Some(Overlay::Confirm(dialog)) = &mut self.overlay {
+                    dialog.update(action, &());
                 }
-                return None;
+                None
             }
-            DetailAction::ReviewSelect => {
+            ConfirmAction::Close => {
+                self.close(|overlay| matches!(overlay, Overlay::Confirm(_)));
+                None
+            }
+            ConfirmAction::Accept => {
+                let accepted = self.confirm()?.accepted();
+                self.overlay = None;
+                let command = match accepted? {
+                    ConfirmKind::Decline => Command::Decline,
+                    ConfirmKind::Reopen => Command::Reopen,
+                    ConfirmKind::DiscardReview => Command::AbandonReview,
+                    ConfirmKind::DeleteComment(comment) => Command::DeleteComment(comment),
+                };
+                Some(Self::command(pr_id, command))
+            }
+        }
+    }
+
+    pub(super) fn review_action(
+        &mut self,
+        action: ReviewAction,
+        pr_id: PrId,
+        ctx: &DetailContext<'_>,
+    ) -> Option<Effect> {
+        match action {
+            ReviewAction::Move(_) | ReviewAction::Preview => {
+                let review_ctx = ReviewContext {
+                    options: self.view(ctx).review_context().options,
+                    pending: ctx.store.reviews.get(&pr_id),
+                };
+                if let Some(Overlay::Review(dialog)) = &mut self.overlay {
+                    dialog.update(action, &review_ctx);
+                }
+                None
+            }
+            ReviewAction::Close => {
+                self.close(|overlay| matches!(overlay, Overlay::Review(_)));
+                None
+            }
+            ReviewAction::Select => {
                 let verdict = self
-                    .review_picker
-                    .as_ref()?
+                    .review_picker()?
                     .selected(&self.view(ctx).review_context())?;
-                self.review_picker = None;
+                self.overlay = None;
                 if verdict.needs_body() {
                     self.open_draft(Some(CommentTarget::Review { verdict }));
                     return None;
                 }
-                Command::SubmitReview {
-                    verdict,
-                    body: String::new(),
-                }
+                Some(Self::command(
+                    pr_id,
+                    Command::SubmitReview {
+                        verdict,
+                        body: String::new(),
+                    },
+                ))
             }
-            DetailAction::StartReview => Command::StartReview,
-            DetailAction::AbandonReview => {
+        }
+    }
+
+    pub(super) fn merge_action(
+        &mut self,
+        action: MergeAction,
+        pr_id: PrId,
+        ctx: &DetailContext<'_>,
+    ) -> Option<Effect> {
+        let strategies = ctx.store.capabilities.merge_strategies.as_slice();
+        match action {
+            MergeAction::Move(_) => {
+                if let Some(Overlay::Merge(dialog)) = &mut self.overlay {
+                    dialog.update(action, &strategies);
+                }
+                None
+            }
+            MergeAction::Close => {
+                self.close(|overlay| matches!(overlay, Overlay::Merge(_)));
+                None
+            }
+            MergeAction::Select => {
+                let strategy = self.merge_picker()?.selected(strategies);
+                self.overlay = None;
+                let strategy = strategy?;
+                Some(Self::command(pr_id, Command::Merge(strategy)))
+            }
+        }
+    }
+
+    pub(super) fn submit_editor(&self, pr_id: PrId) -> Option<Effect> {
+        let CommentDraft { target, text } = self.editor.draft()?;
+        // A blank draft is not a comment: Ctrl+S does nothing until it has text.
+        let text = crate::domain::comment::NonBlank::new(text)?;
+        Some(Self::command(
+            pr_id,
+            Command::SubmitComment { target, text },
+        ))
+    }
+
+    pub(super) fn pr_action(
+        &mut self,
+        action: PrAction,
+        pr_id: PrId,
+        ctx: &DetailContext<'_>,
+    ) -> Option<Effect> {
+        let command = match action {
+            PrAction::OpenReviewPicker => {
+                let dialog = ReviewDialog::new(&self.view(ctx).review_context());
+                self.overlay = Some(Overlay::Review(dialog));
+                return None;
+            }
+            PrAction::FinishReview => {
+                if ctx.store.reviews.contains_key(&pr_id) {
+                    let dialog = ReviewDialog::new(&self.view(ctx).review_context());
+                    self.overlay = Some(Overlay::Review(dialog));
+                }
+                return None;
+            }
+            PrAction::StartReview => Command::StartReview,
+            PrAction::AbandonReview => {
                 if ctx
                     .store
                     .reviews
                     .get(&pr_id)
                     .is_some_and(|review| !review.comments.is_empty())
                 {
-                    self.confirm = Some(ConfirmDialog::new(ConfirmKind::DiscardReview));
+                    self.ask(ConfirmDialog::new(ConfirmKind::DiscardReview));
                     return None;
                 }
                 Command::AbandonReview
             }
-            DetailAction::RemovePendingComment => {
-                Command::RemovePendingComment(self.active_diff_view().pane_pending?)
+            PrAction::RemovePendingComment => Command::RemovePendingComment(
+                self.surface(ctx.tab).diff_viewer()?.focused_pending()?,
+            ),
+            PrAction::OpenMergePicker => {
+                if !ctx.store.capabilities.merge_strategies.is_empty() {
+                    self.overlay = Some(Overlay::Merge(MergeDialog::default()));
+                }
+                return None;
             }
-            DetailAction::OpenComment => {
+            PrAction::OpenDecline => {
+                self.ask(ConfirmDialog::new(ConfirmKind::Decline));
+                return None;
+            }
+            PrAction::OpenReopen => {
+                self.ask(ConfirmDialog::new(ConfirmKind::Reopen));
+                return None;
+            }
+            PrAction::OpenComment => {
                 self.open_draft(self.view(ctx).comment_target());
                 return None;
             }
-            DetailAction::OpenReply => {
+            PrAction::OpenReply => {
                 self.open_draft(self.view(ctx).reply_target());
                 return None;
             }
-            DetailAction::EditComment => {
+            PrAction::EditComment => {
                 let view = self.view(ctx);
-                let selected = view.editable_selected()?;
-                let id = selected.id?;
-                let text = view.find_comment(id, selected.review)?.content.clone();
-                if self.editor.draft.is_some() {
-                    self.editor.resuming = true;
-                    self.editor.suspended = false;
-                    return None;
+                let comment = view.editable_selected()?;
+                let text = view.find_comment(comment)?.content.clone();
+                if !self.editor.resume() {
+                    self.editor = CommentEditor::start(CommentTarget::Edit(comment), text);
                 }
-                self.editor = CommentEditor::default();
-                self.editor.draft = Some(CommentDraft {
-                    target: CommentTarget::Edit {
-                        id,
-                        review: selected.review,
-                    },
-                    text,
-                });
                 return None;
             }
-            DetailAction::DeleteComment => {
-                let selected = self.view(ctx).editable_selected()?;
-                let comment = self.view(ctx).find_comment(selected.id?, selected.review)?;
+            PrAction::DeleteComment => {
+                let key = self.view(ctx).editable_selected()?;
+                let comment = self.view(ctx).find_comment(key)?;
                 let preview = format!("@{}: {}", comment.author.username, comment.content);
-                self.confirm = Some(
-                    ConfirmDialog::new(ConfirmKind::DeleteComment {
-                        id: selected.id?,
-                        review: selected.review,
-                    })
-                    .with_context(preview),
-                );
+                self.ask(ConfirmDialog::new(ConfirmKind::DeleteComment(key)).with_preview(preview));
                 return None;
             }
-            DetailAction::ResolveThread => {
+            PrAction::ResolveThread => {
                 let thread = self.view(ctx).focused_thread()?;
-                if thread.node_id.is_none() && thread.comment_id.is_none() {
-                    return None;
-                }
                 Command::ResolveThread {
-                    node_id: thread.node_id.clone(),
-                    comment_id: thread.comment_id,
+                    thread: thread.handle.clone()?,
                     resolved: !thread.resolved,
                 }
             }
-            DetailAction::MergeSelect => Command::Merge(
-                self.merge_picker
-                    .take()?
-                    .selected(&ctx.store.capabilities.merge_strategies)?,
-            ),
-            DetailAction::SubmitConfirm => match self.confirm.take()?.accepted()? {
-                ConfirmKind::Decline => Command::Decline,
-                ConfirmKind::Reopen => Command::Reopen,
-                ConfirmKind::DiscardReview => Command::AbandonReview,
-                ConfirmKind::DeleteComment { id, review } => Command::DeleteComment { id, review },
-            },
-            DetailAction::CommentSubmit => {
-                let draft = self.editor.draft.as_ref()?;
-                if draft.text.trim().is_empty() {
-                    return None;
-                }
-                Command::SubmitComment {
-                    target: draft.target.clone(),
-                    text: draft.text.clone(),
-                }
-            }
-            DetailAction::DismissError => {
-                self.error = super::dialogs::error::ErrorDialog::default();
-                Command::DismissError
-            }
-            _ => unreachable!("local interaction handled by screen"),
         };
-        Some(Action::Command { pr_id, command })
+        Some(Self::command(pr_id, command))
     }
 }
 
 impl PrDetailScreen {
-    pub fn draft_snapshot(&self) -> std::collections::BTreeMap<u64, CommentDraft> {
+    pub fn draft_snapshot(&self) -> std::collections::BTreeMap<PrId, CommentDraft> {
         let mut drafts: std::collections::BTreeMap<_, _> = self
             .editors
             .iter()
-            .filter_map(|(id, editor)| editor.draft.clone().map(|draft| (*id, draft)))
+            .filter_map(|(id, editor)| editor.draft().map(|draft| (*id, draft)))
             .collect();
         if let Some(id) = self.pr_id {
             drafts.remove(&id);
-            if let Some(draft) = &self.editor.draft {
-                drafts.insert(id, draft.clone());
+            if let Some(draft) = self.editor.draft() {
+                drafts.insert(id, draft);
             }
         }
         drafts
     }
-    pub fn restore_drafts(&mut self, drafts: std::collections::BTreeMap<u64, CommentDraft>) {
+    pub fn restore_drafts(&mut self, drafts: std::collections::BTreeMap<PrId, CommentDraft>) {
         self.editors = drafts
             .into_iter()
-            .map(|(id, draft)| {
-                (
-                    id,
-                    CommentEditor {
-                        draft: Some(draft),
-                        suspended: true,
-                        resuming: true,
-                        ..CommentEditor::default()
-                    },
-                )
-            })
+            .map(|(id, draft)| (id, CommentEditor::restored(draft)))
             .collect();
     }
 }

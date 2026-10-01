@@ -3,7 +3,7 @@ use crate::{
     app::{reviews::PendingComment, store::LoadState},
     domain::{
         comment::CommentThread,
-        diff::{Diff, DiffLine, FileDiff},
+        diff::{Diff, DiffLine, FileDiff, LineRef},
     },
     tui::{layout, widgets},
 };
@@ -22,7 +22,8 @@ pub(super) fn render(
     author: &str,
     area: Rect,
 ) {
-    ui_diff.clear_targets();
+    // Until a pane is drawn below, there is nothing in it to act on.
+    ui_diff.pane = super::PaneNav::default();
     let Some(diff) = widgets::loaded_or_placeholder(frame, diff_state, "diff", area) else {
         return;
     };
@@ -121,8 +122,9 @@ fn file_comment_count(
     }
     on_file()
         .filter(|(_, a)| match a.line {
-            Some(l) => new_lines.contains(&l),
-            None => a.old_line.is_some_and(|o| old_lines.contains(&o)),
+            Some(LineRef::New(line)) => new_lines.contains(&line),
+            Some(LineRef::Old(line)) => old_lines.contains(&line),
+            None => false,
         })
         .map(|(t, _)| t.comments.len())
         .sum()

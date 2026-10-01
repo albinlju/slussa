@@ -18,12 +18,22 @@ for AI-generated PRs: triage, check intent, approve or merge.
   Return an error, or restructure so the case cannot occur. An exception is an
   `#[expect(lint, reason = "...")]`, never an `#[allow]`: an `expect` that is
   no longer needed is reported, an `allow` lingers.
+- **Types before runtime checks.** A state that should not exist is made
+  impossible to write, not guarded where it is used. Reach for, in this order:
+  an enum with the data in the variant it belongs to, instead of a struct with
+  a flag and optional fields; a newtype with one constructor, for a value with
+  a rule (`Username`, `NonBlank`, `WebUrl`); a ticket or a constructor that
+  requires its data, instead of a call order to remember (`FetchTicket`,
+  `WriteTicket`, `Session`). A `match` on one of our own enums names every
+  variant; `_ =>` is for foreign enums such as `KeyCode` and for strings from a
+  server. Clippy refuses the catch-all in `app`, `domain` and `providers`.
+  ARCHITECTURE.md (*Types that carry the rules*) lists what exists.
 - **Modules stay under about 500 lines.** `mod.rs` composes and does not
   implement. Tests live inline, or in exactly one sibling `tests.rs`; suites that drive several modules through the doubles in `src/test_support.rs` are named `*_tests.rs`. A test
   suite that outgrows the limit becomes a directory with a file per concern and
-  a `support.rs` for what they share (`src/app/tests/`). A few
-  files already exceed the limit (`widgets/comment.rs`, `diff_viewer/pane.rs`,
-  `pr_list/mod.rs` and `timeline.rs`); split one when
+  a `support.rs` for what they share (`src/app/tests/`). Two
+  files already exceed the limit (`widgets/comment.rs` and
+  `diff_viewer/pane.rs`); split one when
   you next change it substantially, and do not make them bigger.
 - **Show only what the provider supports.** Hide unsupported actions; keep
   actions blocked by PR state visible with a reason.
@@ -62,4 +72,9 @@ library API than `rust-version` allows.
   `FakeGh` holds a process-wide lock, so never install two in one test without
   dropping the first. Say in the PR when a double stands in for real behaviour
   you could not check.
+- The draft file must stay readable. The types in `src/app/reviews.rs`, with
+  `CommentAnchor` and `DiffRevision`, are written to it, and a file that cannot
+  be parsed stops slussa from starting. Change how they are spelled on disk
+  only with a new file version; the version 1 fixture in `src/app/drafts.rs`
+  fails otherwise.
 - Commit and push only when asked.

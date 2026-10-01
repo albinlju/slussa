@@ -1,6 +1,10 @@
 use serde::Deserialize;
 
-use crate::domain::comment::{CommentThread, ThreadAnchor};
+use crate::domain::{
+    comment::{CommentId, CommentThread, ThreadAnchor, ThreadHandle},
+    diff::LineRef,
+    pr::PrId,
+};
 use crate::providers::error::FetchError;
 use crate::providers::github::{COMMENT_FIELDS, GqlComment, map_gql_comment};
 
@@ -55,7 +59,7 @@ const THREAD_FIELDS: &str = r"
     }
 ";
 
-pub fn fetch_review_threads(pr_number: u64) -> Result<Vec<CommentThread>, FetchError> {
+pub fn fetch_review_threads(pr_number: PrId) -> Result<Vec<CommentThread>, FetchError> {
     let fields = format!("{COMMENT_FIELDS} commit {{ oid }} originalCommit {{ oid }}");
     // Keep the nested page modest: a PR page can contain 100 review threads.
     let nodes: Vec<GqlThread> = super::pagination::pr_nodes(
@@ -97,13 +101,18 @@ fn complete_threads(
 }
 
 fn map_thread(t: GqlThread) -> CommentThread {
-    let pos = t.line.or(t.original_line);
-    let (line, old_line) = if t.diff_side == "LEFT" {
-        (None, pos)
+    let side = if t.diff_side == "LEFT" {
+        LineRef::Old
     } else {
-        (pos, None)
+        LineRef::New
     };
-    let reply_to = t.comments.nodes.first().and_then(|c| c.database_id);
+    let line = t.line.or(t.original_line).map(side);
+    let reply_to = t
+        .comments
+        .nodes
+        .first()
+        .and_then(|c| c.database_id)
+        .map(CommentId);
     let revision = t
         .comments
         .nodes
@@ -124,9 +133,8 @@ fn map_thread(t: GqlThread) -> CommentThread {
             revision,
             path: t.path,
             line,
-            old_line,
             resolved: t.is_resolved,
-            node_id: (!t.id.is_empty()).then_some(t.id),
+            handle: (!t.id.is_empty()).then_some(ThreadHandle::NodeId(t.id)),
         }),
     }
 }
@@ -162,9 +170,14 @@ mod tests {
         assert_eq!(threads[0].comments.len(), 1);
         assert_eq!(
             threads[1].comments.iter().map(|c| c.id).collect::<Vec<_>>(),
-            vec![Some(1), Some(2)]
+            vec![Some(CommentId(1)), Some(CommentId(2))]
         );
-        assert_eq!(threads[1].reply_to, Some(1));
+        assert_eq!(threads[1].reply_to, Some(CommentId(1)));
+        // Resolved through the thread's own id, not a comment's.
+        assert_eq!(
+            threads[1].anchor.as_ref().unwrap().handle,
+            Some(ThreadHandle::NodeId("long".into()))
+        );
     }
 
     #[test]
@@ -240,8 +253,8 @@ mod tests {
         let t = &threads[0];
         let anchor = t.anchor.as_ref().unwrap();
         assert!(anchor.resolved);
-        assert_eq!((anchor.line, anchor.old_line), (None, Some(7)));
-        assert_eq!(t.reply_to, Some(555));
+        assert_eq!(anchor.line, Some(LineRef::Old(7)));
+        assert_eq!(t.reply_to, Some(CommentId(555)));
 
         let reactions = &t.comments[0].reactions;
         assert_eq!(reactions.len(), 2);

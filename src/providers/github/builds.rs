@@ -1,5 +1,6 @@
 use crate::{
     domain::ci::{Build, BuildState},
+    domain::pr::PrId,
     providers::FetchError,
 };
 use chrono::{DateTime, Utc};
@@ -19,7 +20,7 @@ struct Status {
     state: String,
 }
 
-pub fn fetch_builds(pr_number: u64) -> Result<Vec<Build>, FetchError> {
+pub fn fetch_builds(pr_number: PrId) -> Result<Vec<Build>, FetchError> {
     let head = super::comments::head_sha(pr_number)?;
     let checks: Vec<Check> = pages(
         &format!("repos/{{owner}}/{{repo}}/commits/{head}/check-runs?per_page=100"),
@@ -57,10 +58,10 @@ fn pages<T: serde::de::DeserializeOwned>(path: &str, field: &str) -> Result<Vec<
         let list = page
             .get_mut(field)
             .map(serde_json::Value::take)
-            .ok_or_else(|| FetchError::ParseFailed(format!("Missing {field}")))?;
+            .ok_or_else(|| FetchError::ParseFailed(format!("Missing {field}").into()))?;
         items.extend(
             serde_json::from_value::<Vec<T>>(list)
-                .map_err(|e| FetchError::ParseFailed(e.to_string()))?,
+                .map_err(|e| FetchError::ParseFailed(e.into()))?,
         );
     }
     Ok(items)

@@ -1,13 +1,20 @@
 use crate::{
     app::{
-        action::{Action, DetailAction},
+        action::{Action, DetailAction, NavAction, PrAction},
         navigation::Screen,
         state::AppState,
         store::LoadState,
     },
-    domain::{capabilities::Feature, pr::PrStatus},
+    domain::{
+        capabilities::Feature,
+        comment::CommentId,
+        pr::{PrId, PrStatus},
+    },
     tui::{
-        components::diff_viewer::DiffFocus, key_to_action, regression_tests::fixture, render,
+        components::diff_viewer::{DiffFocus, FocusedNav, NavTarget},
+        key_to_action,
+        regression_tests::fixture,
+        render,
         screens::pr_detail::tabs::DetailTab,
     },
 };
@@ -21,7 +28,7 @@ use ratatui::{
 fn overview_of(status: PrStatus) -> AppState {
     let mut state = fixture();
     state.screen = Screen::Detail {
-        pr_id: 42,
+        pr_id: PrId(42),
         tab: DetailTab::Overview,
     };
     let LoadState::Loaded(prs) = &mut state.store.cache.prs else {
@@ -56,14 +63,14 @@ fn x_declines_an_open_pr_and_reopens_a_declined_one() {
         assert!(
             matches!(
                 x(&overview_of(status)),
-                Some(Action::Detail(DetailAction::OpenDecline))
+                Some(Action::Detail(DetailAction::Pr(PrAction::OpenDecline)))
             ),
             "an open PR is declined"
         );
     }
     assert!(matches!(
         x(&overview_of(PrStatus::Declined)),
-        Some(Action::Detail(DetailAction::OpenReopen))
+        Some(Action::Detail(DetailAction::Pr(PrAction::OpenReopen)))
     ));
     assert!(
         x(&overview_of(PrStatus::Merged)).is_none(),
@@ -79,7 +86,10 @@ fn x_does_not_reopen_where_the_provider_cannot() {
 }
 
 fn on_tab(mut state: AppState, tab: DetailTab) -> AppState {
-    state.screen = Screen::Detail { pr_id: 42, tab };
+    state.screen = Screen::Detail {
+        pr_id: PrId(42),
+        tab,
+    };
     state
 }
 
@@ -92,20 +102,20 @@ fn the_pr_level_actions_work_from_the_description_too() {
     let state = on_tab(overview_of(PrStatus::Open), DetailTab::Description);
     assert!(matches!(
         key(&state, 'x'),
-        Some(Action::Detail(DetailAction::OpenDecline))
+        Some(Action::Detail(DetailAction::Pr(PrAction::OpenDecline)))
     ));
     assert!(matches!(
         key(&state, 'a'),
-        Some(Action::Detail(DetailAction::OpenReviewPicker))
+        Some(Action::Detail(DetailAction::Pr(PrAction::OpenReviewPicker)))
     ));
     assert!(matches!(
         key(&state, 'v'),
-        Some(Action::Detail(DetailAction::StartReview))
+        Some(Action::Detail(DetailAction::Pr(PrAction::StartReview)))
     ));
     let declined = on_tab(overview_of(PrStatus::Declined), DetailTab::Description);
     assert!(matches!(
         key(&declined, 'x'),
-        Some(Action::Detail(DetailAction::OpenReopen))
+        Some(Action::Detail(DetailAction::Pr(PrAction::OpenReopen)))
     ));
 }
 
@@ -134,14 +144,14 @@ fn h_and_l_change_tab_on_every_tab_including_the_diff_panes() {
             assert!(
                 matches!(
                     key(&state, 'l'),
-                    Some(Action::Detail(DetailAction::NextTab))
+                    Some(Action::Detail(DetailAction::Nav(NavAction::NextTab)))
                 ),
                 "l on {tab:?} with {focus:?} focus"
             );
             assert!(
                 matches!(
                     key(&state, 'h'),
-                    Some(Action::Detail(DetailAction::PrevTab))
+                    Some(Action::Detail(DetailAction::Nav(NavAction::PrevTab)))
                 ),
                 "h on {tab:?} with {focus:?} focus"
             );
@@ -177,4 +187,96 @@ fn the_footer_offers_reopen_only_for_a_declined_pr() {
         .remove(&Feature::ReopenPr);
     let text = footer_of(&mut unsupported);
     assert!(!text.contains("x: reopen"), "{text}");
+}
+
+#[test]
+fn a_pr_that_is_not_in_the_list_gives_no_context_and_only_the_way_out() {
+    use crate::{app::action::Effect, tui::screens::pr_detail::DetailContext};
+    let mut state = overview_of(PrStatus::Open);
+    assert!(DetailContext::new(&state.store, PrId(42), DetailTab::Overview).is_some());
+
+    state.screen = Screen::Detail {
+        pr_id: PrId(7),
+        tab: DetailTab::Overview,
+    };
+    assert!(DetailContext::new(&state.store, PrId(7), DetailTab::Overview).is_none());
+    let key = |code| key_to_action(&state, KeyEvent::new(code, KeyModifiers::NONE));
+    assert!(matches!(
+        key(KeyCode::Char('q')),
+        Some(Action::Effect(Effect::Quit))
+    ));
+    assert!(matches!(
+        key(KeyCode::Esc),
+        Some(Action::Effect(Effect::Navigate(Screen::List)))
+    ));
+    assert!(key(KeyCode::Char('m')).is_none());
+    assert!(key(KeyCode::Char('c')).is_none());
+    // A message that still arrives has no PR to act on.
+    let effect = state.ui.update(
+        Action::Detail(DetailAction::Pr(PrAction::OpenComment)),
+        &state.store,
+        state.screen,
+    );
+    assert!(effect.is_none());
+    assert!(!state.ui.detail.editor.has_draft());
+}
+
+/// The Commits list, reached after the Diff tab was left with its pane on
+/// `focused`, and with a review in progress.
+fn commit_list_after_the_diff_pane(focused: FocusedNav) -> AppState {
+    let mut state = overview_of(PrStatus::Open);
+    state.ui.detail.diff.focus = DiffFocus::Pane;
+    state.ui.detail.diff.pane.focused = Some(focused);
+    state.store.reviews.entry(PrId(42)).or_default();
+    state.screen = Screen::Detail {
+        pr_id: PrId(42),
+        tab: DetailTab::Commits,
+    };
+    state
+}
+
+#[test]
+fn the_commit_list_does_not_reply_to_the_thread_the_diff_tab_left_focused() {
+    let state = commit_list_after_the_diff_pane(FocusedNav::on_thread(CommentId(7)));
+    let r = key_to_action(
+        &state,
+        KeyEvent::new(KeyCode::Char('r'), KeyModifiers::NONE),
+    );
+    assert!(r.is_none(), "{r:?}");
+    let c = key_to_action(
+        &state,
+        KeyEvent::new(KeyCode::Char('c'), KeyModifiers::NONE),
+    );
+    assert!(c.is_none(), "{c:?}");
+}
+
+#[test]
+fn the_commit_list_footer_offers_only_keys_that_work_there() {
+    let mut state = commit_list_after_the_diff_pane(FocusedNav::on_thread(CommentId(7)));
+    let footer = footer_of(&mut state);
+    assert!(footer.contains("v: finish draft"), "{footer}");
+    assert!(!footer.contains("r: reply"), "{footer}");
+    let mut state = commit_list_after_the_diff_pane(FocusedNav::on(NavTarget::Pending(0)));
+    let footer = footer_of(&mut state);
+    assert!(footer.contains("v: finish draft"), "{footer}");
+    assert!(!footer.contains("d: remove pending"), "{footer}");
+
+    // On the diff itself the queued comment can be removed, as before.
+    state.screen = Screen::Detail {
+        pr_id: PrId(42),
+        tab: DetailTab::Diff,
+    };
+    let d = key_to_action(
+        &state,
+        KeyEvent::new(KeyCode::Char('d'), KeyModifiers::NONE),
+    );
+    assert!(
+        matches!(
+            d,
+            Some(Action::Detail(DetailAction::Pr(
+                PrAction::RemovePendingComment
+            )))
+        ),
+        "{d:?}"
+    );
 }

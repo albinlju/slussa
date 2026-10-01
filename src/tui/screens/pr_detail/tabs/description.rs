@@ -1,6 +1,6 @@
 use crate::{
     app::{
-        action::{Action, DetailAction},
+        action::{Action, DescriptionAction, Effect},
         store::LoadState,
     },
     domain::pr::{PrInfo, PullRequest},
@@ -17,7 +17,7 @@ use ratatui::{
 
 /// `info` holds the description for a provider whose list leaves it out. Until
 /// it arrives there is nothing to show but that it is loading.
-pub fn render(
+fn render(
     frame: &mut Frame<'_>,
     pr: &PullRequest,
     info: Option<&LoadState<PrInfo>>,
@@ -33,10 +33,11 @@ pub fn render(
             );
             return;
         }
-        Some(LoadState::Failed(message)) if pr.description.is_none() => {
+        Some(LoadState::Failed(error)) if pr.description.is_none() => {
             frame.render_widget(
                 ratatui::widgets::Paragraph::new(format!(
-                    "Couldn't load the description. F: retry\n{message}"
+                    "Couldn't load the description. F: retry\n{}",
+                    error.user_message()
                 ))
                 .style(ratatui::style::Style::default().fg(crate::tui::theme::current().error)),
                 area,
@@ -93,18 +94,25 @@ pub struct Description {
     pub max_horizontal: u16,
 }
 
+/// The PR whose description to show, and what was read for it when the list
+/// left the description out.
+pub struct DescriptionView<'a> {
+    pub pr: &'a PullRequest,
+    pub info: Option<&'a LoadState<PrInfo>>,
+}
+
 impl Component for Description {
-    type Context<'a> = &'a PullRequest;
-    type Message = DetailAction;
-    fn handle_key(&self, key: KeyEvent, _: &Self::Context<'_>) -> Option<Action> {
+    type Input<'a> = ();
+    type View<'a> = DescriptionView<'a>;
+    type Message = DescriptionAction;
+    fn handle_key(&self, key: KeyEvent, (): &()) -> Option<Action> {
         if matches!(key.code, KeyCode::Char('H' | 'L')) && self.max_horizontal > 0 {
-            return Some(Action::Detail(DetailAction::DescriptionHorizontal(
-                if key.code == KeyCode::Char('H') {
-                    -8
-                } else {
-                    8
-                },
-            )));
+            let delta = if key.code == KeyCode::Char('H') {
+                -8
+            } else {
+                8
+            };
+            return Some(DescriptionAction::Horizontal(delta).into());
         }
         let delta = match key.code {
             KeyCode::Char('j') | KeyCode::Down => 1,
@@ -113,19 +121,18 @@ impl Component for Description {
             KeyCode::PageUp => -crate::tui::screens::half_page(self.viewport),
             _ => return None,
         };
-        Some(Action::Detail(DetailAction::DescriptionScroll(delta)))
+        Some(DescriptionAction::Scroll(delta).into())
     }
-    fn update(&mut self, action: DetailAction, _: &Self::Context<'_>) -> Option<Action> {
+    fn update(&mut self, action: DescriptionAction, (): &()) -> Option<Effect> {
         match action {
-            DetailAction::DescriptionScroll(delta) => self.scroll = scroll(self.scroll, delta),
-            DetailAction::DescriptionHorizontal(delta) => {
+            DescriptionAction::Scroll(delta) => self.scroll = scroll(self.scroll, delta),
+            DescriptionAction::Horizontal(delta) => {
                 self.horizontal = scroll(self.horizontal, delta).min(self.max_horizontal);
             }
-            _ => {}
         }
         None
     }
-    fn render(&mut self, frame: &mut Frame<'_>, area: Rect, pr: &&PullRequest) {
-        render(frame, pr, None, self, area);
+    fn render(&mut self, frame: &mut Frame<'_>, area: Rect, view: &DescriptionView<'_>) {
+        render(frame, view.pr, view.info, self, area);
     }
 }

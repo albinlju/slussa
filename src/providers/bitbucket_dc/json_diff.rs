@@ -2,6 +2,7 @@ use serde::Deserialize;
 
 use super::Config;
 use crate::domain::diff::{Diff, DiffLine, FileDiff, Hunk};
+use crate::domain::pr::PrId;
 use crate::providers::bitbucket_dc::http::get_json;
 use crate::providers::error::FetchError;
 
@@ -58,7 +59,7 @@ struct BbLine {
     line: String,
 }
 
-pub(super) fn fetch(config: &Config, pr_id: u64) -> Result<Diff, FetchError> {
+pub(super) fn fetch(config: &Config, pr_id: PrId) -> Result<Diff, FetchError> {
     let path = format!(
         "/rest/api/1.0/projects/{}/repos/{}/pull-requests/{pr_id}/diff",
         config.repo.project_key, config.repo.repo_slug
@@ -81,7 +82,7 @@ pub(super) fn fetch_commit(config: &Config, oid: &str) -> Result<Diff, FetchErro
 fn fetch_path(config: &Config, path: &str) -> Result<Diff, FetchError> {
     let response: BbDiffResponse = get_json(&config.repo.base_url, path, &config.pat)?;
     if response.truncated {
-        return Err(FetchError::InvalidInput(
+        return Err(FetchError::Truncated(
             "The server truncated this diff. Open it in Bitbucket to review the full change."
                 .into(),
         ));

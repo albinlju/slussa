@@ -4,6 +4,8 @@ use std::time::Duration;
 use reqwest::blocking::Client;
 use serde::de::DeserializeOwned;
 
+use super::auth::Pat;
+use crate::domain::user::Username;
 use crate::providers::error::FetchError;
 
 pub(super) fn build_client(timeout: Duration) -> reqwest::Result<Client> {
@@ -19,17 +21,13 @@ fn client() -> Result<&'static Client, FetchError> {
         return Ok(client);
     }
     let built = build_client(Duration::from_secs(20))
-        .map_err(|e| FetchError::Network(format!("http client build failed: {e}")))?;
+        .map_err(|e| FetchError::Network(format!("http client build failed: {e}").into()))?;
     Ok(CLIENT.get_or_init(|| built))
 }
 
-#[expect(
-    clippy::needless_pass_by_value,
-    reason = "passed as `.map_err(net_err)`, which hands the error over by value"
-)]
 fn net_err(e: reqwest::Error) -> FetchError {
     tracing::warn!("http send failed: {e}");
-    FetchError::Network(e.to_string())
+    FetchError::Network(e.into())
 }
 
 /// Maps a rejected token (401) to `NotAuthenticated` and any other non-2xx to
@@ -65,30 +63,34 @@ fn check_status(
 pub(super) fn get_json<T: DeserializeOwned>(
     base_url: &str,
     path: &str,
-    pat: &str,
+    pat: &Pat,
 ) -> Result<T, FetchError> {
     let url = format!("{base_url}{path}");
     tracing::debug!("GET {url}");
     let response = client()?
         .get(&url)
-        .bearer_auth(pat)
+        .bearer_auth(pat.expose())
         .header("Accept", "application/json")
         .send()
         .map_err(net_err)?;
     let response = check_status(response, base_url, &url)?;
     response.json::<T>().map_err(|e| {
         tracing::warn!("json parse failed on {url}: {e}");
-        FetchError::ParseFailed(e.to_string())
+        FetchError::ParseFailed(e.into())
     })
 }
 
-pub(super) fn current_user(base_url: &str, path: &str, pat: &str) -> Result<String, FetchError> {
+pub(super) fn current_user(base_url: &str, path: &str, pat: &Pat) -> Result<Username, FetchError> {
     let url = format!("{base_url}{path}");
     tracing::debug!("GET {url} (whoami)");
-    let response = client()?.get(&url).bearer_auth(pat).send().map_err(|e| {
-        tracing::warn!("http send failed: {e}");
-        FetchError::Network(e.to_string())
-    })?;
+    let response = client()?
+        .get(&url)
+        .bearer_auth(pat.expose())
+        .send()
+        .map_err(|e| {
+            tracing::warn!("http send failed: {e}");
+            FetchError::Network(e.into())
+        })?;
     // A rejected token must say so, not "no X-AUSERNAME header".
     let response = check_status(response, base_url, &url)?;
     // Bitbucket DC stamps the authenticated account on every response as
@@ -97,22 +99,22 @@ pub(super) fn current_user(base_url: &str, path: &str, pat: &str) -> Result<Stri
         .headers()
         .get("X-AUSERNAME")
         .and_then(|v| v.to_str().ok())
-        .map(str::to_owned)
-        .filter(|u| !u.is_empty() && u != "anonymous")
-        .ok_or_else(|| FetchError::ParseFailed("no X-AUSERNAME header".to_owned()))
+        .filter(|name| *name != "anonymous")
+        .and_then(Username::parse)
+        .ok_or_else(|| FetchError::ParseFailed("no X-AUSERNAME header".into()))
 }
 
 pub(super) fn post_json<B: serde::Serialize>(
     base_url: &str,
     path: &str,
-    pat: &str,
+    pat: &Pat,
     body: &B,
 ) -> Result<(), FetchError> {
     let url = format!("{base_url}{path}");
     tracing::debug!("POST {url}");
     let response = client()?
         .post(&url)
-        .bearer_auth(pat)
+        .bearer_auth(pat.expose())
         .header("Accept", "application/json")
         .json(body)
         .send()
@@ -124,14 +126,14 @@ pub(super) fn post_json<B: serde::Serialize>(
 pub(super) fn put_json<B: serde::Serialize>(
     base_url: &str,
     path: &str,
-    pat: &str,
+    pat: &Pat,
     body: &B,
 ) -> Result<(), FetchError> {
     let url = format!("{base_url}{path}");
     tracing::debug!("PUT {url}");
     let response = client()?
         .put(&url)
-        .bearer_auth(pat)
+        .bearer_auth(pat.expose())
         .header("Accept", "application/json")
         .json(body)
         .send()
@@ -140,12 +142,12 @@ pub(super) fn put_json<B: serde::Serialize>(
     Ok(())
 }
 
-pub(super) fn delete(base_url: &str, path: &str, pat: &str) -> Result<(), FetchError> {
+pub(super) fn delete(base_url: &str, path: &str, pat: &Pat) -> Result<(), FetchError> {
     let url = format!("{base_url}{path}");
     tracing::debug!("DELETE {url}");
     let response = client()?
         .delete(&url)
-        .bearer_auth(pat)
+        .bearer_auth(pat.expose())
         .send()
         .map_err(net_err)?;
     check_status(response, base_url, &url)?;
@@ -164,7 +166,7 @@ struct Page<T> {
 pub(super) fn get_all<T: DeserializeOwned>(
     base_url: &str,
     path: &str,
-    pat: &str,
+    pat: &Pat,
 ) -> Result<Vec<T>, FetchError> {
     collect_pages(|start| {
         let separator = if path.contains('?') { '&' } else { '?' };
@@ -178,7 +180,7 @@ pub(super) fn get_all<T: DeserializeOwned>(
 pub(super) fn get_page_from<T: DeserializeOwned>(
     base_url: &str,
     path: &str,
-    pat: &str,
+    pat: &Pat,
     start: u64,
 ) -> Result<(Vec<T>, Option<u64>), FetchError> {
     let separator = if path.contains('?') { '&' } else { '?' };

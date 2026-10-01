@@ -6,3 +6,4 @@ mod recovery;
 mod review;
 mod submission;
 mod support;
+mod tickets;

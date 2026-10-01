@@ -37,7 +37,7 @@ fn restart_restores_closed_editor_and_discard_removes_it_from_disk() {
     press(&mut second, KeyCode::Char('c'));
     assert!(second.state.ui.detail.editor.is_open());
     assert_eq!(
-        second.state.ui.detail.editor.draft.as_ref().unwrap().text,
+        second.state.ui.detail.editor.text().unwrap(),
         "first\nsecond 🦀\n"
     );
     second.handle_key(KeyEvent::new(KeyCode::Char('x'), KeyModifiers::CONTROL));
@@ -46,7 +46,7 @@ fn restart_restores_closed_editor_and_discard_removes_it_from_disk() {
     let mut third = app();
     attach_recovery(&mut third, &root);
     detail(&mut third, DetailTab::Description);
-    assert!(third.state.ui.detail.editor.draft.is_none());
+    assert!(!third.state.ui.detail.editor.has_draft());
     drop(third);
     std::fs::remove_dir_all(root).unwrap();
 }
@@ -60,22 +60,22 @@ async fn interrupted_send_is_journaled_and_success_clears_recovery_data() {
     press(&mut first, KeyCode::Char('c'));
     first.apply(Action::Paste("send me".into()));
     send_comment(&mut first);
-    assert!(first.state.store.operations.contains_key(&42));
+    assert!(first.state.store.operations.contains_key(&PrId(42)));
     drop(first);
     let mut second = app();
     attach_recovery(&mut second, &root);
     assert!(second.state.store.operations.is_empty());
-    assert!(second.state.store.errors[&42].contains("may have reached"));
+    assert!(second.state.store.errors[&PrId(42)].contains("may have reached"));
     detail(&mut second, DetailTab::Overview);
     press(&mut second, KeyCode::Esc); // acknowledge interrupted request notice
     press(&mut second, KeyCode::Char('c'));
     send_comment(&mut second);
-    second.apply(Action::Loaded(LoadedAction::Commented(42, Ok(()))));
+    finish_write(&mut second, PrId(42), Ok(()));
     drop(second);
     let mut third = app();
     attach_recovery(&mut third, &root);
     detail(&mut third, DetailTab::Overview);
-    assert!(third.state.ui.detail.editor.draft.is_none());
+    assert!(!third.state.ui.detail.editor.has_draft());
     assert!(third.state.store.uncertain_submissions.is_empty());
     assert!(third.state.store.errors.is_empty());
     drop(third);
@@ -99,11 +99,8 @@ fn journal_failure_prevents_remote_submission_and_keeps_editor() {
     // No runtime: a remote spawn here would panic, so this verifies the boundary.
     send_comment(&mut app);
     assert!(app.state.store.operations.is_empty());
-    assert_eq!(
-        app.state.ui.detail.editor.draft.as_ref().unwrap().text,
-        "keep me"
-    );
-    assert!(app.state.store.errors[&42].starts_with("Not sent:"));
+    assert_eq!(app.state.ui.detail.editor.text().unwrap(), "keep me");
+    assert!(app.state.store.errors[&PrId(42)].starts_with("Not sent:"));
     assert!(
         std::fs::read(&file)
             .unwrap()

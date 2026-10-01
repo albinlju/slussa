@@ -2,9 +2,13 @@ use serde::Deserialize;
 
 use super::{Config, ms_to_utc};
 use crate::domain::activity::Activity;
-use crate::domain::comment::{Comment, CommentThread, Reaction, ThreadAnchor};
 use crate::domain::event::{EventKind, PushedCommit, TimelineEvent};
 use crate::domain::user::User;
+use crate::domain::{
+    comment::{Comment, CommentId, CommentThread, Reaction, ThreadAnchor, ThreadHandle},
+    diff::LineRef,
+    pr::PrId,
+};
 use crate::providers::bitbucket_dc::http::get_all;
 use crate::providers::error::FetchError;
 
@@ -103,7 +107,7 @@ struct BbUser {
     name: String,
 }
 
-pub fn fetch(config: &Config, pr_id: u64) -> Result<Activity, FetchError> {
+pub fn fetch(config: &Config, pr_id: PrId) -> Result<Activity, FetchError> {
     let path = format!(
         "/rest/api/1.0/projects/{}/repos/{}/pull-requests/{pr_id}/activities?limit=100",
         config.repo.project_key, config.repo.repo_slug
@@ -170,25 +174,25 @@ fn event_kind(action: &str) -> Option<EventKind> {
 }
 
 fn make_thread(anchor: Anchor, root: &BbComment) -> CommentThread {
-    let (line, old_line) = if anchor.line_type.eq_ignore_ascii_case("REMOVED") {
-        (None, Some(anchor.line))
+    let line = if anchor.line_type.eq_ignore_ascii_case("REMOVED") {
+        LineRef::Old(anchor.line)
     } else {
-        (Some(anchor.line), None)
+        LineRef::New(anchor.line)
     };
     let mut comments = Vec::new();
     collect_replies(root, &mut comments);
+    let root_id = comment_id(root);
     CommentThread {
         comments,
-        reply_to: (root.id != 0).then_some(root.id),
+        reply_to: root_id,
         anchor: Some(ThreadAnchor {
             revision: anchor.to_hash,
             path: anchor.path,
-            line,
-            old_line,
+            line: Some(line),
             // Resolved by the "Resolve" button (threadResolved) or, for a task,
             // by closing the task (state == RESOLVED).
             resolved: root.thread_resolved || root.state.eq_ignore_ascii_case("RESOLVED"),
-            node_id: None,
+            handle: root_id.map(ThreadHandle::RootComment),
         }),
     }
 }
@@ -200,7 +204,7 @@ fn make_general_thread(root: &BbComment) -> CommentThread {
     collect_replies(root, &mut comments);
     CommentThread {
         comments,
-        reply_to: (root.id != 0).then_some(root.id),
+        reply_to: comment_id(root),
         anchor: None,
     }
 }
@@ -212,8 +216,13 @@ fn collect_replies(c: &BbComment, out: &mut Vec<Comment>) {
     }
 }
 
+/// A comment's id; none where the server sent none (it then parses as 0).
+fn comment_id(comment: &BbComment) -> Option<CommentId> {
+    (comment.id != 0).then_some(CommentId(comment.id))
+}
+
 fn map_comment(c: &BbComment) -> Comment {
-    let id = (c.id != 0).then_some(c.id);
+    let id = comment_id(c);
     Comment {
         id,
         author: map_user(&c.author),
@@ -294,10 +303,12 @@ mod tests {
         assert_eq!(bundle.threads.len(), 1);
         let anchor = bundle.threads[0].anchor.as_ref().unwrap();
         assert_eq!(anchor.path, "src/x.rs");
-        assert_eq!(anchor.line, Some(42));
+        assert_eq!(anchor.line, Some(LineRef::New(42)));
         assert_eq!(bundle.threads[0].comments.len(), 2);
-        assert_eq!(bundle.threads[0].reply_to, Some(2));
+        assert_eq!(bundle.threads[0].reply_to, Some(CommentId(2)));
         assert!(!anchor.resolved); // state OPEN, no threadResolved
+        // Resolved through its root comment.
+        assert_eq!(anchor.handle, Some(ThreadHandle::RootComment(CommentId(2))));
 
         assert_eq!(bundle.events.len(), 3);
         assert_eq!(bundle.events[0].kind, EventKind::Opened);

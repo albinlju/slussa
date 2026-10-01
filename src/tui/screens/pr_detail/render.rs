@@ -1,9 +1,8 @@
 use super::{dialogs, footer, header};
 use crate::{
     app::{
-        navigation::Screen,
         reviews::{PendingComment, PendingReview},
-        store::{LoadState, PrData},
+        store::PrData,
     },
     domain::{
         capabilities::{Capabilities, Feature},
@@ -12,11 +11,12 @@ use crate::{
     },
     tui::{
         component::Component,
-        components::diff_viewer::DiffContext,
+        components::{comment_editor::EditorView, diff_viewer::DiffContext},
         layout,
         screens::pr_detail::{
-            DetailContext, DetailView, PrDetailScreen,
-            tabs::{DetailTab, commits},
+            DetailContext, DetailView, Overlay, PrDetailScreen,
+            dialogs::{PrSummary, merge::MergeView},
+            tabs::{DetailTab, commits, description::DescriptionView, overview::OverviewContext},
         },
         theme,
     },
@@ -31,10 +31,9 @@ use ratatui::{
 
 fn render_tabs_and_content(
     frame: &mut Frame<'_>,
-    overview: &super::tabs::overview::OverviewContext<'_>,
+    ctx: &DetailContext<'_>,
     ui: &mut PrDetailScreen,
     pending: &[PendingComment],
-    tab: DetailTab,
     area: Rect,
 ) {
     let theme = theme::current();
@@ -58,11 +57,11 @@ fn render_tabs_and_content(
     let tabs_inner = tabs_block.inner(tabs_area);
     frame.render_widget(tabs_block, tabs_area);
     frame.render_widget(
-        Paragraph::new(tab_bar(tab, overview.capabilities, tabs_inner.width)),
+        Paragraph::new(tab_bar(ctx.tab, &ctx.store.capabilities, tabs_inner.width)),
         tabs_inner,
     );
 
-    render_content(frame, overview, ui, pending, tab, content_area);
+    render_content(frame, ctx, ui, pending, content_area);
 }
 
 fn tab_bar(tab: DetailTab, caps: &Capabilities, width: u16) -> Line<'static> {
@@ -96,17 +95,15 @@ fn tab_bar(tab: DetailTab, caps: &Capabilities, width: u16) -> Line<'static> {
 
 fn render_content(
     frame: &mut Frame<'_>,
-    overview: &super::tabs::overview::OverviewContext<'_>,
+    ctx: &DetailContext<'_>,
     ui: &mut PrDetailScreen,
     pending: &[PendingComment],
-    tab: DetailTab,
     area: Rect,
 ) {
-    let pr = overview.pr;
-    let pr_data = overview.data;
+    let (pr, pr_data, tab) = (ctx.pr, ctx.data, ctx.tab);
     let inset = match tab {
         DetailTab::Description => area,
-        _ => Rect {
+        DetailTab::Overview | DetailTab::Diff | DetailTab::Commits | DetailTab::Builds => Rect {
             x: area.x + if area.width < 70 { 0 } else { 2 },
             y: area.y,
             width: area
@@ -116,22 +113,27 @@ fn render_content(
         },
     };
     match tab {
-        DetailTab::Description => super::tabs::description::render(
+        DetailTab::Description => ui.description.render(
             frame,
-            pr,
-            pr_data.map(|data| &data.info),
-            &mut ui.description,
             inset,
+            &DescriptionView {
+                pr,
+                info: pr_data.map(|data| &data.info),
+            },
         ),
-        DetailTab::Overview => ui.overview.render_with_scrollbar(
+        DetailTab::Overview => ui.overview.render(
             frame,
             inset,
-            overview,
-            Rect::new(area.right(), area.y, 1, area.height),
+            &OverviewContext {
+                pr,
+                data: pr_data,
+                capabilities: &ctx.store.capabilities,
+                scrollbar: Rect::new(area.right(), area.y, 1, area.height),
+            },
         ),
         DetailTab::Diff => {
             let threads = activity_threads(pr_data);
-            let diff = pr_data.and_then(|d| d.diff_for(ui.commits.open_commit.as_deref()));
+            let diff = pr_data.map(|d| &d.diff);
             ui.diff.render(
                 frame,
                 inset,
@@ -148,7 +150,6 @@ fn render_content(
                 frame,
                 inset,
                 &commits::CommitContext {
-                    pr_id: pr.id,
                     data: pr_data,
                     pending,
                     author: &pr.author.username,
@@ -165,11 +166,8 @@ fn pending_comments(pending: Option<&PendingReview>) -> &[PendingComment] {
 
 fn activity_threads(pr_data: Option<&PrData>) -> &[CommentThread] {
     pr_data
-        .and_then(|d| match &d.activity {
-            LoadState::Loaded(b) => Some(b.threads.as_slice()),
-            _ => None,
-        })
-        .unwrap_or(&[])
+        .and_then(|data| data.activity.loaded())
+        .map_or(&[], |activity| activity.threads.as_slice())
 }
 
 pub(super) fn render(
@@ -178,16 +176,7 @@ pub(super) fn render(
     area: Rect,
     ctx: &DetailContext<'_>,
 ) {
-    let Screen::Detail { pr_id, tab } = ctx.screen else {
-        return;
-    };
-
-    let LoadState::Loaded(prs) = &ctx.store.cache.prs else {
-        return;
-    };
-    let Some(pr) = prs.iter().find(|p| p.id == pr_id) else {
-        return;
-    };
+    let (pr_id, pr, pr_data) = (ctx.pr_id, ctx.pr, ctx.data);
 
     let theme = theme::current();
     let [main_area, footer_area] = layout::split(
@@ -213,7 +202,6 @@ pub(super) fn render(
         ],
     );
 
-    let pr_data = ctx.store.cache.details.get(&pr.id);
     header::render(
         frame,
         pr,
@@ -224,90 +212,62 @@ pub(super) fn render(
     );
     render_tabs_and_content(
         frame,
-        &super::tabs::overview::OverviewContext {
-            pr,
-            data: pr_data,
-            capabilities: &ctx.store.capabilities,
-        },
+        ctx,
         ui,
         pending_comments(ctx.store.reviews.get(&pr_id)),
-        tab,
         content_area,
     );
-    let state = DetailView {
-        detail: ui,
-        store: ctx.store,
-        screen: ctx.screen,
-        refreshing: ctx.refreshing,
-    };
-    footer::render(frame, &state, pr_data, tab, footer_area);
+    let state = DetailView::new(ui, ctx);
+    footer::render(frame, &state, footer_area);
 
     let review_ctx = dialogs::review::ReviewContext {
         options: state.review_context().options,
         pending: ctx.store.reviews.get(&pr_id),
     };
-    ui.editor.target_context = ui.editor.draft.as_ref().and_then(|draft| {
-        let comment = match &draft.target {
-            crate::app::reviews::CommentTarget::Reply(id) => {
-                pr_data.and_then(|data| match &data.activity {
-                    LoadState::Loaded(activity) => activity
-                        .threads
-                        .iter()
-                        .find(|thread| thread.reply_to == Some(*id))
-                        .and_then(|thread| thread.comments.first()),
-                    _ => None,
-                })
-            }
-            crate::app::reviews::CommentTarget::Edit { id, review } => {
-                state.find_comment(*id, *review)
-            }
-            _ => None,
-        }?;
-        Some(format!(
-            "@{}: {}",
-            comment.author.username,
-            comment.content.lines().next().unwrap_or("")
-        ))
-    });
     if ui.editor.is_open() {
-        ui.editor.render_with_review(
-            frame,
-            area,
-            ctx.store.operations.contains_key(&pr_id),
-            ctx.store.reviews.contains_key(&pr_id),
-        );
+        let view = EditorView {
+            sending: ctx.store.operations.contains_key(&pr_id),
+            review_active: ctx.store.reviews.contains_key(&pr_id),
+            context: ui
+                .editor
+                .target()
+                .and_then(|target| state.comment_under(target))
+                .map(|comment| {
+                    format!(
+                        "@{}: {}",
+                        comment.author.username,
+                        comment.content.lines().next().unwrap_or("")
+                    )
+                }),
+        };
+        ui.editor.render(frame, area, &view);
     }
-    if ui.help_open {
-        ui.help.render(
+    match &mut ui.overlay {
+        Some(Overlay::Help(help)) => help.render(
             frame,
             area,
             &dialogs::help::entries(&ctx.store.capabilities, pr.url.is_some()).as_slice(),
-        );
-    }
-    if let Some(dialog) = &mut ui.confirm {
-        dialog.set_pr_context(format!("PR #{} · {}", pr.id, pr.title), &pr.target_branch);
-        dialog.render(frame, area, &());
-    }
-    if let Some(dialog) = &mut ui.review_picker {
-        dialog.render(frame, area, &review_ctx);
-    }
-    if let Some(dialog) = &mut ui.merge_picker {
-        dialog.pr_label = format!("PR #{} · {}", pr.id, pr.title);
-        dialog.target_branch.clone_from(&pr.target_branch);
-        dialog.source_branch.clone_from(&pr.source_branch);
-        dialog.blockers = match pr_data.map(|data| &data.mergeability) {
-            Some(LoadState::Loaded(status)) if status.state != Mergeability::Mergeable => {
-                status.blockers.clone()
-            }
-            _ => Vec::new(),
-        };
-        dialog.render(
-            frame,
-            area,
-            &ctx.store.capabilities.merge_strategies.as_slice(),
-        );
+        ),
+        Some(Overlay::Confirm(dialog)) => dialog.render(frame, area, &PrSummary::of(pr)),
+        Some(Overlay::Review(dialog)) => dialog.render(frame, area, &review_ctx),
+        Some(Overlay::Merge(dialog)) => {
+            // What stands in the way of a merge, as far as the provider said.
+            let blockers = pr_data
+                .and_then(|data| data.mergeability.loaded())
+                .map_or(&[][..], Mergeability::blockers);
+            dialog.render(
+                frame,
+                area,
+                &MergeView {
+                    strategies: &ctx.store.capabilities.merge_strategies,
+                    pr: PrSummary::of(pr),
+                    blockers,
+                },
+            );
+        }
+        None => {}
     }
     if let Some(msg) = ctx.store.errors.get(&pr_id) {
-        ui.error.render(frame, msg, area);
+        ui.error.render(frame, area, &msg.as_str());
     }
 }

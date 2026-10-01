@@ -44,7 +44,7 @@ fn merged_cursor(app: &App) -> Option<String> {
 
 fn switch_to(app: &mut App, filter: StatusFilter) {
     app.state.ui.list.filter = filter;
-    app.apply(Action::List(ListAction::FilterChanged));
+    app.apply(Action::Effect(Effect::LoadView));
 }
 
 /// Start the app the way `run` does, then look at the merged PRs.
@@ -214,7 +214,8 @@ async fn a_failed_older_read_keeps_the_list_says_so_and_can_be_retried() {
     assert_eq!(loaded_ids(&app), vec![1, 3], "the list is untouched");
     assert_eq!(merged_cursor(&app).as_deref(), Some("x"));
     let notice = app.state.store.notice.as_ref().unwrap();
-    assert!(notice.error && notice.message.contains("Couldn't load older PRs"));
+    assert_eq!(notice.kind, crate::app::store::NoticeKind::Error);
+    assert!(notice.message.contains("Couldn't load older PRs"));
     assert!(
         app.state.store.refresh_failures.is_empty(),
         "a failed older read is not a refresh failure"
@@ -246,7 +247,11 @@ async fn a_failed_first_read_of_a_group_is_reported_and_retried_on_the_next_visi
         .notice
         .as_ref()
         .expect("the failure is said");
-    assert!(notice.error, "{notice:?}");
+    assert_eq!(
+        notice.kind,
+        crate::app::store::NoticeKind::Error,
+        "{notice:?}"
+    );
 
     switch_to(&mut app, StatusFilter::Open);
     switch_to(&mut app, StatusFilter::Merged);

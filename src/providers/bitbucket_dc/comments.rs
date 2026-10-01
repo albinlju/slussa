@@ -1,17 +1,20 @@
 use serde::Deserialize;
 
 use super::{Config, http};
+use crate::domain::{comment::CommentId, diff::LineRef, pr::PrId, review::ReviewComment};
 use crate::providers::error::FetchError;
 
 pub fn post_comment(
     config: &Config,
-    pr_id: u64,
-    path: &str,
-    line: usize,
-    removed: bool,
-    text: &str,
-    revision: &crate::domain::diff::DiffRevision,
+    pr_id: PrId,
+    comment: &ReviewComment,
 ) -> Result<(), FetchError> {
+    let ReviewComment {
+        revision,
+        path,
+        line,
+        body: text,
+    } = comment;
     if revision.base.is_none() {
         return Err(FetchError::InvalidInput(
             "The diff has no base revision. Reload it before commenting.".into(),
@@ -21,10 +24,9 @@ pub fn post_comment(
         "/rest/api/1.0/projects/{}/repos/{}/pull-requests/{pr_id}/comments",
         config.repo.project_key, config.repo.repo_slug,
     );
-    let (line_type, file_type) = if removed {
-        ("REMOVED", "FROM")
-    } else {
-        ("ADDED", "TO")
+    let (line_type, file_type) = match line {
+        LineRef::Old(_) => ("REMOVED", "FROM"),
+        LineRef::New(_) => ("ADDED", "TO"),
     };
     let body = serde_json::json!({
         "text": text,
@@ -33,7 +35,7 @@ pub fn post_comment(
             "toHash": revision.head,
             "diffType": if revision.commit { "COMMIT" } else { "EFFECTIVE" },
             "path": path,
-            "line": line,
+            "line": line.number(),
             "lineType": line_type,
             "fileType": file_type,
         }
@@ -41,7 +43,7 @@ pub fn post_comment(
     http::post_json(&config.repo.base_url, &endpoint, &config.pat, &body)
 }
 
-pub fn post_pr_comment(config: &Config, pr_id: u64, text: &str) -> Result<(), FetchError> {
+pub fn post_pr_comment(config: &Config, pr_id: PrId, text: &str) -> Result<(), FetchError> {
     let endpoint = format!(
         "/rest/api/1.0/projects/{}/repos/{}/pull-requests/{pr_id}/comments",
         config.repo.project_key, config.repo.repo_slug,
@@ -52,8 +54,8 @@ pub fn post_pr_comment(config: &Config, pr_id: u64, text: &str) -> Result<(), Fe
 
 pub fn reply_comment(
     config: &Config,
-    pr_id: u64,
-    parent: u64,
+    pr_id: PrId,
+    parent: CommentId,
     text: &str,
 ) -> Result<(), FetchError> {
     let endpoint = format!(
@@ -66,8 +68,8 @@ pub fn reply_comment(
 
 pub fn edit_comment(
     config: &Config,
-    pr_id: u64,
-    comment_id: u64,
+    pr_id: PrId,
+    comment_id: CommentId,
     text: &str,
 ) -> Result<(), FetchError> {
     // Editing requires the current version (optimistic locking); fetch it here so
@@ -82,7 +84,11 @@ pub fn edit_comment(
     )
 }
 
-pub fn delete_comment(config: &Config, pr_id: u64, comment_id: u64) -> Result<(), FetchError> {
+pub fn delete_comment(
+    config: &Config,
+    pr_id: PrId,
+    comment_id: CommentId,
+) -> Result<(), FetchError> {
     let version = comment_version(config, pr_id, comment_id)?;
     let path = format!(
         "{}?version={version}",
@@ -93,8 +99,8 @@ pub fn delete_comment(config: &Config, pr_id: u64, comment_id: u64) -> Result<()
 
 pub fn set_thread_resolved(
     config: &Config,
-    pr_id: u64,
-    comment_id: u64,
+    pr_id: PrId,
+    comment_id: CommentId,
     resolved: bool,
 ) -> Result<(), FetchError> {
     let version = comment_version(config, pr_id, comment_id)?;
@@ -108,14 +114,14 @@ pub fn set_thread_resolved(
     )
 }
 
-fn comment_path(config: &Config, pr_id: u64, comment_id: u64) -> String {
+fn comment_path(config: &Config, pr_id: PrId, comment_id: CommentId) -> String {
     format!(
         "/rest/api/1.0/projects/{}/repos/{}/pull-requests/{pr_id}/comments/{comment_id}",
         config.repo.project_key, config.repo.repo_slug,
     )
 }
 
-fn comment_version(config: &Config, pr_id: u64, comment_id: u64) -> Result<u32, FetchError> {
+fn comment_version(config: &Config, pr_id: PrId, comment_id: CommentId) -> Result<u32, FetchError> {
     #[derive(Deserialize)]
     struct VersionOnly {
         version: u32,

@@ -1,5 +1,5 @@
 use crate::{
-    app::action::Action,
+    app::action::{Action, Effect},
     tui::{
         component::{Component, saturating_u16, scroll},
         theme, widgets,
@@ -22,9 +22,11 @@ pub struct HelpDialog {
     max_scroll: u16,
 }
 impl Component for HelpDialog {
-    type Context<'a> = &'a [(&'static str, &'static str)];
+    type Input<'a> = ();
+    /// The keys and what they do.
+    type View<'a> = &'a [(&'static str, &'static str)];
     type Message = i16;
-    fn handle_key(&self, key: KeyEvent, _: &Self::Context<'_>) -> Option<Action> {
+    fn handle_key(&self, key: KeyEvent, (): &()) -> Option<Action> {
         let page = self.viewport.max(1) as i16;
         let delta = match key.code {
             KeyCode::Down | KeyCode::Char('j') => 1,
@@ -35,11 +37,11 @@ impl Component for HelpDialog {
         };
         Some(Action::HelpScroll(delta))
     }
-    fn update(&mut self, delta: i16, _: &Self::Context<'_>) -> Option<Action> {
+    fn update(&mut self, delta: i16, (): &()) -> Option<Effect> {
         self.scroll = scroll(self.scroll, delta).min(self.max_scroll);
         None
     }
-    fn render(&mut self, frame: &mut Frame<'_>, area: Rect, entries: &Self::Context<'_>) {
+    fn render(&mut self, frame: &mut Frame<'_>, area: Rect, entries: &Self::View<'_>) {
         let width = area.width.min(48);
         let height = area
             .height

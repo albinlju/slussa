@@ -47,7 +47,7 @@ fn bitbucket_open_group_reads_every_page_with_drafts_and_nothing_closed() {
 
     assert_eq!(batch.more, None, "the open group is read in full");
     assert_eq!(
-        batch.prs.iter().map(|pr| pr.id).collect::<Vec<_>>(),
+        batch.prs.iter().map(|pr| pr.id.0).collect::<Vec<_>>(),
         vec![1, 2]
     );
     assert_eq!(batch.prs[0].source_branch, "feature");
@@ -93,7 +93,10 @@ fn bitbucket_closed_groups_read_one_page_at_a_time_from_their_offset() {
         );
 
         let next = provider.fetch_prs(group, Some("25")).unwrap();
-        assert_eq!(next.prs.iter().map(|pr| pr.id).collect::<Vec<_>>(), vec![4]);
+        assert_eq!(
+            next.prs.iter().map(|pr| pr.id.0).collect::<Vec<_>>(),
+            vec![4]
+        );
         assert_eq!(next.more, None, "the end is reported");
         assert!(
             server
@@ -211,7 +214,9 @@ fn bitbucket_rejects_a_non_advancing_page_cursor() {
 fn bitbucket_pr_comment_posts_json_to_the_comments_endpoint() {
     let target = "/rest/api/1.0/projects/PROJ/repos/repo/pull-requests/9/comments";
     let server = MockHttp::start(vec![Route::post(target, 201, "{}")]);
-    bitbucket(&server).post_pr_comment(9, "looks good").unwrap();
+    bitbucket(&server)
+        .post_pr_comment(PrId(9), "looks good")
+        .unwrap();
 
     let requests = server.requests();
     assert_eq!(requests.len(), 1);
@@ -232,11 +237,11 @@ fn bitbucket_review_posts_comments_then_summary_then_the_verdict() {
         Route::put(&format!("{PR_9}/participants/me"), 200, "{}"),
     ]);
     let comments = [
-        review_comment(Some("abc"), 3, false),
-        review_comment(Some("abc"), 9, true),
+        review_comment("abc", 3, false),
+        review_comment("abc", 9, true),
     ];
     bitbucket(&server)
-        .submit_full_review(9, ReviewVerdict::Approve, "ship it", "me", &comments)
+        .submit_full_review(PrId(9), ReviewVerdict::Approve, "ship it", "me", &comments)
         .unwrap();
 
     let requests = server.requests();
@@ -271,28 +276,25 @@ fn bitbucket_review_reports_how_many_comments_landed_before_a_failure() {
         ),
     ]);
     let comments = [
-        review_comment(Some("abc"), 3, false),
-        review_comment(Some("abc"), 4, false),
-        review_comment(Some("abc"), 5, false),
+        review_comment("abc", 3, false),
+        review_comment("abc", 4, false),
+        review_comment("abc", 5, false),
     ];
     let error = bitbucket(&server)
-        .submit_full_review(9, ReviewVerdict::Approve, "ship it", "me", &comments)
+        .submit_full_review(PrId(9), ReviewVerdict::Approve, "ship it", "me", &comments)
         .unwrap_err();
 
     match error {
-        FetchError::PartialReview {
+        ReviewError::Partial {
             posted_comments,
             summary_posted,
             source,
         } => {
             assert_eq!(posted_comments, 1);
             assert!(!summary_posted);
-            assert!(matches!(
-                *source,
-                FetchError::HttpFailed { status: 500, .. }
-            ));
+            assert!(matches!(source, FetchError::HttpFailed { status: 500, .. }));
         }
-        other => panic!("expected PartialReview, got {other:?}"),
+        other @ ReviewError::Failed(_) => panic!("expected a partial review, got {other:?}"),
     }
     let requests = server.requests();
     assert_eq!(requests.len(), 2, "stops at the first failure");
@@ -351,7 +353,7 @@ fn bitbucket_reopen_reads_the_version_then_posts_it() {
         ),
         Route::post(&format!("{PR_BASE}/9/reopen?version=3"), 200, "{}"),
     ]);
-    bitbucket(&server).reopen(9).unwrap();
+    bitbucket(&server).reopen(PrId(9)).unwrap();
 
     let requests = server.requests();
     let sent: Vec<_> = requests
@@ -383,10 +385,71 @@ fn bitbucket_refusing_a_reopen_shows_the_servers_reason() {
             &refusal.to_string(),
         ),
     ]);
-    let error = bitbucket(&server).reopen(9).unwrap_err();
+    let error = bitbucket(&server).reopen(PrId(9)).unwrap_err();
 
     assert_eq!(
         error.user_message(),
         "Only declined pull requests can be reopened"
+    );
+}
+
+#[test]
+fn bitbucket_token_is_sent_as_a_bearer_and_never_printed() {
+    let server = MockHttp::start(vec![Route::get(
+        &format!("{PR_BASE}/9/merge"),
+        200,
+        &json!({"canMerge": true, "conflicted": false}).to_string(),
+    )]);
+    let provider = bitbucket(&server);
+    provider.fetch_mergeability(PrId(9)).unwrap();
+    assert_eq!(
+        server.requests()[0].headers["authorization"],
+        "Bearer secret-token"
+    );
+
+    let printed = format!("{provider:?}");
+    assert!(!printed.contains("secret-token"), "{printed}");
+    assert!(printed.contains("redacted"), "{printed}");
+}
+
+#[test]
+fn bitbucket_verdict_alone_that_is_refused_is_a_plain_failure() {
+    let refusal = json!({"errors": [{"message": "You cannot approve your own pull request"}]});
+    let server = MockHttp::start(vec![
+        Route::post(&format!("{PR_9}/comments"), 201, "{}"),
+        Route::put(
+            &format!("{PR_9}/participants/me"),
+            409,
+            &refusal.to_string(),
+        ),
+    ]);
+
+    // No comments and no summary: the verdict is the only request.
+    let error = bitbucket(&server)
+        .submit_full_review(PrId(9), ReviewVerdict::Approve, "", "me", &[])
+        .unwrap_err();
+    match &error {
+        ReviewError::Failed(source) => assert!(
+            !source.may_have_reached_server(),
+            "a stated refusal changed nothing: {source:?}"
+        ),
+        ReviewError::Partial { .. } => panic!("nothing was sent in part: {error:?}"),
+    }
+    assert_eq!(server.requests().len(), 1);
+
+    // With a summary, the summary arrived and the verdict did not.
+    let error = bitbucket(&server)
+        .submit_full_review(PrId(9), ReviewVerdict::Approve, "ship it", "me", &[])
+        .unwrap_err();
+    assert!(
+        matches!(
+            error,
+            ReviewError::Partial {
+                posted_comments: 0,
+                summary_posted: true,
+                ..
+            }
+        ),
+        "{error:?}"
     );
 }

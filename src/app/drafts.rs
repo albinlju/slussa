@@ -7,7 +7,12 @@
 //! than overwritten.
 use super::{
     App,
+    preflight::Session,
     reviews::{CommentDraft, PendingReview},
+};
+use crate::{
+    domain::{pr::PrId, user::Username},
+    providers::Provider,
 };
 use serde::{Deserialize, Serialize};
 use std::{
@@ -19,9 +24,9 @@ use std::{
 
 #[derive(Debug, Default, Serialize, Deserialize)]
 pub struct Snapshot {
-    pub editors: BTreeMap<u64, CommentDraft>,
-    pub reviews: BTreeMap<u64, PendingReview>,
-    pub interrupted: BTreeSet<u64>,
+    pub editors: BTreeMap<PrId, CommentDraft>,
+    pub reviews: BTreeMap<PrId, PendingReview>,
+    pub interrupted: BTreeSet<PrId>,
 }
 #[derive(Serialize, Deserialize)]
 struct Envelope {
@@ -130,47 +135,76 @@ fn private_options() -> OpenOptions {
     }
     options
 }
+/// Where drafts are kept. Outside tests that is always the disk: an app that
+/// "saved" drafts nowhere cannot be built.
+pub enum Drafts {
+    Disk(DraftStorage),
+    /// A test that does not look at the draft file.
+    #[cfg(test)]
+    Nowhere,
+}
+
+/// The name drafts are filed under: one file per provider, host, repository
+/// and account.
+fn scope(provider: &Provider, remote: &str, user: &Username) -> io::Result<String> {
+    let (authority, repo) = crate::git_url::split(remote)
+        .ok_or_else(|| io::Error::other("Cannot identify repository for drafts"))?;
+    let host = authority.rsplit('@').next().unwrap_or(authority);
+    let provider = match provider {
+        Provider::GitHub => "github",
+        Provider::BitbucketDc(_) => "bitbucket-dc",
+    };
+    Ok(serde_json::to_string(&(
+        provider,
+        host,
+        repo.trim_end_matches(".git"),
+        user.as_str(),
+    ))?)
+}
+
 impl App {
-    pub fn enable_drafts(&mut self) -> io::Result<()> {
-        if self.state.store.current_user.is_empty() {
-            return Err(io::Error::other(
-                "Cannot identify the account for draft storage. Check authentication and retry.",
-            ));
-        }
+    /// The application with its draft storage open and what it held restored.
+    pub fn open(session: Session) -> io::Result<Self> {
         let remote = super::remote::origin_url().map_err(io::Error::other)?;
-        let (authority, repo) = crate::git_url::split(&remote)
-            .ok_or_else(|| io::Error::other("Cannot identify repository for drafts"))?;
-        let host = authority.rsplit('@').next().unwrap_or(authority);
-        let provider = match self.provider {
-            crate::providers::Provider::GitHub => "github",
-            crate::providers::Provider::BitbucketDc(_) => "bitbucket-dc",
-        };
-        let scope = serde_json::to_string(&(
-            provider,
-            host,
-            repo.trim_end_matches(".git"),
-            &self.state.store.current_user,
-        ))?;
+        let scope = scope(session.provider(), &remote, session.user())?;
         let root = dirs::data_local_dir()
             .ok_or_else(|| io::Error::other("Cannot locate local data directory"))?
             .join("slussa/drafts");
         let (storage, snapshot) = DraftStorage::open(&root, scope)?;
-        self.restore_drafts(storage, snapshot);
-        Ok(())
+        let mut app = Self::new(session, Drafts::Disk(storage));
+        app.restore(snapshot);
+        Ok(app)
     }
-    pub(super) fn restore_drafts(&mut self, storage: DraftStorage, snapshot: Snapshot) {
+
+    fn restore(&mut self, snapshot: Snapshot) {
         self.state.ui.detail.restore_drafts(snapshot.editors);
         self.state.store.reviews = snapshot.reviews.into_iter().collect();
         for &id in &snapshot.interrupted {
             self.state.store.errors.insert(id, "A previous request was interrupted and may have reached the server. Check the PR before sending it again; nothing was resent automatically.".into());
         }
         self.state.store.uncertain_submissions = snapshot.interrupted;
-        self.drafts = Some(storage);
     }
+
+    /// Give a test's app a draft file, as `open` does.
+    #[cfg(test)]
+    pub(super) fn restore_drafts(&mut self, storage: DraftStorage, snapshot: Snapshot) {
+        self.drafts = Drafts::Disk(storage);
+        self.restore(snapshot);
+    }
+
+    #[cfg_attr(
+        not(test),
+        expect(
+            clippy::infallible_destructuring_match,
+            reason = "`Drafts` has a second variant in test builds"
+        )
+    )]
     pub(super) fn save_drafts(&mut self) -> bool {
         self.drafts_dirty = false;
-        let Some(storage) = &mut self.drafts else {
-            return true;
+        let storage = match &mut self.drafts {
+            Drafts::Disk(storage) => storage,
+            #[cfg(test)]
+            Drafts::Nowhere => return true,
         };
         let snapshot = Snapshot {
             editors: self.state.ui.detail.draft_snapshot(),
@@ -202,7 +236,7 @@ impl App {
         }
     }
     /// Journal the uncertain outcome before any remote write can start.
-    pub(super) fn checkpoint_submission(&mut self, pr_id: u64) -> bool {
+    pub(super) fn checkpoint_submission(&mut self, pr_id: PrId) -> bool {
         if self.save_drafts() {
             return true;
         }
@@ -237,7 +271,10 @@ pub(super) fn reopen(root: &Path, scope: &str) -> io::Result<(DraftStorage, Snap
 mod tests {
     use super::*;
     use crate::app::reviews::{CommentAnchor, CommentTarget, PendingComment};
-    use crate::domain::diff::DiffRevision;
+    use crate::domain::{
+        comment::{CommentId, CommentKey, CommentKind},
+        diff::DiffRevision,
+    };
     static NEXT: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
     pub(super) fn directory() -> PathBuf {
         std::env::temp_dir().join(format!(
@@ -267,14 +304,14 @@ mod tests {
         let snapshot = Snapshot {
             editors: [
                 (
-                    1,
+                    PrId(1),
                     CommentDraft {
-                        target: CommentTarget::Reply(789),
+                        target: CommentTarget::Reply(CommentId(789)),
                         text: "å\n🦀".into(),
                     },
                 ),
                 (
-                    2,
+                    PrId(2),
                     CommentDraft {
                         target: CommentTarget::Line(anchor.clone()),
                         text: "line".into(),
@@ -283,7 +320,7 @@ mod tests {
             ]
             .into(),
             reviews: [(
-                2,
+                PrId(2),
                 PendingReview {
                     submitted_summary: Some("already sent".into()),
                     comments: vec![PendingComment {
@@ -293,7 +330,7 @@ mod tests {
                 },
             )]
             .into(),
-            interrupted: [2].into(),
+            interrupted: [PrId(2)].into(),
         };
         storage.save(snapshot).unwrap();
         assert!(DraftStorage::open(&root, "repo/account-a".into()).is_err());
@@ -301,13 +338,13 @@ mod tests {
         assert!(other.editors.is_empty());
         drop(storage);
         let (mut storage, restored) = reopen(&root, "repo/account-a").unwrap();
-        assert_eq!(restored.editors[&1].text, "å\n🦀");
+        assert_eq!(restored.editors[&PrId(1)].text, "å\n🦀");
         assert!(matches!(
-            restored.editors[&1].target,
-            CommentTarget::Reply(789)
+            restored.editors[&PrId(1)].target,
+            CommentTarget::Reply(CommentId(789))
         ));
         assert_eq!(
-            restored.reviews[&2].comments[0]
+            restored.reviews[&PrId(2)].comments[0]
                 .anchor
                 .revision
                 .as_ref()
@@ -316,10 +353,10 @@ mod tests {
             "head"
         );
         assert_eq!(
-            restored.reviews[&2].submitted_summary.as_deref(),
+            restored.reviews[&PrId(2)].submitted_summary.as_deref(),
             Some("already sent")
         );
-        assert!(restored.interrupted.contains(&2));
+        assert!(restored.interrupted.contains(&PrId(2)));
         storage.save(Snapshot::default()).unwrap();
         drop(storage);
         let (storage, cleared) = reopen(&root, "repo/account-a").unwrap();
@@ -347,21 +384,50 @@ mod tests {
     fn version_1_draft_file_is_read_and_written_back_unchanged() {
         let envelope: Envelope = serde_json::from_str(VERSION_1).unwrap();
         let editors = &envelope.snapshot.editors;
-        assert!(matches!(editors[&1].target, CommentTarget::Reply(789)));
-        assert!(matches!(&editors[&2].target, CommentTarget::Line(a) if a.line == 42));
-        assert!(matches!(editors[&3].target, CommentTarget::Pr));
         assert!(matches!(
-            editors[&4].target,
-            CommentTarget::Edit { id: 5, .. }
+            editors[&PrId(1)].target,
+            CommentTarget::Reply(CommentId(789))
         ));
-        assert!(matches!(editors[&5].target, CommentTarget::Review { .. }));
+        assert!(matches!(&editors[&PrId(2)].target, CommentTarget::Line(a) if a.line == 42));
+        assert!(matches!(editors[&PrId(3)].target, CommentTarget::Pr));
+        assert!(matches!(
+            editors[&PrId(4)].target,
+            CommentTarget::Edit(CommentKey {
+                id: CommentId(5),
+                kind: CommentKind::Review
+            })
+        ));
+        assert!(matches!(
+            editors[&PrId(5)].target,
+            CommentTarget::Review { .. }
+        ));
         assert!(
-            envelope.snapshot.reviews[&2].comments[0]
+            envelope.snapshot.reviews[&PrId(2)].comments[0]
                 .anchor
                 .revision
                 .is_none()
         );
         assert_eq!(serde_json::to_string(&envelope).unwrap(), VERSION_1);
+    }
+
+    /// The scope names the draft file, so a change to it would hide every
+    /// draft saved before.
+    #[test]
+    fn the_scope_names_provider_host_repository_and_account() {
+        let user = Username::parse("octocat").unwrap();
+        let expected = r#"["github","github.com","albinlju/slussa","octocat"]"#;
+        for remote in [
+            "git@github.com:albinlju/slussa.git",
+            "https://github.com/albinlju/slussa.git",
+            "https://github.com/albinlju/slussa",
+        ] {
+            assert_eq!(
+                scope(&Provider::GitHub, remote, &user).unwrap(),
+                expected,
+                "{remote}"
+            );
+        }
+        assert!(scope(&Provider::GitHub, "not a remote", &user).is_err());
     }
 
     #[test]
@@ -372,7 +438,7 @@ mod tests {
         let old = fs::read(&storage.path).unwrap();
         fs::create_dir(storage.path.with_extension("tmp")).unwrap();
         let snapshot = Snapshot {
-            interrupted: [42].into(),
+            interrupted: [PrId(42)].into(),
             ..Snapshot::default()
         };
         assert!(storage.save(snapshot).is_err());

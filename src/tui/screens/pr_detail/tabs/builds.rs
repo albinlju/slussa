@@ -133,12 +133,14 @@ pub struct Builds {
     viewport: u16,
 }
 impl crate::tui::component::Component for Builds {
-    type Context<'a> = Option<&'a PrData>;
-    type Message = crate::app::action::DetailAction;
+    type Input<'a> = ();
+    type View<'a> = Option<&'a PrData>;
+    /// How far to scroll.
+    type Message = i16;
     fn handle_key(
         &self,
         key: crossterm::event::KeyEvent,
-        _: &Self::Context<'_>,
+        (): &(),
     ) -> Option<crate::app::action::Action> {
         use ratatui::crossterm::event::KeyCode;
         let delta = match key.code {
@@ -152,17 +154,11 @@ impl crate::tui::component::Component for Builds {
             crate::app::action::DetailAction::BuildsScroll(delta),
         ))
     }
-    fn update(
-        &mut self,
-        action: Self::Message,
-        _: &Self::Context<'_>,
-    ) -> Option<crate::app::action::Action> {
-        if let crate::app::action::DetailAction::BuildsScroll(delta) = action {
-            self.scroll = crate::tui::component::scroll(self.scroll, delta);
-        }
+    fn update(&mut self, delta: Self::Message, (): &()) -> Option<crate::app::action::Effect> {
+        self.scroll = crate::tui::component::scroll(self.scroll, delta);
         None
     }
-    fn render(&mut self, frame: &mut Frame<'_>, area: Rect, data: &Self::Context<'_>) {
+    fn render(&mut self, frame: &mut Frame<'_>, area: Rect, data: &Self::View<'_>) {
         render(frame, *data, self, area);
     }
 }

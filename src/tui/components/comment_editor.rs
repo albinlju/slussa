@@ -1,11 +1,12 @@
 pub use crate::app::reviews::CommentDraft;
 use crate::{
     app::{
-        action::{Action, DetailAction},
+        action::{Action, EditorAction, Effect},
         reviews::CommentTarget,
     },
     tui::{
         component::{Component, saturating_u16},
+        components::text_buffer::TextBuffer,
         theme,
     },
 };
@@ -18,190 +19,195 @@ use ratatui::{
     widgets::{Block, BorderType, Borders, Clear, Paragraph},
 };
 
+/// The comment being written on a PR, if there is one.
 #[derive(Debug, Default)]
 pub struct CommentEditor {
-    pub draft: Option<CommentDraft>,
-    pub suspended: bool,
-    pub resuming: bool,
-    pub target_context: Option<String>,
-    pub cursor: Option<usize>,
-    pub scroll: usize,
-    pub discard_confirm: bool,
+    editing: Option<Editing>,
 }
-impl CommentEditor {
-    pub const fn is_open(&self) -> bool {
-        self.draft.is_some() && !self.suspended
-    }
-    fn position(&self) -> usize {
-        let text = self.draft.as_ref().map_or("", |d| d.text.as_str());
-        let mut pos = self.cursor.unwrap_or(text.len()).min(text.len());
-        while !text.is_char_boundary(pos) {
-            pos -= 1;
-        }
-        pos
-    }
-    pub fn insert_text(&mut self, text: &str) {
-        if !self.is_open() || self.discard_confirm {
-            return;
-        }
-        let text: String = text
-            .replace("\r\n", "\n")
-            .replace('\r', "\n")
-            .replace('\t', "    ")
-            .chars()
-            .filter(|c| !c.is_control() || *c == '\n')
-            .collect();
-        let pos = self.position();
-        if let Some(draft) = &mut self.draft {
-            draft.text.insert_str(pos, &text);
-            self.cursor = Some(pos + text.len());
-        }
-    }
-    fn move_vertical(&mut self, delta: i16) {
-        let pos = self.position();
-        let Some(draft) = &self.draft else {
-            return;
-        };
-        let text = &draft.text;
-        let start = text[..pos].rfind('\n').map_or(0, |i| i + 1);
-        let col = text[start..pos].chars().count();
-        let target = if delta < 0 {
-            if start == 0 {
-                return;
-            }
-            let end = start - 1;
-            (text[..end].rfind('\n').map_or(0, |i| i + 1), end)
-        } else {
-            let Some(end) = text[pos..].find('\n').map(|i| pos + i) else {
-                return;
-            };
-            let next = end + 1;
-            (
-                next,
-                text[next..].find('\n').map_or(text.len(), |i| next + i),
-            )
-        };
-        self.cursor = Some(
-            target.0
-                + text[target.0..target.1]
-                    .char_indices()
-                    .nth(col)
-                    .map_or(target.1 - target.0, |(i, _)| i),
-        );
-    }
+
+#[derive(Debug)]
+struct Editing {
+    target: CommentTarget,
+    buffer: TextBuffer,
+    mode: EditMode,
+    /// The draft was put aside or restored before it was shown again, and the
+    /// title says so.
+    resumed: bool,
+    scroll: usize,
 }
-impl Component for CommentEditor {
-    type Context<'a> = bool;
-    type Message = DetailAction;
-    fn handle_key(&self, key: KeyEvent, _: &bool) -> Option<Action> {
-        if !self.is_open() {
-            return None;
-        }
-        if self.discard_confirm {
-            return match key.code {
-                KeyCode::Enter => Some(Action::Detail(DetailAction::CommentDiscardConfirm)),
-                KeyCode::Esc => Some(Action::Detail(DetailAction::CommentKeep)),
-                _ => None,
-            };
-        }
-        let control = key.modifiers.contains(KeyModifiers::CONTROL);
-        let action = match key.code {
-            KeyCode::Char('s') if control => DetailAction::CommentSubmit,
-            KeyCode::Char('x') if control => DetailAction::CommentDiscard,
-            KeyCode::Char(c) if !control && !key.modifiers.contains(KeyModifiers::ALT) => {
-                DetailAction::CommentType(c)
-            }
-            KeyCode::Enter => DetailAction::CommentType('\n'),
-            KeyCode::Left => DetailAction::CommentMove(-1),
-            KeyCode::Right => DetailAction::CommentMove(1),
-            KeyCode::Up => DetailAction::CommentVertical(-1),
-            KeyCode::Down => DetailAction::CommentVertical(1),
-            KeyCode::Home => DetailAction::CommentHome,
-            KeyCode::End => DetailAction::CommentEnd,
-            KeyCode::Delete => DetailAction::CommentDelete,
-            KeyCode::Backspace => DetailAction::CommentBackspace,
-            KeyCode::Esc => DetailAction::CommentCancel,
-            _ => return None,
-        };
-        Some(Action::Detail(action))
-    }
-    fn update(&mut self, action: DetailAction, _: &bool) -> Option<Action> {
-        let pos = self.position();
-        match action {
-            DetailAction::CommentType(c) => self.insert_text(&c.to_string()),
-            DetailAction::CommentMove(delta) => {
-                if let Some(draft) = &self.draft {
-                    self.cursor = Some(if delta < 0 {
-                        draft.text[..pos]
-                            .char_indices()
-                            .next_back()
-                            .map_or(0, |(i, _)| i)
-                    } else {
-                        pos + draft.text[pos..].chars().next().map_or(0, char::len_utf8)
-                    });
-                }
-            }
-            DetailAction::CommentVertical(delta) => self.move_vertical(delta),
-            DetailAction::CommentHome => {
-                if let Some(draft) = &self.draft {
-                    self.cursor = Some(draft.text[..pos].rfind('\n').map_or(0, |i| i + 1));
-                }
-            }
-            DetailAction::CommentEnd => {
-                if let Some(draft) = &self.draft {
-                    self.cursor = Some(
-                        draft.text[pos..]
-                            .find('\n')
-                            .map_or(draft.text.len(), |i| pos + i),
-                    );
-                }
-            }
-            DetailAction::CommentBackspace => {
-                if let Some(draft) = &mut self.draft
-                    && let Some((prev, _)) = draft.text[..pos].char_indices().next_back()
-                {
-                    draft.text.drain(prev..pos);
-                    self.cursor = Some(prev);
-                }
-            }
-            DetailAction::CommentDelete => {
-                if let Some(draft) = &mut self.draft
-                    && pos < draft.text.len()
-                {
-                    draft.text.remove(pos);
-                }
-            }
-            DetailAction::CommentCancel => {
-                self.suspended = true;
-                if self.draft.as_ref().is_some_and(|d| d.text.is_empty()) {
-                    self.draft = None;
-                }
-            }
-            DetailAction::CommentDiscard => self.discard_confirm = true,
-            DetailAction::CommentKeep => self.discard_confirm = false,
-            DetailAction::CommentDiscardConfirm => *self = Self::default(),
-            other => return Some(Action::Detail(other)),
-        }
-        None
-    }
-    fn render(&mut self, frame: &mut Frame<'_>, area: Rect, sending: &bool) {
-        self.render_with_review(frame, area, *sending, false);
-    }
+
+/// Where a draft is. One at a time: a draft that is put aside cannot also be
+/// asking whether to discard it.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum EditMode {
+    /// Put aside with Esc or restored from disk: kept, and not on screen.
+    Kept,
+    Typing,
+    ConfirmDiscard,
 }
 
 impl CommentEditor {
-    pub fn render_with_review(
-        &mut self,
-        frame: &mut Frame<'_>,
-        area: Rect,
-        sending: bool,
-        review_active: bool,
-    ) {
-        if !self.is_open() {
-            return;
+    /// Start a draft and show it.
+    pub const fn start(target: CommentTarget, text: String) -> Self {
+        Self {
+            editing: Some(Editing {
+                target,
+                buffer: TextBuffer::new(text),
+                mode: EditMode::Typing,
+                resumed: false,
+                scroll: 0,
+            }),
         }
-        let Some(draft) = &self.draft else {
+    }
+
+    /// A draft from an earlier session: kept until it is asked for.
+    pub fn restored(draft: CommentDraft) -> Self {
+        Self {
+            editing: Some(Editing {
+                target: draft.target,
+                buffer: TextBuffer::new(draft.text),
+                mode: EditMode::Kept,
+                resumed: true,
+                scroll: 0,
+            }),
+        }
+    }
+
+    /// Show the draft that was put aside. False when there is none, and then
+    /// the caller may start a new one.
+    pub const fn resume(&mut self) -> bool {
+        let Some(editing) = &mut self.editing else {
+            return false;
+        };
+        editing.resumed = true;
+        if matches!(editing.mode, EditMode::Kept) {
+            editing.mode = EditMode::Typing;
+        }
+        true
+    }
+
+    /// The draft is gone: it was sent.
+    pub fn clear(&mut self) {
+        self.editing = None;
+    }
+
+    pub const fn is_open(&self) -> bool {
+        match &self.editing {
+            Some(editing) => !matches!(editing.mode, EditMode::Kept),
+            None => false,
+        }
+    }
+
+    pub const fn has_draft(&self) -> bool {
+        self.editing.is_some()
+    }
+
+    pub fn target(&self) -> Option<&CommentTarget> {
+        self.editing.as_ref().map(|editing| &editing.target)
+    }
+
+    #[cfg(test)]
+    pub fn text(&self) -> Option<&str> {
+        self.editing.as_ref().map(|editing| editing.buffer.as_str())
+    }
+
+    /// The draft as it is saved and sent.
+    pub fn draft(&self) -> Option<CommentDraft> {
+        self.editing.as_ref().map(|editing| CommentDraft {
+            target: editing.target.clone(),
+            text: editing.buffer.as_str().to_owned(),
+        })
+    }
+
+    /// Typed or pasted text. Ignored unless the draft is being typed in.
+    pub fn insert_text(&mut self, text: &str) {
+        if let Some(editing) = &mut self.editing
+            && editing.mode == EditMode::Typing
+        {
+            editing.buffer.insert(text);
+        }
+    }
+}
+
+/// What the editor's frame says besides the draft itself.
+#[derive(Debug, Clone)]
+pub struct EditorView {
+    /// The draft is on its way to the server.
+    pub sending: bool,
+    /// A review is being drafted, so a line comment is added to it.
+    pub review_active: bool,
+    /// The comment a reply or an edit is about, as one line.
+    pub context: Option<String>,
+}
+
+const fn typing_key(key: KeyEvent) -> Option<EditorAction> {
+    let control = key.modifiers.contains(KeyModifiers::CONTROL);
+    Some(match key.code {
+        KeyCode::Char('s') if control => EditorAction::Submit,
+        KeyCode::Char('x') if control => EditorAction::Discard,
+        KeyCode::Char(c) if !control && !key.modifiers.contains(KeyModifiers::ALT) => {
+            EditorAction::Type(c)
+        }
+        KeyCode::Enter => EditorAction::Type('\n'),
+        KeyCode::Left => EditorAction::Move(-1),
+        KeyCode::Right => EditorAction::Move(1),
+        KeyCode::Up => EditorAction::Vertical(-1),
+        KeyCode::Down => EditorAction::Vertical(1),
+        KeyCode::Home => EditorAction::Home,
+        KeyCode::End => EditorAction::End,
+        KeyCode::Delete => EditorAction::Delete,
+        KeyCode::Backspace => EditorAction::Backspace,
+        KeyCode::Esc => EditorAction::Cancel,
+        _ => return None,
+    })
+}
+
+impl Component for CommentEditor {
+    type Input<'a> = ();
+    type View<'a> = EditorView;
+    type Message = EditorAction;
+    fn handle_key(&self, key: KeyEvent, (): &()) -> Option<Action> {
+        let action = match self.editing.as_ref()?.mode {
+            EditMode::Kept => return None,
+            EditMode::Typing => typing_key(key)?,
+            EditMode::ConfirmDiscard => match key.code {
+                KeyCode::Enter => EditorAction::DiscardConfirm,
+                KeyCode::Esc => EditorAction::Keep,
+                _ => return None,
+            },
+        };
+        Some(action.into())
+    }
+    fn update(&mut self, action: EditorAction, (): &()) -> Option<Effect> {
+        let editing = self.editing.as_mut()?;
+        match action {
+            EditorAction::Type(c) => self.insert_text(&c.to_string()),
+            EditorAction::Move(delta) => editing.buffer.move_horizontal(delta),
+            EditorAction::Vertical(delta) => editing.buffer.move_vertical(delta),
+            EditorAction::Home => editing.buffer.home(),
+            EditorAction::End => editing.buffer.end(),
+            EditorAction::Backspace => editing.buffer.backspace(),
+            EditorAction::Delete => editing.buffer.delete(),
+            // Esc keeps what was written; there is nothing to keep of an
+            // empty draft.
+            EditorAction::Cancel if editing.buffer.as_str().is_empty() => self.editing = None,
+            EditorAction::Cancel => editing.mode = EditMode::Kept,
+            EditorAction::Discard => editing.mode = EditMode::ConfirmDiscard,
+            EditorAction::Keep => editing.mode = EditMode::Typing,
+            EditorAction::DiscardConfirm => self.editing = None,
+            // Sending is the screen's: it knows the PR the draft belongs to.
+            EditorAction::Submit => {}
+        }
+        None
+    }
+    fn render(&mut self, frame: &mut Frame<'_>, area: Rect, view: &EditorView) {
+        let Some(editing) = &mut self.editing else {
             return;
+        };
+        let confirming = match editing.mode {
+            EditMode::Kept => return,
+            EditMode::Typing => false,
+            EditMode::ConfirmDiscard => true,
         };
         let width = area.width.saturating_sub(4).min(88);
         let height = area.height.saturating_sub(2).min(20);
@@ -211,14 +217,14 @@ impl CommentEditor {
             width,
             height,
         );
-        let title = match &draft.target {
+        let title = match &editing.target {
             CommentTarget::Line(a) => format!(" Comment {}:{} ", a.path, a.line),
             CommentTarget::Reply(id) => format!(" Reply to comment #{id} "),
-            CommentTarget::Edit { id, .. } => format!(" Edit comment #{id} "),
+            CommentTarget::Edit(comment) => format!(" Edit comment #{} ", comment.id),
             CommentTarget::Review { verdict } => format!(" {} review ", verdict.label()),
             CommentTarget::Pr => " PR comment ".into(),
         };
-        let title = if self.resuming {
+        let title = if editing.resumed {
             format!(" Resuming draft · {}", title.trim())
         } else {
             title
@@ -234,14 +240,14 @@ impl CommentEditor {
         frame.render_widget(block, popup);
         let hints = footer_lines(
             inner.width.saturating_sub(2),
-            sending,
-            self.discard_confirm,
-            match &draft.target {
-                CommentTarget::Line(_) if review_active => "add to review",
+            view.sending,
+            confirming,
+            match &editing.target {
+                CommentTarget::Line(_) if view.review_active => "add to review",
                 CommentTarget::Review { .. } => "submit review",
                 CommentTarget::Reply(_) => "post reply",
-                CommentTarget::Edit { .. } => "save changes",
-                _ => "post comment",
+                CommentTarget::Edit(_) => "save changes",
+                CommentTarget::Line(_) | CommentTarget::Pr => "post comment",
             },
         );
         let footer_height = saturating_u16(hints.len()).saturating_add(1);
@@ -249,9 +255,9 @@ impl CommentEditor {
             height: inner.height.saturating_sub(footer_height),
             ..inner
         };
-        if !self.discard_confirm
+        if !confirming
             && body.height > 2
-            && let Some(context) = &self.target_context
+            && let Some(context) = &view.context
         {
             let spans = crate::tui::widgets::truncate_to_width(
                 vec![Span::styled(
@@ -270,30 +276,30 @@ impl CommentEditor {
         if body.width == 0 || body.height == 0 {
             return;
         }
-        if self.discard_confirm {
+        if confirming {
             frame.render_widget(
                 Paragraph::new("Discard this draft?").style(Style::default().fg(theme.fg)),
                 body,
             );
         } else {
-            let (lines, row, col) = visual_lines(&draft.text, self.position(), body.width as usize);
-            if row < self.scroll {
-                self.scroll = row;
+            let (lines, row, col) = editing.buffer.wrapped(body.width as usize);
+            if row < editing.scroll {
+                editing.scroll = row;
             }
-            if row >= self.scroll + body.height as usize {
-                self.scroll = row + 1 - body.height as usize;
+            if row >= editing.scroll + body.height as usize {
+                editing.scroll = row + 1 - body.height as usize;
             }
             frame.render_widget(
                 Paragraph::new(lines)
                     .style(Style::default().fg(theme.fg))
-                    .scroll((saturating_u16(self.scroll), 0)),
+                    .scroll((saturating_u16(editing.scroll), 0)),
                 body,
             );
-            if !sending {
+            if !view.sending {
                 frame.set_cursor_position((
                     body.x.saturating_add(saturating_u16(col)),
                     body.y
-                        .saturating_add(saturating_u16(row.saturating_sub(self.scroll))),
+                        .saturating_add(saturating_u16(row.saturating_sub(editing.scroll))),
                 ));
             }
         }
@@ -354,115 +360,83 @@ fn footer_lines(
     lines
 }
 
-fn visual_lines(text: &str, cursor: usize, width: usize) -> (Vec<Line<'static>>, usize, usize) {
-    let mut lines = vec![String::new()];
-    let (mut row, mut col) = (0, 0);
-    let mut caret = (0, 0);
-    for (i, c) in text
-        .char_indices()
-        .chain(std::iter::once((text.len(), '\0')))
-    {
-        if c == '\n' {
-            if i == cursor {
-                caret = if col >= width {
-                    (row + 1, 0)
-                } else {
-                    (row, col)
-                };
-            }
-            lines.push(String::new());
-            row += 1;
-            col = 0;
-            continue;
-        }
-        let size = Span::raw(c.to_string()).width();
-        if col >= width || col + size > width {
-            lines.push(String::new());
-            row += 1;
-            col = 0;
-        }
-        if i == cursor {
-            caret = (row, col);
-        }
-        if i == text.len() {
-            break;
-        }
-        // `row` is always the last line: it grows with every line pushed.
-        if let Some(line) = lines.last_mut() {
-            line.push(c);
-        }
-        col += size;
-    }
-    (lines.into_iter().map(Line::raw).collect(), caret.0, caret.1)
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::{app::action::DetailAction, domain::comment::CommentId};
     fn editor(text: &str) -> CommentEditor {
-        CommentEditor {
-            draft: Some(CommentDraft {
-                target: CommentTarget::Pr,
-                text: text.into(),
-            }),
-            ..CommentEditor::default()
-        }
+        CommentEditor::start(CommentTarget::Pr, text.into())
+    }
+    fn key(editor: &CommentEditor, code: KeyCode, modifiers: KeyModifiers) -> Option<Action> {
+        editor.handle_key(KeyEvent::new(code, modifiers), &())
     }
     #[test]
     fn multiline_editing_and_paste_do_not_submit_or_trigger_shortcuts() {
         let mut e = editor("å🦀");
-        e.update(DetailAction::CommentMove(-1), &false);
+        e.update(EditorAction::Move(-1), &());
         e.insert_text("x\r\ny\tq\u{1b}");
-        assert_eq!(e.draft.as_ref().unwrap().text, "åx\ny    q🦀");
-        e.update(DetailAction::CommentDelete, &false);
-        e.update(DetailAction::CommentHome, &false);
-        e.update(DetailAction::CommentVertical(-1), &false);
+        assert_eq!(e.text(), Some("åx\ny    q🦀"));
+        e.update(EditorAction::Delete, &());
+        e.update(EditorAction::Home, &());
+        e.update(EditorAction::Vertical(-1), &());
         e.insert_text("A");
-        assert_eq!(e.draft.as_ref().unwrap().text, "Aåx\ny    q");
+        assert_eq!(e.text(), Some("Aåx\ny    q"));
         assert!(matches!(
-            e.handle_key(KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE), &false),
-            Some(Action::Detail(DetailAction::CommentType('\n')))
+            key(&e, KeyCode::Enter, KeyModifiers::NONE),
+            Some(Action::Detail(DetailAction::Editor(EditorAction::Type(
+                '\n'
+            ))))
         ));
         assert!(matches!(
-            e.handle_key(
-                KeyEvent::new(KeyCode::Char('s'), KeyModifiers::CONTROL),
-                &false
-            ),
-            Some(Action::Detail(DetailAction::CommentSubmit))
+            key(&e, KeyCode::Char('s'), KeyModifiers::CONTROL),
+            Some(Action::Detail(DetailAction::Editor(EditorAction::Submit)))
         ));
     }
     #[test]
     fn escape_keeps_work_and_discard_requires_confirmation() {
         let mut e = editor("keep");
-        e.update(DetailAction::CommentCancel, &false);
+        e.update(EditorAction::Cancel, &());
         assert!(!e.is_open());
-        assert_eq!(e.draft.as_ref().unwrap().text, "keep");
-        e.suspended = false;
-        e.update(DetailAction::CommentDiscard, &false);
+        assert_eq!(e.text(), Some("keep"));
+        assert!(
+            key(&e, KeyCode::Char('x'), KeyModifiers::NONE).is_none(),
+            "a draft that is put aside takes no keys"
+        );
+        assert!(e.resume());
+        e.update(EditorAction::Discard, &());
         e.insert_text("ignored");
-        assert_eq!(e.draft.as_ref().unwrap().text, "keep");
-        e.update(DetailAction::CommentKeep, &false);
+        assert_eq!(e.text(), Some("keep"));
+        assert!(matches!(
+            key(&e, KeyCode::Esc, KeyModifiers::NONE),
+            Some(Action::Detail(DetailAction::Editor(EditorAction::Keep)))
+        ));
+        e.update(EditorAction::Keep, &());
         assert!(e.is_open());
-        e.update(DetailAction::CommentDiscard, &false);
-        e.update(DetailAction::CommentDiscardConfirm, &false);
-        assert!(e.draft.is_none());
+        e.update(EditorAction::Discard, &());
+        e.update(EditorAction::DiscardConfirm, &());
+        assert!(!e.has_draft());
+        assert!(!e.resume(), "nothing is left to resume");
     }
     #[test]
-    fn wrapped_unicode_cursor_remains_inside_viewport() {
-        let (lines, row, col) = visual_lines("1234\nx", 6, 4);
-        assert_eq!(lines.len(), 2);
-        assert_eq!((row, col), (1, 1));
-        for width in [2, 6, 30] {
-            let text = "å🦀long text\nsecond line\n";
-            for pos in text
-                .char_indices()
-                .map(|(i, _)| i)
-                .chain(std::iter::once(text.len()))
-            {
-                let (lines, row, col) = visual_lines(text, pos, width);
-                assert!(row < lines.len());
-                assert!(col < width);
-            }
-        }
+    fn an_empty_draft_is_dropped_by_escape_and_a_restored_one_waits_to_be_asked_for() {
+        let mut e = editor("");
+        e.update(EditorAction::Cancel, &());
+        assert!(!e.has_draft());
+
+        let mut e = CommentEditor::restored(CommentDraft {
+            target: CommentTarget::Reply(CommentId(7)),
+            text: "from last time".into(),
+        });
+        assert!(e.has_draft() && !e.is_open());
+        assert!(e.resume());
+        assert!(e.is_open());
+        e.insert_text("!");
+        assert_eq!(e.draft().unwrap().text, "from last time!");
+        assert!(matches!(
+            e.target(),
+            Some(CommentTarget::Reply(CommentId(7)))
+        ));
+        e.clear();
+        assert!(!e.has_draft());
     }
 }

@@ -1,17 +1,100 @@
 use super::user::User;
 use chrono::{DateTime, Utc};
 
+/// A comment's id at its provider. A type of its own, so that it cannot be
+/// passed where a PR's number is expected.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, serde::Serialize, serde::Deserialize)]
+#[serde(transparent)]
+pub struct CommentId(pub u64);
+
+impl std::fmt::Display for CommentId {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        self.0.fmt(f)
+    }
+}
+
 #[derive(Debug, Clone)]
 pub struct Comment {
     /// The comment's own id (GitHub `databaseId`, Bitbucket `id`), used to edit
     /// or delete it. `None` when the provider didn't supply one.
-    pub id: Option<u64>,
+    pub id: Option<CommentId>,
     pub author: User,
     pub content: String,
     pub created: DateTime<Utc>,
     pub reactions: Vec<Reaction>,
     /// Id to hang a reply under, when the provider threads this comment (None = no threading).
-    pub reply_to: Option<u64>,
+    pub reply_to: Option<CommentId>,
+}
+
+/// Text with something in it besides whitespace: what a comment has to be
+/// before it is sent or queued. `new` is the only way to make one, so nothing
+/// that takes it checks again.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct NonBlank(String);
+
+impl NonBlank {
+    pub fn new(text: String) -> Option<Self> {
+        (!text.trim().is_empty()).then_some(Self(text))
+    }
+
+    #[cfg(test)]
+    pub fn as_str(&self) -> &str {
+        &self.0
+    }
+
+    pub fn into_string(self) -> String {
+        self.0
+    }
+}
+
+#[cfg(test)]
+impl From<&str> for NonBlank {
+    fn from(text: &str) -> Self {
+        Self::new(text.to_owned()).expect("a test comment is not blank")
+    }
+}
+
+/// Which of the two kinds of comment a provider keeps. GitHub edits and
+/// deletes them through different endpoints.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum CommentKind {
+    /// A comment on the PR as a whole.
+    Conversation,
+    /// A comment in a review thread on the code.
+    Review,
+}
+
+/// A comment that can be edited or deleted: the provider gave it an id.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
+pub struct CommentKey {
+    pub id: CommentId,
+    /// Saved drafts spell this `review: bool`; the file is older than the enum.
+    #[serde(rename = "review", with = "review_flag")]
+    pub kind: CommentKind,
+}
+
+mod review_flag {
+    use super::CommentKind;
+    use serde::{Deserialize, Deserializer, Serializer};
+
+    #[expect(
+        clippy::trivially_copy_pass_by_ref,
+        reason = "the signature is serde's"
+    )]
+    pub fn serialize<S: Serializer>(kind: &CommentKind, serializer: S) -> Result<S::Ok, S::Error> {
+        serializer.serialize_bool(match kind {
+            CommentKind::Review => true,
+            CommentKind::Conversation => false,
+        })
+    }
+
+    pub fn deserialize<'de, D: Deserializer<'de>>(source: D) -> Result<CommentKind, D::Error> {
+        Ok(if bool::deserialize(source)? {
+            CommentKind::Review
+        } else {
+            CommentKind::Conversation
+        })
+    }
 }
 
 #[derive(Debug, Clone)]
@@ -46,7 +129,7 @@ pub fn split_suggestions(body: &str) -> (String, Vec<String>) {
 pub struct CommentThread {
     pub comments: Vec<Comment>,
     /// Id of the comment a reply should hang under (None = can't reply, e.g. no id parsed).
-    pub reply_to: Option<u64>,
+    pub reply_to: Option<CommentId>,
     /// Code-review context: where the thread is anchored and its resolution.
     /// `None` for a general discussion thread (no code location, not resolvable).
     pub anchor: Option<ThreadAnchor>,
@@ -57,12 +140,22 @@ pub struct CommentThread {
 pub struct ThreadAnchor {
     pub revision: Option<String>,
     pub path: String,
-    pub line: Option<usize>,
-    pub old_line: Option<usize>,
+    /// The line it is on; none for a thread on the file as a whole.
+    pub line: Option<super::diff::LineRef>,
     pub resolved: bool,
-    /// GitHub GraphQL thread node id, needed to resolve/unresolve. None on Bitbucket
-    /// (which toggles the root comment's state instead).
-    pub node_id: Option<String>,
+    /// What resolving or reopening the thread takes; none when the provider
+    /// gave nothing to address it by.
+    pub handle: Option<ThreadHandle>,
+}
+
+/// How a provider addresses a thread to resolve or reopen it. The provider
+/// that read the thread makes the handle, so there is exactly one way.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum ThreadHandle {
+    /// GitHub: the GraphQL node id of the review thread.
+    NodeId(String),
+    /// Bitbucket: the thread's root comment, whose state is toggled.
+    RootComment(CommentId),
 }
 
 impl CommentThread {
@@ -70,6 +163,15 @@ impl CommentThread {
         self.anchor
             .as_ref()
             .is_some_and(|anchor| anchor.revision.as_deref() == revision.map(|r| r.head.as_str()))
+    }
+
+    /// Anchored threads hold review comments; a general discussion's are
+    /// comments on the PR.
+    pub const fn kind(&self) -> CommentKind {
+        match self.anchor {
+            Some(_) => CommentKind::Review,
+            None => CommentKind::Conversation,
+        }
     }
 
     /// A code-review thread that's been resolved. General discussion is never
@@ -81,6 +183,16 @@ impl CommentThread {
 
 #[cfg(test)]
 mod tests {
+    #[test]
+    fn a_comment_needs_more_than_whitespace_and_is_kept_as_written() {
+        use super::NonBlank;
+        assert_eq!(NonBlank::new(String::new()), None);
+        assert_eq!(NonBlank::new(" \n\t".into()), None);
+        let text = NonBlank::new("  indented\n".into()).unwrap();
+        assert_eq!(text.as_str(), "  indented\n");
+        assert_eq!(text.into_string(), "  indented\n");
+    }
+
     use super::*;
 
     #[test]
@@ -149,10 +261,9 @@ mod tests {
         ThreadAnchor {
             revision: revision.map(str::to_owned),
             path: "src/lib.rs".into(),
-            line: Some(3),
-            old_line: None,
+            line: Some(crate::domain::diff::LineRef::New(3)),
             resolved,
-            node_id: None,
+            handle: None,
         }
     }
 

@@ -1,10 +1,10 @@
 use crate::{
     app::{
-        action::{Action, DetailAction},
+        action::{Action, Effect, TimelineAction},
         store::{LoadState, PrData},
     },
     domain::{
-        comment::{Comment, CommentThread},
+        comment::{Comment, CommentId, CommentKind, CommentThread},
         diff::Diff,
         event::{EventKind, TimelineEvent},
     },
@@ -69,10 +69,7 @@ fn render_timeline(
         return;
     }
 
-    let diff = pr_data.and_then(|d| match &d.diff {
-        LoadState::Loaded(diff) => Some(diff),
-        _ => None,
-    });
+    let diff = pr_data.and_then(|data| data.diff.loaded());
 
     let previous_selection = ui.selected.filter(|selected| selected.id.is_some());
     if let Some(selected) = previous_selection {
@@ -93,17 +90,17 @@ fn render_timeline(
             .iter()
             .enumerate()
             .find_map(|(cursor, item)| match item {
-                TimelineItem::Comment(comment) if !selected.review && comment.id == selected.id => {
+                TimelineItem::Comment(comment)
+                    if selected == CommentRef::new(comment.id, CommentKind::Conversation) =>
+                {
                     Some((cursor, 0))
                 }
-                TimelineItem::Review(thread) if selected.review == thread.anchor.is_some() => {
-                    thread
-                        .comments
-                        .iter()
-                        .position(|comment| comment.id == selected.id)
-                        .map(|sub| (cursor, sub))
-                }
-                _ => None,
+                TimelineItem::Review(thread) if selected.kind == thread.kind() => thread
+                    .comments
+                    .iter()
+                    .position(|comment| comment.id == selected.id)
+                    .map(|sub| (cursor, sub)),
+                TimelineItem::Comment(_) | TimelineItem::Review(_) | TimelineItem::Event(_) => None,
             });
         if let Some((cursor, sub)) = found {
             ui.cursor = cursor;
@@ -145,10 +142,8 @@ fn render_timeline(
     ui.selected = focused.and_then(|n| n.comments.get(sub).copied());
 
     let selected_row = focused.map(|n| n.selected_range.as_ref().map_or(n.start, |r| r.start));
-    if previous_selection.is_some_and(|old| {
-        ui.selected
-            .is_some_and(|new| old.id == new.id && old.review == new.review)
-    }) && let (Some(before), Some(after)) = (ui.selected_row, selected_row)
+    if previous_selection.is_some_and(|old| ui.selected.is_some_and(|new| old == new))
+        && let (Some(before), Some(after)) = (ui.selected_row, selected_row)
     {
         ui.scroll = saturating_u16(
             usize::from(ui.scroll)
@@ -211,7 +206,7 @@ struct TimelineBlock {
     /// Colour of the dash after the node — tracks the box's left border
     /// (muted-light when focused, divider otherwise).
     border: Color,
-    reply_to: Option<u64>,
+    reply_to: Option<CommentId>,
     /// Comments and review threads are focus targets for j/k; events render
     /// inline for context but the cursor skips them.
     focusable: bool,
@@ -225,7 +220,7 @@ struct ItemNav {
     start: usize,
     span: usize,
     selected_range: Option<std::ops::Range<usize>>,
-    reply_to: Option<u64>,
+    reply_to: Option<CommentId>,
     focusable: bool,
     comments: Vec<CommentRef>,
     resolve: Option<ThreadRef>,
@@ -272,10 +267,7 @@ fn build_blocks(
                     border: if active { theme.accent } else { theme.divider },
                     reply_to: c.reply_to,
                     focusable: true,
-                    comments: vec![CommentRef {
-                        id: c.id,
-                        review: false,
-                    }],
+                    comments: vec![CommentRef::new(c.id, CommentKind::Conversation)],
                     resolve: None,
                 });
                 focus_idx += 1;
@@ -296,17 +288,12 @@ fn build_blocks(
                         comments: t
                             .comments
                             .iter()
-                            .map(|c| CommentRef {
-                                id: c.id,
-                                // Anchored threads are review comments; a general
-                                // discussion's are PR-level (issue) comments.
-                                review: t.anchor.is_some(),
-                            })
+                            .map(|c| CommentRef::new(c.id, t.kind()))
                             .collect(),
                         // Only anchored threads can be resolved — general
                         // discussion has no resolve target (so `R` no-ops).
                         resolve: t.anchor.as_ref().map(|a| ThreadRef {
-                            node_id: a.node_id.clone(),
+                            handle: a.handle.clone(),
                             comment_id: t.reply_to,
                             resolved: a.resolved,
                         }),
@@ -428,7 +415,7 @@ pub struct Timeline {
     pub scroll: u16,
     pub cursor: usize,
     pub item_count: usize,
-    pub reply: Option<u64>,
+    pub reply: Option<CommentId>,
     pub thread: Option<ThreadRef>,
     pub sub: usize,
     pub block_len: usize,
@@ -439,43 +426,35 @@ pub struct Timeline {
 }
 
 impl Component for Timeline {
-    type Context<'a> = TimelineContext<'a>;
-    type Message = DetailAction;
-    fn handle_key(&self, key: KeyEvent, _: &Self::Context<'_>) -> Option<Action> {
-        if key
+    type Input<'a> = ();
+    type View<'a> = TimelineContext<'a>;
+    type Message = TimelineAction;
+    fn handle_key(&self, key: KeyEvent, (): &()) -> Option<Action> {
+        let control = key
             .modifiers
-            .contains(crossterm::event::KeyModifiers::CONTROL)
-        {
-            match key.code {
-                KeyCode::Char('j') => {
-                    return Some(Action::Detail(DetailAction::OverviewSubMove(1)));
-                }
-                KeyCode::Char('k') => {
-                    return Some(Action::Detail(DetailAction::OverviewSubMove(-1)));
-                }
-                _ => {}
+            .contains(crossterm::event::KeyModifiers::CONTROL);
+        let action = match key.code {
+            KeyCode::Char('j') if control => TimelineAction::SubMove(1),
+            KeyCode::Char('k') if control => TimelineAction::SubMove(-1),
+            KeyCode::Char('j') | KeyCode::Down => TimelineAction::Move(1),
+            KeyCode::Char('k') | KeyCode::Up => TimelineAction::Move(-1),
+            KeyCode::PageDown => {
+                TimelineAction::Scroll(crate::tui::screens::half_page(self.viewport))
             }
-        }
-
-        let delta = match key.code {
-            KeyCode::Char('j') | KeyCode::Down => 1,
-            KeyCode::Char('k') | KeyCode::Up => -1,
-            KeyCode::PageDown | KeyCode::PageUp => {
-                let delta = crate::tui::screens::half_page(self.viewport)
-                    * if key.code == KeyCode::PageUp { -1 } else { 1 };
-                return Some(Action::Detail(DetailAction::OverviewScroll(delta)));
+            KeyCode::PageUp => {
+                TimelineAction::Scroll(-crate::tui::screens::half_page(self.viewport))
             }
             _ => return None,
         };
-        Some(Action::Detail(DetailAction::OverviewMove(delta)))
+        Some(action.into())
     }
-    fn update(&mut self, action: DetailAction, _: &Self::Context<'_>) -> Option<Action> {
+    fn update(&mut self, action: TimelineAction, (): &()) -> Option<Effect> {
         match action {
-            DetailAction::OverviewScroll(delta) => {
+            TimelineAction::Scroll(delta) => {
                 self.scroll = scroll(self.scroll, delta);
                 self.reveal_selection = false;
             }
-            DetailAction::OverviewMove(delta) => {
+            TimelineAction::Move(delta) => {
                 if self.item_count <= 1 {
                     self.scroll = scroll(self.scroll, delta);
                 } else {
@@ -489,7 +468,7 @@ impl Component for Timeline {
                     }
                 }
             }
-            DetailAction::OverviewSubMove(delta) => {
+            TimelineAction::SubMove(delta) => {
                 let next = step_index(self.sub, delta, self.block_len);
                 if next != self.sub {
                     self.selected = None;
@@ -498,11 +477,10 @@ impl Component for Timeline {
                 self.reveal_selection = next != self.sub;
                 self.sub = next;
             }
-            _ => {}
         }
         None
     }
-    fn render(&mut self, frame: &mut Frame<'_>, area: Rect, ctx: &Self::Context<'_>) {
+    fn render(&mut self, frame: &mut Frame<'_>, area: Rect, ctx: &TimelineContext<'_>) {
         render_timeline(frame, ctx.data, self, ctx.author, area, ctx.scrollbar);
     }
 }

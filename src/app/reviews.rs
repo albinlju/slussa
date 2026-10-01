@@ -6,7 +6,10 @@
 //! collects line comments locally until a verdict submits them together.
 //! Everything here is serializable because `drafts` persists it.
 
-use crate::domain::review::ReviewVerdict;
+use crate::domain::{
+    comment::{CommentId, CommentKey},
+    review::ReviewVerdict,
+};
 
 pub use crate::domain::review::CommentAnchor;
 
@@ -14,12 +17,9 @@ pub use crate::domain::review::CommentAnchor;
 pub enum CommentTarget {
     Line(CommentAnchor),
     Pr,
-    Reply(u64),
-    /// Editing an existing comment; `review` picks the right provider endpoint.
-    Edit {
-        id: u64,
-        review: bool,
-    },
+    Reply(CommentId),
+    /// Editing an existing comment.
+    Edit(CommentKey),
     /// The summary body of a review verdict that carries one (request changes /
     /// comment).
     Review {

@@ -2,7 +2,7 @@ mod sidebar;
 pub mod timeline;
 use crate::{
     app::{
-        action::{Action, DetailAction},
+        action::{Action, Effect, TimelineAction},
         store::PrData,
     },
     domain::{
@@ -25,48 +25,27 @@ pub struct OverviewContext<'a> {
     pub pr: &'a PullRequest,
     pub data: Option<&'a PrData>,
     pub capabilities: &'a Capabilities,
+    /// Where the timeline's scrollbar goes: the screen's edge, not the tab's.
+    pub scrollbar: Rect,
 }
 
 #[derive(Debug, Default)]
 pub struct Overview {
     pub timeline: Timeline,
 }
-impl Overview {
-    pub fn render_with_scrollbar(
-        &mut self,
-        frame: &mut Frame<'_>,
-        area: Rect,
-        ctx: &OverviewContext<'_>,
-        scrollbar: Rect,
-    ) {
-        render(frame, ctx, self, area, scrollbar);
-    }
-}
+
 impl Component for Overview {
-    type Context<'a> = OverviewContext<'a>;
-    type Message = DetailAction;
-    fn handle_key(&self, key: KeyEvent, ctx: &Self::Context<'_>) -> Option<Action> {
-        self.timeline.handle_key(
-            key,
-            &TimelineContext {
-                data: ctx.data,
-                author: &ctx.pr.author.username,
-                scrollbar: Rect::default(),
-            },
-        )
+    type Input<'a> = ();
+    type View<'a> = OverviewContext<'a>;
+    type Message = TimelineAction;
+    fn handle_key(&self, key: KeyEvent, (): &()) -> Option<Action> {
+        self.timeline.handle_key(key, &())
     }
-    fn update(&mut self, action: DetailAction, ctx: &Self::Context<'_>) -> Option<Action> {
-        self.timeline.update(
-            action,
-            &TimelineContext {
-                data: ctx.data,
-                author: &ctx.pr.author.username,
-                scrollbar: Rect::default(),
-            },
-        )
+    fn update(&mut self, action: TimelineAction, (): &()) -> Option<Effect> {
+        self.timeline.update(action, &())
     }
-    fn render(&mut self, frame: &mut Frame<'_>, area: Rect, ctx: &Self::Context<'_>) {
-        self.render_with_scrollbar(frame, area, ctx, layout::scrollbar_area(area));
+    fn render(&mut self, frame: &mut Frame<'_>, area: Rect, ctx: &OverviewContext<'_>) {
+        render(frame, ctx, self, area, ctx.scrollbar);
     }
 }
 

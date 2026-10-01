@@ -1,10 +1,14 @@
 use crate::{
     app::{
-        action::{Action, CommitsAction},
+        action::{Action, CommitsAction, Effect},
         reviews::PendingComment,
         store::{LoadState, PrData},
     },
-    domain::{comment::CommentThread, commit::Commit},
+    domain::{
+        comment::CommentThread,
+        commit::{Commit, CommitOid},
+        pr::PrId,
+    },
     tui::{
         component::{Component, step_index},
         components::{
@@ -86,7 +90,7 @@ fn commit_row(commit: &Commit, is_last: bool, now: DateTime<Utc>, width: usize) 
             Span::styled(age, Style::default().fg(theme.muted)),
         ]
     };
-    let oid_cell = format!("{}  ", short_oid(&commit.oid));
+    let oid_cell = format!("{}  ", commit.oid.short());
     let headline = commit.headline.clone();
 
     let left = vec![
@@ -106,7 +110,7 @@ pub fn render_commit_diff(
     author: &str,
     area: Rect,
 ) {
-    let Some(oid) = cv.open_commit.clone() else {
+    let CommitsView::Diff { oid, viewer } = &mut cv.view else {
         return;
     };
     let [banner_area, diff_area] = layout::split(
@@ -115,10 +119,10 @@ pub fn render_commit_diff(
         [Constraint::Length(2), Constraint::Min(0)],
     );
 
-    render_commit_banner(frame, pr_data, &oid, banner_area);
+    render_commit_banner(frame, pr_data, oid, banner_area);
 
-    let diff_state = pr_data.and_then(|d| d.diff_for(Some(&oid)));
-    cv.diff.render(
+    let diff_state = pr_data.and_then(|d| d.diff_for(Some(oid)));
+    viewer.render(
         frame,
         diff_area,
         &DiffContext {
@@ -130,7 +134,12 @@ pub fn render_commit_diff(
     );
 }
 
-fn render_commit_banner(frame: &mut Frame<'_>, pr_data: Option<&PrData>, oid: &str, area: Rect) {
+fn render_commit_banner(
+    frame: &mut Frame<'_>,
+    pr_data: Option<&PrData>,
+    oid: &CommitOid,
+    area: Rect,
+) {
     let theme = theme::current();
     let block = Block::default()
         .borders(Borders::BOTTOM)
@@ -142,7 +151,7 @@ fn render_commit_banner(frame: &mut Frame<'_>, pr_data: Option<&PrData>, oid: &s
         Some(LoadState::Loaded(c)) => c.as_slice(),
         _ => &[],
     };
-    let found = commits.iter().enumerate().find(|(_, c)| c.oid == oid);
+    let found = commits.iter().enumerate().find(|(_, c)| &c.oid == oid);
     let total = commits.len();
 
     let mut left = vec![
@@ -151,7 +160,7 @@ fn render_commit_banner(frame: &mut Frame<'_>, pr_data: Option<&PrData>, oid: &s
             Style::default().fg(theme.decorative),
         ),
         Span::styled(
-            short_oid(oid),
+            oid.short(),
             Style::default()
                 .fg(theme.decorative)
                 .add_modifier(Modifier::BOLD),
@@ -181,30 +190,55 @@ fn render_commit_banner(frame: &mut Frame<'_>, pr_data: Option<&PrData>, oid: &s
     frame.render_widget(Paragraph::new(line), inner);
 }
 
-fn short_oid(oid: &str) -> String {
-    oid.chars().take(7).collect()
-}
-
 #[derive(Debug, Default)]
 pub struct CommitList {
     pub selected: usize,
     list_state: ListState,
     pub viewport: u16,
     pub search: SearchInput,
-    pub open_commit: Option<String>,
-    pub diff: DiffViewer,
+    view: CommitsView,
+}
+
+/// What the Commits tab shows. A commit's diff has a viewer of its own, made
+/// when the commit is opened, so it never moves the PR diff's cursor or search.
+#[derive(Debug, Default)]
+enum CommitsView {
+    #[default]
+    List,
+    Diff {
+        oid: CommitOid,
+        viewer: Box<DiffViewer>,
+    },
 }
 
 pub struct CommitContext<'a> {
-    pub pr_id: u64,
     pub data: Option<&'a PrData>,
     pub pending: &'a [PendingComment],
     pub author: &'a str,
 }
+
+/// The commits to move between, and the PR a commit's diff is asked for.
+pub struct CommitInput<'a> {
+    pub pr_id: PrId,
+    pub commits: &'a [Commit],
+}
+
+impl<'a> CommitInput<'a> {
+    pub fn new(pr_id: PrId, data: Option<&'a PrData>) -> Self {
+        Self {
+            pr_id,
+            commits: data
+                .and_then(|data| data.commits.loaded())
+                .map_or(&[], Vec::as_slice),
+        }
+    }
+}
+
 impl Component for CommitList {
-    type Context<'a> = CommitContext<'a>;
+    type Input<'a> = CommitInput<'a>;
+    type View<'a> = CommitContext<'a>;
     type Message = CommitsAction;
-    fn handle_key(&self, key: KeyEvent, _: &CommitContext<'_>) -> Option<Action> {
+    fn handle_key(&self, key: KeyEvent, _: &CommitInput<'_>) -> Option<Action> {
         let action = match key.code {
             KeyCode::Char('j') | KeyCode::Down => CommitsAction::MoveSelection(1),
             KeyCode::Char('k') | KeyCode::Up => CommitsAction::MoveSelection(-1),
@@ -219,15 +253,11 @@ impl Component for CommitList {
         };
         Some(Action::Commits(action))
     }
-    fn update(&mut self, action: CommitsAction, ctx: &CommitContext<'_>) -> Option<Action> {
-        let commits = match ctx.data.map(|d| &d.commits) {
-            Some(LoadState::Loaded(c)) => c.as_slice(),
-            _ => &[],
-        };
-        let filtered = self.search.filter_commits(commits);
+    fn update(&mut self, action: CommitsAction, input: &CommitInput<'_>) -> Option<Effect> {
+        let filtered = self.search.filter_commits(input.commits);
         match action {
             CommitsAction::Back => {
-                self.open_commit = None;
+                self.close_commit();
                 return None;
             }
             CommitsAction::MoveSelection(delta) => {
@@ -244,15 +274,17 @@ impl Component for CommitList {
             CommitsAction::Open => {}
         }
         let oid = filtered.get(self.selected)?.oid.clone();
-        self.open_commit = Some(oid.clone());
-        self.diff = DiffViewer::default();
-        Some(Action::LoadCommitDiff {
-            pr_id: ctx.pr_id,
+        self.view = CommitsView::Diff {
+            oid: oid.clone(),
+            viewer: Box::default(),
+        };
+        Some(Effect::LoadCommitDiff {
+            pr_id: input.pr_id,
             oid,
         })
     }
     fn render(&mut self, frame: &mut Frame<'_>, area: Rect, ctx: &CommitContext<'_>) {
-        if self.open_commit.is_some() {
+        if self.open_commit().is_some() {
             let threads = match ctx.data.map(|d| &d.activity) {
                 Some(LoadState::Loaded(a)) => a.threads.as_slice(),
                 _ => &[],
@@ -273,6 +305,34 @@ impl Component for CommitList {
 }
 
 impl CommitList {
+    /// The commit whose diff is open, if one is.
+    pub const fn open_commit(&self) -> Option<&CommitOid> {
+        match &self.view {
+            CommitsView::List => None,
+            CommitsView::Diff { oid, .. } => Some(oid),
+        }
+    }
+
+    /// The open commit's diff viewer.
+    pub const fn diff(&self) -> Option<&DiffViewer> {
+        match &self.view {
+            CommitsView::List => None,
+            CommitsView::Diff { viewer, .. } => Some(viewer),
+        }
+    }
+
+    pub const fn diff_mut(&mut self) -> Option<&mut DiffViewer> {
+        match &mut self.view {
+            CommitsView::List => None,
+            CommitsView::Diff { viewer, .. } => Some(viewer),
+        }
+    }
+
+    /// Back to the list of commits.
+    pub fn close_commit(&mut self) {
+        self.view = CommitsView::List;
+    }
+
     pub fn reconcile(&mut self, old: &[Commit], new: &[Commit]) {
         let id = self
             .search
@@ -288,10 +348,7 @@ impl CommitList {
         use crate::app::action::SearchAction;
         self.search.update(
             action,
-            &crate::tui::components::search_input::SearchContext {
-                highlight: false,
-                matches: 0,
-            },
+            &crate::tui::components::search_input::SearchKind::Filter,
         );
         if !matches!(action, SearchAction::Open | SearchAction::Confirm) {
             self.selected = 0;
@@ -308,7 +365,7 @@ mod tests {
     fn commit_rows_prioritize_title_in_narrow_views() {
         let now = Utc::now();
         let commit = Commit {
-            oid: "abcdef123456".into(),
+            oid: CommitOid("abcdef123456".into()),
             headline: "Fix 非常に長い headline with more details".into(),
             author_name: "a-very-long-author-name".into(),
             authored_at: now,

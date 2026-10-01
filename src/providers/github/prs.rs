@@ -2,7 +2,7 @@ use chrono::{DateTime, Utc};
 use serde::Deserialize;
 
 use crate::domain::ci::CiSummary;
-use crate::domain::pr::{PrBatch, PrGroup, PrInfo, PrStatus, PullRequest};
+use crate::domain::pr::{PrBatch, PrGroup, PrId, PrInfo, PrStatus, PullRequest};
 use crate::domain::review::{Reviewer, ReviewerState};
 use crate::domain::user::User;
 use crate::providers::error::FetchError;
@@ -68,17 +68,6 @@ struct ReviewRequest {
 #[derive(Debug, Default, Deserialize)]
 struct RequestedReviewer {
     login: Option<String>,
-}
-
-#[derive(Debug, Deserialize)]
-#[serde(rename_all = "camelCase")]
-struct GhCheck {
-    #[serde(default)]
-    conclusion: String,
-    #[serde(default)]
-    status: String,
-    #[serde(default)]
-    state: String,
 }
 
 #[derive(Debug, Deserialize)]
@@ -180,7 +169,7 @@ fn complete(mut prs: Vec<GhPr>) -> Result<Vec<PullRequest>, FetchError> {
 }
 
 /// The description and labels of one PR.
-pub fn fetch_info(pr: u64) -> Result<PrInfo, FetchError> {
+pub fn fetch_info(pr: PrId) -> Result<PrInfo, FetchError> {
     #[derive(Deserialize)]
     struct Fields {
         id: String,
@@ -201,24 +190,19 @@ pub fn fetch_info(pr: u64) -> Result<PrInfo, FetchError> {
 }
 
 fn map_pr(gh: GhPr) -> PullRequest {
-    let checks: Vec<GhCheck> = gh
-        .commits
-        .nodes
-        .into_iter()
-        .filter_map(|n| n.commit.status_check_rollup)
-        .map(|s| GhCheck {
-            state: s.state,
-            conclusion: String::new(),
-            status: String::new(),
-        })
-        .collect();
-    let ci_state = summarize_checks(&checks);
+    let ci_state = summarize_checks(
+        gh.commits
+            .nodes
+            .into_iter()
+            .filter_map(|node| node.commit.status_check_rollup)
+            .map(|rollup| rollup.state),
+    );
     let reviewers = with_requests(map_reviewers(gh.latest_reviews.nodes), gh.review_requests);
     let comment_count = gh.comments.total_count + gh.review_threads.total_count;
 
     PullRequest {
         url: gh.url,
-        id: gh.number,
+        id: PrId(gh.number),
         title: gh.title,
         description: None,
         author: User {
@@ -245,35 +229,21 @@ fn map_pr(gh: GhPr) -> PullRequest {
     }
 }
 
-fn summarize_checks(checks: &[GhCheck]) -> CiSummary {
-    if checks.is_empty() {
-        return CiSummary::Unknown;
-    }
-
+/// A PR's CI state from the status rollups of the commits read for it (the
+/// last one). No rollup, or one in a state not known here, is `Unknown`.
+fn summarize_checks(states: impl IntoIterator<Item = String>) -> CiSummary {
     let mut any_failure = false;
     let mut any_pending = false;
     let mut any_success = false;
 
-    for c in checks {
-        let outcome = if !c.conclusion.is_empty() {
-            c.conclusion.as_str()
-        } else if !c.state.is_empty() {
-            c.state.as_str()
-        } else {
-            ""
-        };
-
-        match outcome {
+    for state in states {
+        match state.as_str() {
             "FAILURE" | "ERROR" | "TIMED_OUT" | "CANCELLED" | "ACTION_REQUIRED" => {
                 any_failure = true;
             }
             "SUCCESS" => any_success = true,
             "PENDING" | "QUEUED" | "IN_PROGRESS" => any_pending = true,
             _ => {}
-        }
-
-        if c.status == "IN_PROGRESS" || c.status == "QUEUED" {
-            any_pending = true;
         }
     }
 
@@ -373,5 +343,29 @@ mod comment_count_tests {
     fn without_threads_only_the_conversation_comments_count() {
         assert_eq!(comment_count(None), 1);
         assert_eq!(comment_count(Some(0)), 1);
+    }
+}
+
+#[cfg(test)]
+mod ci_tests {
+    use super::*;
+
+    fn summary(states: &[&str]) -> CiSummary {
+        summarize_checks(states.iter().map(|state| (*state).to_owned()))
+    }
+
+    #[test]
+    fn the_rollup_state_becomes_the_ci_summary_and_a_failure_outweighs_the_rest() {
+        assert_eq!(summary(&[]), CiSummary::Unknown, "no checks at all");
+        assert_eq!(summary(&["SUCCESS"]), CiSummary::Success);
+        assert_eq!(summary(&["PENDING"]), CiSummary::Pending);
+        assert_eq!(summary(&["FAILURE"]), CiSummary::Failed);
+        assert_eq!(summary(&["ERROR"]), CiSummary::Failed);
+        assert_eq!(summary(&["EXPECTED"]), CiSummary::Unknown);
+        assert_eq!(summary(&["SUCCESS", "PENDING"]), CiSummary::Pending);
+        assert_eq!(
+            summary(&["SUCCESS", "PENDING", "FAILURE"]),
+            CiSummary::Failed
+        );
     }
 }

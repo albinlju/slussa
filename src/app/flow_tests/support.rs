@@ -2,12 +2,12 @@
 
 pub(super) use crate::app::{
     App,
-    action::{Action, Command, ListAction},
+    action::{Action, Command, Effect, ListAction},
     reviews::CommentTarget,
     store::{FetchKey, LoadState, OpenChain},
 };
 pub(super) use crate::{
-    domain::pr::PrGroup,
+    domain::pr::{PrGroup, PrId},
     providers::Provider,
     test_support::{FakeGh, gh_closed_pr, gh_list_page, gh_pr},
     tui::screens::pr_list::StatusFilter,
@@ -16,17 +16,20 @@ pub(super) use serde_json::json;
 pub(super) use std::time::Duration;
 
 pub(super) fn app() -> App {
-    App::new(Provider::GitHub, "me".into())
+    App::new(
+        crate::app::preflight::Session::for_test(Provider::GitHub, "me"),
+        crate::app::drafts::Drafts::Nowhere,
+    )
 }
 
 /// Apply provider results until nothing is in flight.
 pub(super) async fn settle(app: &mut App) {
     while !app.state.store.fetches.is_empty() || !app.state.store.operations.is_empty() {
-        let action = tokio::time::timeout(Duration::from_secs(10), app.action_rx.recv())
+        let action = tokio::time::timeout(Duration::from_secs(10), app.results_rx.recv())
             .await
             .expect("a provider result within 10 seconds")
             .expect("the action channel stays open");
-        app.apply(action);
+        app.apply_result(action);
     }
 }
 
@@ -69,7 +72,7 @@ pub(super) fn any_connection() -> String {
 
 pub(super) fn loaded_ids(app: &App) -> Vec<u64> {
     match &app.state.store.cache.prs {
-        LoadState::Loaded(prs) => prs.iter().map(|pr| pr.id).collect(),
+        LoadState::Loaded(prs) => prs.iter().map(|pr| pr.id.0).collect(),
         other => panic!("PR list is not loaded: {other:?}"),
     }
 }

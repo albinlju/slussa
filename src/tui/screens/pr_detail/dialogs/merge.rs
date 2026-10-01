@@ -1,7 +1,8 @@
 use crate::{
-    app::action::{Action, DetailAction},
+    app::action::{Action, Effect, MergeAction},
     tui::{
         component::{Component, step_index},
+        screens::pr_detail::dialogs::PrSummary,
         theme,
     },
 };
@@ -13,12 +14,17 @@ use ratatui::{
     text::{Line, Span},
 };
 
-fn render(
-    frame: &mut Frame<'_>,
-    strategies: &[crate::domain::pr::MergeStrategy],
-    dialog: &MergeDialog,
-    area: Rect,
-) {
+/// What the merge dialog shows besides its own selection.
+pub struct MergeView<'a> {
+    pub strategies: &'a [crate::domain::pr::MergeStrategy],
+    pub pr: PrSummary<'a>,
+    /// Why the provider says this PR cannot be merged yet; empty when nothing
+    /// is known to stand in the way.
+    pub blockers: &'a [String],
+}
+
+fn render(frame: &mut Frame<'_>, view: &MergeView<'_>, dialog: &MergeDialog, area: Rect) {
+    let strategies = view.strategies;
     let theme = theme::current();
     let selected = Style::default()
         .bg(theme.highlight_bg)
@@ -27,34 +33,26 @@ fn render(
 
     let mut lines = vec![
         Line::from(Span::styled("Merge this PR", Style::default().fg(theme.fg))),
+        Line::styled(view.pr.label.clone(), normal),
+        Line::from(vec![
+            Span::styled("Into: ", normal),
+            Span::styled(
+                view.pr.target_branch.to_owned(),
+                Style::default()
+                    .fg(theme.accent)
+                    .add_modifier(Modifier::BOLD),
+            ),
+        ]),
+        Line::from(vec![
+            Span::styled("From: ", normal),
+            Span::styled(
+                view.pr.source_branch.to_owned(),
+                Style::default().fg(theme.orange),
+            ),
+        ]),
         Line::default(),
     ];
-    if !dialog.pr_label.is_empty() {
-        lines.insert(1, Line::styled(dialog.pr_label.clone(), normal));
-        lines.insert(
-            2,
-            Line::from(vec![
-                Span::styled("Into: ", normal),
-                Span::styled(
-                    dialog.target_branch.clone(),
-                    Style::default()
-                        .fg(theme.accent)
-                        .add_modifier(Modifier::BOLD),
-                ),
-            ]),
-        );
-        lines.insert(
-            3,
-            Line::from(vec![
-                Span::styled("From: ", normal),
-                Span::styled(
-                    dialog.source_branch.clone(),
-                    Style::default().fg(theme.orange),
-                ),
-            ]),
-        );
-    }
-    if !dialog.blockers.is_empty() {
+    if !view.blockers.is_empty() {
         lines.push(Line::default());
         lines.push(Line::styled(
             "Blocked by:",
@@ -62,7 +60,7 @@ fn render(
                 .fg(theme.warning)
                 .add_modifier(Modifier::BOLD),
         ));
-        for reason in &dialog.blockers {
+        for reason in view.blockers {
             lines.push(Line::styled(
                 format!("  • {reason}"),
                 Style::default().fg(theme.warning),
@@ -94,16 +92,12 @@ fn render(
     );
 }
 
-const fn key_to_action(code: KeyCode) -> Option<Action> {
+const fn key_to_action(code: KeyCode) -> Option<MergeAction> {
     match code {
-        KeyCode::Left | KeyCode::Up | KeyCode::Char('h' | 'k') => {
-            Some(Action::Detail(DetailAction::MergeMove(-1)))
-        }
-        KeyCode::Right | KeyCode::Down | KeyCode::Char('j' | 'l') => {
-            Some(Action::Detail(DetailAction::MergeMove(1)))
-        }
-        KeyCode::Enter => Some(Action::Detail(DetailAction::MergeSelect)),
-        KeyCode::Esc => Some(Action::Detail(DetailAction::CloseMergePicker)),
+        KeyCode::Left | KeyCode::Up | KeyCode::Char('h' | 'k') => Some(MergeAction::Move(-1)),
+        KeyCode::Right | KeyCode::Down | KeyCode::Char('j' | 'l') => Some(MergeAction::Move(1)),
+        KeyCode::Enter => Some(MergeAction::Select),
+        KeyCode::Esc => Some(MergeAction::Close),
         _ => None,
     }
 }
@@ -111,12 +105,6 @@ const fn key_to_action(code: KeyCode) -> Option<Action> {
 #[derive(Debug, Default)]
 pub struct MergeDialog {
     cursor: usize,
-    pub pr_label: String,
-    pub target_branch: String,
-    pub source_branch: String,
-    /// Why the provider says this PR cannot be merged yet; empty when nothing
-    /// is known to stand in the way.
-    pub blockers: Vec<String>,
 }
 impl MergeDialog {
     pub fn selected(
@@ -128,22 +116,23 @@ impl MergeDialog {
 }
 
 impl Component for MergeDialog {
-    type Context<'a> = &'a [crate::domain::pr::MergeStrategy];
-    type Message = DetailAction;
-    fn handle_key(&self, key: KeyEvent, _: &Self::Context<'_>) -> Option<Action> {
-        key_to_action(key.code)
+    /// The strategies on offer.
+    type Input<'a> = &'a [crate::domain::pr::MergeStrategy];
+    type View<'a> = MergeView<'a>;
+    type Message = MergeAction;
+    fn handle_key(&self, key: KeyEvent, _: &Self::Input<'_>) -> Option<Action> {
+        key_to_action(key.code).map(Action::from)
     }
-    fn update(&mut self, action: DetailAction, ctx: &Self::Context<'_>) -> Option<Action> {
+    fn update(&mut self, action: MergeAction, ctx: &Self::Input<'_>) -> Option<Effect> {
         match action {
-            DetailAction::MergeMove(delta) => {
-                self.cursor = step_index(self.cursor, delta, ctx.len());
-                None
-            }
-            other => Some(Action::Detail(other)),
+            MergeAction::Move(delta) => self.cursor = step_index(self.cursor, delta, ctx.len()),
+            // Closing and merging are the screen's: it holds the dialog.
+            MergeAction::Select | MergeAction::Close => {}
         }
+        None
     }
-    fn render(&mut self, frame: &mut Frame<'_>, area: Rect, ctx: &Self::Context<'_>) {
-        render(frame, ctx, self, area);
+    fn render(&mut self, frame: &mut Frame<'_>, area: Rect, view: &MergeView<'_>) {
+        render(frame, view, self, area);
     }
 }
 
@@ -153,11 +142,19 @@ mod tests {
     use crate::domain::pr::MergeStrategy;
     use ratatui::{Terminal, backend::TestBackend};
 
-    fn drawn(dialog: &mut MergeDialog) -> String {
-        let strategies = [MergeStrategy::Merge, MergeStrategy::Squash];
+    fn drawn(blockers: &[String]) -> String {
+        let view = MergeView {
+            strategies: &[MergeStrategy::Merge, MergeStrategy::Squash],
+            pr: PrSummary {
+                label: "PR #7 · Fix it".into(),
+                target_branch: "main",
+                source_branch: "feature",
+            },
+            blockers,
+        };
         let mut terminal = Terminal::new(TestBackend::new(90, 28)).unwrap();
         terminal
-            .draw(|frame| dialog.render(frame, frame.area(), &strategies.as_slice()))
+            .draw(|frame| MergeDialog::default().render(frame, frame.area(), &view))
             .unwrap();
         let buffer = terminal.backend().buffer();
         (0..28)
@@ -168,14 +165,10 @@ mod tests {
 
     #[test]
     fn blockers_are_listed_above_the_choices_and_the_choices_stay_usable() {
-        let mut dialog = MergeDialog {
-            blockers: vec![
-                "An approving review is required.".into(),
-                "Required checks have not passed.".into(),
-            ],
-            ..MergeDialog::default()
-        };
-        let text = drawn(&mut dialog);
+        let text = drawn(&[
+            "An approving review is required.".into(),
+            "Required checks have not passed.".into(),
+        ]);
 
         assert!(text.contains("Blocked by:"), "{text}");
         assert!(
@@ -194,8 +187,11 @@ mod tests {
 
     #[test]
     fn a_clean_merge_shows_no_blocker_section() {
-        let text = drawn(&mut MergeDialog::default());
+        let text = drawn(&[]);
         assert!(!text.contains("Blocked by"), "{text}");
+        assert!(text.contains("PR #7 · Fix it"), "{text}");
+        assert!(text.contains("Into: main"), "{text}");
+        assert!(text.contains("From: feature"), "{text}");
         assert!(text.contains("Merge commit"), "{text}");
     }
 }

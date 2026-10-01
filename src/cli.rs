@@ -1,12 +1,12 @@
 use std::process::ExitCode;
 
-use crate::app::preflight::{self, PreflightError};
+use crate::app::preflight::{self, PreflightError, Session};
 use crate::app::remote;
-use crate::providers::{Provider, bitbucket_dc, github};
+use crate::providers::{bitbucket_dc, github};
 
 pub enum Dispatch {
     Done(ExitCode),
-    RunTui(Provider),
+    RunTui(Session),
 }
 
 pub fn dispatch(mut args: Vec<String>) -> Dispatch {
@@ -40,10 +40,10 @@ pub fn dispatch(mut args: Vec<String>) -> Dispatch {
         None => {}
     }
 
-    match resolve_provider() {
-        Ok(provider) => {
+    match connect() {
+        Ok(session) => {
             tracing::info!("preflight passed, starting tui");
-            Dispatch::RunTui(provider)
+            Dispatch::RunTui(session)
         }
         Err(err) => {
             tracing::error!("preflight failed: {err}");
@@ -94,16 +94,16 @@ fn run_auth(args: &[String]) -> ExitCode {
     }
 }
 
-fn resolve_provider() -> Result<Provider, PreflightError> {
-    match preflight::run() {
-        Ok(provider) => Ok(provider),
+fn connect() -> Result<Session, PreflightError> {
+    match preflight::connect() {
+        Ok(session) => Ok(session),
         Err(PreflightError::GhNotAuthenticated { host }) => {
             eprintln!(
                 "slussa: not logged in to {host}. Launching `gh auth login` — \
                  follow the prompts and slussa will continue afterwards.\n"
             );
             match github::auth::launch_login(&host) {
-                Ok(true) => preflight::run(),
+                Ok(true) => preflight::connect(),
                 Ok(false) => {
                     eprintln!("slussa: `gh auth login` was cancelled or failed.\n");
                     Err(PreflightError::GhNotAuthenticated { host })

@@ -1,5 +1,5 @@
 use crate::{
-    app::action::{Action, DetailAction},
+    app::action::{Action, Effect, ErrorAction},
     tui::{
         component::{Component, saturating_u16},
         theme, widgets,
@@ -12,8 +12,12 @@ pub struct ErrorDialog {
     pub scroll: u16,
     pub max_scroll: u16,
 }
-impl ErrorDialog {
-    pub fn render(&mut self, frame: &mut Frame<'_>, message: &str, area: Rect) {
+impl Component for ErrorDialog {
+    type Input<'a> = ();
+    /// The message to show.
+    type View<'a> = &'a str;
+    type Message = ErrorAction;
+    fn render(&mut self, frame: &mut Frame<'_>, area: Rect, message: &&str) {
         let width = area.width.min(64);
         let lines = widgets::wrap_text(message, width.saturating_sub(4).max(1) as usize);
         let body = widgets::dialog::frame(
@@ -32,32 +36,27 @@ impl ErrorDialog {
             body,
         );
     }
-}
-
-impl Component for ErrorDialog {
-    type Context<'a> = &'a str;
-    type Message = DetailAction;
-    fn handle_key(&self, key: crossterm::event::KeyEvent, _: &Self::Context<'_>) -> Option<Action> {
+    fn handle_key(&self, key: crossterm::event::KeyEvent, (): &()) -> Option<Action> {
         use ratatui::crossterm::event::KeyCode;
         let action = match key.code {
-            KeyCode::Esc | KeyCode::Enter => DetailAction::DismissError,
-            KeyCode::Char('j') | KeyCode::Down => DetailAction::ErrorScroll(1),
-            KeyCode::Char('k') | KeyCode::Up => DetailAction::ErrorScroll(-1),
-            KeyCode::PageDown => DetailAction::ErrorScroll(5),
-            KeyCode::PageUp => DetailAction::ErrorScroll(-5),
+            KeyCode::Esc | KeyCode::Enter => ErrorAction::Dismiss,
+            KeyCode::Char('j') | KeyCode::Down => ErrorAction::Scroll(1),
+            KeyCode::Char('k') | KeyCode::Up => ErrorAction::Scroll(-1),
+            KeyCode::PageDown => ErrorAction::Scroll(5),
+            KeyCode::PageUp => ErrorAction::Scroll(-5),
             _ => return None,
         };
-        Some(Action::Detail(action))
+        Some(action.into())
     }
-    fn update(&mut self, action: DetailAction, _: &Self::Context<'_>) -> Option<Action> {
-        if let DetailAction::ErrorScroll(delta) = action {
-            self.scroll = crate::tui::component::scroll(self.scroll, delta).min(self.max_scroll);
-            None
-        } else {
-            Some(Action::Detail(action))
+    fn update(&mut self, action: ErrorAction, (): &()) -> Option<Effect> {
+        match action {
+            ErrorAction::Scroll(delta) => {
+                self.scroll =
+                    crate::tui::component::scroll(self.scroll, delta).min(self.max_scroll);
+            }
+            // Dismissing is the screen's: the error itself is in the store.
+            ErrorAction::Dismiss => {}
         }
-    }
-    fn render(&mut self, frame: &mut Frame<'_>, area: Rect, message: &Self::Context<'_>) {
-        self.render(frame, message, area);
+        None
     }
 }

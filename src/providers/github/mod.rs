@@ -24,22 +24,19 @@ use chrono::{DateTime, Utc};
 use serde::Deserialize;
 use serde::de::DeserializeOwned;
 
-use crate::domain::comment::{Comment, Reaction};
-use crate::domain::pr::{MergeStatus, MergeStrategy, Mergeability};
+use crate::domain::comment::{Comment, CommentId, Reaction};
+use crate::domain::pr::{MergeStrategy, Mergeability, PrId};
 use crate::domain::review::{ReviewComment, ReviewVerdict};
-use crate::domain::user::User;
+use crate::domain::user::{User, Username};
 use crate::providers::error::FetchError;
 
-pub fn current_user() -> Result<String, FetchError> {
+pub fn current_user() -> Result<Username, FetchError> {
     let out = cli::run_gh(&["api", "user", "--jq", ".login"])?;
-    let login = String::from_utf8_lossy(&out).trim().to_owned();
-    if login.is_empty() {
-        return Err(FetchError::ParseFailed("gh named no login".to_owned()));
-    }
-    Ok(login)
+    Username::parse(&String::from_utf8_lossy(&out))
+        .ok_or_else(|| FetchError::ParseFailed("gh named no login".into()))
 }
 
-pub fn fetch_mergeability(pr_number: u64) -> Result<MergeStatus, FetchError> {
+pub fn fetch_mergeability(pr_number: PrId) -> Result<Mergeability, FetchError> {
     #[derive(Deserialize)]
     #[serde(rename_all = "camelCase")]
     struct MergeFields {
@@ -63,13 +60,12 @@ pub fn fetch_mergeability(pr_number: u64) -> Result<MergeStatus, FetchError> {
 /// the reason comes from the review decision when that explains it and is
 /// otherwise general. An administrator may still be able to merge a `Blocked`
 /// PR, which is why the state informs and does not forbid.
-fn merge_status(mergeable: &str, state: &str, review_decision: Option<&str>) -> MergeStatus {
-    let blocked = |reason: &str| MergeStatus::with(Mergeability::Blocked, vec![reason.to_owned()]);
+fn merge_status(mergeable: &str, state: &str, review_decision: Option<&str>) -> Mergeability {
+    let blocked = |reason: &str| Mergeability::Blocked(vec![reason.to_owned()]);
     match (mergeable, state) {
-        ("CONFLICTING", _) | (_, "DIRTY") => MergeStatus::with(
-            Mergeability::Conflicts,
-            vec!["It conflicts with the base branch.".into()],
-        ),
+        ("CONFLICTING", _) | (_, "DIRTY") => {
+            Mergeability::Conflicts(vec!["It conflicts with the base branch.".into()])
+        }
         (_, "DRAFT") => blocked("It is a draft."),
         (_, "BEHIND") => blocked("The branch is behind its base and must be updated."),
         (_, "BLOCKED") => blocked(match review_decision {
@@ -78,14 +74,12 @@ fn merge_status(mergeable: &str, state: &str, review_decision: Option<&str>) -> 
             _ => "Required checks or branch rules are not satisfied.",
         }),
         // `UNSTABLE` means failing checks that are not required; GitHub still merges.
-        ("MERGEABLE", "CLEAN" | "HAS_HOOKS" | "UNSTABLE") => {
-            MergeStatus::new(Mergeability::Mergeable)
-        }
-        _ => MergeStatus::new(Mergeability::Unknown),
+        ("MERGEABLE", "CLEAN" | "HAS_HOOKS" | "UNSTABLE") => Mergeability::Mergeable,
+        _ => Mergeability::Unknown,
     }
 }
 
-pub fn merge(pr_number: u64, strategy: MergeStrategy) -> Result<(), FetchError> {
+pub fn merge(pr_number: PrId, strategy: MergeStrategy) -> Result<(), FetchError> {
     let method = match strategy {
         MergeStrategy::Merge => "merge",
         MergeStrategy::Squash => "squash",
@@ -104,7 +98,7 @@ pub fn merge(pr_number: u64, strategy: MergeStrategy) -> Result<(), FetchError> 
 
 /// Reopen a closed PR. GitHub refuses when the head branch is gone or the PR
 /// was merged; that message reaches the user as it is.
-pub fn reopen(pr_number: u64) -> Result<(), FetchError> {
+pub fn reopen(pr_number: PrId) -> Result<(), FetchError> {
     cli::run_gh(&[
         "api",
         "--method",
@@ -116,7 +110,7 @@ pub fn reopen(pr_number: u64) -> Result<(), FetchError> {
     Ok(())
 }
 
-pub fn decline(pr_number: u64) -> Result<(), FetchError> {
+pub fn decline(pr_number: PrId) -> Result<(), FetchError> {
     // GitHub has no "decline" — closing the PR is the equivalent.
     cli::run_gh(&[
         "api",
@@ -140,9 +134,13 @@ const fn review_event(verdict: ReviewVerdict) -> Option<&'static str> {
     }
 }
 
-pub fn submit_review(pr_number: u64, verdict: ReviewVerdict, body: &str) -> Result<(), FetchError> {
+pub fn submit_review(
+    pr_number: PrId,
+    verdict: ReviewVerdict,
+    body: &str,
+) -> Result<(), FetchError> {
     let Some(event) = review_event(verdict) else {
-        return Err(FetchError::InvalidInput(
+        return Err(FetchError::Unsupported(
             "This review verdict is not supported by GitHub.".into(),
         ));
     };
@@ -162,22 +160,22 @@ pub fn submit_review(pr_number: u64, verdict: ReviewVerdict, body: &str) -> Resu
 /// reviews endpoint takes a `comments` array, fed as JSON on stdin since `-f`
 /// flags can't express it.
 pub fn submit_full_review(
-    pr_number: u64,
+    pr_number: PrId,
     verdict: ReviewVerdict,
     body: &str,
     comments: &[ReviewComment],
 ) -> Result<(), FetchError> {
-    if comments.is_empty() {
+    let Some(first) = comments.first() else {
         return submit_review(pr_number, verdict, body);
-    }
+    };
     let Some(event) = review_event(verdict) else {
-        return Err(FetchError::InvalidInput(
+        return Err(FetchError::Unsupported(
             "This review verdict is not supported by GitHub.".into(),
         ));
     };
-    let payload = review_payload(event, body, comments)?;
+    let payload = review_payload(event, body, &first.revision, comments)?;
     let endpoint = format!("repos/{{owner}}/{{repo}}/pulls/{pr_number}/reviews");
-    let input = serde_json::to_vec(&payload).map_err(|e| FetchError::ParseFailed(e.to_string()))?;
+    let input = serde_json::to_vec(&payload).map_err(|e| FetchError::ParseFailed(e.into()))?;
     cli::run_gh_stdin(
         &["api", "--method", "POST", &endpoint, "--input", "-"],
         &input,
@@ -185,23 +183,14 @@ pub fn submit_full_review(
     Ok(())
 }
 
+/// A review on `revision`, which every comment in it has to be on.
 fn review_payload(
     event: &str,
     body: &str,
+    revision: &crate::domain::diff::DiffRevision,
     comments: &[ReviewComment],
 ) -> Result<serde_json::Value, FetchError> {
-    let revision = comments
-        .first()
-        .and_then(|c| c.revision.as_ref())
-        .ok_or_else(|| {
-            FetchError::InvalidInput(
-                "Reload the diff and recreate comments with an unknown revision.".into(),
-            )
-        })?;
-    if comments
-        .iter()
-        .any(|c| c.revision.as_ref() != Some(revision))
-    {
+    if comments.iter().any(|c| &c.revision != revision) {
         return Err(FetchError::InvalidInput("A review must contain comments from one diff revision. Submit comments on different commits separately.".into()));
     }
     let commit_id = &revision.head;
@@ -210,8 +199,8 @@ fn review_payload(
         .map(|c| {
             serde_json::json!({
                 "path": c.path,
-                "line": c.line,
-                "side": if c.removed { "LEFT" } else { "RIGHT" },
+                "line": c.line.number(),
+                "side": comments::side(c.line),
                 "body": c.body,
             })
         })
@@ -226,7 +215,7 @@ fn review_payload(
 
 pub(super) fn run_pr_graphql<P: DeserializeOwned>(
     query: &str,
-    pr_number: u64,
+    pr_number: PrId,
 ) -> Result<P, FetchError> {
     let resp: GqlResponse<P> = cli::run_gh_json(&[
         "api",
@@ -316,8 +305,9 @@ pub(super) fn map_gql_comment(c: GqlComment) -> Comment {
             })
         })
         .collect();
+    let id = c.database_id.map(CommentId);
     Comment {
-        id: c.database_id,
+        id,
         author: User {
             username: c.author.map(|a| a.login).unwrap_or_default(),
         },
@@ -326,7 +316,7 @@ pub(super) fn map_gql_comment(c: GqlComment) -> Comment {
         reactions,
         // Review-thread comments reply via this databaseId; issue comments are
         // flat and get None overridden in fetch_comments.
-        reply_to: c.database_id,
+        reply_to: id,
     }
 }
 
@@ -350,22 +340,28 @@ mod revision_tests {
     #[test]
     fn review_uses_displayed_revision_and_rejects_mixed_revisions() {
         let first = ReviewComment {
-            revision: Some(crate::domain::diff::DiffRevision {
+            revision: crate::domain::diff::DiffRevision {
                 head: "reviewed-sha".into(),
                 base: None,
                 commit: true,
-            }),
+            },
             path: "file.rs".into(),
-            line: 7,
-            removed: true,
+            line: crate::domain::diff::LineRef::Old(7),
             body: "comment".into(),
         };
-        let payload = review_payload("COMMENT", "summary", std::slice::from_ref(&first)).unwrap();
+        let revision = first.revision.clone();
+        let payload = review_payload(
+            "COMMENT",
+            "summary",
+            &revision,
+            std::slice::from_ref(&first),
+        )
+        .unwrap();
         assert_eq!(payload["commit_id"], "reviewed-sha");
         assert_eq!(payload["comments"][0]["side"], "LEFT");
         let mut other = first.clone();
-        other.revision.as_mut().unwrap().head = "new-sha".into();
-        assert!(review_payload("COMMENT", "summary", &[first, other]).is_err());
+        other.revision.head = "new-sha".into();
+        assert!(review_payload("COMMENT", "summary", &revision, &[first, other]).is_err());
     }
 }
 

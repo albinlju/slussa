@@ -2,6 +2,7 @@ use chrono::{DateTime, Utc};
 use serde::Deserialize;
 
 use crate::domain::event::{EventKind, TimelineEvent};
+use crate::domain::pr::PrId;
 use crate::domain::user::User;
 use crate::providers::error::FetchError;
 use crate::providers::github::cli::run_gh_json;
@@ -39,7 +40,7 @@ struct GhPrTimeline {
     reviews: Vec<GhReview>,
 }
 
-pub fn fetch_events(pr_number: u64) -> Result<Vec<TimelineEvent>, FetchError> {
+pub fn fetch_events(pr_number: PrId) -> Result<Vec<TimelineEvent>, FetchError> {
     let pr_arg = pr_number.to_string();
     let mut pr: GhPrTimeline = run_gh_json(&[
         "pr",

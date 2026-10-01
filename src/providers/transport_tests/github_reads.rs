@@ -33,7 +33,7 @@ fn github_open_group_is_read_a_page_at_a_time_with_drafts_and_nothing_closed() {
     let first = Provider::GitHub.fetch_prs(PrGroup::Open, None).unwrap();
     assert_eq!(first.more.as_deref(), Some("c1"), "the caller reads on");
     assert_eq!(
-        first.prs.iter().map(|pr| pr.id).collect::<Vec<_>>(),
+        first.prs.iter().map(|pr| pr.id.0).collect::<Vec<_>>(),
         vec![1]
     );
     let pr = &first.prs[0];
@@ -53,7 +53,7 @@ fn github_open_group_is_read_a_page_at_a_time_with_drafts_and_nothing_closed() {
         .fetch_prs(PrGroup::Open, Some("c1"))
         .unwrap();
     assert_eq!(last.more, None);
-    assert_eq!(last.prs[0].id, 2);
+    assert_eq!(last.prs[0].id, PrId(2));
     assert_eq!(
         last.prs[0].status,
         PrStatus::Draft,
@@ -201,7 +201,7 @@ fn github_info_reads_the_description_and_the_labels_of_one_pr() {
     let gh = FakeGh::new()
         .on("pullRequest(number: $pr)", &info_answer(&["bug"], false))
         .install();
-    let info = Provider::GitHub.fetch_info(7).unwrap();
+    let info = Provider::GitHub.fetch_info(PrId(7)).unwrap();
 
     assert_eq!(info.description.as_deref(), Some("Explains the change."));
     assert_eq!(info.labels, vec!["bug"]);
@@ -220,7 +220,7 @@ fn github_info_reads_on_when_the_labels_are_truncated() {
         .on("node(id: \"PR_1\")", &node_page)
         .on("pullRequest(number: $pr)", &info_answer(&["bug"], true))
         .install();
-    let info = Provider::GitHub.fetch_info(1).unwrap();
+    let info = Provider::GitHub.fetch_info(PrId(1)).unwrap();
 
     assert_eq!(info.labels, vec!["bug", "ux"]);
     assert_eq!(gh.calls().len(), 2);
@@ -276,9 +276,15 @@ fn github_rejects_unparseable_output_and_graphql_errors() {
 
     let errors = json!({"errors": [{"message": "rate limited"}]}).to_string();
     let (result, _installed) = fetch_prs_with(FakeGh::new().on("graphql", &errors));
+    // GitHub's own words are kept for the log; the user gets one plain line.
+    let error = result.unwrap_err();
     assert!(
-        matches!(result, Err(FetchError::InvalidInput(_))),
-        "{result:?}"
+        matches!(&error, FetchError::GraphQl(messages) if messages == &["rate limited"]),
+        "{error:?}"
+    );
+    assert_eq!(
+        error.user_message(),
+        "GitHub returned an incomplete GraphQL response."
     );
 }
 
@@ -298,7 +304,7 @@ fn github_an_answer_of_the_wrong_shape_is_an_error_and_not_a_panic() {
         .on("check-runs", "[[1, 2]]")
         .on("pulls/7", "abc\n")
         .install();
-    let result = Provider::GitHub.fetch_builds(7);
+    let result = Provider::GitHub.fetch_builds(PrId(7));
     assert!(
         matches!(result, Err(FetchError::ParseFailed(_))),
         "{result:?}"
@@ -326,7 +332,7 @@ fn github_asking_who_is_logged_in_fails_instead_of_naming_nobody() {
     );
 
     let _installed = FakeGh::new().on("api user", "octocat\n").install();
-    assert_eq!(Provider::GitHub.current_user().unwrap(), "octocat");
+    assert_eq!(Provider::GitHub.current_user().unwrap().as_str(), "octocat");
 }
 
 #[test]
@@ -349,7 +355,7 @@ fn github_older_prs_continue_from_the_cursor_and_report_when_they_end() {
         .fetch_prs(PrGroup::Declined, Some("x"))
         .unwrap();
     assert_eq!(
-        first.prs.iter().map(|pr| pr.id).collect::<Vec<_>>(),
+        first.prs.iter().map(|pr| pr.id.0).collect::<Vec<_>>(),
         vec![9]
     );
     assert_eq!(first.prs[0].status, PrStatus::Declined);
@@ -358,7 +364,10 @@ fn github_older_prs_continue_from_the_cursor_and_report_when_they_end() {
     let last = Provider::GitHub
         .fetch_prs(PrGroup::Declined, Some("y"))
         .unwrap();
-    assert_eq!(last.prs.iter().map(|pr| pr.id).collect::<Vec<_>>(), vec![8]);
+    assert_eq!(
+        last.prs.iter().map(|pr| pr.id.0).collect::<Vec<_>>(),
+        vec![8]
+    );
     assert_eq!(last.more, None, "the end is reported, not guessed");
 
     let calls = gh.calls();

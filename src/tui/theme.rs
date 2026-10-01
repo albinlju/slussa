@@ -191,20 +191,29 @@ fn named(name: &str) -> Option<&'static Theme> {
     }
 }
 
-pub fn current() -> &'static Theme {
-    static SELECTED: OnceLock<&'static Theme> = OnceLock::new();
-    SELECTED.get_or_init(|| {
-        let name = std::env::var("SLUSSA_THEME")
-            .ok()
-            .or_else(|| crate::config::load().theme);
-        let Some(name) = name else {
-            return DEFAULT;
-        };
+static SELECTED: OnceLock<&'static Theme> = OnceLock::new();
+
+/// Choose the theme for this run: `SLUSSA_THEME` if set, else the name from
+/// the config file, else the default. Called once at startup, so that
+/// rendering only reads the choice and never the environment or a file.
+pub fn init(configured: Option<&str>) {
+    let name = std::env::var("SLUSSA_THEME")
+        .ok()
+        .or_else(|| configured.map(str::to_owned));
+    let theme = name.map_or(DEFAULT, |name| {
         named(&name).unwrap_or_else(|| {
             tracing::warn!("unknown theme {name:?}, using graphite");
             DEFAULT
         })
-    })
+    });
+    if SELECTED.set(theme).is_err() {
+        tracing::warn!("the theme was already chosen; keeping it");
+    }
+}
+
+/// The theme chosen by `init`, or the default where it was never called.
+pub fn current() -> &'static Theme {
+    SELECTED.get().copied().unwrap_or(DEFAULT)
 }
 
 #[cfg(test)]

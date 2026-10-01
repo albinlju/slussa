@@ -80,8 +80,9 @@ pub(super) fn loaded_or_placeholder<'a, T>(
     let theme = theme::current();
     match state {
         Some(LoadState::Loaded(value)) => return Some(value),
-        Some(LoadState::Failed(msg)) => {
-            let p = Paragraph::new(format!("Couldn't load {noun}. F: retry\n{msg}"))
+        Some(LoadState::Failed(error)) => {
+            let message = error.user_message();
+            let p = Paragraph::new(format!("Couldn't load {noun}. F: retry\n{message}"))
                 .style(Style::default().fg(theme.error))
                 .wrap(Wrap { trim: false });
             frame.render_widget(p, area);

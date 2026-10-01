@@ -51,6 +51,24 @@ impl<'a> Iterator for NumberedLines<'a> {
     }
 }
 
+/// A line number on one side of a diff. A removed line has only an old
+/// number, so which side it is on is part of the reference.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum LineRef {
+    /// In the file as the change leaves it: an added or unchanged line.
+    New(usize),
+    /// In the file as it was: a removed line.
+    Old(usize),
+}
+
+impl LineRef {
+    pub const fn number(self) -> usize {
+        match self {
+            Self::New(number) | Self::Old(number) => number,
+        }
+    }
+}
+
 #[derive(Debug, Clone)]
 pub enum DiffLine {
     Added(String),
