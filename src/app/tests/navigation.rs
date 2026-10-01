@@ -245,10 +245,17 @@ async fn link_completion_keeps_navigation_and_reports_failure_without_blocking_p
     }));
     assert!(app.state.store.link_pending);
     detail(&mut app, DetailTab::Overview);
-    app.apply_result(TaskResult::LinkFinished(Err(
-        "PR #42: clipboard unavailable".into(),
-    )));
+    app.apply_result(TaskResult::LinkFinished {
+        pr_id: PrId(42),
+        result: Err(crate::app::desktop::LinkError::Copy(std::io::Error::other(
+            "clipboard unavailable",
+        ))),
+    });
     assert!(!app.state.store.link_pending);
+    assert_eq!(
+        app.state.store.notice.as_ref().unwrap().message,
+        "PR #42: Could not copy link: clipboard unavailable"
+    );
     assert_eq!(
         app.state.store.notice.as_ref().unwrap().kind,
         crate::app::store::NoticeKind::Error

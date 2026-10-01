@@ -377,7 +377,9 @@ its cause. It travels as a value through `spawn_fetch`, `Read` and
 is shown; the log gets its `Display`. A review that goes out as several
 requests can end as `ReviewError::Partial`, which says how much arrived, and
 becomes `WriteError::PartialReview` in the app. A worker that panicked is
-`FetchError::WorkerPanicked`, not a lost result.
+`FetchError::WorkerPanicked`, not a lost result. Opening or copying a link
+ends as `LinkDone` or `LinkError` (`app/desktop.rs`), and the notice is worded
+where it is shown.
 
 ## Types that carry the rules
 

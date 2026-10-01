@@ -23,8 +23,8 @@ impl App {
         };
         let url = match WebUrl::parse(&url) {
             Ok(url) => url,
-            Err(message) => {
-                self.state.store.notice = Some(Notice::error(message));
+            Err(error) => {
+                self.state.store.notice = Some(Notice::error(error.to_string()));
                 return;
             }
         };
@@ -39,15 +39,12 @@ impl App {
         )));
         self.spawn_fetch(
             move || perform(kind, &url),
-            move |returned| {
-                TaskResult::LinkFinished(match returned {
-                    Ok(Ok(done)) => Ok(format!("PR #{pr_id}: {}", done.message())),
-                    Ok(Err(error)) => Err(format!("PR #{pr_id}: {error}")),
-                    Err(panic) => {
-                        tracing::error!("desktop worker panicked: {panic}");
-                        Err(format!("PR #{pr_id}: desktop operation failed"))
-                    }
-                })
+            move |returned| TaskResult::LinkFinished {
+                pr_id,
+                result: returned.unwrap_or_else(|panic| {
+                    tracing::error!("desktop worker panicked: {panic}");
+                    Err(LinkError::WorkerPanicked)
+                }),
             },
         );
     }
@@ -59,22 +56,34 @@ impl App {
 #[derive(Debug)]
 struct WebUrl(String);
 
+/// Why a link action did nothing. The text is what the notice says.
+#[derive(Debug, thiserror::Error)]
+pub enum LinkError {
+    #[error("This PR has no valid HTTP(S) link.")]
+    InvalidUrl,
+    #[error("Could not open browser: {0}")]
+    Open(io::Error),
+    #[error("Could not copy link: {0}")]
+    Copy(io::Error),
+    #[error("desktop operation failed")]
+    WorkerPanicked,
+}
+
 impl WebUrl {
-    fn parse(value: &str) -> Result<Self, String> {
-        let invalid = || "This PR has no valid HTTP(S) link.".to_string();
+    fn parse(value: &str) -> Result<Self, LinkError> {
         if value.len() > 4096 || value.chars().any(char::is_control) {
-            return Err(invalid());
+            return Err(LinkError::InvalidUrl);
         }
         let url = reqwest::Url::parse(value).map_err(|e| {
             tracing::debug!("rejected a PR link: {e}");
-            invalid()
+            LinkError::InvalidUrl
         })?;
         if !matches!(url.scheme(), "http" | "https")
             || url.host_str().is_none()
             || !url.username().is_empty()
             || url.password().is_some()
         {
-            return Err(invalid());
+            return Err(LinkError::InvalidUrl);
         }
         Ok(Self(value.to_owned()))
     }
@@ -87,14 +96,14 @@ impl WebUrl {
 /// What a desktop action achieved. The terminal never confirms an OSC 52
 /// write, so that outcome is reported as "sent", not "copied".
 #[derive(Debug, PartialEq, Eq, Clone, Copy)]
-enum Done {
+pub enum LinkDone {
     Opened,
     Copied,
     SentToTerminal,
 }
 
-impl Done {
-    const fn message(self) -> &'static str {
+impl LinkDone {
+    pub const fn message(self) -> &'static str {
         match self {
             Self::Opened => "opened in browser",
             Self::Copied => "link copied",
@@ -103,22 +112,14 @@ impl Done {
     }
 }
 
-fn perform(kind: LinkAction, url: &WebUrl) -> Result<Done, String> {
+fn perform(kind: LinkAction, url: &WebUrl) -> Result<LinkDone, LinkError> {
     let url = url.as_str();
-    let result = match kind {
-        LinkAction::Open => open_browser(url).map(|()| Done::Opened),
-        LinkAction::Copy => copy_link(url),
-    };
-    result.map_err(|error| {
-        format!(
-            "{}: {error}",
-            if kind == LinkAction::Open {
-                "Could not open browser"
-            } else {
-                "Could not copy link"
-            }
-        )
-    })
+    match kind {
+        LinkAction::Open => open_browser(url)
+            .map(|()| LinkDone::Opened)
+            .map_err(LinkError::Open),
+        LinkAction::Copy => copy_link(url).map_err(LinkError::Copy),
+    }
 }
 
 fn run(command: &mut Command, input: &[u8], timeout: Duration) -> io::Result<()> {
@@ -162,18 +163,18 @@ const TIMEOUT: Duration = Duration::from_secs(5);
 /// Copy with the platform helper, falling back to the terminal's clipboard
 /// (OSC 52). Over SSH the helper would fill the *remote* machine's clipboard,
 /// so the terminal goes first there.
-fn copy_link(url: &str) -> io::Result<Done> {
+fn copy_link(url: &str) -> io::Result<LinkDone> {
     let remote = is_remote_session(
         std::env::var_os("SSH_CONNECTION").as_deref(),
         std::env::var_os("SSH_TTY").as_deref(),
     );
     if remote && write_osc52(url).is_ok() {
-        return Ok(Done::SentToTerminal);
+        return Ok(LinkDone::SentToTerminal);
     }
     match copy_with_helper(url) {
-        Ok(()) => Ok(Done::Copied),
+        Ok(()) => Ok(LinkDone::Copied),
         Err(error) => write_osc52(url)
-            .map(|()| Done::SentToTerminal)
+            .map(|()| LinkDone::SentToTerminal)
             .map_err(|osc52| {
                 tracing::debug!("the terminal clipboard failed too: {osc52}");
                 error
@@ -309,9 +310,9 @@ mod tests {
     }
     #[test]
     fn outcomes_are_reported_honestly() {
-        assert_eq!(Done::Copied.message(), "link copied");
+        assert_eq!(LinkDone::Copied.message(), "link copied");
         assert_eq!(
-            Done::SentToTerminal.message(),
+            LinkDone::SentToTerminal.message(),
             "link sent to terminal clipboard"
         );
     }

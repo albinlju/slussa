@@ -161,11 +161,11 @@ impl App {
         match result {
             TaskResult::Read(read) => self.apply_read(read),
             TaskResult::Written { ticket, result } => self.apply_write(&ticket, result),
-            TaskResult::LinkFinished(result) => {
+            TaskResult::LinkFinished { pr_id, result } => {
                 self.state.store.link_pending = false;
                 self.state.store.notice = Some(match result {
-                    Ok(message) => store::Notice::info(message),
-                    Err(message) => store::Notice::error(message),
+                    Ok(done) => store::Notice::info(format!("PR #{pr_id}: {}", done.message())),
+                    Err(error) => store::Notice::error(format!("PR #{pr_id}: {error}")),
                 });
             }
         }

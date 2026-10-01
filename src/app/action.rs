@@ -1,5 +1,8 @@
 use crate::{
-    app::store::{FetchKey, WriteTicket},
+    app::{
+        desktop::{LinkDone, LinkError},
+        store::{FetchKey, WriteTicket},
+    },
     domain::{
         activity::Activity,
         ci::Build,
@@ -66,7 +69,11 @@ pub enum TaskResult {
         ticket: WriteTicket,
         result: Result<(), WriteError>,
     },
-    LinkFinished(Result<String, String>),
+    /// Opening or copying a PR's link is over.
+    LinkFinished {
+        pr_id: PrId,
+        result: Result<LinkDone, LinkError>,
+    },
 }
 
 impl Action {
