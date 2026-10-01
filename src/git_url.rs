@@ -25,7 +25,8 @@ pub fn web_base(url: &str) -> Option<String> {
     let context = segments
         .iter()
         .rposition(|s| *s == "scm")
-        .map_or(&segments[..0], |i| &segments[..i]);
+        .and_then(|i| segments.get(..i))
+        .unwrap_or_default();
     let mut base = format!("{scheme}://{authority}");
     for part in context {
         base.push('/');

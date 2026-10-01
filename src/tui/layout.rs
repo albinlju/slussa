@@ -5,11 +5,10 @@ pub(super) fn split<const N: usize>(
     direction: Direction,
     constraints: [Constraint; N],
 ) -> [Rect; N] {
-    let chunks = Layout::default()
+    Layout::default()
         .direction(direction)
         .constraints(constraints)
-        .split(area);
-    std::array::from_fn(|i| chunks[i])
+        .areas(area)
 }
 
 pub(super) const fn scrollbar_area(area: Rect) -> Rect {

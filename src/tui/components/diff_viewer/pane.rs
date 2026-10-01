@@ -25,7 +25,7 @@ use std::collections::{HashMap, HashSet};
 const DIFF_GUTTER: &str = "  ";
 const DIFF_GUTTER_COLS: u16 = 2;
 
-#[allow(clippy::too_many_arguments)]
+#[expect(clippy::too_many_arguments, reason = "render inputs; see ROADMAP")]
 pub(super) fn render(
     frame: &mut Frame<'_>,
     diff: &Diff,
@@ -92,10 +92,9 @@ pub(super) fn render(
 
     if let Some(m) = cursor
         && matches!(m.kind, NavKind::Line { .. })
-        && m.rendered_row < lines.len()
+        && let Some(line) = lines.get_mut(m.rendered_row)
     {
-        let row = m.rendered_row;
-        lines[row] = highlight_row(std::mem::take(&mut lines[row]), body_area.width as usize);
+        *line = highlight_row(std::mem::take(line), body_area.width as usize);
     }
 
     let visible = body_area.height as usize;
@@ -210,7 +209,7 @@ struct DiffBody {
     matches: Vec<usize>,
 }
 
-#[allow(clippy::too_many_arguments)]
+#[expect(clippy::too_many_arguments, reason = "render inputs; see ROADMAP")]
 fn build_diff_body(
     file: &FileDiff,
     revision: Option<&crate::domain::diff::DiffRevision>,
@@ -430,7 +429,7 @@ fn push_pending_lines(
     count
 }
 
-#[allow(clippy::too_many_arguments)]
+#[expect(clippy::too_many_arguments, reason = "render inputs; see ROADMAP")]
 fn push_thread_lines(
     lines: &mut Vec<Line<'static>>,
     thread: &CommentThread,

@@ -167,7 +167,7 @@ fn failed_refresh_marks_cached_data_until_that_resource_recovers() {
     assert!(app.state.store.refresh_failed(app.state.screen));
     let diff = match &app.state.store.cache.details[&42].diff {
         LoadState::Loaded(diff) => diff.clone(),
-        _ => unreachable!(),
+        other => panic!("the diff is not loaded: {other:?}"),
     };
     app.apply(Action::Loaded(LoadedAction::Diff(42, Ok(diff))));
     assert!(!app.state.store.refresh_failed(app.state.screen));

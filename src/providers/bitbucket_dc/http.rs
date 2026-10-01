@@ -23,8 +23,10 @@ fn client() -> Result<&'static Client, FetchError> {
     Ok(CLIENT.get_or_init(|| built))
 }
 
-// Taken by value so it can be passed directly as `.map_err(net_err)`.
-#[allow(clippy::needless_pass_by_value)]
+#[expect(
+    clippy::needless_pass_by_value,
+    reason = "passed as `.map_err(net_err)`, which hands the error over by value"
+)]
 fn net_err(e: reqwest::Error) -> FetchError {
     tracing::warn!("http send failed: {e}");
     FetchError::Network(e.to_string())

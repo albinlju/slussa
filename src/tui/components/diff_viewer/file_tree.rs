@@ -58,11 +58,9 @@ fn build_tree(files: &[FileDiff], query: &str) -> Node {
 }
 
 fn insert(node: &mut Node, segments: &[&str], file_index: usize) {
-    if segments.is_empty() {
+    let Some((&head, rest)) = segments.split_first() else {
         return;
-    }
-    let head = segments[0];
-    let rest = &segments[1..];
+    };
     let new_path = if node.full_path.is_empty() {
         head.to_string()
     } else {
@@ -77,12 +75,12 @@ fn insert(node: &mut Node, segments: &[&str], file_index: usize) {
             file_index: Some(file_index),
         });
     } else {
-        let pos = node
+        let existing = node
             .children
-            .iter()
-            .position(|c| c.name == head && c.is_dir());
-        if let Some(idx) = pos {
-            insert(&mut node.children[idx], rest, file_index);
+            .iter_mut()
+            .find(|c| c.name == head && c.is_dir());
+        if let Some(child) = existing {
+            insert(child, rest, file_index);
         } else {
             let mut new_child = Node {
                 name: head.to_string(),

@@ -5,8 +5,7 @@ use std::{
     time::{Duration, Instant},
 };
 
-#[allow(clippy::duration_suboptimal_units)]
-const REQUEST_TIMEOUT: Duration = Duration::from_secs(60);
+const REQUEST_TIMEOUT: Duration = Duration::from_mins(1);
 
 /// The `gh` command. In a test build it is the scripted fake, or a program
 /// that does not exist when no fake is installed: a test never reaches the
@@ -38,7 +37,10 @@ fn run_command(
         .stdout(Stdio::piped())
         .stderr(Stdio::piped())
         .spawn()
-        .map_err(|_| FetchError::GhMissing)?;
+        .map_err(|e| {
+            tracing::warn!("couldn't start gh: {e}");
+            FetchError::GhMissing
+        })?;
     let mut stdin = take_pipe(child.stdin.take(), "stdin")?;
     let input = input.to_vec();
     let writer = background(move || stdin.write_all(&input));
@@ -113,7 +115,10 @@ fn receive<T>(
     deadline: Instant,
 ) -> Result<T, FetchError> {
     rx.recv_timeout(deadline.saturating_duration_since(Instant::now()))
-        .map_err(|_| FetchError::Timeout)?
+        .map_err(|e| {
+            tracing::warn!("gh did not answer in time: {e}");
+            FetchError::Timeout
+        })?
         .map_err(|e| FetchError::Network(e.to_string()))
 }
 

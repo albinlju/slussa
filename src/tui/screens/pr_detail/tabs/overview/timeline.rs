@@ -237,7 +237,7 @@ fn focusable_count(comments: &[Comment], threads: &[CommentThread]) -> usize {
     comments.len() + threads.iter().filter(|t| !t.comments.is_empty()).count()
 }
 
-#[allow(clippy::too_many_arguments)]
+#[expect(clippy::too_many_arguments, reason = "render inputs; see ROADMAP")]
 fn build_blocks(
     comments: &[Comment],
     threads: &[CommentThread],

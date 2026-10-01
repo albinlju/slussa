@@ -157,7 +157,7 @@ pub(super) fn spinner_frame() -> &'static str {
         .unwrap_or_default()
         .as_millis();
     let idx = (now / 100) as usize % SPINNER_FRAMES.len();
-    SPINNER_FRAMES[idx]
+    SPINNER_FRAMES.get(idx).copied().unwrap_or(" ")
 }
 
 /// A footer action hint. `enabled == false` renders it dimmed (key not accented)

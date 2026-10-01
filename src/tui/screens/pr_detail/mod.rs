@@ -19,7 +19,6 @@ use ratatui::{Frame, layout::Rect};
 
 pub use view::{DetailContext, DetailView};
 #[derive(Debug, Default)]
-#[allow(clippy::struct_excessive_bools)] // a UI-state bag, not a state machine
 pub struct PrDetailScreen {
     pub overview: tabs::overview::Overview,
     pub builds: tabs::builds::Builds,
@@ -281,6 +280,10 @@ impl PrDetailScreen {
         }
     }
 
+    #[expect(
+        clippy::unreachable,
+        reason = "a component consumed these; the `Action` split removes the arm (ROADMAP)"
+    )]
     pub fn update_action(
         &mut self,
         action: crate::app::action::Action,

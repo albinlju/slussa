@@ -100,7 +100,8 @@ pub fn fetch_prs(
                 "DECLINED"
             };
             let start = after.map_or(Ok(0), |after| {
-                after.parse::<u64>().map_err(|_| {
+                after.parse::<u64>().map_err(|e| {
+                    tracing::warn!("unreadable position {after:?} for older PRs: {e}");
                     FetchError::InvalidInput("Unreadable position for older PRs.".into())
                 })
             })?;

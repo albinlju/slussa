@@ -11,7 +11,7 @@ use crate::{
         review::{Reviewer, ReviewerState},
     },
     tui::{
-        component::{Component, step_index},
+        component::{Component, saturating_u16, step_index},
         components::search_input::SearchInput,
         icons, layout,
         screens::half_page,
@@ -143,7 +143,7 @@ fn render_table_body(
                 table.row(
                     &columns
                         .iter()
-                        .map(|&i| cells[i].clone())
+                        .filter_map(|&i| cells.get(i).cloned())
                         .collect::<Vec<_>>(),
                 ),
             )
@@ -186,7 +186,7 @@ fn render_filter_picker(frame: &mut Frame<'_>, state: &PrListScreen, area: Rect)
         frame,
         area,
         "Filter",
-        (44, StatusFilter::CYCLE.len() as u16),
+        (44, saturating_u16(StatusFilter::CYCLE.len())),
         &[("j/k", "move"), ("Enter", "select"), ("Esc", "cancel")],
     );
     let items: Vec<ListItem<'_>> = StatusFilter::CYCLE
@@ -419,7 +419,7 @@ impl StatusFilter {
     }
 }
 
-#[allow(clippy::struct_excessive_bools)] // independent facts about what is being read
+#[expect(clippy::struct_excessive_bools, reason = "independent loading facts")]
 pub struct ListContext<'a> {
     pub prs: &'a LoadState<Vec<PullRequest>>,
     pub refreshing: bool,
@@ -490,10 +490,7 @@ impl Component for PrListScreen {
         let columns = columns.as_slice();
         let definitions: Vec<_> = columns
             .iter()
-            .map(|&i| Column {
-                title: COLS[i].title,
-                width: COLS[i].width,
-            })
+            .filter_map(|&i| COLS.get(i).copied())
             .collect();
         let table = table::Table::new(&definitions, width);
         render_table_header(frame, &table, header_area);

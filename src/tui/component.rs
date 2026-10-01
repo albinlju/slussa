@@ -25,20 +25,21 @@ pub trait Component {
 }
 
 pub fn step_index(current: usize, delta: i16, len: usize) -> usize {
-    if len == 0 {
+    let Some(last) = len.checked_sub(1) else {
         return 0;
+    };
+    let step = usize::from(delta.unsigned_abs());
+    if delta >= 0 {
+        current.saturating_add(step).min(last)
+    } else {
+        current.saturating_sub(step).min(last)
     }
-    (current as i64 + i64::from(delta)).clamp(0, (len - 1) as i64) as usize
 }
 
 /// A length or offset as ratatui's `u16`, capped instead of wrapped: a diff of
 /// 70 000 lines must scroll to line 65 535, not to line 4 464.
-pub const fn saturating_u16(value: usize) -> u16 {
-    if value > u16::MAX as usize {
-        u16::MAX
-    } else {
-        value as u16
-    }
+pub fn saturating_u16(value: usize) -> u16 {
+    u16::try_from(value).unwrap_or(u16::MAX)
 }
 
 /// The scroll offset that brings an item of `span` rows starting at `start`
@@ -73,6 +74,19 @@ pub const fn scroll(offset: u16, delta: i16) -> u16 {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn a_step_stays_inside_the_list() {
+        assert_eq!(step_index(0, 1, 3), 1);
+        assert_eq!(step_index(2, 1, 3), 2);
+        assert_eq!(step_index(2, -1, 3), 1);
+        assert_eq!(step_index(0, -1, 3), 0);
+        assert_eq!(step_index(1, i16::MAX, 3), 2);
+        assert_eq!(step_index(1, i16::MIN, 3), 0);
+        // An index left past the end by a shrunken list comes back inside it.
+        assert_eq!(step_index(9, -1, 3), 2);
+        assert_eq!(step_index(4, 1, 0), 0);
+    }
 
     #[test]
     fn lengths_past_the_u16_range_are_capped_and_not_wrapped() {

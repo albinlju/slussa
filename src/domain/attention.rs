@@ -64,10 +64,7 @@ pub fn attention(pr: &PullRequest, viewer: &str) -> Option<Attention> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::domain::{
-        review::{Reviewer, ReviewerState},
-        user::User,
-    };
+    use crate::domain::{review::Reviewer, user::User};
     use chrono::Utc;
 
     fn reviewer(name: &str, state: ReviewerState) -> Reviewer {

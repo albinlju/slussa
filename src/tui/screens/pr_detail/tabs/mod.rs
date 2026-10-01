@@ -47,7 +47,14 @@ impl DetailTab {
     }
     pub fn step(self, delta: i16, caps: &crate::domain::capabilities::Capabilities) -> Self {
         let tabs = Self::available(caps);
+        let len = tabs.len().max(1);
         let current = tabs.iter().position(|tab| *tab == self).unwrap_or(0);
-        tabs[(current as i16 + delta).rem_euclid(tabs.len() as i16) as usize]
+        let step = usize::from(delta.unsigned_abs()) % len;
+        let next = if delta >= 0 {
+            current + step
+        } else {
+            current + len - step
+        };
+        tabs.get(next % len).copied().unwrap_or(self)
     }
 }

@@ -387,7 +387,10 @@ fn visual_lines(text: &str, cursor: usize, width: usize) -> (Vec<Line<'static>>,
         if i == text.len() {
             break;
         }
-        lines[row].push(c);
+        // `row` is always the last line: it grows with every line pushed.
+        if let Some(line) = lines.last_mut() {
+            line.push(c);
+        }
         col += size;
     }
     (lines.into_iter().map(Line::raw).collect(), caret.0, caret.1)

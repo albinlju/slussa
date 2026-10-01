@@ -7,6 +7,8 @@ use crate::providers::{Provider, bitbucket_dc, github};
 pub enum PreflightError {
     #[error("git is not installed (or not on PATH).")]
     GitMissing,
+    #[error("couldn't run git: {0}.")]
+    GitFailed(#[source] std::io::Error),
     #[error("must be run inside a git repository with an `origin` remote.")]
     NotAGitRepo,
     #[error("couldn't parse a host out of the `origin` remote `{remote}`.")]

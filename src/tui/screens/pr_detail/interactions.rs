@@ -88,6 +88,10 @@ impl PrDetailScreen {
         }
     }
 
+    #[expect(
+        clippy::unreachable,
+        reason = "a component consumed these; the `Action` split removes the arm (ROADMAP)"
+    )]
     pub(super) fn interaction(
         &mut self,
         action: DetailAction,
