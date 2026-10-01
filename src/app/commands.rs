@@ -33,9 +33,7 @@ impl App {
                 }
             }
             Command::SubmitComment { target, text } => {
-                if text.trim().is_empty() {
-                    return;
-                }
+                let text = text.into_string();
                 if let CommentTarget::Line(anchor) = &target
                     && let Some(review) = self.state.store.reviews.get_mut(&pr_id)
                 {

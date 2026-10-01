@@ -123,7 +123,7 @@ fn detail_emits_resolved_commands_and_retains_submission_payload() {
     );
     assert!(matches!(command, Some(Effect::Command {
         pr_id: 42, command: Command::SubmitComment { target: CommentTarget::Pr, text }
-    }) if text == "å"));
+    }) if text.as_str() == "å"));
     assert_eq!(app.state.ui.detail.editor.text().unwrap(), "å");
     press(&mut app, KeyCode::Esc);
     app.apply(Action::Detail(DetailAction::Pr(PrAction::OpenDecline)));

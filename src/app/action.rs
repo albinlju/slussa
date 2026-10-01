@@ -406,7 +406,7 @@ pub enum Command {
     RemovePendingComment(usize),
     SubmitComment {
         target: crate::app::reviews::CommentTarget,
-        text: String,
+        text: crate::domain::comment::NonBlank,
     },
     SubmitReview {
         verdict: crate::domain::review::ReviewVerdict,

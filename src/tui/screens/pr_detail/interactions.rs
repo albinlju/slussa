@@ -199,9 +199,8 @@ impl PrDetailScreen {
 
     pub(super) fn submit_editor(&self, pr_id: u64) -> Option<Effect> {
         let CommentDraft { target, text } = self.editor.draft()?;
-        if text.trim().is_empty() {
-            return None;
-        }
+        // A blank draft is not a comment: Ctrl+S does nothing until it has text.
+        let text = crate::domain::comment::NonBlank::new(text)?;
         Some(Self::command(
             pr_id,
             Command::SubmitComment { target, text },

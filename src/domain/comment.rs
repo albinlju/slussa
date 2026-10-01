@@ -14,6 +14,34 @@ pub struct Comment {
     pub reply_to: Option<u64>,
 }
 
+/// Text with something in it besides whitespace: what a comment has to be
+/// before it is sent or queued. `new` is the only way to make one, so nothing
+/// that takes it checks again.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct NonBlank(String);
+
+impl NonBlank {
+    pub fn new(text: String) -> Option<Self> {
+        (!text.trim().is_empty()).then_some(Self(text))
+    }
+
+    #[cfg(test)]
+    pub fn as_str(&self) -> &str {
+        &self.0
+    }
+
+    pub fn into_string(self) -> String {
+        self.0
+    }
+}
+
+#[cfg(test)]
+impl From<&str> for NonBlank {
+    fn from(text: &str) -> Self {
+        Self::new(text.to_owned()).expect("a test comment is not blank")
+    }
+}
+
 /// Which of the two kinds of comment a provider keeps. GitHub edits and
 /// deletes them through different endpoints.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -143,6 +171,16 @@ impl CommentThread {
 
 #[cfg(test)]
 mod tests {
+    #[test]
+    fn a_comment_needs_more_than_whitespace_and_is_kept_as_written() {
+        use super::NonBlank;
+        assert_eq!(NonBlank::new(String::new()), None);
+        assert_eq!(NonBlank::new(" \n\t".into()), None);
+        let text = NonBlank::new("  indented\n".into()).unwrap();
+        assert_eq!(text.as_str(), "  indented\n");
+        assert_eq!(text.into_string(), "  indented\n");
+    }
+
     use super::*;
 
     #[test]
