@@ -30,9 +30,13 @@ pub mod state;
 pub mod store;
 
 const SPINNER_INTERVAL: Duration = Duration::from_millis(100);
+/// How long typed text may wait before it is written to the draft file.
+const DRAFT_SAVE_INTERVAL: Duration = Duration::from_millis(500);
 
 pub struct App {
     drafts: Option<drafts::DraftStorage>,
+    /// Text was typed since the draft file was last written.
+    drafts_dirty: bool,
     pub state: AppState,
     pub(crate) provider: Provider,
     action_tx: UnboundedSender<Action>,
@@ -45,6 +49,7 @@ impl App {
         let (action_tx, action_rx) = mpsc::unbounded_channel();
         Self {
             drafts: None,
+            drafts_dirty: false,
             state: AppState {
                 store: store::Store {
                     current_user,
@@ -61,12 +66,23 @@ impl App {
     }
 
     pub async fn run(mut self, terminal: &mut DefaultTerminal) -> std::io::Result<()> {
+        let result = self.event_loop(terminal).await;
+        // Leaving on a terminal error must not lose text typed since the last save.
+        if self.drafts_dirty {
+            self.save_drafts();
+        }
+        result
+    }
+
+    async fn event_loop(&mut self, terminal: &mut DefaultTerminal) -> std::io::Result<()> {
         self.state.store.cache.prs = LoadState::Loading;
         self.spawn_load_prs(PrGroup::Open, None);
 
         let mut events = EventStream::new();
         let start = time::Instant::now() + refresh::BUILDS_INTERVAL;
         let mut refresh = time::interval_at(start, refresh::BUILDS_INTERVAL);
+        let mut draft_save = time::interval(DRAFT_SAVE_INTERVAL);
+        draft_save.set_missed_tick_behavior(time::MissedTickBehavior::Delay);
         self.draw(terminal)?;
 
         loop {
@@ -82,6 +98,10 @@ impl App {
                 () = time::sleep(SPINNER_INTERVAL), if animating => self.draw(terminal)?,
                 _ = refresh.tick() => {
                     self.tick_refresh();
+                    self.draw(terminal)?;
+                }
+                _ = draft_save.tick(), if self.drafts_dirty => {
+                    self.save_drafts();
                     self.draw(terminal)?;
                 }
                 Some(Ok(event)) = events.next() => match event {
@@ -129,9 +149,17 @@ mod flow_tests;
 mod tests;
 
 impl App {
+    /// A keystroke in the editor only marks the drafts as changed, and the event
+    /// loop writes them within `DRAFT_SAVE_INTERVAL`; a write is a file sync,
+    /// too slow to do for every character. Everything else is written at once.
     pub(super) fn apply(&mut self, action: Action) {
+        let typing = action.is_editor_keystroke();
         self.apply_inner(action);
-        self.save_drafts();
+        if typing {
+            self.drafts_dirty = true;
+        } else {
+            self.save_drafts();
+        }
     }
 
     fn apply_inner(&mut self, action: Action) {

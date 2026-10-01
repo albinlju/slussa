@@ -113,3 +113,48 @@ fn journal_failure_prevents_remote_submission_and_keeps_editor() {
     drop(app);
     std::fs::remove_dir_all(root).unwrap();
 }
+
+fn draft_file(root: &std::path::Path) -> std::path::PathBuf {
+    std::fs::read_dir(root)
+        .unwrap()
+        .map(|e| e.unwrap().path())
+        .find(|p| p.extension().is_some_and(|e| e == "json"))
+        .unwrap()
+}
+
+#[test]
+fn typing_is_not_written_per_key_and_the_next_save_or_other_action_writes_it() {
+    let root = recovery_root("typing");
+    let mut app = app();
+    attach_recovery(&mut app, &root);
+    detail(&mut app, DetailTab::Overview);
+    press(&mut app, KeyCode::Char('c'));
+    let file = draft_file(&root);
+    let on_disk = || String::from_utf8(std::fs::read(&file).unwrap()).unwrap();
+    let opened = on_disk();
+
+    for c in "typed".chars() {
+        press(&mut app, KeyCode::Char(c));
+    }
+    press(&mut app, KeyCode::Backspace);
+    press(&mut app, KeyCode::Left);
+    assert_eq!(on_disk(), opened, "no write per key");
+    assert!(app.drafts_dirty);
+
+    // What the event loop does every `DRAFT_SAVE_INTERVAL` while text is unsaved.
+    assert!(app.save_drafts());
+    assert!(!app.drafts_dirty);
+    assert!(on_disk().contains("\"type\""), "{}", on_disk());
+
+    // Anything other than a keystroke is written at once, with what was typed.
+    press(&mut app, KeyCode::Char('!'));
+    assert!(on_disk().contains("\"type\""), "{}", on_disk());
+    app.apply(Action::Paste("pasted".into()));
+    assert!(on_disk().contains("typ!pastede"), "{}", on_disk());
+    press(&mut app, KeyCode::Char('?'));
+    press(&mut app, KeyCode::Esc);
+    assert!(!app.drafts_dirty);
+    assert!(on_disk().contains("typ!pasted?e"), "{}", on_disk());
+    drop(app);
+    std::fs::remove_dir_all(root).unwrap();
+}
