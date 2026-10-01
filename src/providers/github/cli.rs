@@ -8,12 +8,13 @@ use std::{
 #[allow(clippy::duration_suboptimal_units)]
 const REQUEST_TIMEOUT: Duration = Duration::from_secs(60);
 
-/// The `gh` command. Tests can swap it for a scripted fake.
+/// The `gh` command. In a test build it is the scripted fake, or a program
+/// that does not exist when no fake is installed: a test never reaches the
+/// real `gh`.
 fn gh_command() -> Command {
     #[cfg(test)]
-    if let Some(command) = crate::test_support::gh_command() {
-        return command;
-    }
+    return crate::test_support::gh_command();
+    #[cfg(not(test))]
     Command::new("gh")
 }
 

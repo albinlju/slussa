@@ -256,6 +256,15 @@ fn github_reports_a_missing_gh() {
 }
 
 #[test]
+fn github_without_an_installed_fake_never_reaches_the_real_gh() {
+    let _nothing_installed = InstalledGh::none();
+    assert!(matches!(
+        Provider::GitHub.current_user(),
+        Err(FetchError::GhMissing)
+    ));
+}
+
+#[test]
 fn github_rejects_unparseable_output_and_graphql_errors() {
     // One fake at a time: the first guard must be gone before the second install.
     let (result, installed) = fetch_prs_with(FakeGh::new().on("graphql", "not json"));
