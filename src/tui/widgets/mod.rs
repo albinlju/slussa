@@ -1,4 +1,5 @@
 pub mod comment;
+mod comment_code;
 pub mod comment_fold;
 pub mod comment_meta;
 pub mod dialog;
