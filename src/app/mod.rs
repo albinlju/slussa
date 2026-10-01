@@ -12,6 +12,7 @@ mod event_loop;
 pub mod fetchers;
 mod loads;
 pub mod navigation;
+mod notice;
 pub mod preflight;
 pub mod refresh;
 pub mod remote;
