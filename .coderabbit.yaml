@@ -23,7 +23,8 @@ reviews:
         - Provider and process calls block and run off the UI thread through
           `App::spawn_fetch`. Flag async HTTP, ad hoc threads, and anything that
           starts I/O from rendering or key handling.
-        - Flag new `unwrap`, `expect` or `unreachable!` in non-test code.
+        - Flag new `unwrap`, `expect`, `panic!` or `unreachable!` in non-test
+          code, and any `#[allow]`: an exception is an `#[expect]` with a reason.
         - Two views only (the PR list and the PR). Flag a new screen, dashboard
           or sidebar; new capability is a default, a column, a marker or a key.
         - Show only what the provider supports: unsupported actions are hidden,

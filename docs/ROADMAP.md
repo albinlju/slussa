@@ -385,6 +385,12 @@ tighter than their `App` struct with 20 `pending_*` flags, and it stays.
   thread, several commits and a failing build at both sizes, and one at 80x24.
 - [ ] **`cargo nextest`** in CI (parallel, per-test timeouts, clearer failure
   output). Local `cargo test` stays fine.
+- [ ] **`clippy::wildcard_enum_match_arm`.** It refuses a `_ =>` arm on an
+  enum, so a new variant is a compile error where it was forgotten instead of
+  falling into the catch-all. 75 arms match today; most are on `Action` and
+  `DetailAction` and go with *Split `Action`*. Turn it on then, with an
+  `#[expect]` on key handlers that match crossterm's `KeyCode`.
+- [ ] **reqwest 0.13.** The crate is on 0.12; 0.13 is out. Not looked into.
 - [ ] **CodeRabbit on the repository.** An automatic AI reviewer on every PR.
   *Trigger:* the repository becomes public (see *Release* under *Features to build*).
   Third-party pages say it is free for public repositories and about 24 USD per
@@ -467,13 +473,20 @@ Kept as one line each; the detail is in git history.
   18 transport tests, shared fixtures in `src/test_support.rs`, and CLI
   integration tests (`tests/cli_integration.rs`, isolated HOME, no network).
 - **Lints:** `clippy::{all, pedantic, nursery}` and a `[lints.rust]` block, two
-  nursery lints allowed by name; `rust-toolchain.toml` (1.95.0) and
-  `rust-version`.
-- **CI** on Ubuntu and macOS (fmt, clippy, test, cargo-deny), actions pinned by
+  nursery lints allowed by name. The no-panic rule is a lint (`unwrap_used`,
+  `expect_used`, `panic`, `unreachable`, `unimplemented`, `indexing_slicing`),
+  `unsafe_code` is forbidden, truncating casts are refused again, and an
+  exception is an `#[expect]` with a reason: the switch from `#[allow]` found
+  two that were no longer needed. `rust-toolchain.toml` pins 1.98.1 and
+  `rust-version` stays 1.95, which CI builds with as well.
+- **CI** on Ubuntu and macOS (fmt, clippy, test, cargo-deny, a build with the
+  minimum Rust version, and cargo-deny again every week), actions pinned by
   SHA; **cargo-deny** found RUSTSEC-2026-0285 in `rustls` 0.23.40 (fixed by
   updating to 0.23.45); `colored` and `option-ext` are named MPL-2.0 exceptions.
 - **Dependabot** (weekly for Actions, monthly grouped for Cargo) and release
-  profile `strip = true`, dev `debug = 1`.
+  profile `strip = true`, `lto = "thin"`, `codegen-units = 1` (the macOS arm64
+  binary went from 7.0 to 6.1 MB), dev `debug = 1`. Not `panic = "abort"`:
+  Markdown rendering relies on catching a panic in the renderer.
 - **Release workflow** (`release.yml` + `package.sh`), dry-run twice on GitHub;
   the publish step has still never run.
 - **OSC 52 clipboard:** helper first, OSC 52 as fallback, and first over SSH.

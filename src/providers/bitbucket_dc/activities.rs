@@ -231,7 +231,7 @@ fn map_reactions(props: &BbProperties) -> Vec<Reaction> {
         .filter_map(|r| {
             Some(Reaction {
                 emoji: emoji_from_url(&r.emoticon.url)?,
-                count: r.users.len() as u32,
+                count: u32::try_from(r.users.len()).unwrap_or(u32::MAX),
                 mine: false,
             })
         })
@@ -263,7 +263,6 @@ fn map_pushed(c: RescopeCommit) -> PushedCommit {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::domain::event::EventKind;
 
     const SAMPLE: &str = r#"{ "values": [
         { "action": "OPENED", "createdDate": 1000, "user": { "name": "ana" } },

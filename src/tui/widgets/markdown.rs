@@ -1,17 +1,21 @@
+use crate::tui::component::saturating_u16;
 use ratatui::text::Line;
 
-const GLAMOUR_MARGIN: usize = 2;
+const GLAMOUR_MARGIN: u16 = 2;
 
 pub(in crate::tui) fn render(body: &str, width: u16) -> Vec<Line<'static>> {
     let source: Vec<_> = body.lines().collect();
+    let prose = |from: usize, to: usize| source.get(from..to).unwrap_or_default().join("\n");
     let mut output = Vec::new();
     let mut start = 0;
     let mut i = 0;
     let mut fence: Option<&str> = None;
-    while i < source.len() {
-        let trimmed = source[i].trim_start();
-        if trimmed.starts_with("```") || trimmed.starts_with("~~~") {
-            let marker = &trimmed[..3];
+    while let Some(line) = source.get(i) {
+        let trimmed = line.trim_start();
+        if let Some(marker) = ["```", "~~~"]
+            .into_iter()
+            .find(|marker| trimmed.starts_with(marker))
+        {
             if fence == Some(marker) {
                 fence = None;
             } else if fence.is_none() {
@@ -19,33 +23,36 @@ pub(in crate::tui) fn render(body: &str, width: u16) -> Vec<Line<'static>> {
             }
         }
         if fence.is_none()
-            && i + 1 < source.len()
-            && source[i].contains('|')
-            && table_separator(source[i + 1])
+            && line.contains('|')
+            && source.get(i + 1).is_some_and(|next| table_separator(next))
         {
             output.extend(render_glamour(
-                &source[start..i].join("\n"),
+                &prose(start, i),
                 width,
                 description_style(crate::tui::theme::current()),
             ));
             let table_start = i;
             i += 2;
-            while i < source.len() && source[i].contains('|') && !source[i].trim().is_empty() {
+            while source
+                .get(i)
+                .is_some_and(|row| row.contains('|') && !row.trim().is_empty())
+            {
                 i += 1;
             }
             let mut columns = Vec::<usize>::new();
-            for row in &source[table_start..i] {
+            for row in source.get(table_start..i).unwrap_or_default() {
                 for (index, cell) in row.trim().trim_matches('|').split('|').enumerate() {
-                    if columns.len() <= index {
-                        columns.resize(index + 1, 0);
+                    let cell_width = ratatui::text::Span::raw(cell).width();
+                    match columns.get_mut(index) {
+                        Some(widest) => *widest = (*widest).max(cell_width),
+                        None => columns.push(cell_width),
                     }
-                    columns[index] = columns[index].max(ratatui::text::Span::raw(cell).width());
                 }
             }
             let table_width = columns.iter().sum::<usize>() + columns.len() * 4 + 8;
-            let render_width = width.max(table_width.min(u16::MAX as usize) as u16);
+            let render_width = width.max(saturating_u16(table_width));
             output.extend(render_glamour(
-                &source[table_start..i].join("\n"),
+                &prose(table_start, i),
                 render_width,
                 description_style(crate::tui::theme::current()),
             ));
@@ -55,7 +62,7 @@ pub(in crate::tui) fn render(body: &str, width: u16) -> Vec<Line<'static>> {
         }
     }
     output.extend(render_glamour(
-        &source[start..].join("\n"),
+        &prose(start, source.len()),
         width,
         description_style(crate::tui::theme::current()),
     ));
@@ -74,10 +81,10 @@ fn table_separator(line: &str) -> bool {
 pub(in crate::tui) fn render_no_margin(body: &str, width: u16) -> Vec<Line<'static>> {
     let lines = render_glamour(
         body,
-        width.saturating_add(GLAMOUR_MARGIN as u16),
+        width.saturating_add(GLAMOUR_MARGIN),
         glamour::Style::Dark.config(),
     );
-    trim_blank_lines(strip_margin(lines, GLAMOUR_MARGIN))
+    trim_blank_lines(strip_margin(lines, usize::from(GLAMOUR_MARGIN)))
 }
 
 fn render_glamour(body: &str, width: u16, style: glamour::StyleConfig) -> Vec<Line<'static>> {

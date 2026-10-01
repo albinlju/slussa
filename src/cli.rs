@@ -24,7 +24,7 @@ pub fn dispatch(mut args: Vec<String>) -> Dispatch {
     }
 
     match args.get(1).map(String::as_str) {
-        Some("auth") => return Dispatch::Done(run_auth(&args[2..])),
+        Some("auth") => return Dispatch::Done(run_auth(args.get(2..).unwrap_or_default())),
         Some("--help" | "-h") => {
             print_help();
             return Dispatch::Done(ExitCode::SUCCESS);

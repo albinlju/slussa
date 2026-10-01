@@ -162,6 +162,10 @@ impl App {
         }
     }
 
+    #[expect(
+        clippy::unreachable,
+        reason = "a component consumed these; the `Action` split removes the arm (ROADMAP)"
+    )]
     fn apply_inner(&mut self, action: Action) {
         let Some(action) = self
             .state

@@ -2,9 +2,10 @@
 //! and how answers and failures come back. Everything runs through `Provider`
 //! against `FakeGh` or `MockHttp`; nothing touches a real service.
 
-// The fake `gh` guard is held for the whole test on purpose; dropping it early
-// would let another test replace `gh` mid-call.
-#![allow(clippy::significant_drop_tightening)]
+#![expect(
+    clippy::significant_drop_tightening,
+    reason = "the fake is held for the whole test on purpose: dropped early, another test would replace `gh` mid-call"
+)]
 
 mod bitbucket;
 mod github_reads;

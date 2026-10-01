@@ -16,14 +16,17 @@ exclude = [
     ".coderabbit.yaml",
     "AGENTS.md",
     "CLAUDE.md",
+    "clippy.toml",
     "deny.toml",
     "docs/media/",
     "rust-toolchain.toml",
 ]
 
 [lints.rust]
-unsafe_code = "warn"
+unsafe_code = "forbid"
 rust_2018_idioms = { level = "warn", priority = -1 }
+redundant_imports = "warn"
+redundant_lifetimes = "warn"
 trivial_casts = "warn"
 trivial_numeric_casts = "warn"
 unused_lifetimes = "warn"
@@ -33,7 +36,6 @@ unused_qualifications = "warn"
 all = { level = "warn", priority = -1 }
 pedantic = { level = "warn", priority = -1 }
 nursery = { level = "warn", priority = -1 }
-cast_possible_truncation = "allow"
 cast_sign_loss = "allow"
 cast_possible_wrap = "allow"
 too_many_lines = "allow"
@@ -44,6 +46,18 @@ redundant_pub_crate = "allow"
 redundant_clone = "warn"
 dbg_macro = "warn"
 todo = "warn"
+# No panics in non-test code (AGENTS.md); clippy.toml lets tests use them.
+unwrap_used = "warn"
+expect_used = "warn"
+panic = "warn"
+unreachable = "warn"
+unimplemented = "warn"
+indexing_slicing = "warn"
+# An exception is an `#[expect]` with its reason, so one that is no longer
+# needed shows up as a warning instead of lingering.
+allow_attributes = "warn"
+allow_attributes_without_reason = "warn"
+map_err_ignore = "warn"
 
 [dependencies]
 serde = { version = "1", features = ["derive"] }
@@ -67,6 +81,8 @@ base64 = "0.22"
 
 [profile.release]
 strip = true
+lto = "thin"
+codegen-units = 1
 
 [profile.dev]
 # Faster incremental builds; keeps line tables for backtraces.

@@ -5,9 +5,10 @@
 //! Each test holds the installed fake until its work has settled, because the
 //! fake replaces `gh` for the whole process.
 
-// The fake guard is deliberately held across awaits; the lint's suggestion to
-// drop it early would let the next test replace `gh` mid-flow.
-#![allow(clippy::significant_drop_tightening)]
+#![expect(
+    clippy::significant_drop_tightening,
+    reason = "the fake is held across awaits on purpose: dropped early, the next test would replace `gh` mid-flow"
+)]
 
 mod closed_groups;
 mod open_group;

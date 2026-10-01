@@ -158,27 +158,26 @@ impl DiffViewer {
     }
 
     fn diff_jump_match(&mut self, delta: i16) {
-        let view = &mut *self;
-        let matches = &view.pane_matches;
-        if matches.is_empty() {
-            return;
-        }
-        let cur = view.pane_cursor;
+        let matches = &self.pane_matches;
+        let cur = self.pane_cursor;
+        // Past the last match the search wraps to the first, and the other way.
         let next = if delta >= 0 {
             matches
                 .iter()
                 .copied()
                 .find(|&m| m > cur)
-                .unwrap_or(matches[0])
+                .or_else(|| matches.first().copied())
         } else {
             matches
                 .iter()
                 .copied()
                 .rev()
                 .find(|&m| m < cur)
-                .unwrap_or(matches[matches.len() - 1])
+                .or_else(|| matches.last().copied())
         };
-        self.pane_cursor = next;
+        if let Some(next) = next {
+            self.pane_cursor = next;
+        }
     }
 
     fn diff_move_pane_cursor(&mut self, delta: i16) {

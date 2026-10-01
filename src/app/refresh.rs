@@ -7,8 +7,7 @@ use std::time::{Duration, Instant};
 
 /// CI moves fast, so the Builds tab re-fetches more often than everything else.
 pub const BUILDS_INTERVAL: Duration = Duration::from_secs(15);
-#[allow(clippy::duration_suboptimal_units)] // `from_mins` is still unstable
-pub const FULL_INTERVAL: Duration = Duration::from_secs(60);
+pub const FULL_INTERVAL: Duration = Duration::from_mins(1);
 
 impl App {
     /// Background tick: re-fetch the active view on its cadence. Fires on the

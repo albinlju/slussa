@@ -102,7 +102,9 @@ fn validate_pat(base_url: &str, pat: &str) -> Result<(), PatError> {
 
 fn server_message(body: &str) -> String {
     if let Ok(v) = serde_json::from_str::<serde_json::Value>(body)
-        && let Some(msg) = v["errors"][0]["message"].as_str()
+        && let Some(msg) = v
+            .pointer("/errors/0/message")
+            .and_then(serde_json::Value::as_str)
     {
         return msg.to_string();
     }

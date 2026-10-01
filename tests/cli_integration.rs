@@ -2,6 +2,11 @@
 //! isolated temporary directory with its own HOME and config, outside any git
 //! checkout, and none of them touch the network or start the TUI.
 
+#![expect(
+    clippy::expect_used,
+    reason = "the sandbox helpers are test code outside a `#[test]` function"
+)]
+
 use std::{
     path::{Path, PathBuf},
     process::{Command, Stdio},

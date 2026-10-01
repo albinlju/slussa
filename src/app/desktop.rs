@@ -59,7 +59,10 @@ fn validate_url(value: &str) -> Result<(), String> {
     if value.len() > 4096 || value.chars().any(char::is_control) {
         return Err(invalid());
     }
-    let url = reqwest::Url::parse(value).map_err(|_| invalid())?;
+    let url = reqwest::Url::parse(value).map_err(|e| {
+        tracing::debug!("rejected a PR link: {e}");
+        invalid()
+    })?;
     if !matches!(url.scheme(), "http" | "https")
         || url.host_str().is_none()
         || !url.username().is_empty()
@@ -160,7 +163,10 @@ fn copy_link(url: &str) -> io::Result<Done> {
         Ok(()) => Ok(Done::Copied),
         Err(error) => write_osc52(url)
             .map(|()| Done::SentToTerminal)
-            .map_err(|_| error),
+            .map_err(|osc52| {
+                tracing::debug!("the terminal clipboard failed too: {osc52}");
+                error
+            }),
     }
 }
 

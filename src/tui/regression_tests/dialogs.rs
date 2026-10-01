@@ -31,7 +31,7 @@ fn extracted_dialogs_render_and_keep_their_key_bindings() {
                 state.ui.detail.help_open = true;
                 ("Help", DetailAction::ToggleHelp)
             }
-            _ => unreachable!(),
+            other => panic!("no such dialog in this test: {other}"),
         };
         let mut terminal = Terminal::new(TestBackend::new(100, 30)).unwrap();
         terminal.draw(|frame| render(frame, &mut state)).unwrap();

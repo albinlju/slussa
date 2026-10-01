@@ -13,8 +13,11 @@ for AI-generated PRs: triage, check intent, approve or merge.
 - **Provider and process calls block and run off the UI thread**, through
   `App::spawn_fetch`. No async HTTP, no ad hoc threads, nothing started from
   rendering or key handling.
-- **No new panics in non-test code.** No `unwrap`, `expect` or `unreachable!`.
-  Return an error, or restructure so the case cannot occur.
+- **No new panics in non-test code.** No `unwrap`, `expect`, `panic!`,
+  `unreachable!` or indexing that can go out of bounds; clippy refuses them.
+  Return an error, or restructure so the case cannot occur. An exception is an
+  `#[expect(lint, reason = "...")]`, never an `#[allow]`: an `expect` that is
+  no longer needed is reported, an `allow` lingers.
 - **Modules stay under about 500 lines.** `mod.rs` composes and does not
   implement. Tests live inline, or in exactly one sibling `tests.rs`; suites that drive several modules through the doubles in `src/test_support.rs` are named `*_tests.rs`. A test
   suite that outgrows the limit becomes a directory with a file per concern and
@@ -35,7 +38,9 @@ cargo deny check
 ```
 
 CI runs all four on Linux and macOS. The toolchain is pinned in
-`rust-toolchain.toml`.
+`rust-toolchain.toml`; `rust-version` in `Cargo.toml` is the oldest compiler
+supported, and CI builds with that one too. Do not use a newer standard
+library API than `rust-version` allows.
 
 ## Where to look
 

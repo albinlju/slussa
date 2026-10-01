@@ -3,7 +3,6 @@ use serde::Deserialize;
 use super::{Config, http};
 use crate::providers::error::FetchError;
 
-#[allow(clippy::too_many_arguments)]
 pub fn post_comment(
     config: &Config,
     pr_id: u64,

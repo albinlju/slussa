@@ -10,6 +10,7 @@ pub(crate) enum Width {
     Flex(u16),
 }
 
+#[derive(Clone, Copy)]
 pub(crate) struct Column {
     pub title: &'static str,
     pub width: Width,

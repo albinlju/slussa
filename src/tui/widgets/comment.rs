@@ -271,7 +271,7 @@ fn bracket(body: Vec<Line<'static>>, width: u16, left: Color, rule: Color) -> Ve
     out
 }
 
-#[allow(clippy::too_many_arguments)]
+#[expect(clippy::too_many_arguments, reason = "render inputs; see ROADMAP")]
 fn conversation(
     thread: &CommentThread,
     anchor: Option<(usize, &str)>,
@@ -514,7 +514,7 @@ fn suggestion_box(
     let mut rows: Vec<Line<'static>> = Vec::new();
     if let Some((n, old)) = anchor {
         rows.push(widgets::numbered_diff_row(
-            Some(n as u32),
+            u32::try_from(n).ok(),
             num_width,
             "-",
             old,
@@ -526,7 +526,7 @@ fn suggestion_box(
     }
     for (i, new) in new_lines.iter().enumerate() {
         rows.push(widgets::numbered_diff_row(
-            start.map(|n| (n + i) as u32),
+            start.and_then(|n| u32::try_from(n + i).ok()),
             num_width,
             "+",
             new,
@@ -591,17 +591,17 @@ fn diff_snippet(
         (None, Some(o)) => matches!(r.dl, DiffLine::Removed(_)) && r.old_no == o,
         _ => false,
     });
-    let Some(anchor) = anchor else {
+    let Some((anchor, anchor_row)) = anchor.and_then(|i| Some((i, rows.get(i)?))) else {
         return (Vec::new(), None);
     };
-    let anchor_text = rows[anchor].dl.content().to_string();
+    let anchor_text = anchor_row.dl.content().to_string();
 
-    let hunk_start = rows[..anchor]
-        .iter()
-        .rposition(|r| r.hunk != rows[anchor].hunk)
+    let hunk_start = (0..anchor)
+        .rev()
+        .find(|&i| rows.get(i).is_some_and(|r| r.hunk != anchor_row.hunk))
         .map_or(0, |i| i + 1);
     let start = anchor.saturating_sub(SNIPPET_CONTEXT).max(hunk_start);
-    let window = &rows[start..=anchor];
+    let window = rows.get(start..=anchor).unwrap_or_default();
     let num_width = window
         .iter()
         .map(|r| r.new_no)
@@ -615,7 +615,7 @@ fn diff_snippet(
         .iter()
         .map(|r| match r.dl {
             DiffLine::Added(c) => widgets::numbered_diff_row(
-                Some(r.new_no as u32),
+                u32::try_from(r.new_no).ok(),
                 num_width,
                 "+",
                 c,
@@ -635,7 +635,7 @@ fn diff_snippet(
                 row_w,
             ),
             DiffLine::Context(c) => widgets::numbered_diff_row(
-                Some(r.new_no as u32),
+                u32::try_from(r.new_no).ok(),
                 num_width,
                 " ",
                 c,

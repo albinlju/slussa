@@ -6,7 +6,13 @@ pub(crate) fn origin_url() -> Result<String, PreflightError> {
     let output = Command::new("git")
         .args(["remote", "get-url", "origin"])
         .output()
-        .map_err(|_| PreflightError::GitMissing)?;
+        .map_err(|e| {
+            if e.kind() == std::io::ErrorKind::NotFound {
+                PreflightError::GitMissing
+            } else {
+                PreflightError::GitFailed(e)
+            }
+        })?;
     if !output.status.success() {
         return Err(PreflightError::NotAGitRepo);
     }

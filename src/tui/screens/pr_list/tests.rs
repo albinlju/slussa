@@ -1,12 +1,8 @@
 use super::*;
 use crate::{
-    app::{
-        navigation::Screen,
-        state::AppState,
-        store::{FetchKey, OpenChain},
-    },
-    domain::{pr::PrGroup, user::User},
-    tui::{component::Component, key_to_action, render},
+    app::{state::AppState, store::FetchKey},
+    domain::user::User,
+    tui::{key_to_action, render},
 };
 use ratatui::{Terminal, backend::TestBackend, crossterm::event::KeyModifiers};
 
