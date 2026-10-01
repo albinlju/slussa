@@ -172,7 +172,10 @@ fn review_options_follow_capabilities_and_keep_own_pr_restrictions() {
     app.state
         .store
         .capabilities
-        .review_verdicts
+        .review
+        .as_mut()
+        .unwrap()
+        .verdicts
         .push(ReviewVerdict::Unapprove);
     assert!(
         app.state

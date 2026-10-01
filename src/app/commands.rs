@@ -114,8 +114,17 @@ impl App {
             );
             return;
         }
-        if self.state.store.capabilities.review_submission
-            == crate::domain::capabilities::ReviewSubmission::AtomicSingleRevision
+        let one_revision = self
+            .state
+            .store
+            .capabilities
+            .review
+            .as_ref()
+            .is_some_and(|caps| {
+                caps.submission
+                    == crate::domain::capabilities::ReviewSubmission::AtomicSingleRevision
+            });
+        if one_revision
             && let Some(review) = self.state.store.reviews.get(&pr_id)
             && let Some(first) = review.comments.first()
             && review

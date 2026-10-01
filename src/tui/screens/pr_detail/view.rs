@@ -150,7 +150,7 @@ impl<'a> DetailView<'a> {
     /// picker — you can't approve / request changes on your own PR (but you *can*
     /// leave a plain comment, which GitHub allows).
     pub fn verdict_disabled_reason(&self, verdict: ReviewVerdict) -> Option<&'static str> {
-        (self.viewing_own_pr() && !self.store.capabilities.own_pr_verdicts.contains(&verdict))
+        (self.viewing_own_pr() && !self.store.capabilities.own_pr_verdicts().contains(&verdict))
             .then_some("your PR")
     }
 
@@ -216,11 +216,7 @@ impl<'a> DetailView<'a> {
     /// The review verdicts to offer in the menu — `Unapprove` only where the
     /// provider supports withdrawing approval.
     pub fn review_verdicts(&self) -> Vec<ReviewVerdict> {
-        if self.store.capabilities.reviews() {
-            self.store.capabilities.review_verdicts.clone()
-        } else {
-            Vec::new()
-        }
+        self.store.capabilities.review_verdicts().to_vec()
     }
 
     /// Target for a brand-new comment (`c`): a top-level PR comment in Overview,

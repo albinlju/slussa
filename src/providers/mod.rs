@@ -131,7 +131,7 @@ impl Provider {
     }
 
     pub fn capabilities(&self) -> crate::domain::capabilities::Capabilities {
-        use crate::domain::capabilities::{Capabilities, Feature, ReviewSubmission};
+        use crate::domain::capabilities::{Capabilities, Feature, ReviewCaps, ReviewSubmission};
         let features: std::collections::HashSet<Feature> = [
             Feature::PrComments,
             Feature::InlineComments,
@@ -149,13 +149,15 @@ impl Provider {
         match self {
             Self::GitHub => Capabilities {
                 features: features.into_iter().chain([Feature::PrInfo]).collect(),
-                review_verdicts: vec![
-                    ReviewVerdict::Approve,
-                    ReviewVerdict::RequestChanges,
-                    ReviewVerdict::Comment,
-                ],
-                own_pr_verdicts: vec![ReviewVerdict::Comment],
-                review_submission: ReviewSubmission::AtomicSingleRevision,
+                review: Some(ReviewCaps {
+                    verdicts: vec![
+                        ReviewVerdict::Approve,
+                        ReviewVerdict::RequestChanges,
+                        ReviewVerdict::Comment,
+                    ],
+                    own_pr_verdicts: vec![ReviewVerdict::Comment],
+                    submission: ReviewSubmission::AtomicSingleRevision,
+                }),
                 merge_strategies: vec![
                     MergeStrategy::Merge,
                     MergeStrategy::Squash,
@@ -164,14 +166,16 @@ impl Provider {
             },
             Self::BitbucketDc(_) => Capabilities {
                 features,
-                review_verdicts: vec![
-                    ReviewVerdict::Approve,
-                    ReviewVerdict::RequestChanges,
-                    ReviewVerdict::Comment,
-                    ReviewVerdict::Unapprove,
-                ],
-                own_pr_verdicts: vec![ReviewVerdict::Comment],
-                review_submission: ReviewSubmission::Sequential,
+                review: Some(ReviewCaps {
+                    verdicts: vec![
+                        ReviewVerdict::Approve,
+                        ReviewVerdict::RequestChanges,
+                        ReviewVerdict::Comment,
+                        ReviewVerdict::Unapprove,
+                    ],
+                    own_pr_verdicts: vec![ReviewVerdict::Comment],
+                    submission: ReviewSubmission::Sequential,
+                }),
                 merge_strategies: vec![MergeStrategy::Merge],
             },
         }
@@ -287,10 +291,13 @@ mod capability_tests {
         assert!(!github.can_submit_verdict(ReviewVerdict::Unapprove, false));
         assert!(bb.can_submit_verdict(ReviewVerdict::Unapprove, false));
         assert_eq!(
-            github.review_submission,
-            ReviewSubmission::AtomicSingleRevision
+            github.review.map(|review| review.submission),
+            Some(ReviewSubmission::AtomicSingleRevision)
         );
-        assert_eq!(bb.review_submission, ReviewSubmission::Sequential);
+        assert_eq!(
+            bb.review.map(|review| review.submission),
+            Some(ReviewSubmission::Sequential)
+        );
         assert!(github.merge_strategies.contains(&MergeStrategy::Squash));
         assert_eq!(bb.merge_strategies, vec![MergeStrategy::Merge]);
         // These must reject locally, before trying authentication or the network.
