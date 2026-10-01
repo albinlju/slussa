@@ -40,6 +40,15 @@ impl AuthorFilter {
         }
     }
 
+    /// What the Overview says when the filter leaves nothing.
+    pub const fn empty_text(self) -> &'static str {
+        match self {
+            Self::All => "(no activity)",
+            Self::Humans => "(no comments from people)",
+            Self::Ai => "(no comments from AI)",
+        }
+    }
+
     pub const fn label(self) -> &'static str {
         match self {
             Self::All => "all",

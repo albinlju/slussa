@@ -75,10 +75,7 @@ fn render_timeline(
             filter: ui.filter,
             ..Timeline::default()
         };
-        frame.render_widget(
-            widgets::empty_state(&format!("(no {} comments)", ui.filter.label())),
-            area,
-        );
+        frame.render_widget(widgets::empty_state(ui.filter.empty_text()), area);
         return;
     }
 

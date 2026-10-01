@@ -86,7 +86,7 @@ fn a_filter_that_leaves_nothing_says_so_and_can_be_changed_again() {
     }
     local_key(&mut state, KeyCode::Char('f'));
     let ai = screen(&mut state);
-    assert!(ai.contains("(no AI comments)"), "{ai}");
+    assert!(ai.contains("(no comments from AI)"), "{ai}");
     assert!(ai.contains("f: comments (AI)"));
     local_key(&mut state, KeyCode::Char('f'));
     let all = screen(&mut state);
