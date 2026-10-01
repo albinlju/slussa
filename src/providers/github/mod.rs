@@ -34,7 +34,7 @@ pub fn current_user() -> Result<String, FetchError> {
     let out = cli::run_gh(&["api", "user", "--jq", ".login"])?;
     let login = String::from_utf8_lossy(&out).trim().to_owned();
     if login.is_empty() {
-        return Err(FetchError::ParseFailed("gh named no login".to_owned()));
+        return Err(FetchError::ParseFailed("gh named no login".into()));
     }
     Ok(login)
 }
@@ -142,7 +142,7 @@ const fn review_event(verdict: ReviewVerdict) -> Option<&'static str> {
 
 pub fn submit_review(pr_number: u64, verdict: ReviewVerdict, body: &str) -> Result<(), FetchError> {
     let Some(event) = review_event(verdict) else {
-        return Err(FetchError::InvalidInput(
+        return Err(FetchError::Unsupported(
             "This review verdict is not supported by GitHub.".into(),
         ));
     };
@@ -171,13 +171,13 @@ pub fn submit_full_review(
         return submit_review(pr_number, verdict, body);
     }
     let Some(event) = review_event(verdict) else {
-        return Err(FetchError::InvalidInput(
+        return Err(FetchError::Unsupported(
             "This review verdict is not supported by GitHub.".into(),
         ));
     };
     let payload = review_payload(event, body, comments)?;
     let endpoint = format!("repos/{{owner}}/{{repo}}/pulls/{pr_number}/reviews");
-    let input = serde_json::to_vec(&payload).map_err(|e| FetchError::ParseFailed(e.to_string()))?;
+    let input = serde_json::to_vec(&payload).map_err(|e| FetchError::ParseFailed(e.into()))?;
     cli::run_gh_stdin(
         &["api", "--method", "POST", &endpoint, "--input", "-"],
         &input,

@@ -262,7 +262,7 @@ fn refreshed_lists_keep_pr_and_commit_identity() {
     let mut new = prs[0].clone();
     new.id = 44;
     prs.insert(0, new);
-    app.apply_result(TaskResult::Loaded(LoadedAction::Prs {
+    app.apply_result(TaskResult::Read(Read::Prs {
         group: crate::domain::pr::PrGroup::Open,
         after: None,
         result: Ok(crate::domain::pr::PrBatch { prs, more: None }),
@@ -281,7 +281,7 @@ fn refreshed_lists_keep_pr_and_commit_identity() {
     let mut new = commits[0].clone();
     new.oid = "new".into();
     commits.insert(0, new);
-    app.apply_result(TaskResult::Loaded(LoadedAction::Commits(42, Ok(commits))));
+    app.apply_result(TaskResult::Read(Read::Commits(42, Ok(commits))));
     assert_eq!(app.state.ui.detail.commits.selected, 2);
 }
 

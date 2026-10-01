@@ -5,9 +5,9 @@ pub(super) use crate::{
     app::{
         navigation::Screen,
         reviews::{CommentAnchor, CommentTarget},
-        store::LoadState,
+        store::{LoadState, WriteTicket},
     },
-    providers::Provider,
+    providers::{FetchError, Provider},
     tui::{
         self,
         component::Component,
@@ -22,6 +22,27 @@ pub(super) use crate::{
     },
 };
 pub(super) use ratatui::crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
+
+/// End the write pending for `pr_id` with `result`, as its worker would. With
+/// none pending there is no write to end.
+pub(super) fn finish_write(app: &mut App, pr_id: u64, result: Result<(), WriteError>) {
+    let Some(&operation) = app.state.store.operations.get(&pr_id) else {
+        return;
+    };
+    app.apply_result(TaskResult::Written {
+        ticket: WriteTicket::pending(pr_id, operation),
+        result,
+    });
+}
+
+/// A failure whose message for the user is `message`, of the kind that leaves
+/// open whether the server was reached.
+pub(super) fn failed(message: &str) -> FetchError {
+    FetchError::GhFailed {
+        code: Some(1),
+        stderr: message.into(),
+    }
+}
 
 pub(super) fn app() -> App {
     let mut app = App::new(Provider::GitHub, "reviewer".into());

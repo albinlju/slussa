@@ -33,10 +33,11 @@ pub fn render(
             );
             return;
         }
-        Some(LoadState::Failed(message)) if pr.description.is_none() => {
+        Some(LoadState::Failed(error)) if pr.description.is_none() => {
             frame.render_widget(
                 ratatui::widgets::Paragraph::new(format!(
-                    "Couldn't load the description. F: retry\n{message}"
+                    "Couldn't load the description. F: retry\n{}",
+                    error.user_message()
                 ))
                 .style(ratatui::style::Style::default().fg(crate::tui::theme::current().error)),
                 area,

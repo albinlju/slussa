@@ -1,4 +1,5 @@
 use crate::{
+    app::store::{FetchKey, WriteTicket},
     domain::{
         activity::Activity,
         ci::Build,
@@ -6,6 +7,7 @@ use crate::{
         diff::Diff,
         pr::{MergeStatus, PrBatch, PrGroup, PrInfo},
     },
+    providers::{FetchError, ReviewError},
     tui::screens::pr_detail::tabs::DetailTab,
 };
 
@@ -49,12 +51,21 @@ pub enum Effect {
         pr_id: u64,
         command: Command,
     },
+    /// Close the error shown on this PR.
+    DismissError {
+        pr_id: u64,
+    },
 }
 
 /// What work that ran off the UI thread sends back.
 #[derive(Debug)]
 pub enum TaskResult {
-    Loaded(LoadedAction),
+    Read(Read),
+    /// A write is over. The ticket names the PR and the operation it was.
+    Written {
+        ticket: WriteTicket,
+        result: Result<(), WriteError>,
+    },
     LinkFinished(Result<String, String>),
 }
 
@@ -285,31 +296,106 @@ pub enum CommitsAction {
     StepCommit(i16),
 }
 
+/// What a read brought back, and of which resource.
 #[derive(Debug)]
-pub enum LoadedAction {
-    ReviewFailed {
-        pr_id: u64,
-        posted_comments: usize,
-        submitted_summary: Option<String>,
-        message: String,
-    },
+pub enum Read {
     /// A group of PRs, or with `after` the page of a closed group that follows it.
     Prs {
         group: PrGroup,
         after: Option<String>,
-        result: Result<PrBatch, String>,
+        result: Result<PrBatch, FetchError>,
     },
-    Commits(u64, Result<Vec<Commit>, String>),
-    Diff(u64, Result<Diff, String>),
-    Builds(u64, Result<Vec<Build>, String>),
-    Activity(u64, Result<Activity, String>),
-    Mergeability(u64, Result<MergeStatus, String>),
-    Info(u64, Result<PrInfo, String>),
-    Merged(u64, Result<(), String>),
-    Declined(u64, Result<(), String>),
-    Reopened(u64, Result<(), String>),
-    CommitDiff(u64, String, Result<Diff, String>),
-    Commented(u64, Result<(), String>),
+    Commits(u64, Result<Vec<Commit>, FetchError>),
+    Diff(u64, Result<Diff, FetchError>),
+    Builds(u64, Result<Vec<Build>, FetchError>),
+    Activity(u64, Result<Activity, FetchError>),
+    Mergeability(u64, Result<MergeStatus, FetchError>),
+    Info(u64, Result<PrInfo, FetchError>),
+    CommitDiff(u64, String, Result<Diff, FetchError>),
+}
+
+impl Read {
+    /// The resource this is a read of: the key its fetch was registered under.
+    pub fn key(&self) -> FetchKey {
+        match self {
+            Self::Prs { group, .. } => FetchKey::Prs(*group),
+            Self::Commits(id, _) => FetchKey::Commits(*id),
+            Self::Diff(id, _) => FetchKey::Diff(*id),
+            Self::Builds(id, _) => FetchKey::Builds(*id),
+            Self::Activity(id, _) => FetchKey::Activity(*id),
+            Self::Mergeability(id, _) => FetchKey::Mergeability(*id),
+            Self::Info(id, _) => FetchKey::Info(*id),
+            Self::CommitDiff(id, oid, _) => FetchKey::CommitDiff(*id, oid.clone()),
+        }
+    }
+
+    /// Why it failed, if it did.
+    pub fn failure(&self) -> Option<&FetchError> {
+        match self {
+            Self::Prs { result, .. } => result.as_ref().err(),
+            Self::Commits(_, result) => result.as_ref().err(),
+            Self::Diff(_, result) | Self::CommitDiff(_, _, result) => result.as_ref().err(),
+            Self::Builds(_, result) => result.as_ref().err(),
+            Self::Activity(_, result) => result.as_ref().err(),
+            Self::Mergeability(_, result) => result.as_ref().err(),
+            Self::Info(_, result) => result.as_ref().err(),
+        }
+    }
+}
+
+/// Why a write did not go through, or not all of it.
+#[derive(Debug, thiserror::Error)]
+pub enum WriteError {
+    #[error(transparent)]
+    Failed(#[from] FetchError),
+    /// A review sent as several requests, some of which arrived.
+    #[error("review partially sent ({posted_comments} comments): {source}")]
+    PartialReview {
+        posted_comments: usize,
+        /// The summary, when it was among what arrived.
+        submitted_summary: Option<String>,
+        source: FetchError,
+    },
+}
+
+impl WriteError {
+    /// A review's failure, with `summary` kept if it was among what arrived.
+    pub fn from_review(error: ReviewError, summary: String) -> Self {
+        match error {
+            ReviewError::Failed(error) => Self::Failed(error),
+            ReviewError::Partial {
+                posted_comments,
+                summary_posted,
+                source,
+            } => Self::PartialReview {
+                posted_comments,
+                submitted_summary: summary_posted.then_some(summary),
+                source,
+            },
+        }
+    }
+
+    pub fn user_message(&self) -> String {
+        match self {
+            Self::Failed(error) => error.user_message(),
+            Self::PartialReview {
+                posted_comments,
+                source,
+                ..
+            } => format!(
+                "{}\n{posted_comments} line comments were sent; confirmed posts will be skipped on retry. Check the last attempted post before retrying.",
+                source.user_message()
+            ),
+        }
+    }
+
+    /// Whether the server may have applied the write, or part of it.
+    pub const fn may_have_reached_server(&self) -> bool {
+        match self {
+            Self::Failed(error) => error.may_have_reached_server(),
+            Self::PartialReview { .. } => true,
+        }
+    }
 }
 
 /// Fully resolved user intent; no dialog or editor state is read by the app.
@@ -338,14 +424,12 @@ pub enum Command {
         comment_id: Option<u64>,
         resolved: bool,
     },
-    DismissError,
 }
 
 impl Command {
     pub fn supported_by(&self, caps: &crate::domain::capabilities::Capabilities) -> bool {
         use crate::{app::reviews::CommentTarget, domain::capabilities::Feature};
         match self {
-            Self::DismissError => true,
             Self::StartReview | Self::AbandonReview | Self::RemovePendingComment(_) => {
                 caps.reviews()
             }

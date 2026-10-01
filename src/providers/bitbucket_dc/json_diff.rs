@@ -81,7 +81,7 @@ pub(super) fn fetch_commit(config: &Config, oid: &str) -> Result<Diff, FetchErro
 fn fetch_path(config: &Config, path: &str) -> Result<Diff, FetchError> {
     let response: BbDiffResponse = get_json(&config.repo.base_url, path, &config.pat)?;
     if response.truncated {
-        return Err(FetchError::InvalidInput(
+        return Err(FetchError::Truncated(
             "The server truncated this diff. Open it in Bitbucket to review the full change."
                 .into(),
         ));

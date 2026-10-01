@@ -9,7 +9,7 @@ pub fn fetch_diff(pr_number: u64) -> Result<Diff, FetchError> {
     let stdout = run_gh(&["pr", "diff", &pr_arg])?;
     let text = String::from_utf8_lossy(&stdout);
     if revision != super::comments::diff_revision(pr_number)? {
-        return Err(FetchError::InvalidInput(
+        return Err(FetchError::Stale(
             "The PR changed while loading its diff. Refresh and try again.".into(),
         ));
     }

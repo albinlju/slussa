@@ -5,10 +5,10 @@ use super::support::*;
 #[test]
 fn refresh_failure_preserves_visible_data() {
     let mut app = app();
-    app.apply_result(TaskResult::Loaded(LoadedAction::Prs {
+    app.apply_result(TaskResult::Read(Read::Prs {
         group: crate::domain::pr::PrGroup::Open,
         after: None,
-        result: Err("offline".into()),
+        result: Err(failed("offline")),
     }));
     assert!(matches!(&app.state.store.cache.prs, LoadState::Loaded(prs) if prs.len() == 1));
 }
@@ -22,23 +22,23 @@ async fn refresh_tracks_each_resource_and_refetches_after_mutation() {
     app.apply(Action::Effect(Effect::Refresh));
     assert_eq!(app.state.store.fetches.len(), 4);
     assert!(app.state.store.refreshing(app.state.screen));
-    app.apply_result(TaskResult::Loaded(LoadedAction::Prs {
+    app.apply_result(TaskResult::Read(Read::Prs {
         group: crate::domain::pr::PrGroup::Open,
         after: None,
-        result: Err("offline".into()),
+        result: Err(failed("offline")),
     }));
     assert!(app.state.store.refreshing(app.state.screen));
     app.state.store.operations.insert(42, Operation::Moderation);
-    app.apply_result(TaskResult::Loaded(LoadedAction::Commented(42, Ok(()))));
+    finish_write(&mut app, 42, Ok(()));
     assert!(
         app.state
             .store
             .reload_after_fetch
             .contains(&FetchKey::Activity(42))
     );
-    app.apply_result(TaskResult::Loaded(LoadedAction::Activity(
+    app.apply_result(TaskResult::Read(Read::Activity(
         42,
-        Err("old response".into()),
+        Err(failed("old response")),
     )));
     assert!(app.state.store.fetches.contains(&FetchKey::Activity(42)));
     assert!(
@@ -47,28 +47,25 @@ async fn refresh_tracks_each_resource_and_refetches_after_mutation() {
             .reload_after_fetch
             .contains(&FetchKey::Activity(42))
     );
-    app.apply_result(TaskResult::Loaded(LoadedAction::Activity(
+    app.apply_result(TaskResult::Read(Read::Activity(
         42,
-        Err("new response".into()),
+        Err(failed("new response")),
     )));
     assert!(!app.state.store.fetches.contains(&FetchKey::Activity(42)));
-    app.apply_result(TaskResult::Loaded(LoadedAction::Mergeability(
+    app.apply_result(TaskResult::Read(Read::Mergeability(
         42,
-        Err("old response".into()),
+        Err(failed("old response")),
     )));
-    app.apply_result(TaskResult::Loaded(LoadedAction::Mergeability(
+    app.apply_result(TaskResult::Read(Read::Mergeability(
         42,
-        Err("new response".into()),
+        Err(failed("new response")),
     )));
-    app.apply_result(TaskResult::Loaded(LoadedAction::Prs {
+    app.apply_result(TaskResult::Read(Read::Prs {
         group: crate::domain::pr::PrGroup::Open,
         after: None,
-        result: Err("offline".into()),
+        result: Err(failed("offline")),
     }));
-    app.apply_result(TaskResult::Loaded(LoadedAction::Info(
-        42,
-        Err("offline".into()),
-    )));
+    app.apply_result(TaskResult::Read(Read::Info(42, Err(failed("offline")))));
     assert!(!app.state.store.refreshing(app.state.screen));
     assert!(matches!(app.state.store.cache.prs, LoadState::Loaded(_)));
 }
@@ -150,10 +147,7 @@ fn read_only_capabilities_block_shortcuts_commands_and_optional_loads() {
 fn failed_refresh_marks_cached_data_until_that_resource_recovers() {
     let mut app = app();
     detail(&mut app, DetailTab::Diff);
-    app.apply_result(TaskResult::Loaded(LoadedAction::Diff(
-        42,
-        Err("offline".into()),
-    )));
+    app.apply_result(TaskResult::Read(Read::Diff(42, Err(failed("offline")))));
     assert!(app.state.store.refresh_failed(app.state.screen));
     assert!(matches!(
         app.state.store.cache.details[&42].diff,
@@ -163,12 +157,12 @@ fn failed_refresh_marks_cached_data_until_that_resource_recovers() {
         pr_id: 43,
         tab: DetailTab::Diff
     }));
-    app.apply_result(TaskResult::Loaded(LoadedAction::Builds(42, Ok(vec![]))));
+    app.apply_result(TaskResult::Read(Read::Builds(42, Ok(vec![]))));
     assert!(app.state.store.refresh_failed(app.state.screen));
     let diff = match &app.state.store.cache.details[&42].diff {
         LoadState::Loaded(diff) => diff.clone(),
         other => panic!("the diff is not loaded: {other:?}"),
     };
-    app.apply_result(TaskResult::Loaded(LoadedAction::Diff(42, Ok(diff))));
+    app.apply_result(TaskResult::Read(Read::Diff(42, Ok(diff))));
     assert!(!app.state.store.refresh_failed(app.state.screen));
 }

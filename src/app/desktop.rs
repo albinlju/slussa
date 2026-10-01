@@ -41,16 +41,19 @@ impl App {
             ),
             false,
         ));
-        let tx = self.results_tx.clone();
-        tokio::spawn(async move {
-            let result = tokio::task::spawn_blocking(move || perform(kind, &url)).await;
-            let result = match result {
-                Ok(Ok(done)) => Ok(format!("PR #{pr_id}: {}", done.message())),
-                Ok(Err(error)) => Err(format!("PR #{pr_id}: {error}")),
-                Err(_) => Err(format!("PR #{pr_id}: desktop operation failed")),
-            };
-            let _ = tx.send(TaskResult::LinkFinished(result));
-        });
+        self.spawn_fetch(
+            move || perform(kind, &url),
+            move |returned| {
+                TaskResult::LinkFinished(match returned {
+                    Ok(Ok(done)) => Ok(format!("PR #{pr_id}: {}", done.message())),
+                    Ok(Err(error)) => Err(format!("PR #{pr_id}: {error}")),
+                    Err(panic) => {
+                        tracing::error!("desktop worker panicked: {panic}");
+                        Err(format!("PR #{pr_id}: desktop operation failed"))
+                    }
+                })
+            },
+        );
     }
 }
 

@@ -2,7 +2,7 @@ use crate::app::{
     App,
     action::Command,
     reviews::{CommentTarget, PendingComment},
-    store::Operation,
+    store::{Operation, WriteTicket},
 };
 
 impl App {
@@ -12,10 +12,6 @@ impl App {
                 pr_id,
                 "This action is not supported by the connected provider.".into(),
             );
-            return;
-        }
-        if matches!(command, Command::DismissError) {
-            self.state.store.errors.remove(&pr_id);
             return;
         }
         // One mutation per PR: payloads and review queues remain stable until completion.
@@ -52,71 +48,52 @@ impl App {
                 }
                 if let CommentTarget::Review { verdict } = target {
                     self.submit_review_verdict(pr_id, verdict, text);
-                } else {
-                    self.state
-                        .store
-                        .operations
-                        .insert(pr_id, Operation::Comment);
-                    if !self.checkpoint_submission(pr_id) {
-                        return;
-                    }
-                    self.spawn_comment(pr_id, target, text);
+                } else if let Some(ticket) = self.begin_write(pr_id, Operation::Comment) {
+                    self.spawn_comment(ticket, target, text);
                 }
             }
             Command::SubmitReview { verdict, body } => {
                 self.submit_review_verdict(pr_id, verdict, body);
             }
             Command::Merge(strategy) => {
-                self.state.store.operations.insert(pr_id, Operation::Merge);
-                if !self.checkpoint_submission(pr_id) {
-                    return;
+                if let Some(ticket) = self.begin_write(pr_id, Operation::Merge) {
+                    self.spawn_merge(ticket, strategy);
                 }
-                self.spawn_merge(pr_id, strategy);
             }
             Command::Decline => {
-                self.state
-                    .store
-                    .operations
-                    .insert(pr_id, Operation::Decline);
-                if !self.checkpoint_submission(pr_id) {
-                    return;
+                if let Some(ticket) = self.begin_write(pr_id, Operation::Decline) {
+                    self.spawn_decline(ticket);
                 }
-                self.spawn_decline(pr_id);
             }
             Command::Reopen => {
-                self.state.store.operations.insert(pr_id, Operation::Reopen);
-                if !self.checkpoint_submission(pr_id) {
-                    return;
+                if let Some(ticket) = self.begin_write(pr_id, Operation::Reopen) {
+                    self.spawn_reopen(ticket);
                 }
-                self.spawn_reopen(pr_id);
             }
             Command::DeleteComment { id, review } => {
-                self.state
-                    .store
-                    .operations
-                    .insert(pr_id, Operation::Moderation);
-                if !self.checkpoint_submission(pr_id) {
-                    return;
+                if let Some(ticket) = self.begin_write(pr_id, Operation::Moderation) {
+                    self.spawn_delete_comment(ticket, id, review);
                 }
-                self.spawn_delete_comment(pr_id, id, review);
             }
             Command::ResolveThread {
                 node_id,
                 comment_id,
                 resolved,
             } => {
-                self.state
-                    .store
-                    .operations
-                    .insert(pr_id, Operation::Moderation);
-                if !self.checkpoint_submission(pr_id) {
-                    return;
+                if let Some(ticket) = self.begin_write(pr_id, Operation::Moderation) {
+                    self.spawn_resolve_thread(ticket, node_id, comment_id, resolved);
                 }
-                self.spawn_resolve_thread(pr_id, node_id, comment_id, resolved);
             }
-            // Handled before the match; kept so the match stays exhaustive.
-            Command::DismissError => {}
         }
+    }
+
+    /// The step every write goes through: record the operation, then journal
+    /// the drafts so an interrupted request is known about after a restart.
+    /// `None` when another write is pending for the PR, or the journal could
+    /// not be written; nothing is sent then.
+    fn begin_write(&mut self, pr_id: u64, operation: Operation) -> Option<WriteTicket> {
+        let ticket = self.state.store.begin_write(pr_id, operation)?;
+        self.checkpoint_submission(pr_id).then_some(ticket)
     }
 
     fn submit_review_verdict(
@@ -125,12 +102,10 @@ impl App {
         verdict: crate::domain::review::ReviewVerdict,
         body: String,
     ) {
-        let own_pr = match &self.state.store.cache.prs {
-            crate::app::store::LoadState::Loaded(prs) => prs
-                .iter()
-                .any(|pr| pr.id == pr_id && pr.author.username == self.state.store.current_user),
-            _ => false,
-        };
+        let own_pr = self.state.store.cache.prs.loaded().is_some_and(|prs| {
+            prs.iter()
+                .any(|pr| pr.id == pr_id && pr.author.username == self.state.store.current_user)
+        });
         if !self
             .state
             .store
@@ -155,7 +130,6 @@ impl App {
             self.state.store.errors.insert(pr_id, "This provider requires one diff revision per review. Submit different revisions separately.".into());
             return;
         }
-        self.state.store.operations.insert(pr_id, Operation::Review);
         let user = self.state.store.current_user.clone();
         let review = self.state.store.reviews.entry(pr_id).or_default();
         let body = if review.submitted_summary.as_ref() == Some(&body) {
@@ -164,9 +138,8 @@ impl App {
             body
         };
         let comments = review.comments.clone();
-        if !self.checkpoint_submission(pr_id) {
-            return;
+        if let Some(ticket) = self.begin_write(pr_id, Operation::Review) {
+            self.spawn_submit_full_review(ticket, verdict, body, user, comments);
         }
-        self.spawn_submit_full_review(pr_id, verdict, body, user, comments);
     }
 }

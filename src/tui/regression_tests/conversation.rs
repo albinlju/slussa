@@ -50,7 +50,8 @@ fn timeline_keeps_thread_selection_and_sidebar_is_responsive() {
     let loading = rendered_text(&terminal);
     assert!(loading.contains("Loading code context"));
     assert!(!loading.contains("Comment 10"));
-    state.store.cache.details.get_mut(&42).unwrap().diff = LoadState::Failed("offline".into());
+    state.store.cache.details.get_mut(&42).unwrap().diff =
+        LoadState::Failed(crate::providers::FetchError::Network("offline".into()));
     terminal.draw(|frame| render(frame, &mut state)).unwrap();
     assert!(rendered_text(&terminal).contains("Comment 10"));
     state.store.cache.details.get_mut(&42).unwrap().diff = loaded_diff;
@@ -167,7 +168,8 @@ fn unloaded_diff_cannot_reuse_a_previous_comment_target() {
         line: 20,
         removed: false,
     });
-    state.store.cache.details.get_mut(&42).unwrap().diff = LoadState::Failed("offline".into());
+    state.store.cache.details.get_mut(&42).unwrap().diff =
+        LoadState::Failed(crate::providers::FetchError::Network("offline".into()));
     let mut terminal = Terminal::new(TestBackend::new(40, 12)).unwrap();
     terminal.draw(|f| render(f, &mut state)).unwrap();
     assert!(state.detail_view().comment_target().is_none());

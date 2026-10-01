@@ -71,7 +71,7 @@ fn run_command(
             Err(error) => {
                 let _ = child.kill();
                 let _ = child.wait();
-                return Err(FetchError::Network(error.to_string()));
+                return Err(FetchError::Network(error.into()));
             }
         }
     };
@@ -97,7 +97,7 @@ fn run_command(
 /// `Stdio::piped()` guarantees the handle exists; report the impossible case
 /// as an error instead of panicking.
 fn take_pipe<T>(pipe: Option<T>, name: &str) -> Result<T, FetchError> {
-    pipe.ok_or_else(|| FetchError::Network(format!("gh {name} was not available")))
+    pipe.ok_or_else(|| FetchError::Network(format!("gh {name} was not available").into()))
 }
 
 fn background<T: Send + 'static>(
@@ -119,7 +119,7 @@ fn receive<T>(
             tracing::warn!("gh did not answer in time: {e}");
             FetchError::Timeout
         })?
-        .map_err(|e| FetchError::Network(e.to_string()))
+        .map_err(|e| FetchError::Network(e.into()))
 }
 
 pub(super) fn run_gh_json<T: serde::de::DeserializeOwned>(args: &[&str]) -> Result<T, FetchError> {
@@ -127,7 +127,7 @@ pub(super) fn run_gh_json<T: serde::de::DeserializeOwned>(args: &[&str]) -> Resu
     serde_json::from_slice(&stdout).map_err(|e| {
         let sample: String = String::from_utf8_lossy(&stdout).chars().take(200).collect();
         tracing::warn!("gh json parse failed: {e} (first 200B: {sample})");
-        FetchError::ParseFailed(e.to_string())
+        FetchError::ParseFailed(e.into())
     })
 }
 

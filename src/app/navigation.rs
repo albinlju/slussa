@@ -1,4 +1,7 @@
-use crate::{app::App, tui::screens::pr_detail::tabs::DetailTab};
+use crate::{
+    app::{App, store::FetchKey},
+    tui::screens::pr_detail::tabs::DetailTab,
+};
 
 impl App {
     pub(super) fn open_pr(&mut self, pr_id: u64) {
@@ -7,46 +10,16 @@ impl App {
             pr_id,
             tab: self.state.ui.detail.active_tab,
         };
-
-        let pr_data = self.state.store.cache.details.entry(pr_id).or_default();
-        let load_commits = pr_data.commits.start_loading();
-        let load_diff = pr_data.diff.start_loading();
-        let load_builds = self
-            .state
-            .store
-            .capabilities
-            .supports(crate::domain::capabilities::Feature::Builds)
-            && pr_data.builds.start_loading();
-        let load_info = self
-            .state
-            .store
-            .capabilities
-            .supports(crate::domain::capabilities::Feature::PrInfo)
-            && pr_data.info.start_loading();
-        let load_activity = pr_data.activity.start_loading();
-        let load_mergeability = self
-            .state
-            .store
-            .capabilities
-            .supports(crate::domain::capabilities::Feature::Mergeability)
-            && pr_data.mergeability.start_loading();
-        if load_commits {
-            self.spawn_load_commits(pr_id);
-        }
-        if load_diff {
-            self.spawn_load_diff(pr_id);
-        }
-        if load_builds {
-            self.spawn_load_builds(pr_id);
-        }
-        if load_activity {
-            self.spawn_load_activity(pr_id);
-        }
-        if load_info {
-            self.spawn_load_info(pr_id);
-        }
-        if load_mergeability {
-            self.spawn_load_mergeability(pr_id);
+        // Whatever this PR has not had read yet; the rest is shown from cache.
+        for key in [
+            FetchKey::Commits(pr_id),
+            FetchKey::Diff(pr_id),
+            FetchKey::Builds(pr_id),
+            FetchKey::Activity(pr_id),
+            FetchKey::Info(pr_id),
+            FetchKey::Mergeability(pr_id),
+        ] {
+            self.ensure_loaded(key);
         }
     }
 }

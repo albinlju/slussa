@@ -24,15 +24,12 @@ async fn failed_submission_preserves_draft_and_blocks_duplicate_input() {
         "Keep this draft"
     );
     // A read result must never acknowledge a write.
-    app.apply_result(TaskResult::Loaded(LoadedAction::Activity(
+    app.apply_result(TaskResult::Read(Read::Activity(
         42,
-        Err("read failed".into()),
+        Err(failed("read failed")),
     )));
     assert!(app.state.store.operations.contains_key(&42));
-    app.apply_result(TaskResult::Loaded(LoadedAction::Commented(
-        42,
-        Err("offline".into()),
-    )));
+    finish_write(&mut app, 42, Err(failed("offline").into()));
     assert!(!app.state.store.operations.contains_key(&42));
     assert_eq!(
         app.state.store.errors.get(&42).map(String::as_str),
@@ -46,7 +43,7 @@ async fn failed_submission_preserves_draft_and_blocks_duplicate_input() {
         "Keep this draft"
     );
     send_comment(&mut app);
-    app.apply_result(TaskResult::Loaded(LoadedAction::Commented(42, Ok(()))));
+    finish_write(&mut app, 42, Ok(()));
     assert!(app.state.ui.detail.editor.draft.is_none());
 }
 
@@ -70,7 +67,7 @@ async fn late_completion_only_clears_the_submitting_pr_editor() {
     app.apply(Action::Detail(DetailAction::Editor(EditorAction::Type(
         'B',
     ))));
-    app.apply_result(TaskResult::Loaded(LoadedAction::Commented(42, Ok(()))));
+    finish_write(&mut app, 42, Ok(()));
     assert_eq!(app.state.ui.detail.editor.draft.as_ref().unwrap().text, "B");
     app.open_pr(42);
     assert!(app.state.ui.detail.editor.draft.is_none());
@@ -114,10 +111,7 @@ async fn failed_review_and_error_stay_with_their_pr_until_success() {
     assert_eq!(app.state.store.reviews[&42].comments.len(), 1);
     app.open_pr(43);
     app.state.store.operations.insert(43, Operation::Merge);
-    app.apply_result(TaskResult::Loaded(LoadedAction::Commented(
-        42,
-        Err("offline".into()),
-    )));
+    finish_write(&mut app, 42, Err(failed("offline").into()));
     assert!(app.state.store.operations.contains_key(&43));
     assert!(app.state.detail_view().error().is_none());
     assert_eq!(app.state.store.reviews[&42].comments.len(), 1);
@@ -131,7 +125,7 @@ async fn failed_review_and_error_stay_with_their_pr_until_success() {
             body: String::new(),
         },
     }));
-    app.apply_result(TaskResult::Loaded(LoadedAction::Commented(42, Ok(()))));
+    finish_write(&mut app, 42, Ok(()));
     assert!(!app.state.store.reviews.contains_key(&42));
     assert!(app.state.store.operations.contains_key(&43));
 }
@@ -146,10 +140,7 @@ async fn escape_during_submission_keeps_request_and_draft_scoped() {
     press(&mut app, KeyCode::Esc);
     assert_eq!(app.state.screen, Screen::List);
     assert!(app.state.store.operations.contains_key(&42));
-    app.apply_result(TaskResult::Loaded(LoadedAction::Commented(
-        42,
-        Err("timeout".into()),
-    )));
+    finish_write(&mut app, 42, Err(failed("timeout").into()));
     press(&mut app, KeyCode::Enter);
     assert_eq!(app.state.ui.detail.editor.draft.as_ref().unwrap().text, "A");
     assert_eq!(app.state.detail_view().error(), Some("timeout"));
@@ -180,12 +171,15 @@ async fn partial_review_removes_confirmed_posts_and_remembers_sent_summary() {
         },
     );
     app.state.store.operations.insert(42, Operation::Review);
-    app.apply_result(TaskResult::Loaded(LoadedAction::ReviewFailed {
-        pr_id: 42,
-        posted_comments: 1,
-        submitted_summary: Some("summary".into()),
-        message: "offline".into(),
-    }));
+    finish_write(
+        &mut app,
+        42,
+        Err(WriteError::PartialReview {
+            posted_comments: 1,
+            submitted_summary: Some("summary".into()),
+            source: failed("offline"),
+        }),
+    );
     let review = &app.state.store.reviews[&42];
     assert_eq!(review.comments.len(), 1);
     assert_eq!(review.comments[0].text, "remaining");
@@ -201,7 +195,7 @@ async fn successful_mutation_reports_which_pr_changed() {
         .store
         .operations
         .insert(42, crate::app::store::Operation::Merge);
-    app.apply_result(TaskResult::Loaded(LoadedAction::Merged(42, Ok(()))));
+    finish_write(&mut app, 42, Ok(()));
     let notice = app.state.store.notice.as_ref().unwrap();
     assert!(!notice.error);
     assert!(notice.message.contains("42"));

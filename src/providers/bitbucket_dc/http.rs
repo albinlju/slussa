@@ -19,17 +19,13 @@ fn client() -> Result<&'static Client, FetchError> {
         return Ok(client);
     }
     let built = build_client(Duration::from_secs(20))
-        .map_err(|e| FetchError::Network(format!("http client build failed: {e}")))?;
+        .map_err(|e| FetchError::Network(format!("http client build failed: {e}").into()))?;
     Ok(CLIENT.get_or_init(|| built))
 }
 
-#[expect(
-    clippy::needless_pass_by_value,
-    reason = "passed as `.map_err(net_err)`, which hands the error over by value"
-)]
 fn net_err(e: reqwest::Error) -> FetchError {
     tracing::warn!("http send failed: {e}");
-    FetchError::Network(e.to_string())
+    FetchError::Network(e.into())
 }
 
 /// Maps a rejected token (401) to `NotAuthenticated` and any other non-2xx to
@@ -78,7 +74,7 @@ pub(super) fn get_json<T: DeserializeOwned>(
     let response = check_status(response, base_url, &url)?;
     response.json::<T>().map_err(|e| {
         tracing::warn!("json parse failed on {url}: {e}");
-        FetchError::ParseFailed(e.to_string())
+        FetchError::ParseFailed(e.into())
     })
 }
 
@@ -87,7 +83,7 @@ pub(super) fn current_user(base_url: &str, path: &str, pat: &str) -> Result<Stri
     tracing::debug!("GET {url} (whoami)");
     let response = client()?.get(&url).bearer_auth(pat).send().map_err(|e| {
         tracing::warn!("http send failed: {e}");
-        FetchError::Network(e.to_string())
+        FetchError::Network(e.into())
     })?;
     // A rejected token must say so, not "no X-AUSERNAME header".
     let response = check_status(response, base_url, &url)?;
@@ -99,7 +95,7 @@ pub(super) fn current_user(base_url: &str, path: &str, pat: &str) -> Result<Stri
         .and_then(|v| v.to_str().ok())
         .map(str::to_owned)
         .filter(|u| !u.is_empty() && u != "anonymous")
-        .ok_or_else(|| FetchError::ParseFailed("no X-AUSERNAME header".to_owned()))
+        .ok_or_else(|| FetchError::ParseFailed("no X-AUSERNAME header".into()))
 }
 
 pub(super) fn post_json<B: serde::Serialize>(

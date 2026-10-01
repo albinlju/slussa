@@ -9,7 +9,7 @@
 //!   hide unsupported actions instead of letting them fail.
 //! - Writes are not exactly-once. A timeout or lost response can follow a
 //!   write the server accepted, and a Bitbucket review is several requests, so
-//!   a failure can be `FetchError::PartialReview`. Nothing retries
+//!   a failure can be `ReviewError::Partial`. Nothing retries
 //!   automatically.
 
 pub mod bitbucket_dc;
@@ -17,7 +17,7 @@ pub mod error;
 pub mod github;
 mod unified_diff;
 
-pub use error::FetchError;
+pub use error::{FetchError, ReviewError};
 
 #[cfg(test)]
 mod transport_tests;
@@ -94,7 +94,7 @@ impl Provider {
     pub fn fetch_info(&self, pr_id: u64) -> Result<PrInfo, FetchError> {
         match self {
             Self::GitHub => github::fetch_info(pr_id),
-            Self::BitbucketDc(_) => Err(FetchError::InvalidInput(
+            Self::BitbucketDc(_) => Err(FetchError::Unsupported(
                 "Bitbucket lists the description and labels with each PR.".into(),
             )),
         }
@@ -102,7 +102,7 @@ impl Provider {
 
     pub fn merge(&self, pr_id: u64, strategy: MergeStrategy) -> Result<(), FetchError> {
         if !self.capabilities().merge_strategies.contains(&strategy) {
-            return Err(FetchError::InvalidInput(
+            return Err(FetchError::Unsupported(
                 "This merge strategy is not supported by the connected provider.".into(),
             ));
         }
@@ -282,9 +282,10 @@ impl Provider {
         body: &str,
         user: &str,
         comments: &[ReviewComment],
-    ) -> Result<(), FetchError> {
+    ) -> Result<(), ReviewError> {
         match self {
-            Self::GitHub => github::submit_full_review(pr_id, verdict, body, comments),
+            // One request: it arrives whole or not at all.
+            Self::GitHub => Ok(github::submit_full_review(pr_id, verdict, body, comments)?),
             Self::BitbucketDc(c) => {
                 bitbucket_dc::submit_full_review(c, pr_id, verdict, body, user, comments)
             }

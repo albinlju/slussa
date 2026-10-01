@@ -280,19 +280,16 @@ fn bitbucket_review_reports_how_many_comments_landed_before_a_failure() {
         .unwrap_err();
 
     match error {
-        FetchError::PartialReview {
+        ReviewError::Partial {
             posted_comments,
             summary_posted,
             source,
         } => {
             assert_eq!(posted_comments, 1);
             assert!(!summary_posted);
-            assert!(matches!(
-                *source,
-                FetchError::HttpFailed { status: 500, .. }
-            ));
+            assert!(matches!(source, FetchError::HttpFailed { status: 500, .. }));
         }
-        other => panic!("expected PartialReview, got {other:?}"),
+        other @ ReviewError::Failed(_) => panic!("expected a partial review, got {other:?}"),
     }
     let requests = server.requests();
     assert_eq!(requests.len(), 2, "stops at the first failure");

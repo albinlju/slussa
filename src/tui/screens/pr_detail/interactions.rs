@@ -97,7 +97,7 @@ impl PrDetailScreen {
 
     pub(super) fn dismiss_error(&mut self, pr_id: u64) -> Effect {
         self.error = super::dialogs::error::ErrorDialog::default();
-        Self::command(pr_id, Command::DismissError)
+        Effect::DismissError { pr_id }
     }
 
     pub(super) fn confirm_action(&mut self, action: ConfirmAction, pr_id: u64) -> Option<Effect> {

@@ -71,7 +71,9 @@ async fn first_load_failure_is_shown_as_failed_not_empty() {
     settle(&mut app).await;
 
     match &app.state.store.cache.prs {
-        LoadState::Failed(message) => assert!(message.contains("Bad credentials"), "{message}"),
+        LoadState::Failed(error) => {
+            assert!(error.user_message().contains("Bad credentials"), "{error}");
+        }
         other => panic!("expected a failed load, got {other:?}"),
     }
 }

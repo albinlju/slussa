@@ -14,7 +14,7 @@ use chrono::{DateTime, TimeZone, Utc};
 
 use crate::domain::pr::{MergeStatus, Mergeability};
 use crate::domain::review::{ReviewComment, ReviewVerdict};
-use crate::providers::error::FetchError;
+use crate::providers::error::{FetchError, ReviewError};
 
 pub use activities::fetch as fetch_activity;
 pub use builds::fetch_builds;
@@ -38,7 +38,7 @@ pub fn submit_review(
     verdict: ReviewVerdict,
     body: &str,
     user: &str,
-) -> Result<(), FetchError> {
+) -> Result<(), ReviewError> {
     // Bitbucket has no review body — post any summary as a PR comment first.
     if !body.is_empty() {
         post_pr_comment(config, pr_id, body)?;
@@ -56,10 +56,10 @@ pub fn submit_review(
     );
     let payload = serde_json::json!({ "status": status });
     http::put_json(&config.repo.base_url, &endpoint, &config.pat, &payload).map_err(|source| {
-        FetchError::PartialReview {
+        ReviewError::Partial {
             posted_comments: 0,
             summary_posted: !body.is_empty(),
-            source: Box::new(source),
+            source,
         }
     })
 }
@@ -74,7 +74,7 @@ pub fn submit_full_review(
     body: &str,
     user: &str,
     comments: &[ReviewComment],
-) -> Result<(), FetchError> {
+) -> Result<(), ReviewError> {
     let with_revisions: Vec<_> = comments
         .iter()
         .map(|c| c.revision.as_ref().map(|revision| (c, revision)))
@@ -92,31 +92,32 @@ pub fn submit_full_review(
 fn publish_steps<T>(
     comments: &[T],
     mut post: impl FnMut(&T) -> Result<(), FetchError>,
-    finish: impl FnOnce() -> Result<(), FetchError>,
-) -> Result<(), FetchError> {
+    finish: impl FnOnce() -> Result<(), ReviewError>,
+) -> Result<(), ReviewError> {
     for (i, comment) in comments.iter().enumerate() {
         if let Err(source) = post(comment) {
-            return Err(FetchError::PartialReview {
+            return Err(ReviewError::Partial {
                 posted_comments: i,
                 summary_posted: false,
-                source: Box::new(source),
+                source,
             });
         }
     }
+    // Every comment arrived, whatever happened to the summary and the verdict.
     finish().map_err(|error| match error {
-        FetchError::PartialReview {
+        ReviewError::Partial {
             summary_posted,
             source,
             ..
-        } => FetchError::PartialReview {
+        } => ReviewError::Partial {
             posted_comments: comments.len(),
             summary_posted,
             source,
         },
-        source => FetchError::PartialReview {
+        ReviewError::Failed(source) => ReviewError::Partial {
             posted_comments: comments.len(),
             summary_posted: false,
-            source: Box::new(source),
+            source,
         },
     })
 }
@@ -263,7 +264,7 @@ mod submission_tests {
         );
         assert!(matches!(
             result,
-            Err(FetchError::PartialReview {
+            Err(ReviewError::Partial {
                 posted_comments: 2,
                 summary_posted: false,
                 ..
@@ -273,16 +274,16 @@ mod submission_tests {
             &[1, 2],
             |_| Ok(()),
             || {
-                Err(FetchError::PartialReview {
+                Err(ReviewError::Partial {
                     posted_comments: 0,
                     summary_posted: true,
-                    source: Box::new(FetchError::Network("offline".into())),
+                    source: FetchError::Network("offline".into()),
                 })
             },
         );
         assert!(matches!(
             result,
-            Err(FetchError::PartialReview {
+            Err(ReviewError::Partial {
                 posted_comments: 2,
                 summary_posted: true,
                 ..

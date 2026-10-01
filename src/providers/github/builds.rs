@@ -57,10 +57,10 @@ fn pages<T: serde::de::DeserializeOwned>(path: &str, field: &str) -> Result<Vec<
         let list = page
             .get_mut(field)
             .map(serde_json::Value::take)
-            .ok_or_else(|| FetchError::ParseFailed(format!("Missing {field}")))?;
+            .ok_or_else(|| FetchError::ParseFailed(format!("Missing {field}").into()))?;
         items.extend(
             serde_json::from_value::<Vec<T>>(list)
-                .map_err(|e| FetchError::ParseFailed(e.to_string()))?,
+                .map_err(|e| FetchError::ParseFailed(e.into()))?,
         );
     }
     Ok(items)

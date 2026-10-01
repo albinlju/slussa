@@ -191,7 +191,7 @@ mod tests {
         let mut data = PrData::default();
         for builds in [
             LoadState::Loading,
-            LoadState::Failed("offline".into()),
+            LoadState::Failed(crate::providers::FetchError::Network("offline".into())),
             LoadState::Loaded(vec![]),
             LoadState::Loaded(vec![crate::domain::ci::Build {
                 name: "Tests".into(),

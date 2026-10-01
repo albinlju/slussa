@@ -3,7 +3,7 @@ use crate::{
         action::{Action, Effect, TaskResult},
         drafts, refresh,
         state::AppState,
-        store::{self, LoadState},
+        store::{self, FetchKey, LoadState},
     },
     domain::pr::PrGroup,
     providers::Provider,
@@ -161,7 +161,8 @@ impl App {
     /// Take in what work off the UI thread sent back.
     pub(super) fn apply_result(&mut self, result: TaskResult) {
         match result {
-            TaskResult::Loaded(loaded) => self.loaded_actions(loaded),
+            TaskResult::Read(read) => self.apply_read(read),
+            TaskResult::Written { ticket, result } => self.apply_write(&ticket, result),
             TaskResult::LinkFinished(result) => {
                 self.state.store.link_pending = false;
                 self.state.store.notice = Some(match result {
@@ -189,7 +190,12 @@ impl App {
             Effect::OpenPr(id) => self.open_pr(id),
             Effect::LoadOlder => self.load_older_prs(),
             Effect::LoadView => self.ensure_view_loaded(),
-            Effect::LoadCommitDiff { pr_id, oid } => self.ensure_commit_diff(pr_id, oid),
+            Effect::LoadCommitDiff { pr_id, oid } => {
+                self.ensure_loaded(FetchKey::CommitDiff(pr_id, oid));
+            }
+            Effect::DismissError { pr_id } => {
+                self.state.store.errors.remove(&pr_id);
+            }
             Effect::PrLink { pr_id, kind } => self.pr_link(pr_id, kind),
             Effect::Command { pr_id, command } => self.execute(pr_id, command),
         }

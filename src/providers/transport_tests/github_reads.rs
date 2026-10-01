@@ -276,9 +276,15 @@ fn github_rejects_unparseable_output_and_graphql_errors() {
 
     let errors = json!({"errors": [{"message": "rate limited"}]}).to_string();
     let (result, _installed) = fetch_prs_with(FakeGh::new().on("graphql", &errors));
+    // GitHub's own words are kept for the log; the user gets one plain line.
+    let error = result.unwrap_err();
     assert!(
-        matches!(result, Err(FetchError::InvalidInput(_))),
-        "{result:?}"
+        matches!(&error, FetchError::GraphQl(messages) if messages == &["rate limited"]),
+        "{error:?}"
+    );
+    assert_eq!(
+        error.user_message(),
+        "GitHub returned an incomplete GraphQL response."
     );
 }
 

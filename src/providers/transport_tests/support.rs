@@ -1,7 +1,7 @@
 //! Imports and helpers shared by the files in this directory.
 
 pub(super) use crate::providers::{
-    FetchError, Provider,
+    FetchError, Provider, ReviewError,
     bitbucket_dc::{Config, RepoLocation},
 };
 pub(super) use crate::{

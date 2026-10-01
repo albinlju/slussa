@@ -1,28 +1,80 @@
-use std::fmt;
+use thiserror::Error;
 
-#[derive(Debug)]
+/// The error a failure wraps, kept so it can be logged and inspected.
+type Source = Box<dyn std::error::Error + Send + Sync>;
+
+/// Why a provider call failed. `Display` is for the log; `user_message` is
+/// what the UI shows.
+#[derive(Debug, Error)]
 pub enum FetchError {
+    #[error("gh CLI not available")]
     GhMissing,
+    /// The request cannot be made from what the user has in front of them.
+    #[error("{0}")]
     InvalidInput(String),
+    /// The provider has no such operation.
+    #[error("{0}")]
+    Unsupported(String),
+    /// What was read no longer matches the server. Reading again fixes it.
+    #[error("{0}")]
+    Stale(String),
+    /// The server cut its answer short.
+    #[error("{0}")]
+    Truncated(String),
+    /// GitHub answered a GraphQL query with errors.
+    #[error("graphql errors: {}", .0.join("; "))]
+    GraphQl(Vec<String>),
+    #[error("request timed out")]
     Timeout,
-    PartialReview {
+    #[error("{}", gh_failed(*code, stderr))]
+    GhFailed { code: Option<i32>, stderr: String },
+    #[error("{}", http_failed(*status, body))]
+    HttpFailed { status: u16, body: String },
+    #[error("network error: {0}")]
+    Network(#[source] Source),
+    #[error("not logged in to {host} — run `slussa auth login`")]
+    NotAuthenticated { host: String },
+    #[error("couldn't parse response: {0}")]
+    ParseFailed(#[source] Source),
+    #[error("worker thread panicked: {0}")]
+    WorkerPanicked(String),
+}
+
+/// Why a review sent as a batch failed.
+#[derive(Debug, Error)]
+pub enum ReviewError {
+    /// Nothing is known to have been posted.
+    #[error(transparent)]
+    Failed(#[from] FetchError),
+    /// The provider sends a review as several requests, and one of them
+    /// failed after others had arrived.
+    #[error(
+        "review partially sent ({posted_comments} comments, summary={summary_posted}): {source}"
+    )]
+    Partial {
         posted_comments: usize,
         summary_posted: bool,
-        source: Box<Self>,
+        source: FetchError,
     },
-    GhFailed {
-        code: Option<i32>,
-        stderr: String,
-    },
-    HttpFailed {
-        status: u16,
-        body: String,
-    },
-    Network(String),
-    NotAuthenticated {
-        host: String,
-    },
-    ParseFailed(String),
+}
+
+fn gh_failed(code: Option<i32>, stderr: &str) -> String {
+    let stderr = stderr.trim();
+    match (code, stderr.is_empty()) {
+        (Some(c), false) => format!("gh exited with code {c}: {stderr}"),
+        (Some(c), true) => format!("gh exited with code {c}"),
+        (None, false) => format!("gh failed: {stderr}"),
+        (None, true) => "gh failed".to_owned(),
+    }
+}
+
+fn http_failed(status: u16, body: &str) -> String {
+    let body = body.trim();
+    if body.is_empty() {
+        format!("http {status}")
+    } else {
+        format!("http {status}: {body}")
+    }
 }
 
 impl FetchError {
@@ -30,8 +82,11 @@ impl FetchError {
     /// The raw `Display` form is kept for logs.
     pub fn user_message(&self) -> String {
         match self {
-            Self::PartialReview { source, .. } => source.user_message(),
-            Self::InvalidInput(msg) => msg.clone(),
+            Self::InvalidInput(msg)
+            | Self::Unsupported(msg)
+            | Self::Stale(msg)
+            | Self::Truncated(msg) => msg.clone(),
+            Self::GraphQl(_) => "GitHub returned an incomplete GraphQL response.".to_owned(),
             Self::Timeout => "The request timed out. Check the PR before retrying: the server may have applied the change.".into(),
             Self::GhMissing => "GitHub CLI (gh) isn't installed or on your PATH.".to_owned(),
             Self::GhFailed { stderr, .. } => {
@@ -49,6 +104,28 @@ impl FetchError {
                 format!("Not logged in to {host} — run `slussa auth login`.")
             }
             Self::ParseFailed(_) => "Couldn't read the server response.".to_owned(),
+            Self::WorkerPanicked(reason) => format!("worker thread panicked: {reason}"),
+        }
+    }
+
+    /// Whether a write that failed this way may still have reached the server.
+    /// Only a failure before the request left, or a refusal the server stated,
+    /// says no; everything else leaves the outcome open.
+    pub const fn may_have_reached_server(&self) -> bool {
+        match self {
+            Self::GhMissing
+            | Self::InvalidInput(_)
+            | Self::Unsupported(_)
+            | Self::Stale(_)
+            | Self::Truncated(_)
+            | Self::NotAuthenticated { .. } => false,
+            Self::HttpFailed { status, .. } => *status >= 500,
+            Self::GraphQl(_)
+            | Self::Timeout
+            | Self::GhFailed { .. }
+            | Self::Network(_)
+            | Self::ParseFailed(_)
+            | Self::WorkerPanicked(_) => true,
         }
     }
 }
@@ -80,7 +157,6 @@ fn api_message(raw: &str) -> Option<String> {
         .map(str::to_owned)
 }
 
-/// Strip `gh:` noise and a trailing `(HTTP nnn)` when there's no JSON body.
 /// Bitbucket explains a refused merge in `vetoes`, each with a short summary,
 /// beside a generic "Merging is vetoed" message.
 fn veto_reasons(error: &serde_json::Value) -> Vec<String> {
@@ -95,51 +171,12 @@ fn veto_reasons(error: &serde_json::Value) -> Vec<String> {
         .collect()
 }
 
+/// Strip `gh:` noise and a trailing `(HTTP nnn)` when there's no JSON body.
 fn clean_gh(stderr: &str) -> String {
     let s = stderr.trim().strip_prefix("gh:").unwrap_or(stderr).trim();
     match s.find("(HTTP") {
         Some(i) => s[..i].trim_end().to_owned(),
         None => s.to_owned(),
-    }
-}
-
-impl fmt::Display for FetchError {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        match self {
-            Self::PartialReview {
-                posted_comments,
-                summary_posted,
-                source,
-            } => write!(
-                f,
-                "review partially sent ({posted_comments} comments, summary={summary_posted}): {source}"
-            ),
-            Self::InvalidInput(msg) => write!(f, "{msg}"),
-            Self::Timeout => write!(f, "request timed out"),
-            Self::GhMissing => write!(f, "gh CLI not available"),
-            Self::GhFailed { code, stderr } => {
-                let stderr = stderr.trim();
-                match (code, stderr.is_empty()) {
-                    (Some(c), false) => write!(f, "gh exited with code {c}: {stderr}"),
-                    (Some(c), true) => write!(f, "gh exited with code {c}"),
-                    (None, false) => write!(f, "gh failed: {stderr}"),
-                    (None, true) => write!(f, "gh failed"),
-                }
-            }
-            Self::HttpFailed { status, body } => {
-                let body = body.trim();
-                if body.is_empty() {
-                    write!(f, "http {status}")
-                } else {
-                    write!(f, "http {status}: {body}")
-                }
-            }
-            Self::Network(msg) => write!(f, "network error: {msg}"),
-            Self::NotAuthenticated { host } => {
-                write!(f, "not logged in to {host} — run `slussa auth login`")
-            }
-            Self::ParseFailed(msg) => write!(f, "couldn't parse response: {msg}"),
-        }
     }
 }
 
@@ -177,6 +214,66 @@ mod tests {
             body: "{\"errors\":[{\"message\":\"You are already a reviewer.\"}]}".to_string(),
         };
         assert_eq!(err.user_message(), "You are already a reviewer.");
+    }
+
+    #[test]
+    fn a_failure_before_sending_or_a_stated_refusal_cannot_have_arrived() {
+        let http = |status| FetchError::HttpFailed {
+            status,
+            body: String::new(),
+        };
+        for unsent in [
+            FetchError::GhMissing,
+            FetchError::InvalidInput("no revision".into()),
+            FetchError::Unsupported("no such strategy".into()),
+            FetchError::NotAuthenticated { host: "h".into() },
+            http(409),
+            http(403),
+        ] {
+            assert!(!unsent.may_have_reached_server(), "{unsent:?}");
+        }
+        for open in [
+            FetchError::Timeout,
+            FetchError::Network("connection reset".into()),
+            FetchError::ParseFailed("not json".into()),
+            FetchError::WorkerPanicked("boom".into()),
+            FetchError::GhFailed {
+                code: Some(1),
+                stderr: String::new(),
+            },
+            http(502),
+        ] {
+            assert!(open.may_have_reached_server(), "{open:?}");
+        }
+    }
+
+    #[test]
+    fn the_wrapped_error_is_kept_and_the_log_text_is_unchanged() {
+        use std::error::Error;
+        let wrapped = std::io::Error::other("connection reset");
+        let error = FetchError::Network(wrapped.into());
+        assert_eq!(error.to_string(), "network error: connection reset");
+        assert_eq!(error.source().unwrap().to_string(), "connection reset");
+
+        let failed = FetchError::GhFailed {
+            code: Some(1),
+            stderr: " boom \n".into(),
+        };
+        assert_eq!(failed.to_string(), "gh exited with code 1: boom");
+        let http = FetchError::HttpFailed {
+            status: 500,
+            body: String::new(),
+        };
+        assert_eq!(http.to_string(), "http 500");
+        let partial = ReviewError::Partial {
+            posted_comments: 2,
+            summary_posted: true,
+            source: FetchError::Timeout,
+        };
+        assert_eq!(
+            partial.to_string(),
+            "review partially sent (2 comments, summary=true): request timed out"
+        );
     }
 
     #[test]

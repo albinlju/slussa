@@ -70,7 +70,7 @@ async fn interrupted_send_is_journaled_and_success_clears_recovery_data() {
     press(&mut second, KeyCode::Esc); // acknowledge interrupted request notice
     press(&mut second, KeyCode::Char('c'));
     send_comment(&mut second);
-    second.apply_result(TaskResult::Loaded(LoadedAction::Commented(42, Ok(()))));
+    finish_write(&mut second, 42, Ok(()));
     drop(second);
     let mut third = app();
     attach_recovery(&mut third, &root);

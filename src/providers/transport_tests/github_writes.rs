@@ -86,7 +86,10 @@ fn github_batched_review_refuses_unsafe_batches_without_calling_gh() {
         let result =
             Provider::GitHub.submit_full_review(7, ReviewVerdict::Comment, "", "me", comments);
         assert!(
-            matches!(result, Err(FetchError::InvalidInput(_))),
+            matches!(
+                result,
+                Err(ReviewError::Failed(FetchError::InvalidInput(_)))
+            ),
             "{result:?}"
         );
     }
