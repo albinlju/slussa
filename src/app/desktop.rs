@@ -25,10 +25,13 @@ impl App {
         let Some(url) = url else {
             return;
         };
-        if let Err(message) = validate_url(&url) {
-            self.state.store.notice = Some(Notice::error(message));
-            return;
-        }
+        let url = match WebUrl::parse(&url) {
+            Ok(url) => url,
+            Err(message) => {
+                self.state.store.notice = Some(Notice::error(message));
+                return;
+            }
+        };
         self.state.store.link_pending = true;
         self.state.store.notice = Some(Notice::info(format!(
             "{} PR #{pr_id}…",
@@ -54,23 +57,35 @@ impl App {
     }
 }
 
-fn validate_url(value: &str) -> Result<(), String> {
-    let invalid = || "This PR has no valid HTTP(S) link.".to_string();
-    if value.len() > 4096 || value.chars().any(char::is_control) {
-        return Err(invalid());
+/// A link that is safe to hand to a browser or a clipboard helper: HTTP(S),
+/// with a host, without credentials or control characters. `parse` is the
+/// only way to make one, so the helpers below take nothing else.
+#[derive(Debug)]
+struct WebUrl(String);
+
+impl WebUrl {
+    fn parse(value: &str) -> Result<Self, String> {
+        let invalid = || "This PR has no valid HTTP(S) link.".to_string();
+        if value.len() > 4096 || value.chars().any(char::is_control) {
+            return Err(invalid());
+        }
+        let url = reqwest::Url::parse(value).map_err(|e| {
+            tracing::debug!("rejected a PR link: {e}");
+            invalid()
+        })?;
+        if !matches!(url.scheme(), "http" | "https")
+            || url.host_str().is_none()
+            || !url.username().is_empty()
+            || url.password().is_some()
+        {
+            return Err(invalid());
+        }
+        Ok(Self(value.to_owned()))
     }
-    let url = reqwest::Url::parse(value).map_err(|e| {
-        tracing::debug!("rejected a PR link: {e}");
-        invalid()
-    })?;
-    if !matches!(url.scheme(), "http" | "https")
-        || url.host_str().is_none()
-        || !url.username().is_empty()
-        || url.password().is_some()
-    {
-        return Err(invalid());
+
+    fn as_str(&self) -> &str {
+        &self.0
     }
-    Ok(())
 }
 
 /// What a desktop action achieved. The terminal never confirms an OSC 52
@@ -92,8 +107,8 @@ impl Done {
     }
 }
 
-fn perform(kind: LinkAction, url: &str) -> Result<Done, String> {
-    validate_url(url)?;
+fn perform(kind: LinkAction, url: &WebUrl) -> Result<Done, String> {
+    let url = url.as_str();
     let result = match kind {
         LinkAction::Open => open_browser(url).map(|()| Done::Opened),
         LinkAction::Copy => copy_link(url),
@@ -267,7 +282,7 @@ mod tests {
             "https://code.example.test/bitbucket/projects/TEAM/repos/repo/pull-requests/42",
             "http://intranet:7990/projects/X/repos/r/pull-requests/1",
         ] {
-            assert!(validate_url(url).is_ok());
+            assert_eq!(WebUrl::parse(url).unwrap().as_str(), url);
         }
         for url in [
             "file:///etc/passwd",
@@ -277,7 +292,7 @@ mod tests {
             "https://host/pr/1\n",
             "",
         ] {
-            assert!(validate_url(url).is_err(), "{url}");
+            assert!(WebUrl::parse(url).is_err(), "{url}");
         }
     }
     #[test]
