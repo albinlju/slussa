@@ -29,8 +29,15 @@ pub fn load() -> Config {
     let Some(path) = config_path() else {
         return Config::default();
     };
-    let Ok(text) = fs::read_to_string(&path) else {
-        return Config::default();
+    let text = match fs::read_to_string(&path) {
+        Ok(text) => text,
+        Err(e) => {
+            // No file is the normal case; one that exists and cannot be read is not.
+            if e.kind() != std::io::ErrorKind::NotFound {
+                tracing::warn!("ignoring unreadable config {}: {e}", path.display());
+            }
+            return Config::default();
+        }
     };
     toml::from_str(&text).unwrap_or_else(|e| {
         tracing::warn!("ignoring invalid config {}: {e}", path.display());

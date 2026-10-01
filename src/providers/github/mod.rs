@@ -32,7 +32,11 @@ use crate::providers::error::FetchError;
 
 pub fn current_user() -> Result<String, FetchError> {
     let out = cli::run_gh(&["api", "user", "--jq", ".login"])?;
-    Ok(String::from_utf8_lossy(&out).trim().to_owned())
+    let login = String::from_utf8_lossy(&out).trim().to_owned();
+    if login.is_empty() {
+        return Err(FetchError::ParseFailed("gh named no login".to_owned()));
+    }
+    Ok(login)
 }
 
 pub fn fetch_mergeability(pr_number: u64) -> Result<MergeStatus, FetchError> {

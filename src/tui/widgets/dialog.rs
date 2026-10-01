@@ -1,5 +1,5 @@
 //! Shared dialog geometry and keyboard hints; interaction stays in components.
-use crate::tui::theme;
+use crate::tui::{component::saturating_u16, theme};
 use ratatui::{
     Frame,
     layout::Rect,
@@ -37,7 +37,7 @@ pub fn frame(
         ));
     }
     lines.push(line);
-    let footer_height = lines.len() as u16 + 1;
+    let footer_height = saturating_u16(lines.len()).saturating_add(1);
     let height = size.1.saturating_add(footer_height + 2).min(area.height);
     let popup = Rect::new(
         area.x + (area.width - width) / 2,
@@ -102,8 +102,16 @@ pub fn choices_with_hints(
     selected: usize,
     hints: &[(&str, &str)],
 ) {
-    let width = (lines.iter().map(Line::width).max().unwrap_or(0) as u16 + 4).clamp(44, 72);
-    let body = self::frame(frame, area, title, (width, lines.len() as u16), hints);
+    let width = saturating_u16(lines.iter().map(Line::width).max().unwrap_or(0))
+        .saturating_add(4)
+        .clamp(44, 72);
+    let body = self::frame(
+        frame,
+        area,
+        title,
+        (width, saturating_u16(lines.len())),
+        hints,
+    );
     let scroll = selected
         .saturating_add(1)
         .saturating_sub(body.height as usize);
@@ -111,5 +119,8 @@ pub fn choices_with_hints(
         .into_iter()
         .map(|line| Line::from(super::truncate_to_width(line.spans, body.width as usize)))
         .collect::<Vec<_>>();
-    frame.render_widget(Paragraph::new(lines).scroll((scroll as u16, 0)), body);
+    frame.render_widget(
+        Paragraph::new(lines).scroll((saturating_u16(scroll), 0)),
+        body,
+    );
 }

@@ -53,8 +53,13 @@ fn pages<T: serde::de::DeserializeOwned>(path: &str, field: &str) -> Result<Vec<
         super::cli::run_gh_json(&["api", "--paginate", "--slurp", path])?;
     let mut items = Vec::new();
     for mut page in pages {
+        // `page[field]` would panic on a page that is not an object.
+        let list = page
+            .get_mut(field)
+            .map(serde_json::Value::take)
+            .ok_or_else(|| FetchError::ParseFailed(format!("Missing {field}")))?;
         items.extend(
-            serde_json::from_value::<Vec<T>>(page[field].take())
+            serde_json::from_value::<Vec<T>>(list)
                 .map_err(|e| FetchError::ParseFailed(e.to_string()))?,
         );
     }

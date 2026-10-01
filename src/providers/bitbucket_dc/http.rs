@@ -30,15 +30,17 @@ fn net_err(e: reqwest::Error) -> FetchError {
     FetchError::Network(e.to_string())
 }
 
-/// Maps an auth failure to `NotAuthenticated` and any other non-2xx to
-/// `HttpFailed`, otherwise hands the response back for the caller to read.
+/// Maps a rejected token (401) to `NotAuthenticated` and any other non-2xx to
+/// `HttpFailed`, otherwise hands the response back for the caller to read. A
+/// 403 is the server refusing this account the action, which logging in again
+/// does not change, so it keeps the server's own explanation.
 fn check_status(
     response: reqwest::blocking::Response,
     base_url: &str,
     url: &str,
 ) -> Result<reqwest::blocking::Response, FetchError> {
     let status = response.status();
-    if status == reqwest::StatusCode::UNAUTHORIZED || status == reqwest::StatusCode::FORBIDDEN {
+    if status == reqwest::StatusCode::UNAUTHORIZED {
         let host = base_url
             .trim_start_matches("https://")
             .trim_start_matches("http://")
@@ -85,6 +87,8 @@ pub(super) fn current_user(base_url: &str, path: &str, pat: &str) -> Result<Stri
         tracing::warn!("http send failed: {e}");
         FetchError::Network(e.to_string())
     })?;
+    // A rejected token must say so, not "no X-AUSERNAME header".
+    let response = check_status(response, base_url, &url)?;
     // Bitbucket DC stamps the authenticated account on every response as
     // X-AUSERNAME; unauthenticated requests get "anonymous".
     response

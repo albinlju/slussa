@@ -1,7 +1,7 @@
 use crate::{
     app::action::Action,
     tui::{
-        component::{Component, scroll},
+        component::{Component, saturating_u16, scroll},
         theme, widgets,
     },
 };
@@ -41,7 +41,9 @@ impl Component for HelpDialog {
     }
     fn render(&mut self, frame: &mut Frame<'_>, area: Rect, entries: &Self::Context<'_>) {
         let width = area.width.min(48);
-        let height = area.height.min(entries.len() as u16 + 4);
+        let height = area
+            .height
+            .min(saturating_u16(entries.len()).saturating_add(4));
         let popup = Rect::new(
             area.x + (area.width - width) / 2,
             area.y + (area.height - height) / 2,
@@ -62,7 +64,7 @@ impl Component for HelpDialog {
             ..inner
         };
         self.viewport = body.height;
-        self.max_scroll = entries.len().saturating_sub(body.height as usize) as u16;
+        self.max_scroll = saturating_u16(entries.len().saturating_sub(body.height as usize));
         self.scroll = self.scroll.min(self.max_scroll);
         let lines: Vec<_> = entries
             .iter()

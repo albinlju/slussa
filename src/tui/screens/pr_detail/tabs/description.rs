@@ -5,7 +5,7 @@ use crate::{
     },
     domain::pr::{PrInfo, PullRequest},
     tui::{
-        component::{Component, scroll},
+        component::{Component, saturating_u16, scroll},
         widgets::{self, markdown},
     },
 };
@@ -50,18 +50,16 @@ pub fn render(
         width: area.width.saturating_sub(1),
         ..area
     };
-    ui.max_horizontal = lines
-        .iter()
-        .map(ratatui::text::Line::width)
-        .max()
-        .unwrap_or(0)
-        .saturating_sub(content.width as usize)
-        .min(u16::MAX as usize) as u16;
+    ui.max_horizontal = saturating_u16(
+        lines
+            .iter()
+            .map(ratatui::text::Line::width)
+            .max()
+            .unwrap_or(0)
+            .saturating_sub(content.width as usize),
+    );
     ui.horizontal = ui.horizontal.min(ui.max_horizontal);
-    let max_scroll = lines
-        .len()
-        .saturating_sub(area.height as usize)
-        .min(u16::MAX as usize) as u16;
+    let max_scroll = saturating_u16(lines.len().saturating_sub(area.height as usize));
     ui.scroll = ui.scroll.min(max_scroll);
     ui.viewport = area.height;
     frame.render_widget(

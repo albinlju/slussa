@@ -411,7 +411,10 @@ queues and partial-submission receipts in the platform's local data directory
 under `slussa/drafts/`. Files are versioned and scoped by provider, remote host,
 repository path and authenticated account; no tokens are included. The snapshot
 uses ordered maps, writes only when content changes, syncs a temporary file,
-and renames it over the previous version. Files use mode 0600 on Unix. A
+and renames it over the previous version. Every action is followed by a save
+except a keystroke in the editor: a save is a file sync, so typed text is
+written within half a second instead, and at once by the next other action
+(a paste, closing the editor, sending) and on exit. Files use mode 0600 on Unix. A
 [standard-library file lock](https://doc.rust-lang.org/std/fs/struct.File.html#method.try_lock)
 prevents simultaneous writers for the same scope and is released on process exit.
 Corrupt or incompatible files are preserved and reported at startup.
@@ -455,7 +458,7 @@ SHAs or branch names remain separate future work.
 ## UI behaviour rules
 
 The rules the code relies on, kept short; the regression tests in
-`tui/regression_tests.rs` and `app/tests.rs` pin them.
+`tui/regression_tests/` and `app/tests/` pin them.
 
 - **Dialogs.** Review, merge, confirmation and filter dialogs share geometry
   and a keyboard footer through `widgets/dialog.rs`; the selected option stays

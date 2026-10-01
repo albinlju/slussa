@@ -168,6 +168,7 @@ impl App {
         self.drafts = Some(storage);
     }
     pub(super) fn save_drafts(&mut self) -> bool {
+        self.drafts_dirty = false;
         let Some(storage) = &mut self.drafts else {
             return true;
         };
@@ -326,6 +327,43 @@ mod tests {
         drop(storage);
         fs::remove_dir_all(root).unwrap();
     }
+    /// The file as version 1 writes it, with every kind of draft target. A
+    /// file that no longer parses stops slussa from starting, so a change to
+    /// these types must keep this text readable and write it back unchanged.
+    const VERSION_1: &str = concat!(
+        r#"{"version":1,"scope":"repo/account","snapshot":{"editors":{"#,
+        r#""1":{"target":{"Reply":789},"text":"reply"},"#,
+        r#""2":{"target":{"Line":{"revision":{"head":"h","base":"b","commit":true},"#,
+        r#""path":"f.rs","line":42,"removed":true}},"text":"line"},"#,
+        r#""3":{"target":"Pr","text":"pr"},"#,
+        r#""4":{"target":{"Edit":{"id":5,"review":true}},"text":"edit"},"#,
+        r#""5":{"target":{"Review":{"verdict":"RequestChanges"}},"text":"summary"}},"#,
+        r#""reviews":{"2":{"submitted_summary":"sent","comments":[{"anchor":{"revision":null,"#,
+        r#""path":"g.rs","line":7,"removed":false},"text":"queued"}]}},"#,
+        r#""interrupted":[2]}}"#,
+    );
+
+    #[test]
+    fn version_1_draft_file_is_read_and_written_back_unchanged() {
+        let envelope: Envelope = serde_json::from_str(VERSION_1).unwrap();
+        let editors = &envelope.snapshot.editors;
+        assert!(matches!(editors[&1].target, CommentTarget::Reply(789)));
+        assert!(matches!(&editors[&2].target, CommentTarget::Line(a) if a.line == 42));
+        assert!(matches!(editors[&3].target, CommentTarget::Pr));
+        assert!(matches!(
+            editors[&4].target,
+            CommentTarget::Edit { id: 5, .. }
+        ));
+        assert!(matches!(editors[&5].target, CommentTarget::Review { .. }));
+        assert!(
+            envelope.snapshot.reviews[&2].comments[0]
+                .anchor
+                .revision
+                .is_none()
+        );
+        assert_eq!(serde_json::to_string(&envelope).unwrap(), VERSION_1);
+    }
+
     #[test]
     fn failed_save_and_corrupt_input_preserve_existing_data() {
         let root = directory();

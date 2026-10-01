@@ -63,21 +63,22 @@ enum GhOverride {
 static GH_OVERRIDE: Mutex<Option<GhOverride>> = Mutex::new(None);
 static GH_LOCK: Mutex<()> = Mutex::new(());
 
-/// The command the provider should run instead of `gh`, while a fake is
-/// installed.
-pub fn gh_command() -> Option<Command> {
+/// The command the provider runs instead of `gh`. With no fake installed it
+/// is a program that does not exist, so a test that forgot its fake fails with
+/// "gh is missing" instead of calling the real `gh`.
+pub fn gh_command() -> Command {
     let installed = GH_OVERRIDE
         .lock()
         .unwrap_or_else(PoisonError::into_inner)
-        .clone()?;
-    Some(match installed {
-        GhOverride::Script(path) => {
+        .clone();
+    match installed {
+        Some(GhOverride::Script(path)) => {
             let mut command = Command::new("/bin/sh");
             command.arg(path);
             command
         }
-        GhOverride::Missing => Command::new("/nonexistent/slussa-test-gh"),
-    })
+        Some(GhOverride::Missing) | None => Command::new("/nonexistent/slussa-test-gh"),
+    }
 }
 
 const GH_SCRIPT: &str = r#"dir=$(dirname "$0")
@@ -179,14 +180,25 @@ impl FakeGh {
     }
 }
 
-/// While alive, provider calls to `gh` go to the fake. Dropping it restores
-/// the real program and lets the next gh-using test run.
+/// While alive, provider calls to `gh` go to the fake. Dropping it leaves no
+/// `gh` at all and lets the next gh-using test run.
 pub struct InstalledGh {
     dir: Option<TempDir>,
     _lock: MutexGuard<'static, ()>,
 }
 
 impl InstalledGh {
+    /// Hold the `gh` slot with nothing installed: what a test that forgot its
+    /// fake finds.
+    pub fn none() -> Self {
+        let lock = GH_LOCK.lock().unwrap_or_else(PoisonError::into_inner);
+        *GH_OVERRIDE.lock().unwrap_or_else(PoisonError::into_inner) = None;
+        Self {
+            dir: None,
+            _lock: lock,
+        }
+    }
+
     /// Make `gh` look uninstalled.
     pub fn missing() -> Self {
         let lock = GH_LOCK.lock().unwrap_or_else(PoisonError::into_inner);

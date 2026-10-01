@@ -99,8 +99,19 @@ pub(super) fn render(
     }
 
     let visible = body_area.height as usize;
-    let max_scroll = lines.len().saturating_sub(visible) as u16;
-    let scroll = scroll_to_cursor(current_scroll, cursor, lines.len(), visible);
+    let max_scroll = crate::tui::component::saturating_u16(lines.len().saturating_sub(visible));
+    // The same rule as in the Overview: move as little as possible, and show an
+    // item taller than the viewport from its first row.
+    let scroll = match cursor {
+        Some(item) => crate::tui::component::scroll_to_item(
+            current_scroll,
+            item.rendered_row,
+            item.row_span,
+            lines.len(),
+            visible,
+        ),
+        None => current_scroll.min(max_scroll),
+    };
 
     let paragraph = Paragraph::new(lines).scroll((scroll, 0));
     frame.render_widget(paragraph, body_area);
@@ -526,21 +537,6 @@ fn highlight_row(line: Line<'static>, row_w: usize) -> Line<'static> {
         spans.push(Span::styled(" ".repeat(pad), Style::default().bg(bg)));
     }
     Line::from(spans)
-}
-
-fn scroll_to_cursor(current: u16, cursor: Option<&NavItem>, total: usize, visible: usize) -> u16 {
-    let max_scroll = total.saturating_sub(visible) as u16;
-    let mut scroll = current.min(max_scroll) as usize;
-    if let Some(m) = cursor {
-        let top = m.rendered_row;
-        let bottom = m.rendered_row + m.row_span.saturating_sub(1);
-        if top < scroll {
-            scroll = top;
-        } else if visible > 0 && bottom >= scroll + visible {
-            scroll = bottom + 1 - visible;
-        }
-    }
-    (scroll as u16).min(max_scroll)
 }
 
 #[cfg(test)]

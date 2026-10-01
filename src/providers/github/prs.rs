@@ -7,6 +7,8 @@ use crate::domain::review::{Reviewer, ReviewerState};
 use crate::domain::user::User;
 use crate::providers::error::FetchError;
 
+use super::pagination::Connection;
+
 #[derive(Debug, Default, Deserialize)]
 struct GhAuthor {
     #[serde(default)]
@@ -17,17 +19,6 @@ struct GhAuthor {
 #[serde(rename_all = "camelCase")]
 struct Count {
     total_count: u32,
-}
-#[derive(Debug, Deserialize)]
-struct Connection<T> {
-    nodes: Vec<T>,
-    #[serde(rename = "pageInfo")]
-    page_info: PageInfo,
-}
-#[derive(Debug, Deserialize)]
-struct PageInfo {
-    #[serde(rename = "hasNextPage")]
-    has_next_page: bool,
 }
 #[derive(Debug, Default, Deserialize)]
 struct Commits {

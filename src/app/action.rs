@@ -38,6 +38,26 @@ pub enum Action {
     Loaded(LoadedAction),
 }
 
+impl Action {
+    /// A key typed or a cursor moved in the comment editor: frequent, and only
+    /// the text of the open draft can change. A paste is one action and is not
+    /// counted, so pasted text is on disk at once.
+    pub const fn is_editor_keystroke(&self) -> bool {
+        matches!(
+            self,
+            Self::Detail(
+                DetailAction::CommentType(_)
+                    | DetailAction::CommentBackspace
+                    | DetailAction::CommentDelete
+                    | DetailAction::CommentMove(_)
+                    | DetailAction::CommentVertical(_)
+                    | DetailAction::CommentHome
+                    | DetailAction::CommentEnd
+            )
+        )
+    }
+}
+
 #[derive(Debug, Clone, Copy)]
 pub enum SearchAction {
     Open,
