@@ -8,6 +8,7 @@ mod keys;
 mod layout;
 mod long_comments;
 mod long_comments_diff;
+mod reading_flow;
 mod support;
 
 pub(crate) use support::fixture;

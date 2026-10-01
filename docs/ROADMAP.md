@@ -198,6 +198,12 @@ notion, applied to the PR's author, to comments and to commits.
   on a resolved thread only expands or collapses the thread. A bot's
   walkthrough runs to dozens of lines. Counts of what a bot found (issues,
   nitpicks) are left out: they mean reading one reviewer's wording.
+- [x] **Read on through a tall comment.** In the Overview `j` scrolls a few
+  rows while the focused comment or thread runs below the screen, and moves to
+  the next one only when its end is in view; `k` does the same upward, and
+  steps back into a tall one at its end. Nothing is skipped when a comment is
+  taller than the screen, and skipping a long one stays a single press because
+  long comments are folded. The diff's code pane is not changed.
 - [ ] **Jump to next / prev unresolved thread** (`]c` / `[c`) — the core loop for
   walking through flags.
 - [ ] **Resolved / unresolved filter** in the Overview.

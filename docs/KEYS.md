@@ -22,7 +22,7 @@ connected provider does not support, so it can show fewer keys than this page.
 
 | Key | What it does |
 | --- | --- |
-| `j` / `k` | scroll or move |
+| `j` / `k` | scroll or move; in the Overview, read on through a comment taller than the screen (a few rows at a time) before moving to the next one |
 | `^d` / `^u` | half a page |
 | `h` / `l` | previous / next tab, on every tab |
 | `1`-`5` | select a tab |
