@@ -40,7 +40,8 @@ Make the change, then open a pull request against `main` from your fork.
 2. **Follow [AGENTS.md](AGENTS.md).** It applies to people as much as to
    agents: two views only; provider and process calls block and run off the UI
    thread through `App::spawn_fetch`, with no async HTTP and no ad hoc
-   threads; no new `unwrap`, `expect` or `unreachable!` in non-test code;
+   threads; no new `unwrap`, `expect` or `unreachable!` in non-test code
+   (clippy refuses them);
    modules stay under about 500 lines; show only what the provider supports.
 3. **Run the four checks before you push.** CI runs the same ones on Linux and
    macOS.
