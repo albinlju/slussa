@@ -1,12 +1,13 @@
 use crate::{
     domain::{
-        comment::{Comment, CommentThread, split_suggestions},
+        comment::{Comment, CommentKey, CommentKind, CommentThread, split_suggestions},
         diff::{Diff, DiffLine, LineRef},
     },
     tui::{
         format, theme,
         widgets::{
             self,
+            comment_fold::Folds,
             comment_meta::{self, Roles},
             markdown,
         },
@@ -120,7 +121,13 @@ pub(in crate::tui) fn comment_box(
     );
     let mut out = vec![header];
     out.extend(bracket(
-        comment_body(comment, None, width.saturating_sub(2)),
+        comment_body(
+            comment,
+            CommentKind::Conversation,
+            None,
+            width.saturating_sub(2),
+            roles.folds,
+        ),
         width,
         frame,
         theme.divider,
@@ -311,7 +318,13 @@ fn conversation(
             out.extend(framed(
                 meta,
                 label,
-                comment_body(comment, anchor, width.saturating_sub(2)),
+                comment_body(
+                    comment,
+                    thread.kind(),
+                    anchor,
+                    width.saturating_sub(2),
+                    roles.folds,
+                ),
                 width,
                 frame,
                 theme.divider,
@@ -339,7 +352,13 @@ fn conversation(
         } else {
             out.push(prefix_gutter(Line::from(meta), head, style));
         }
-        for line in comment_body(comment, anchor, width.saturating_sub(2)) {
+        for line in comment_body(
+            comment,
+            thread.kind(),
+            anchor,
+            width.saturating_sub(2),
+            roles.folds,
+        ) {
             out.push(prefix_gutter(line, body_gutter, style));
         }
         if selected == Some(i) {
@@ -422,13 +441,16 @@ fn align_snippet(lines: Vec<Line<'static>>) -> Vec<Line<'static>> {
 
 fn comment_body(
     comment: &Comment,
+    kind: CommentKind,
     anchor: Option<(usize, &str)>,
     text_w: u16,
+    folds: Folds<'_>,
 ) -> Vec<Line<'static>> {
     let (prose, suggestions) = split_suggestions(&comment.content);
     let mut lines: Vec<Line<'static>> = Vec::new();
     if !prose.trim().is_empty() {
-        lines.extend(paint_fg(markdown::render_no_margin(&prose, text_w)));
+        let key = comment.id.map(|id| CommentKey { id, kind });
+        lines.extend(folds.apply(key, paint_fg(markdown::render_no_margin(&prose, text_w))));
     }
     for suggestion in &suggestions {
         lines.push(Line::raw(""));

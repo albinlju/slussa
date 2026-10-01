@@ -6,7 +6,7 @@ use crate::{
         authorship::{AiMarkers, Authorship},
         comment::{Comment, split_suggestions},
     },
-    tui::{format, theme},
+    tui::{format, theme, widgets::comment_fold::Folds},
 };
 use chrono::{DateTime, Utc};
 use ratatui::{
@@ -14,12 +14,14 @@ use ratatui::{
     text::Span,
 };
 
-/// What a comment's author is measured against: the PR's author, and what makes
-/// an account or a first line an AI agent's.
+/// What a comment is read against: the PR's author, what makes an account or a
+/// first line an AI agent's, and which long comments are folded.
 #[derive(Clone, Copy)]
 pub struct Roles<'a> {
     pub pr_author: &'a str,
     pub markers: &'a AiMarkers,
+    /// Which long comments are folded; `Open` where nothing can open them.
+    pub folds: Folds<'a>,
 }
 
 impl Roles<'_> {
@@ -103,6 +105,7 @@ mod tests {
         let roles = Roles {
             pr_author: "alice",
             markers: &markers,
+            folds: Folds::Open,
         };
         let now = Utc::now();
         let line = |c: &Comment| text(&meta(c, roles, c.created, now));

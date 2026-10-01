@@ -9,7 +9,10 @@ const HELP_KEYS: &[(&str, &str)] = &[
     ("H/L", "pan wide Description"),
     ("1-5", "select tab"),
     ("enter", "open / view"),
-    ("space", "toggle fold"),
+    (
+        "space",
+        "toggle fold; open / fold a long comment (Overview)",
+    ),
     ("/", "search"),
     ("n/N", "next/prev match"),
     ("[ ]", "prev/next tab/commit"),

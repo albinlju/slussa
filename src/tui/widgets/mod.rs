@@ -1,4 +1,5 @@
 pub mod comment;
+pub mod comment_fold;
 pub mod comment_meta;
 pub mod dialog;
 pub mod markdown;

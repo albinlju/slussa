@@ -1,7 +1,6 @@
 mod blocks;
 mod sidebar;
 pub mod timeline;
-use crate::tui::widgets::comment_meta::Roles;
 use crate::{
     app::{
         action::{Action, Effect, TimelineAction},
@@ -106,10 +105,8 @@ fn render(
         body_area,
         &TimelineContext {
             data: pr_data,
-            roles: Roles {
-                pr_author: &pr.author.username,
-                markers: ctx.markers,
-            },
+            pr_author: &pr.author.username,
+            markers: ctx.markers,
             scrollbar: scrollbar_area,
         },
     );

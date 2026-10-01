@@ -58,7 +58,7 @@ impl From<&str> for NonBlank {
 
 /// Which of the two kinds of comment a provider keeps. GitHub edits and
 /// deletes them through different endpoints.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum CommentKind {
     /// A comment on the PR as a whole.
     Conversation,
@@ -67,7 +67,7 @@ pub enum CommentKind {
 }
 
 /// A comment that can be edited or deleted: the provider gave it an id.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, serde::Serialize, serde::Deserialize)]
 pub struct CommentKey {
     pub id: CommentId,
     /// Saved drafts spell this `review: bool`; the file is older than the enum.

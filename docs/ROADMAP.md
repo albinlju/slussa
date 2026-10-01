@@ -189,6 +189,11 @@ notion, applied to the PR's author, to comments and to commits.
 - [ ] **Review as a group (display)** — render a review's comments + summary +
   state as one grouped timeline entry. Matters more once AI reviews arrive as one
   batch with many comments.
+- [ ] **Long comments fold** *(the Overview is done; the diff's inline threads
+  still show them whole)* — a comment over 12 lines shows its first 8 and a
+  dimmed `… N more lines · space expand`; `space` opens or folds it. A bot's
+  walkthrough runs to dozens of lines. Counts of what a bot found (issues,
+  nitpicks) are left out: they mean reading one reviewer's wording.
 - [ ] **Jump to next / prev unresolved thread** (`]c` / `[c`) — the core loop for
   walking through flags.
 - [ ] **Resolved / unresolved filter** in the Overview.

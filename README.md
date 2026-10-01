@@ -120,6 +120,9 @@ for one), so this needs no setup. `markers` is for an agent that posts
 with your own token, which no account tells apart; it works on both providers.
 Bitbucket Data Center does not mark bot accounts, so there only `markers` applies.
 
+A comment longer than 12 lines shows its first 8 and a dimmed `… 34 more lines ·
+space expand`; `space` opens it or folds it again, in the Overview.
+
 ## Documentation
 
 - [KEYS.md](docs/KEYS.md): every key, for the list and for a PR
