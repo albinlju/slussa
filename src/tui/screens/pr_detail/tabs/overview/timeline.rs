@@ -23,6 +23,10 @@ use ratatui::{
 };
 use std::{cmp::Reverse, collections::HashSet};
 
+/// How many rows `j` or `k` scroll to read on through an item that does not fit
+/// on the screen, before the next press moves to the neighbouring item.
+const READ_STEP: usize = 5;
+
 const TIMELINE_RIGHT_PAD: u16 = 3;
 const RAIL_WIDTH: u16 = 3;
 
@@ -172,6 +176,7 @@ fn render_timeline(
         );
     }
     ui.selected_row = selected_row;
+    ui.focused_rows = focused.map(|n| n.start..n.start + n.span);
 
     let viewport = area.height as usize;
     let max_scroll = saturating_u16(content.len().saturating_sub(viewport));
@@ -181,12 +186,18 @@ fn render_timeline(
                 .selected_range
                 .clone()
                 .unwrap_or(n.start..n.start + n.span);
-            scroll_to_item(ui.scroll, range.start, range.len(), content.len(), viewport)
+            if ui.reveal_end && n.span > viewport {
+                // Stepped back up into an item taller than the screen: show its end.
+                saturating_u16((n.start + n.span).saturating_sub(viewport))
+            } else {
+                scroll_to_item(ui.scroll, range.start, range.len(), content.len(), viewport)
+            }
         })
     } else {
         ui.scroll
     };
     ui.reveal_selection = false;
+    ui.reveal_end = false;
     ui.scroll = scroll.min(max_scroll);
     ui.viewport = area.height;
 
@@ -217,7 +228,33 @@ pub struct Timeline {
     /// The long comments the reader has opened with `space`.
     pub expanded: HashSet<CommentKey>,
     reveal_selection: bool,
+    /// Land on the end of the item that was stepped back into, not its start.
+    reveal_end: bool,
+    /// The rows the focused item takes, so that `j` and `k` can read on through it.
+    focused_rows: Option<std::ops::Range<usize>>,
     selected_row: Option<usize>,
+}
+
+impl Timeline {
+    /// How far `j` (down) or `k` (up) scrolls to read on through the focused item
+    /// instead of leaving it, when some of it is out of view that way.
+    fn read_on(&self, delta: i16) -> Option<i16> {
+        let rows = self.focused_rows.as_ref()?;
+        if self.viewport == 0 {
+            return None;
+        }
+        let top = usize::from(self.scroll);
+        let bottom = top + usize::from(self.viewport);
+        let rows_to_go = if delta > 0 && rows.end > bottom {
+            rows.end - bottom
+        } else if delta < 0 && rows.start < top {
+            top - rows.start
+        } else {
+            return None;
+        };
+        let step = i16::try_from(rows_to_go.min(READ_STEP)).unwrap_or(i16::MAX);
+        Some(if delta > 0 { step } else { -step })
+    }
 }
 
 impl Component for Timeline {
@@ -252,6 +289,10 @@ impl Component for Timeline {
             TimelineAction::Move(delta) => {
                 if self.item_count <= 1 {
                     self.scroll = scroll(self.scroll, delta);
+                } else if let Some(step) = self.read_on(delta) {
+                    // Some of this item is out of view the way the reader is going.
+                    self.scroll = scroll(self.scroll, step);
+                    self.reveal_selection = false;
                 } else {
                     let next = step_index(self.cursor, delta, self.item_count);
                     if next != self.cursor {
@@ -260,6 +301,7 @@ impl Component for Timeline {
                         self.cursor = next;
                         self.sub = 0;
                         self.reveal_selection = true;
+                        self.reveal_end = delta < 0;
                     }
                 }
             }
