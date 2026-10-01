@@ -26,6 +26,7 @@ fn queued_review_survives_navigation_without_crossing_prs() {
     // Opening another PR uses already cached data and never contacts a provider.
     let data = app.state.store.cache.details.remove(&42).unwrap();
     app.state.store.cache.details.insert(43, data);
+    add_pr(&mut app, 43);
     app.apply(Action::List(ListAction::OpenPr(43)));
     assert!(app.state.detail_view().pending_review().is_none());
     app.apply(Action::Detail(DetailAction::Pr(PrAction::StartReview)));

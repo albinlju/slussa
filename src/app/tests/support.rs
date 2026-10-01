@@ -53,6 +53,17 @@ pub(super) fn app() -> App {
     app
 }
 
+/// Put a second PR in the list, a copy of the fixture's with another id. A PR
+/// can only be opened from the list, so a test that opens one adds it first.
+pub(super) fn add_pr(app: &mut App, id: u64) {
+    let LoadState::Loaded(prs) = &mut app.state.store.cache.prs else {
+        panic!("the fixture's list is loaded");
+    };
+    let mut pr = prs[0].clone();
+    pr.id = id;
+    prs.push(pr);
+}
+
 pub(super) fn press(app: &mut App, code: KeyCode) {
     app.handle_key(KeyEvent::new(code, KeyModifiers::NONE));
 }

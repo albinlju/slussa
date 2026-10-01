@@ -1,10 +1,6 @@
 use crate::{
-    app::{
-        action::{
-            Action, CommitsAction, DetailAction, DiffAction, Effect, NavAction, PrAction,
-            SearchAction,
-        },
-        navigation::Screen,
+    app::action::{
+        Action, CommitsAction, DetailAction, DiffAction, Effect, NavAction, PrAction, SearchAction,
     },
     tui::{
         component::Component,
@@ -35,9 +31,7 @@ pub(in crate::tui) fn key_to_action(
     if key.code == KeyCode::Char('q') {
         return Some(Action::Effect(Effect::Quit));
     }
-    let Screen::Detail { tab, pr_id } = state.screen else {
-        return None;
-    };
+    let (tab, pr_id) = (state.tab, state.pr_id);
     let viewing_commit = state.detail.commits.open_commit.is_some();
     let code = key.code;
     // Single-letter actions fire only unmodified, so Ctrl-d/Ctrl-e/etc. (scroll,
@@ -104,18 +98,16 @@ pub(in crate::tui) fn key_to_action(
     }
     // `m` opens the merge-strategy menu — only when the PR is mergeable. You can
     // merge your own PR, so (unlike `a`) there's no own-PR gate.
-    if plain && code == KeyCode::Char('m') && acts_on_pr && state.can_merge(pr_id) {
+    if plain && code == KeyCode::Char('m') && acts_on_pr && state.can_merge() {
         return Some(Action::from(PrAction::OpenMergePicker));
     }
     // `x` declines/closes the PR (with a confirm) while it's still open, and
     // reopens it (with a confirm) once it has been declined.
     if plain && code == KeyCode::Char('x') && acts_on_pr {
-        if state.pr_is_open(pr_id) {
+        if state.pr_is_open() {
             return Some(Action::from(PrAction::OpenDecline));
         }
-        if state.pr_is_declined(pr_id)
-            && state.supports_action(DetailAction::Pr(PrAction::OpenReopen))
-        {
+        if state.pr_is_declined() && state.supports_action(DetailAction::Pr(PrAction::OpenReopen)) {
             return Some(Action::from(PrAction::OpenReopen));
         }
     }
@@ -135,22 +127,13 @@ pub(in crate::tui) fn key_to_action(
     // Overview-only: step individual comments within the focused block (Ctrl-j/k),
     // then edit/delete the one you land on (the application gates on authorship).
     if tab == DetailTab::Overview {
-        if key.modifiers.contains(KeyModifiers::CONTROL) {
-            let crate::app::store::LoadState::Loaded(prs) = &state.store.cache.prs else {
-                return None;
-            };
-            if let Some(pr) = prs.iter().find(|p| p.id == pr_id)
-                && let Some(action) = state.detail.overview.handle_key(
-                    key,
-                    &crate::tui::screens::pr_detail::tabs::overview::OverviewContext {
-                        pr,
-                        data: state.store.cache.details.get(&pr_id),
-                        capabilities: &state.store.capabilities,
-                    },
-                )
-            {
-                return Some(action);
-            }
+        if key.modifiers.contains(KeyModifiers::CONTROL)
+            && let Some(action) = state
+                .detail
+                .overview
+                .handle_key(key, &overview_context(state))
+        {
+            return Some(action);
         }
         if plain && code == KeyCode::Char('e') {
             return Some(Action::from(PrAction::EditComment));
@@ -260,54 +243,47 @@ fn tab_key(
                 )
                 .or_else(|| tab_letters(code)),
         },
-        DetailTab::Commits => {
-            let Screen::Detail { pr_id, .. } = state.screen else {
-                return None;
-            };
-            state
-                .detail
-                .commits
-                .handle_key(
-                    KeyEvent::new(code, KeyModifiers::NONE),
-                    &super::tabs::commits::CommitContext {
-                        pr_id,
-                        data: state.store.cache.details.get(&pr_id),
-                        pending: &[],
-                        author: "",
-                    },
-                )
-                .or_else(|| tab_nav(code))
-        }
-        DetailTab::Overview | DetailTab::Description => {
-            let Screen::Detail { pr_id, .. } = state.screen else {
-                return None;
-            };
-            let crate::app::store::LoadState::Loaded(prs) = &state.store.cache.prs else {
-                return tab_nav(code);
-            };
-            let Some(pr) = prs.iter().find(|pr| pr.id == pr_id) else {
-                return tab_nav(code);
-            };
-            let key = KeyEvent::new(code, KeyModifiers::NONE);
-            let action = if tab == DetailTab::Overview {
-                state.detail.overview.handle_key(
-                    key,
-                    &crate::tui::screens::pr_detail::tabs::overview::OverviewContext {
-                        pr,
-                        data: state.store.cache.details.get(&pr_id),
-                        capabilities: &state.store.capabilities,
-                    },
-                )
-            } else {
-                state.detail.description.handle_key(key, &pr)
-            };
-            action.or_else(|| tab_nav(code))
-        }
+        DetailTab::Commits => state
+            .detail
+            .commits
+            .handle_key(
+                KeyEvent::new(code, KeyModifiers::NONE),
+                &super::tabs::commits::CommitContext {
+                    pr_id: state.pr_id,
+                    data: state.data,
+                    pending: &[],
+                    author: "",
+                },
+            )
+            .or_else(|| tab_nav(code)),
+        DetailTab::Overview => state
+            .detail
+            .overview
+            .handle_key(
+                KeyEvent::new(code, KeyModifiers::NONE),
+                &overview_context(state),
+            )
+            .or_else(|| tab_nav(code)),
+        DetailTab::Description => state
+            .detail
+            .description
+            .handle_key(KeyEvent::new(code, KeyModifiers::NONE), &state.pr)
+            .or_else(|| tab_nav(code)),
         DetailTab::Builds => state
             .detail
             .builds
             .handle_key(KeyEvent::new(code, KeyModifiers::NONE), &None)
             .or_else(|| tab_nav(code)),
+    }
+}
+
+const fn overview_context<'a>(
+    state: &super::DetailView<'a>,
+) -> crate::tui::screens::pr_detail::tabs::overview::OverviewContext<'a> {
+    crate::tui::screens::pr_detail::tabs::overview::OverviewContext {
+        pr: state.pr,
+        data: state.data,
+        capabilities: &state.store.capabilities,
     }
 }
 

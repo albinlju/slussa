@@ -29,15 +29,11 @@ pub fn render(frame: &mut Frame<'_>, state: &mut AppState) {
             frame.area(),
             &pr_list::ListContext::from_store(&state.store, state.ui.list.filter, state.screen),
         ),
-        Screen::Detail { .. } => state.ui.detail.render(
-            frame,
-            frame.area(),
-            &pr_detail::DetailContext {
-                store: &state.store,
-                screen: state.screen,
-                refreshing: state.store.refreshing(state.screen),
-            },
-        ),
+        Screen::Detail { pr_id, tab } => {
+            if let Some(ctx) = pr_detail::DetailContext::new(&state.store, pr_id, tab) {
+                state.ui.detail.render(frame, frame.area(), &ctx);
+            }
+        }
     }
     if state.store.refresh_failed(state.screen)
         && !state.ui.modal_open(&state.store, state.screen)
@@ -99,17 +95,19 @@ pub fn render(frame: &mut Frame<'_>, state: &mut AppState) {
 pub fn key_to_action(state: &AppState, key: KeyEvent) -> Option<Action> {
     let key = normalize_key(key);
 
-    if matches!(state.screen, Screen::Detail { .. })
+    let detail = match state.screen {
+        Screen::List => None,
+        Screen::Detail { pr_id, tab } => {
+            let Some(ctx) = pr_detail::DetailContext::new(&state.store, pr_id, tab) else {
+                return leave_key(key);
+            };
+            Some(ctx)
+        }
+    };
+    if let Some(ctx) = &detail
         && state.ui.modal_open(&state.store, state.screen)
     {
-        return state.ui.detail.handle_key(
-            key,
-            &pr_detail::DetailContext {
-                store: &state.store,
-                screen: state.screen,
-                refreshing: state.store.refreshing(state.screen),
-            },
-        );
+        return state.ui.detail.handle_key(key, ctx);
     }
 
     if let Some((search, highlight)) = active_search(state)
@@ -124,19 +122,22 @@ pub fn key_to_action(state: &AppState, key: KeyEvent) -> Option<Action> {
         return Some(action);
     }
 
-    match state.screen {
-        Screen::List => state.ui.list.handle_key(
+    match &detail {
+        None => state.ui.list.handle_key(
             key,
             &pr_list::ListContext::from_store(&state.store, state.ui.list.filter, state.screen),
         ),
-        Screen::Detail { .. } => state.ui.detail.handle_key(
-            key,
-            &pr_detail::DetailContext {
-                store: &state.store,
-                screen: state.screen,
-                refreshing: state.store.refreshing(state.screen),
-            },
-        ),
+        Some(ctx) => state.ui.detail.handle_key(key, ctx),
+    }
+}
+
+/// The keys that work on a PR screen with no PR to show: the way out. The list
+/// keeps the PR that is open, so this is not a state a user gets into.
+const fn leave_key(key: KeyEvent) -> Option<Action> {
+    match key.code {
+        KeyCode::Char('q') => Some(Action::Effect(Effect::Quit)),
+        KeyCode::Esc => Some(Action::Effect(Effect::Navigate(Screen::List))),
+        _ => None,
     }
 }
 
@@ -189,10 +190,9 @@ impl Ui {
         store: &crate::app::store::Store,
         screen: Screen,
     ) -> Option<Effect> {
-        let detail_ctx = pr_detail::DetailContext {
-            store,
-            screen,
-            refreshing: store.refreshing(screen),
+        let detail = match screen {
+            Screen::List => None,
+            Screen::Detail { pr_id, tab } => pr_detail::DetailContext::new(store, pr_id, tab),
         };
         match action {
             Action::Effect(effect) => Some(effect),
@@ -227,13 +227,18 @@ impl Ui {
                             self.list.update_search(action);
                         }
                     }
-                    Screen::Detail { .. } => self.detail.update_search(action, &detail_ctx),
+                    Screen::Detail { .. } => {
+                        if let Some(ctx) = &detail {
+                            self.detail.update_search(action, ctx);
+                        }
+                    }
                 }
                 None
             }
-            Action::Detail(action) => self.detail.update(action, &detail_ctx),
-            Action::Diff(action) => self.detail.update_diff(action, &detail_ctx),
-            Action::Commits(action) => self.detail.update_commits(action, &detail_ctx),
+            // A message for the PR screen with no PR on screen has nothing to act on.
+            Action::Detail(action) => self.detail.update(action, &detail?),
+            Action::Diff(action) => self.detail.update_diff(action, &detail?),
+            Action::Commits(action) => self.detail.update_commits(action, &detail?),
         }
     }
 }

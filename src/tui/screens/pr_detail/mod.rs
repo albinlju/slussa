@@ -14,9 +14,7 @@ use crate::{
             NavAction, SearchAction,
         },
         navigation::Screen,
-        store::LoadState,
     },
-    domain::pr::PullRequest,
     tui::{
         component::Component,
         components::diff_viewer::{DiffContext, DiffViewer},
@@ -123,9 +121,7 @@ impl Component for PrDetailScreen {
         if !self.view(ctx).supports_action(action) {
             return None;
         }
-        let Screen::Detail { pr_id, tab } = ctx.screen else {
-            return None;
-        };
+        let (pr_id, tab) = (ctx.pr_id, ctx.tab);
         if ctx.store.operations.contains_key(&pr_id) && !action.allowed_while_sending() {
             return None;
         }
@@ -135,21 +131,17 @@ impl Component for PrDetailScreen {
                 self.builds.update(delta, &None);
             }
             DetailAction::Description(action) => {
-                if let Some(pr) = loaded_pr(ctx, pr_id) {
-                    self.description.update(action, &pr);
-                }
+                self.description.update(action, &ctx.pr);
             }
             DetailAction::Timeline(action) => {
-                if let Some(pr) = loaded_pr(ctx, pr_id) {
-                    self.overview.update(
-                        action,
-                        &tabs::overview::OverviewContext {
-                            pr,
-                            data: ctx.store.cache.details.get(&pr_id),
-                            capabilities: &ctx.store.capabilities,
-                        },
-                    );
-                }
+                self.overview.update(
+                    action,
+                    &tabs::overview::OverviewContext {
+                        pr: ctx.pr,
+                        data: ctx.data,
+                        capabilities: &ctx.store.capabilities,
+                    },
+                );
             }
             DetailAction::Error(ErrorAction::Dismiss) => return Some(self.dismiss_error(pr_id)),
             DetailAction::Error(action @ ErrorAction::Scroll(_)) => {
@@ -165,13 +157,6 @@ impl Component for PrDetailScreen {
             DetailAction::Pr(action) => return self.pr_action(action, pr_id, ctx),
         }
         None
-    }
-}
-
-fn loaded_pr<'a>(ctx: &DetailContext<'a>, pr_id: u64) -> Option<&'a PullRequest> {
-    match &ctx.store.cache.prs {
-        LoadState::Loaded(prs) => prs.iter().find(|pr| pr.id == pr_id),
-        LoadState::NotRequested | LoadState::Loading | LoadState::Failed(_) => None,
     }
 }
 
@@ -221,14 +206,11 @@ impl PrDetailScreen {
         action: CommitsAction,
         ctx: &DetailContext<'_>,
     ) -> Option<Effect> {
-        let Screen::Detail { pr_id, .. } = ctx.screen else {
-            return None;
-        };
         self.commits.update(
             action,
             &tabs::commits::CommitContext {
-                pr_id,
-                data: ctx.store.cache.details.get(&pr_id),
+                pr_id: ctx.pr_id,
+                data: ctx.data,
                 pending: &[],
                 author: "",
             },
@@ -236,35 +218,29 @@ impl PrDetailScreen {
     }
 
     pub fn update_diff(&mut self, action: DiffAction, ctx: &DetailContext<'_>) -> Option<Effect> {
-        let diff_ctx = self.diff_input_context(ctx)?;
+        let diff_ctx = self.diff_input_context(ctx);
         self.active_diff_view_mut().update(action, &diff_ctx)
     }
 
     pub fn update_search(&mut self, action: SearchAction, ctx: &DetailContext<'_>) {
-        let Screen::Detail { tab, .. } = ctx.screen else {
-            return;
-        };
-        if tab == tabs::DetailTab::Commits && self.commits.open_commit.is_none() {
+        if ctx.tab == tabs::DetailTab::Commits && self.commits.open_commit.is_none() {
             self.commits.update_search(action);
-        } else if self.active_search(tab).is_some()
-            && let Some(diff_ctx) = self.diff_input_context(ctx)
-        {
+        } else if self.active_search(ctx.tab).is_some() {
+            let diff_ctx = self.diff_input_context(ctx);
             self.active_diff_view_mut().update_search(action, &diff_ctx);
         }
     }
 
     /// The diff on screen, for input: which files there are to move between.
-    fn diff_input_context<'a>(&self, ctx: &DetailContext<'a>) -> Option<DiffContext<'a>> {
-        let Screen::Detail { pr_id, .. } = ctx.screen else {
-            return None;
-        };
-        let data = ctx.store.cache.details.get(&pr_id);
-        Some(DiffContext {
-            diff: data.and_then(|d| d.diff_for(self.commits.open_commit.as_deref())),
+    fn diff_input_context<'a>(&self, ctx: &DetailContext<'a>) -> DiffContext<'a> {
+        DiffContext {
+            diff: ctx
+                .data
+                .and_then(|d| d.diff_for(self.commits.open_commit.as_deref())),
             threads: &[],
             pending: &[],
             author: "",
-        })
+        }
     }
 }
 

@@ -301,6 +301,7 @@ fn returning_to_a_pr_restores_its_tab_focus_and_search() {
         .details
         .insert(43, other.store.cache.details.remove(&42).unwrap());
     app.apply(Action::Effect(Effect::Navigate(Screen::List)));
+    add_pr(&mut app, 43);
     app.apply(Action::List(ListAction::OpenPr(43)));
     assert_eq!(
         app.state.screen,

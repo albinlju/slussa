@@ -59,6 +59,7 @@ async fn late_completion_only_clears_the_submitting_pr_editor() {
     press(&mut app, KeyCode::Char('c'));
     press(&mut app, KeyCode::Char('A'));
     send_comment(&mut app);
+    add_pr(&mut app, 43);
     app.open_pr(43);
     app.apply(Action::Detail(DetailAction::Nav(NavAction::SelectTab(
         DetailTab::Overview,
@@ -109,6 +110,7 @@ async fn failed_review_and_error_stay_with_their_pr_until_success() {
         },
     }));
     assert_eq!(app.state.store.reviews[&42].comments.len(), 1);
+    add_pr(&mut app, 43);
     app.open_pr(43);
     app.state.store.operations.insert(43, Operation::Merge);
     finish_write(&mut app, 42, Err(failed("offline").into()));

@@ -178,3 +178,35 @@ fn the_footer_offers_reopen_only_for_a_declined_pr() {
     let text = footer_of(&mut unsupported);
     assert!(!text.contains("x: reopen"), "{text}");
 }
+
+#[test]
+fn a_pr_that_is_not_in_the_list_gives_no_context_and_only_the_way_out() {
+    use crate::{app::action::Effect, tui::screens::pr_detail::DetailContext};
+    let mut state = overview_of(PrStatus::Open);
+    assert!(DetailContext::new(&state.store, 42, DetailTab::Overview).is_some());
+
+    state.screen = Screen::Detail {
+        pr_id: 7,
+        tab: DetailTab::Overview,
+    };
+    assert!(DetailContext::new(&state.store, 7, DetailTab::Overview).is_none());
+    let key = |code| key_to_action(&state, KeyEvent::new(code, KeyModifiers::NONE));
+    assert!(matches!(
+        key(KeyCode::Char('q')),
+        Some(Action::Effect(Effect::Quit))
+    ));
+    assert!(matches!(
+        key(KeyCode::Esc),
+        Some(Action::Effect(Effect::Navigate(Screen::List)))
+    ));
+    assert!(key(KeyCode::Char('m')).is_none());
+    assert!(key(KeyCode::Char('c')).is_none());
+    // A message that still arrives has no PR to act on.
+    let effect = state.ui.update(
+        Action::Detail(DetailAction::Pr(PrAction::OpenComment)),
+        &state.store,
+        state.screen,
+    );
+    assert!(effect.is_none());
+    assert!(state.ui.detail.editor.draft.is_none());
+}

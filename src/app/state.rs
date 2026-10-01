@@ -23,14 +23,16 @@ impl AppState {
         }
     }
 
+    /// The PR screen's read-only view, for a test on that screen.
     #[cfg(test)]
     pub fn detail_view(&self) -> crate::tui::screens::pr_detail::DetailView<'_> {
-        crate::tui::screens::pr_detail::DetailView {
-            detail: &self.ui.detail,
-            store: &self.store,
-            screen: self.screen,
-            refreshing: self.store.refreshing(self.screen),
-        }
+        use crate::tui::screens::pr_detail::{DetailContext, DetailView};
+        let Screen::Detail { pr_id, tab } = self.screen else {
+            panic!("the test is not on the PR screen");
+        };
+        let ctx =
+            DetailContext::new(&self.store, pr_id, tab).expect("the PR on screen is in the list");
+        DetailView::new(&self.ui.detail, &ctx)
     }
     pub fn is_loading(&self) -> bool {
         !self.store.operations.is_empty()

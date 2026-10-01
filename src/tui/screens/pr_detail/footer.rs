@@ -1,6 +1,5 @@
 use crate::{
     app::{
-        navigation::Screen,
         reviews::CommentTarget,
         store::{LoadState, PrData},
     },
@@ -20,13 +19,8 @@ use ratatui::{
     widgets::Paragraph,
 };
 
-pub(super) fn render(
-    frame: &mut Frame<'_>,
-    state: &DetailView<'_>,
-    pr_data: Option<&PrData>,
-    tab: DetailTab,
-    area: Rect,
-) {
+pub(super) fn render(frame: &mut Frame<'_>, state: &DetailView<'_>, area: Rect) {
+    let (pr_data, tab) = (state.data, state.tab);
     let line = if state.detail.modal_open() || state.error().is_some() {
         Line::default()
     } else if state.operation_pending() {
@@ -47,21 +41,19 @@ fn pr_action_hints(state: &DetailView<'_>) -> Vec<Hint> {
         parts.push(Hint::on("a: submit review"));
         parts.push(Hint::on("v: start review"));
     }
-    if let Screen::Detail { pr_id, .. } = state.screen {
-        if !state.store.capabilities.merge_strategies.is_empty() {
-            parts.push(match state.merge_blocked_reason(pr_id) {
-                None => Hint::on("m: merge"),
-                Some(reason) => Hint::off(format!("m: merge ({reason})")),
-            });
-        }
-        if state.pr_is_declined(pr_id) && state.store.capabilities.supports(Feature::ReopenPr) {
-            parts.push(Hint::on("x: reopen"));
-        } else if state.store.capabilities.supports(Feature::ClosePr) {
-            parts.push(match state.decline_blocked_reason(pr_id) {
-                None => Hint::on("x: decline"),
-                Some(reason) => Hint::off(format!("x: decline ({reason})")),
-            });
-        }
+    if !state.store.capabilities.merge_strategies.is_empty() {
+        parts.push(match state.merge_blocked_reason() {
+            None => Hint::on("m: merge"),
+            Some(reason) => Hint::off(format!("m: merge ({reason})")),
+        });
+    }
+    if state.pr_is_declined() && state.store.capabilities.supports(Feature::ReopenPr) {
+        parts.push(Hint::on("x: reopen"));
+    } else if state.store.capabilities.supports(Feature::ClosePr) {
+        parts.push(match state.decline_blocked_reason() {
+            None => Hint::on("x: decline"),
+            Some(reason) => Hint::off(format!("x: decline ({reason})")),
+        });
     }
     parts
 }
@@ -139,12 +131,8 @@ fn footer_actions(state: &DetailView<'_>, tab: DetailTab) -> Vec<Hint> {
     {
         let view = state.detail.active_diff_view();
         if view.focus == DiffFocus::Tree {
-            let data = match state.screen {
-                Screen::Detail { pr_id, .. } => state.store.cache.details.get(&pr_id),
-                Screen::List => None,
-            };
             let rows = crate::tui::components::diff_viewer::file_tree::build_visible_rows(
-                tree_files(state, data),
+                tree_files(state, state.data),
                 &view.collapsed,
                 &view.tree_search.query,
             );

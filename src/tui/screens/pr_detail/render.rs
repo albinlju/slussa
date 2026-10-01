@@ -1,7 +1,6 @@
 use super::{dialogs, footer, header};
 use crate::{
     app::{
-        navigation::Screen,
         reviews::{PendingComment, PendingReview},
         store::{LoadState, PrData},
     },
@@ -178,16 +177,7 @@ pub(super) fn render(
     area: Rect,
     ctx: &DetailContext<'_>,
 ) {
-    let Screen::Detail { pr_id, tab } = ctx.screen else {
-        return;
-    };
-
-    let LoadState::Loaded(prs) = &ctx.store.cache.prs else {
-        return;
-    };
-    let Some(pr) = prs.iter().find(|p| p.id == pr_id) else {
-        return;
-    };
+    let (pr_id, tab, pr, pr_data) = (ctx.pr_id, ctx.tab, ctx.pr, ctx.data);
 
     let theme = theme::current();
     let [main_area, footer_area] = layout::split(
@@ -213,7 +203,6 @@ pub(super) fn render(
         ],
     );
 
-    let pr_data = ctx.store.cache.details.get(&pr.id);
     header::render(
         frame,
         pr,
@@ -234,13 +223,8 @@ pub(super) fn render(
         tab,
         content_area,
     );
-    let state = DetailView {
-        detail: ui,
-        store: ctx.store,
-        screen: ctx.screen,
-        refreshing: ctx.refreshing,
-    };
-    footer::render(frame, &state, pr_data, tab, footer_area);
+    let state = DetailView::new(ui, ctx);
+    footer::render(frame, &state, footer_area);
 
     let review_ctx = dialogs::review::ReviewContext {
         options: state.review_context().options,

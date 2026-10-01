@@ -65,13 +65,8 @@ impl PrDetailScreen {
         }
     }
 
-    pub(super) const fn view<'a>(&'a self, ctx: &'a DetailContext<'a>) -> DetailView<'a> {
-        DetailView {
-            detail: self,
-            store: ctx.store,
-            screen: ctx.screen,
-            refreshing: ctx.refreshing,
-        }
+    pub(super) const fn view<'a>(&'a self, ctx: &DetailContext<'a>) -> DetailView<'a> {
+        DetailView::new(self, ctx)
     }
 
     fn open_draft(&mut self, target: Option<CommentTarget>) {

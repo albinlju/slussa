@@ -3,95 +3,109 @@ use crate::{
     app::{
         navigation::Screen,
         reviews::CommentTarget,
-        store::{LoadState, Store},
+        store::{LoadState, PrData, Store},
     },
     domain::{
         comment::Comment,
-        pr::{MergeStatus, Mergeability, PrStatus},
+        pr::{MergeStatus, Mergeability, PrStatus, PullRequest},
         review::ReviewVerdict,
     },
     tui::{components::diff_viewer::DiffFocus, screens::pr_detail::tabs::DetailTab},
 };
 
+/// What the PR screen works from: the PR it shows, already looked up, with its
+/// tab and what has been read for it. `new` is the only way to make one, so
+/// nothing on the screen asks again whether there is a PR.
+#[derive(Clone, Copy)]
 pub struct DetailContext<'a> {
     pub store: &'a Store,
-    pub screen: Screen,
+    pub pr_id: u64,
+    pub tab: DetailTab,
+    pub pr: &'a PullRequest,
+    pub data: Option<&'a PrData>,
     pub refreshing: bool,
 }
+
+impl<'a> DetailContext<'a> {
+    /// `None` when the PR is not in the list. The list keeps the PR that is
+    /// open (`App::adopt_group`), so that means there is nothing to show.
+    pub fn new(store: &'a Store, pr_id: u64, tab: DetailTab) -> Option<Self> {
+        let pr = store.cache.prs.loaded()?.iter().find(|pr| pr.id == pr_id)?;
+        Some(Self {
+            store,
+            pr_id,
+            tab,
+            pr,
+            data: store.cache.details.get(&pr_id),
+            refreshing: store.refreshing(Screen::Detail { pr_id, tab }),
+        })
+    }
+}
+
+/// The screen's own state together with its context: what the read-only
+/// questions of key handling, the footer and rendering are asked of.
 pub struct DetailView<'a> {
     pub detail: &'a PrDetailScreen,
     pub store: &'a Store,
-    pub screen: Screen,
+    pub pr_id: u64,
+    pub tab: DetailTab,
+    pub pr: &'a PullRequest,
+    pub data: Option<&'a PrData>,
     pub refreshing: bool,
 }
+
 impl<'a> DetailView<'a> {
+    pub const fn new(detail: &'a PrDetailScreen, ctx: &DetailContext<'a>) -> Self {
+        Self {
+            detail,
+            store: ctx.store,
+            pr_id: ctx.pr_id,
+            tab: ctx.tab,
+            pr: ctx.pr,
+            data: ctx.data,
+            refreshing: ctx.refreshing,
+        }
+    }
+
     pub fn review_context(&self) -> super::dialogs::review::ReviewContext<'a> {
-        let pr_id = match self.screen {
-            Screen::Detail { pr_id, .. } => pr_id,
-            Screen::List => 0,
-        };
         super::dialogs::review::ReviewContext {
             options: self
                 .review_verdicts()
                 .into_iter()
-                .map(|v| (v, self.verdict_disabled_reason(v, pr_id)))
+                .map(|v| (v, self.verdict_disabled_reason(v)))
                 .collect(),
             pending: self.pending_review(),
         }
     }
 
     pub fn pending_review(&self) -> Option<&'a crate::app::reviews::PendingReview> {
-        let Screen::Detail { pr_id, .. } = self.screen else {
-            return None;
-        };
-        self.store.reviews.get(&pr_id)
+        self.store.reviews.get(&self.pr_id)
     }
 
-    pub fn viewing_own_pr(&self, pr_id: u64) -> bool {
-        let LoadState::Loaded(prs) = &self.store.cache.prs else {
-            return false;
-        };
-        prs.iter()
-            .any(|pr| pr.id == pr_id && self.store.current_user.is(&pr.author.username))
-    }
-
-    fn pr_status(&self, pr_id: u64) -> Option<PrStatus> {
-        let LoadState::Loaded(prs) = &self.store.cache.prs else {
-            return None;
-        };
-        prs.iter()
-            .find(|pr| pr.id == pr_id)
-            .map(|pr| pr.status.clone())
+    pub fn viewing_own_pr(&self) -> bool {
+        self.store.current_user.is(&self.pr.author.username)
     }
 
     /// Whether the PR is still actionable (open/draft, not already merged or
     /// declined). Gates both `m` (merge) and `x` (decline).
-    pub fn pr_is_open(&self, pr_id: u64) -> bool {
-        matches!(
-            self.pr_status(pr_id),
-            Some(PrStatus::Open | PrStatus::Draft)
-        )
+    pub const fn pr_is_open(&self) -> bool {
+        matches!(self.pr.status, PrStatus::Open | PrStatus::Draft)
     }
 
     /// Why merging is unavailable, for the dimmed footer hint — `None` when it's
     /// offered. Unknown/loading mergeability still allows an attempt (server decides).
-    pub fn merge_blocked_reason(&self, pr_id: u64) -> Option<&'static str> {
-        match self.pr_status(pr_id) {
-            Some(PrStatus::Merged) => return Some("merged"),
-            Some(PrStatus::Declined) => return Some("declined"),
-            Some(PrStatus::Open | PrStatus::Draft) => {}
-            None => return Some("unavailable"),
+    pub fn merge_blocked_reason(&self) -> Option<&'static str> {
+        match self.pr.status {
+            PrStatus::Merged => return Some("merged"),
+            PrStatus::Declined => return Some("declined"),
+            PrStatus::Open | PrStatus::Draft => {}
         }
         (self
             .store
             .capabilities
             .supports(crate::domain::capabilities::Feature::Mergeability)
             && matches!(
-                self.store
-                    .cache
-                    .details
-                    .get(&pr_id)
-                    .map(|d| &d.mergeability),
+                self.data.map(|d| &d.mergeability),
                 Some(LoadState::Loaded(MergeStatus {
                     state: Mergeability::Conflicts,
                     ..
@@ -101,46 +115,36 @@ impl<'a> DetailView<'a> {
     }
 
     /// Whether the PR was closed without merging, so `x` reopens it.
-    pub fn pr_is_declined(&self, pr_id: u64) -> bool {
-        matches!(self.pr_status(pr_id), Some(PrStatus::Declined))
+    pub const fn pr_is_declined(&self) -> bool {
+        matches!(self.pr.status, PrStatus::Declined)
     }
 
     /// Why declining is unavailable, for the dimmed footer hint — `None` when open.
-    pub fn decline_blocked_reason(&self, pr_id: u64) -> Option<&'static str> {
-        match self.pr_status(pr_id) {
-            Some(PrStatus::Open | PrStatus::Draft) => None,
-            Some(PrStatus::Merged) => Some("merged"),
-            Some(PrStatus::Declined) => Some("declined"),
-            None => Some("unavailable"),
+    pub const fn decline_blocked_reason(&self) -> Option<&'static str> {
+        match self.pr.status {
+            PrStatus::Open | PrStatus::Draft => None,
+            PrStatus::Merged => Some("merged"),
+            PrStatus::Declined => Some("declined"),
         }
     }
 
     /// Whether to offer the `m` merge action.
-    pub fn can_merge(&self, pr_id: u64) -> bool {
+    pub fn can_merge(&self) -> bool {
         !self.store.capabilities.merge_strategies.is_empty()
-            && self.merge_blocked_reason(pr_id).is_none()
+            && self.merge_blocked_reason().is_none()
     }
 
     /// Why a review verdict can't be submitted on this PR, for dimming it in the
     /// picker — you can't approve / request changes on your own PR (but you *can*
     /// leave a plain comment, which GitHub allows).
-    pub fn verdict_disabled_reason(
-        &self,
-        verdict: ReviewVerdict,
-        pr_id: u64,
-    ) -> Option<&'static str> {
-        (self.viewing_own_pr(pr_id) && !self.store.capabilities.own_pr_verdicts.contains(&verdict))
+    pub fn verdict_disabled_reason(&self, verdict: ReviewVerdict) -> Option<&'static str> {
+        (self.viewing_own_pr() && !self.store.capabilities.own_pr_verdicts.contains(&verdict))
             .then_some("your PR")
     }
 
     /// The loaded comment with `id` in the current PR's activity, if any.
     pub fn find_comment(&self, id: u64, review: bool) -> Option<&'a Comment> {
-        let Screen::Detail { pr_id, .. } = self.screen else {
-            return None;
-        };
-        let LoadState::Loaded(activity) = &self.store.cache.details.get(&pr_id)?.activity else {
-            return None;
-        };
+        let activity = self.data?.activity.loaded()?;
         activity
             .comments
             .iter()
@@ -157,10 +161,7 @@ impl<'a> DetailView<'a> {
 
     /// The thread the cursor is on, for resolve/unresolve (`R`).
     pub const fn focused_thread(&self) -> Option<&'a ThreadRef> {
-        let Screen::Detail { tab, .. } = self.screen else {
-            return None;
-        };
-        match tab {
+        match self.tab {
             DetailTab::Overview => self.detail.overview.timeline.thread.as_ref(),
             DetailTab::Diff => self.detail.active_diff_view().pane_thread.as_ref(),
             DetailTab::Commits if self.detail.commits.open_commit.is_some() => {
@@ -195,10 +196,7 @@ impl<'a> DetailView<'a> {
     /// Target for a brand-new comment (`c`): a top-level PR comment in Overview,
     /// or the focused line in the Diff / commit pane.
     pub fn comment_target(&self) -> Option<CommentTarget> {
-        let Screen::Detail { tab, .. } = self.screen else {
-            return None;
-        };
-        match tab {
+        match self.tab {
             DetailTab::Overview => self
                 .store
                 .capabilities
@@ -222,10 +220,7 @@ impl<'a> DetailView<'a> {
         {
             return None;
         }
-        let Screen::Detail { tab, .. } = self.screen else {
-            return None;
-        };
-        match tab {
+        match self.tab {
             DetailTab::Overview => self
                 .detail
                 .overview
@@ -287,13 +282,10 @@ pub struct ThreadRef {
 
 impl DetailView<'_> {
     pub fn operation_pending(&self) -> bool {
-        matches!(self.screen, Screen::Detail { pr_id, .. } if self.store.operations.contains_key(&pr_id))
+        self.store.operations.contains_key(&self.pr_id)
     }
     pub fn error(&self) -> Option<&str> {
-        let Screen::Detail { pr_id, .. } = self.screen else {
-            return None;
-        };
-        self.store.errors.get(&pr_id).map(String::as_str)
+        self.store.errors.get(&self.pr_id).map(String::as_str)
     }
 }
 
@@ -343,13 +335,7 @@ impl DetailView<'_> {
 }
 
 impl DetailView<'_> {
-    pub fn has_pr_link(&self) -> bool {
-        let Screen::Detail { pr_id, .. } = self.screen else {
-            return false;
-        };
-        let LoadState::Loaded(prs) = &self.store.cache.prs else {
-            return false;
-        };
-        prs.iter().any(|pr| pr.id == pr_id && pr.url.is_some())
+    pub const fn has_pr_link(&self) -> bool {
+        self.pr.url.is_some()
     }
 }
