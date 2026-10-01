@@ -164,3 +164,75 @@ async fn a_refused_reopen_is_reported_on_its_pr_without_a_refetch() {
     );
     assert!(app.state.store.operations.is_empty());
 }
+
+/// A line of a diff whose revision was not read when the comment was made.
+fn anchor_without_a_revision() -> crate::app::reviews::CommentAnchor {
+    crate::app::reviews::CommentAnchor {
+        revision: None,
+        path: "src/lib.rs".into(),
+        line: 3,
+        removed: false,
+    }
+}
+
+#[tokio::test]
+async fn a_line_comment_on_an_unknown_revision_is_refused_before_anything_is_sent() {
+    let gh = FakeGh::new().on("api", "{}").install();
+    let mut app = app();
+
+    app.apply(Action::Effect(Effect::Command {
+        pr_id: 1,
+        command: Command::SubmitComment {
+            target: CommentTarget::Line(anchor_without_a_revision()),
+            text: "note".into(),
+        },
+    }));
+    settle(&mut app).await;
+
+    assert!(gh.calls().is_empty(), "{:?}", gh.calls());
+    let error = &app.state.store.errors[&1];
+    assert!(
+        error.contains("Reload the diff before commenting"),
+        "{error}"
+    );
+    assert!(
+        app.state.store.uncertain_submissions.is_empty(),
+        "nothing left the machine, so there is nothing to check before retrying"
+    );
+}
+
+#[tokio::test]
+async fn a_review_with_a_comment_on_an_unknown_revision_is_refused_whole() {
+    use crate::app::reviews::{PendingComment, PendingReview};
+    let gh = FakeGh::new().on("api", "{}").install();
+    let mut app = app();
+    app.state.store.reviews.insert(
+        1,
+        PendingReview {
+            submitted_summary: None,
+            comments: vec![PendingComment {
+                anchor: anchor_without_a_revision(),
+                text: "queued".into(),
+            }],
+        },
+    );
+
+    app.apply(Action::Effect(Effect::Command {
+        pr_id: 1,
+        command: Command::SubmitReview {
+            verdict: crate::domain::review::ReviewVerdict::Comment,
+            body: "summary".into(),
+        },
+    }));
+    settle(&mut app).await;
+
+    assert!(gh.calls().is_empty(), "{:?}", gh.calls());
+    let error = &app.state.store.errors[&1];
+    assert!(error.contains("recreate comments"), "{error}");
+    assert!(app.state.store.uncertain_submissions.is_empty());
+    assert_eq!(
+        app.state.store.reviews[&1].comments.len(),
+        1,
+        "the queued comment is kept"
+    );
+}

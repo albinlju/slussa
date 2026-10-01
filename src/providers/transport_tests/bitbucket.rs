@@ -232,8 +232,8 @@ fn bitbucket_review_posts_comments_then_summary_then_the_verdict() {
         Route::put(&format!("{PR_9}/participants/me"), 200, "{}"),
     ]);
     let comments = [
-        review_comment(Some("abc"), 3, false),
-        review_comment(Some("abc"), 9, true),
+        review_comment("abc", 3, false),
+        review_comment("abc", 9, true),
     ];
     bitbucket(&server)
         .submit_full_review(9, ReviewVerdict::Approve, "ship it", "me", &comments)
@@ -271,9 +271,9 @@ fn bitbucket_review_reports_how_many_comments_landed_before_a_failure() {
         ),
     ]);
     let comments = [
-        review_comment(Some("abc"), 3, false),
-        review_comment(Some("abc"), 4, false),
-        review_comment(Some("abc"), 5, false),
+        review_comment("abc", 3, false),
+        review_comment("abc", 4, false),
+        review_comment("abc", 5, false),
     ];
     let error = bitbucket(&server)
         .submit_full_review(9, ReviewVerdict::Approve, "ship it", "me", &comments)

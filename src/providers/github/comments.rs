@@ -1,4 +1,8 @@
-use crate::domain::comment::{Comment, CommentKey, CommentKind};
+use crate::domain::{
+    comment::{Comment, CommentKey, CommentKind},
+    diff::LineRef,
+    review::ReviewComment,
+};
 use crate::providers::error::FetchError;
 use crate::providers::github::{COMMENT_FIELDS, GqlComment, map_gql_comment};
 
@@ -14,16 +18,23 @@ pub fn fetch_comments(pr_number: u64) -> Result<Vec<Comment>, FetchError> {
         .collect())
 }
 
-pub fn post_comment(
-    pr_number: u64,
-    path: &str,
-    line: usize,
-    removed: bool,
-    body: &str,
-    revision: &crate::domain::diff::DiffRevision,
-) -> Result<(), FetchError> {
+/// GitHub's name for the side of the diff a line is on.
+pub(super) const fn side(line: LineRef) -> &'static str {
+    match line {
+        LineRef::Old(_) => "LEFT",
+        LineRef::New(_) => "RIGHT",
+    }
+}
+
+pub fn post_comment(pr_number: u64, comment: &ReviewComment) -> Result<(), FetchError> {
+    let ReviewComment {
+        revision,
+        path,
+        line,
+        body,
+    } = comment;
     let commit_id = &revision.head;
-    let side = if removed { "LEFT" } else { "RIGHT" };
+    let (side, line) = (side(*line), line.number());
     super::cli::run_gh(&[
         "api",
         "--method",

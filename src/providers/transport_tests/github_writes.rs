@@ -42,8 +42,8 @@ fn github_pr_comment_passes_the_body_as_a_literal_argument() {
 fn github_batched_review_is_one_call_with_the_comments_on_stdin() {
     let installed = FakeGh::new().on("api", "{}").install();
     let comments = [
-        review_comment(Some("abc"), 3, false),
-        review_comment(Some("abc"), 9, true),
+        review_comment("abc", 3, false),
+        review_comment("abc", 9, true),
     ];
     Provider::GitHub
         .submit_full_review(
@@ -78,21 +78,17 @@ fn github_batched_review_is_one_call_with_the_comments_on_stdin() {
 fn github_batched_review_refuses_unsafe_batches_without_calling_gh() {
     let installed = FakeGh::new().on("api", "{}").install();
     let mixed = [
-        review_comment(Some("abc"), 1, false),
-        review_comment(Some("def"), 2, false),
+        review_comment("abc", 1, false),
+        review_comment("def", 2, false),
     ];
-    let unknown = [review_comment(None, 1, false)];
-    for comments in [&mixed[..], &unknown[..]] {
-        let result =
-            Provider::GitHub.submit_full_review(7, ReviewVerdict::Comment, "", "me", comments);
-        assert!(
-            matches!(
-                result,
-                Err(ReviewError::Failed(FetchError::InvalidInput(_)))
-            ),
-            "{result:?}"
-        );
-    }
+    let result = Provider::GitHub.submit_full_review(7, ReviewVerdict::Comment, "", "me", &mixed);
+    assert!(
+        matches!(
+            result,
+            Err(ReviewError::Failed(FetchError::InvalidInput(_)))
+        ),
+        "{result:?}"
+    );
     assert!(installed.calls().is_empty(), "{:?}", installed.calls());
 }
 

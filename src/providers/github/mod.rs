@@ -164,15 +164,15 @@ pub fn submit_full_review(
     body: &str,
     comments: &[ReviewComment],
 ) -> Result<(), FetchError> {
-    if comments.is_empty() {
+    let Some(first) = comments.first() else {
         return submit_review(pr_number, verdict, body);
-    }
+    };
     let Some(event) = review_event(verdict) else {
         return Err(FetchError::Unsupported(
             "This review verdict is not supported by GitHub.".into(),
         ));
     };
-    let payload = review_payload(event, body, comments)?;
+    let payload = review_payload(event, body, &first.revision, comments)?;
     let endpoint = format!("repos/{{owner}}/{{repo}}/pulls/{pr_number}/reviews");
     let input = serde_json::to_vec(&payload).map_err(|e| FetchError::ParseFailed(e.into()))?;
     cli::run_gh_stdin(
@@ -182,23 +182,14 @@ pub fn submit_full_review(
     Ok(())
 }
 
+/// A review on `revision`, which every comment in it has to be on.
 fn review_payload(
     event: &str,
     body: &str,
+    revision: &crate::domain::diff::DiffRevision,
     comments: &[ReviewComment],
 ) -> Result<serde_json::Value, FetchError> {
-    let revision = comments
-        .first()
-        .and_then(|c| c.revision.as_ref())
-        .ok_or_else(|| {
-            FetchError::InvalidInput(
-                "Reload the diff and recreate comments with an unknown revision.".into(),
-            )
-        })?;
-    if comments
-        .iter()
-        .any(|c| c.revision.as_ref() != Some(revision))
-    {
+    if comments.iter().any(|c| &c.revision != revision) {
         return Err(FetchError::InvalidInput("A review must contain comments from one diff revision. Submit comments on different commits separately.".into()));
     }
     let commit_id = &revision.head;
@@ -207,8 +198,8 @@ fn review_payload(
         .map(|c| {
             serde_json::json!({
                 "path": c.path,
-                "line": c.line,
-                "side": if c.removed { "LEFT" } else { "RIGHT" },
+                "line": c.line.number(),
+                "side": comments::side(c.line),
                 "body": c.body,
             })
         })
@@ -347,22 +338,28 @@ mod revision_tests {
     #[test]
     fn review_uses_displayed_revision_and_rejects_mixed_revisions() {
         let first = ReviewComment {
-            revision: Some(crate::domain::diff::DiffRevision {
+            revision: crate::domain::diff::DiffRevision {
                 head: "reviewed-sha".into(),
                 base: None,
                 commit: true,
-            }),
+            },
             path: "file.rs".into(),
-            line: 7,
-            removed: true,
+            line: crate::domain::diff::LineRef::Old(7),
             body: "comment".into(),
         };
-        let payload = review_payload("COMMENT", "summary", std::slice::from_ref(&first)).unwrap();
+        let revision = first.revision.clone();
+        let payload = review_payload(
+            "COMMENT",
+            "summary",
+            &revision,
+            std::slice::from_ref(&first),
+        )
+        .unwrap();
         assert_eq!(payload["commit_id"], "reviewed-sha");
         assert_eq!(payload["comments"][0]["side"], "LEFT");
         let mut other = first.clone();
-        other.revision.as_mut().unwrap().head = "new-sha".into();
-        assert!(review_payload("COMMENT", "summary", &[first, other]).is_err());
+        other.revision.head = "new-sha".into();
+        assert!(review_payload("COMMENT", "summary", &revision, &[first, other]).is_err());
     }
 }
 

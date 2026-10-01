@@ -41,16 +41,32 @@ impl ReviewVerdict {
     }
 }
 
-/// One inline (diff-line) comment published as part of a batched review
-/// submission — see `Provider::submit_full_review`.
+/// One comment on a line, as a provider posts it. Its revision is known: an
+/// anchor made on a diff whose revision was not read cannot become one, so no
+/// provider has to ask.
 #[derive(Debug, Clone)]
 pub struct ReviewComment {
-    pub revision: Option<super::diff::DiffRevision>,
+    pub revision: super::diff::DiffRevision,
     pub path: String,
-    pub line: usize,
-    /// The line sits on the removed (old) side of the diff.
-    pub removed: bool,
+    pub line: super::diff::LineRef,
     pub body: String,
+}
+
+impl ReviewComment {
+    /// None when the anchor was made on a diff with an unknown revision.
+    pub fn new(anchor: CommentAnchor, body: String) -> Option<Self> {
+        let line = if anchor.removed {
+            super::diff::LineRef::Old(anchor.line)
+        } else {
+            super::diff::LineRef::New(anchor.line)
+        };
+        Some(Self {
+            revision: anchor.revision?,
+            path: anchor.path,
+            line,
+            body,
+        })
+    }
 }
 
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]

@@ -76,16 +76,9 @@ pub fn submit_full_review(
     user: &str,
     comments: &[ReviewComment],
 ) -> Result<(), ReviewError> {
-    let with_revisions: Vec<_> = comments
-        .iter()
-        .map(|c| c.revision.as_ref().map(|revision| (c, revision)))
-        .collect::<Option<_>>()
-        .ok_or_else(|| {
-            FetchError::InvalidInput("Comment revision is unknown; reload the diff.".into())
-        })?;
     publish_steps(
-        &with_revisions,
-        |&(c, revision)| post_comment(config, pr_id, &c.path, c.line, c.removed, &c.body, revision),
+        comments,
+        |comment| post_comment(config, pr_id, comment),
         || submit_review(config, pr_id, verdict, body, user),
     )
 }

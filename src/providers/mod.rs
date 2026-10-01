@@ -177,35 +177,10 @@ impl Provider {
         }
     }
 
-    pub fn post_comment(
-        &self,
-        pr_id: u64,
-        anchor: &crate::domain::review::CommentAnchor,
-        body: &str,
-    ) -> Result<(), FetchError> {
-        let revision = anchor.revision.as_ref().ok_or_else(|| {
-            FetchError::InvalidInput(
-                "Reload the diff before commenting: its revision is unknown.".into(),
-            )
-        })?;
+    pub fn post_comment(&self, pr_id: u64, comment: &ReviewComment) -> Result<(), FetchError> {
         match self {
-            Self::GitHub => github::post_comment(
-                pr_id,
-                &anchor.path,
-                anchor.line,
-                anchor.removed,
-                body,
-                revision,
-            ),
-            Self::BitbucketDc(c) => bitbucket_dc::post_comment(
-                c,
-                pr_id,
-                &anchor.path,
-                anchor.line,
-                anchor.removed,
-                body,
-                revision,
-            ),
+            Self::GitHub => github::post_comment(pr_id, comment),
+            Self::BitbucketDc(c) => bitbucket_dc::post_comment(c, pr_id, comment),
         }
     }
 

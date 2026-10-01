@@ -5,7 +5,7 @@ use crate::{
     app::{
         App,
         action::{Read, TaskResult, WriteError},
-        reviews::{CommentTarget, PendingComment},
+        reviews::{CommentAnchor, CommentTarget, PendingComment},
         store::{FetchKey, FetchTicket, OpenChain, WriteTicket},
     },
     domain::{
@@ -249,7 +249,14 @@ impl App {
         let provider = self.provider.clone();
         let pr_id = ticket.pr_id();
         self.spawn_write(ticket, move || match target {
-            CommentTarget::Line(a) => provider.post_comment(pr_id, &a, &text),
+            CommentTarget::Line(anchor) => provider.post_comment(
+                pr_id,
+                &postable(
+                    anchor,
+                    text,
+                    "Reload the diff before commenting: its revision is unknown.",
+                )?,
+            ),
             CommentTarget::Pr => provider.post_pr_comment(pr_id, &text),
             CommentTarget::Reply(parent) => provider.reply_comment(pr_id, parent, &text),
             CommentTarget::Edit(comment) => provider.edit_comment(pr_id, comment, &text),
@@ -279,19 +286,14 @@ impl App {
     ) {
         let provider = self.provider.clone();
         let pr_id = ticket.pr_id();
-        let review_comments: Vec<ReviewComment> = comments
-            .into_iter()
-            .map(|c| ReviewComment {
-                revision: c.anchor.revision,
-                path: c.anchor.path,
-                line: c.anchor.line,
-                removed: c.anchor.removed,
-                body: c.text,
-            })
-            .collect();
         self.spawn_write(ticket, move || {
+            let hint = "Reload the diff and recreate comments with an unknown revision.";
+            let comments = comments
+                .into_iter()
+                .map(|comment| postable(comment.anchor, comment.text, hint))
+                .collect::<Result<Vec<_>, _>>()?;
             provider
-                .submit_full_review(pr_id, verdict, &body, &user, &review_comments)
+                .submit_full_review(pr_id, verdict, &body, &user, &comments)
                 .map_err(|error| WriteError::from_review(error, body))
         });
     }
@@ -308,6 +310,12 @@ impl App {
             provider.set_thread_resolved(pr_id, &thread, resolved)
         });
     }
+}
+
+/// The one place an anchor becomes something a provider can post. Nothing is
+/// sent for a comment whose diff revision is unknown; `hint` says what to do.
+fn postable(anchor: CommentAnchor, body: String, hint: &str) -> Result<ReviewComment, FetchError> {
+    ReviewComment::new(anchor, body).ok_or_else(|| FetchError::InvalidInput(hint.into()))
 }
 
 impl App {

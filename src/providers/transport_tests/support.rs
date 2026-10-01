@@ -6,7 +6,7 @@ pub(super) use crate::providers::{
 };
 pub(super) use crate::{
     domain::{
-        diff::DiffRevision,
+        diff::{DiffRevision, LineRef},
         pr::{MergeStatus, MergeStrategy, Mergeability, PrGroup, PrStatus},
         review::{ReviewComment, ReviewVerdict, ReviewerState},
     },
@@ -22,12 +22,15 @@ pub(super) fn revision(head: &str) -> DiffRevision {
     }
 }
 
-pub(super) fn review_comment(head: Option<&str>, line: usize, removed: bool) -> ReviewComment {
+pub(super) fn review_comment(head: &str, line: usize, removed: bool) -> ReviewComment {
     ReviewComment {
-        revision: head.map(revision),
+        revision: revision(head),
         path: "src/lib.rs".into(),
-        line,
-        removed,
+        line: if removed {
+            LineRef::Old(line)
+        } else {
+            LineRef::New(line)
+        },
         body: format!("note on line {line}"),
     }
 }
