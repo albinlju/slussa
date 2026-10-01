@@ -5,8 +5,9 @@ use crate::{
         navigation::Screen,
         store::{LoadState, Notice, OpenChain, Operation, PrData, WriteTicket},
     },
-    domain::pr::{PrBatch, PrGroup},
+    domain::pr::{PrBatch, PrGroup, PullRequest},
     providers::FetchError,
+    tui::screens::pr_list::ListContext,
 };
 
 impl App {
@@ -139,18 +140,13 @@ impl App {
         result: Result<PrBatch, FetchError>,
     ) {
         let older = continuation && group.is_paged();
-        let rows = |app: &Self| {
-            app.state
-                .ui
-                .list
-                .filtered_prs(&app.state.store.cache.prs, &app.state.store.current_user)
-                .get(app.state.ui.list.selected)
-                .map(|pr| pr.id)
-        };
-        let selected_id = rows(self);
+        // The highlighted PR keeps the highlight wherever its row ends up.
+        let selected_id = self
+            .list_rows()
+            .get(self.state.ui.list.selected)
+            .map(|pr| pr.id);
         if group == PrGroup::Open && result.is_err() {
             self.state.store.open_chain = OpenChain::Idle;
-            self.state.ui.list.hold_order = false;
         }
         match result {
             Ok(batch) if group == PrGroup::Open => self.adopt_open_page(continuation, batch),
@@ -181,12 +177,8 @@ impl App {
             // `refresh_failures` above.
             Err(_) => {}
         }
-        let filtered = self
-            .state
-            .ui
-            .list
-            .filtered_prs(&self.state.store.cache.prs, &self.state.store.current_user);
-        self.state.ui.list.selected = selected_id
+        let filtered = self.list_rows();
+        let selected = selected_id
             .and_then(|id| filtered.iter().position(|pr| pr.id == id))
             .unwrap_or_else(|| {
                 self.state
@@ -195,6 +187,14 @@ impl App {
                     .selected
                     .min(filtered.len().saturating_sub(1))
             });
+        self.state.ui.list.selected = selected;
+    }
+
+    /// The list's rows as it shows them now.
+    fn list_rows(&self) -> Vec<&PullRequest> {
+        let state = &self.state;
+        let ctx = ListContext::from_store(&state.store, state.ui.list.filter, state.screen);
+        state.ui.list.filtered_prs(&ctx)
     }
 
     /// Take a group's read into the list. A first read replaces the group's
@@ -255,7 +255,6 @@ impl App {
             .more
             .clone_from(&more);
         if let Some(after) = next {
-            self.state.ui.list.hold_order = matches!(chain, OpenChain::Appending);
             self.state.store.open_chain = chain;
             self.spawn_load_prs(PrGroup::Open, Some(after));
             return;
@@ -263,7 +262,6 @@ impl App {
         if let OpenChain::Collecting(held) = chain {
             self.adopt_group(PrGroup::Open, false, PrBatch { prs: held, more });
         }
-        self.state.ui.list.hold_order = false;
     }
 
     fn adopt_group(&mut self, group: PrGroup, older: bool, batch: PrBatch) {

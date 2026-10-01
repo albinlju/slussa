@@ -9,13 +9,12 @@ fn navigation_and_search_keep_the_same_keyboard_flow() {
     for c in "missing".chars() {
         press(&mut app, KeyCode::Char(c));
     }
-    assert!(
-        app.state
-            .ui
-            .list
-            .filtered_prs(&app.state.store.cache.prs, &app.state.store.current_user)
-            .is_empty()
+    let ctx = tui::screens::pr_list::ListContext::from_store(
+        &app.state.store,
+        app.state.ui.list.filter,
+        app.state.screen,
     );
+    assert!(app.state.ui.list.filtered_prs(&ctx).is_empty());
     press(&mut app, KeyCode::Esc);
     press(&mut app, KeyCode::Enter);
     assert_eq!(

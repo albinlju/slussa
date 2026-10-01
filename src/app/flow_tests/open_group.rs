@@ -2,6 +2,12 @@
 
 use super::support::*;
 
+/// Whether pages of open PRs are still being appended, which holds the rows
+/// in the order they arrive.
+fn arriving(app: &App) -> bool {
+    matches!(app.state.store.open_chain, OpenChain::Appending)
+}
+
 /// Take exactly one provider result and apply it.
 async fn apply_next(app: &mut App) {
     let action = tokio::time::timeout(Duration::from_secs(10), app.results_rx.recv())
@@ -208,28 +214,22 @@ async fn the_open_group_stops_at_the_limit_and_l_reads_the_next_batch() {
 
     app.spawn_load_prs(PrGroup::Open, None);
     apply_next(&mut app).await;
-    assert!(
-        app.state.ui.list.hold_order,
-        "the order is held while reading"
-    );
+    assert!(arriving(&app), "the order is held while reading");
     settle(&mut app).await;
 
     assert_eq!(loaded_ids(&app).len(), 90, "three pages, then it stops");
     assert_eq!(list_reads(&gh.calls()), (3, 0, 0), "{:?}", gh.calls());
     assert_eq!(open_cursor(&app).as_deref(), Some("p3"), "L continues here");
-    assert!(
-        !app.state.ui.list.hold_order,
-        "the order applies once it ends"
-    );
+    assert!(!arriving(&app), "the order applies once it ends");
     assert!(matches!(app.state.store.open_chain, OpenChain::Idle));
 
     app.apply(Action::List(ListAction::LoadOlder));
-    assert!(app.state.ui.list.hold_order);
+    assert!(arriving(&app));
     settle(&mut app).await;
 
     assert_eq!(loaded_ids(&app).len(), 120);
     assert_eq!(open_cursor(&app), None, "nothing is left");
-    assert!(!app.state.ui.list.hold_order);
+    assert!(!arriving(&app));
     assert_eq!(list_reads(&gh.calls()), (4, 0, 0), "{:?}", gh.calls());
 }
 
@@ -277,7 +277,7 @@ async fn a_failed_continuation_keeps_the_list_and_l_retries_from_there() {
     app.spawn_load_prs(PrGroup::Open, None);
     settle(&mut app).await;
     assert_eq!(loaded_ids(&app).len(), 30);
-    assert!(!app.state.ui.list.hold_order);
+    assert!(!arriving(&app));
     assert_eq!(open_cursor(&app).as_deref(), Some("p1"));
 
     app.apply(Action::List(ListAction::LoadOlder));

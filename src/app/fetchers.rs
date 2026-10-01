@@ -127,7 +127,6 @@ impl App {
         }
         store.open_extra += 1;
         store.open_chain = OpenChain::Appending;
-        self.state.ui.list.hold_order = true;
         self.spawn_load_prs(PrGroup::Open, Some(after));
     }
 

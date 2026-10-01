@@ -47,7 +47,9 @@ fn keyboard_routes_list_diff_commit_and_editor() {
 #[test]
 fn filter_and_confirmation_capture_navigation() {
     let mut state = fixture();
-    state.ui.list.filter_picker_open = true;
+    state.ui.list.overlay = Some(pr_list::ListOverlay::FilterPicker {
+        highlighted: pr_list::StatusFilter::Open,
+    });
     assert!(matches!(
         key(&state, KeyCode::Char('j')),
         Action::List(ListAction::FilterPickerNext)

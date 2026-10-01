@@ -149,7 +149,11 @@ fn normalize_key(mut key: KeyEvent) -> KeyEvent {
 
 fn active_search(state: &AppState) -> Option<(&SearchInput, SearchKind)> {
     match state.screen {
-        Screen::List => (!state.ui.list.filter_picker_open && !state.ui.list.help_open)
+        Screen::List => state
+            .ui
+            .list
+            .overlay
+            .is_none()
             .then_some((&state.ui.list.search, SearchKind::Filter)),
         Screen::Detail { tab, .. } => state.ui.detail.active_search(tab),
     }
@@ -171,7 +175,7 @@ impl Ui {
 
     pub fn modal_open(&self, store: &crate::app::store::Store, screen: Screen) -> bool {
         match screen {
-            Screen::List => self.list.filter_picker_open || self.list.help_open,
+            Screen::List => self.list.overlay.is_some(),
             Screen::Detail { pr_id, .. } => {
                 self.detail.modal_open() || store.errors.contains_key(&pr_id)
             }
@@ -202,7 +206,10 @@ impl Ui {
             }
             Action::HelpScroll(delta) => {
                 let help = match screen {
-                    Screen::List => self.list.help_open.then_some(&mut self.list.help),
+                    Screen::List => match &mut self.list.overlay {
+                        Some(pr_list::ListOverlay::Help(help)) => Some(help),
+                        _ => None,
+                    },
                     Screen::Detail { .. } => match &mut self.detail.overlay {
                         Some(pr_detail::Overlay::Help(help)) => Some(help),
                         _ => None,
@@ -220,7 +227,11 @@ impl Ui {
             Action::Search(action) => {
                 match screen {
                     Screen::List => {
-                        if !self.list.filter_picker_open {
+                        let picking = matches!(
+                            self.list.overlay,
+                            Some(pr_list::ListOverlay::FilterPicker { .. })
+                        );
+                        if !picking {
                             self.list.update_search(action);
                         }
                     }
