@@ -57,10 +57,16 @@ pub fn submit_review(
     );
     let payload = serde_json::json!({ "status": status });
     http::put_json(&config.repo.base_url, &endpoint, &config.pat, &payload).map_err(|source| {
-        ReviewError::Partial {
-            posted_comments: 0,
-            summary_posted: !body.is_empty(),
-            source,
+        // Without a summary the verdict is the only request: its failure is
+        // the whole failure, not part of one.
+        if body.is_empty() {
+            ReviewError::Failed(source)
+        } else {
+            ReviewError::Partial {
+                posted_comments: 0,
+                summary_posted: true,
+                source,
+            }
         }
     })
 }
@@ -99,6 +105,8 @@ fn publish_steps<T>(
     }
     // Every comment arrived, whatever happened to the summary and the verdict.
     finish().map_err(|error| match error {
+        // With no comments before it, nothing arrived in part.
+        ReviewError::Failed(source) if comments.is_empty() => ReviewError::Failed(source),
         ReviewError::Partial {
             summary_posted,
             source,
@@ -274,6 +282,24 @@ mod submission_tests {
             Err(ReviewError::Partial {
                 posted_comments: 2,
                 summary_posted: true,
+                ..
+            })
+        ));
+    }
+
+    #[test]
+    fn a_failure_with_nothing_sent_before_it_is_not_a_partial_one() {
+        let offline = || Err(ReviewError::Failed(FetchError::Network("offline".into())));
+        let none: [u8; 0] = [];
+        let result = publish_steps(&none, |_| Ok(()), offline);
+        assert!(matches!(result, Err(ReviewError::Failed(_))), "{result:?}");
+        // With a comment posted first, the same failure leaves part of it sent.
+        let result = publish_steps(&[1], |_| Ok(()), offline);
+        assert!(matches!(
+            result,
+            Err(ReviewError::Partial {
+                posted_comments: 1,
+                summary_posted: false,
                 ..
             })
         ));

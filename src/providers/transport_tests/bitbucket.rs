@@ -411,3 +411,45 @@ fn bitbucket_token_is_sent_as_a_bearer_and_never_printed() {
     assert!(!printed.contains("secret-token"), "{printed}");
     assert!(printed.contains("redacted"), "{printed}");
 }
+
+#[test]
+fn bitbucket_verdict_alone_that_is_refused_is_a_plain_failure() {
+    let refusal = json!({"errors": [{"message": "You cannot approve your own pull request"}]});
+    let server = MockHttp::start(vec![
+        Route::post(&format!("{PR_9}/comments"), 201, "{}"),
+        Route::put(
+            &format!("{PR_9}/participants/me"),
+            409,
+            &refusal.to_string(),
+        ),
+    ]);
+
+    // No comments and no summary: the verdict is the only request.
+    let error = bitbucket(&server)
+        .submit_full_review(PrId(9), ReviewVerdict::Approve, "", "me", &[])
+        .unwrap_err();
+    match &error {
+        ReviewError::Failed(source) => assert!(
+            !source.may_have_reached_server(),
+            "a stated refusal changed nothing: {source:?}"
+        ),
+        ReviewError::Partial { .. } => panic!("nothing was sent in part: {error:?}"),
+    }
+    assert_eq!(server.requests().len(), 1);
+
+    // With a summary, the summary arrived and the verdict did not.
+    let error = bitbucket(&server)
+        .submit_full_review(PrId(9), ReviewVerdict::Approve, "ship it", "me", &[])
+        .unwrap_err();
+    assert!(
+        matches!(
+            error,
+            ReviewError::Partial {
+                posted_comments: 0,
+                summary_posted: true,
+                ..
+            }
+        ),
+        "{error:?}"
+    );
+}
