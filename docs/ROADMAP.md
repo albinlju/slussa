@@ -246,7 +246,10 @@ rank below the decision path.
   overridden by `SLUSSA_THEME`)*
 - [ ] **No-panic audit** — audit fetch/parse paths so a bad response never
   panics (use `LoadState::Failed` / the popup everywhere instead of
-  `unwrap`/`unreachable!`).
+  `unwrap`/`unreachable!`). *Done for the parse paths:* a GraphQL or REST
+  answer of the wrong shape is a load error (it indexed into the value and
+  could panic), and scroll positions past 65 535 rows are capped instead of
+  wrapping. The four `unreachable!` left go with *Split `Action`*.
 - [ ] **Empty / loading / error states** per view (use `LoadState` everywhere).
 - [ ] **Release** — *released:* 0.1.0 (2026-10-01), then 0.1.1, which is also on
   crates.io (`cargo install slussa --locked`). The repository is public, the
@@ -437,6 +440,12 @@ Kept as one line each; the detail is in git history.
 
 - **Panic audit:** 12 of 16 `expect`/`unreachable!` in non-test code removed;
   four remain and go with *Split `Action`*.
+- **Fixes from the 2026-10 quality review:** drafts are no longer synced to
+  disk on every key typed in the editor; a Bitbucket 403 is shown as the
+  server's refusal and not as a missing login; a failed account lookup at
+  startup says why; diff paths with spaces, quotes or non-ASCII letters are
+  read whole (they were cut at the first space, which also misplaced a comment
+  on such a file); a test build has no `gh` unless a fake is installed.
 - **README** (what it is, providers, install, usage, keys, config, develop) and
   a demo gif recorded against a real repository.
 - **Readable GraphQL:** templates in `providers/github/graphql.rs`, compacted

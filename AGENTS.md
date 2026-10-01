@@ -52,7 +52,8 @@ CI runs all four on Linux and macOS. The toolchain is pinned in
   `docs/ROADMAP.md` when behaviour changes.
 - Add a regression test for observable behaviour, especially when navigation or
   asynchronous state is involved. Tests never call a real provider: use
-  `FakeGh` and `MockHttp` from `src/test_support.rs`. A test that installs
+  `FakeGh` and `MockHttp` from `src/test_support.rs`; a test build has no
+  `gh` at all unless a fake is installed. A test that installs
   `FakeGh` holds a process-wide lock, so never install two in one test without
   dropping the first. Say in the PR when a double stands in for real behaviour
   you could not check.
