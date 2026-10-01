@@ -2,8 +2,11 @@
 //!
 //! A component owns its local state. `handle_key` turns input into an `Action`
 //! and changes nothing. `update` applies a message to local state. `render`
-//! draws and may record layout-derived values such as the viewport size. The
-//! `Context` is borrowed data, never the mutable application. A returned
+//! draws and may record layout-derived values such as the viewport size. What
+//! they are given is borrowed data, never the mutable application: `Input` is
+//! what handling a key or a message needs to know, `View` what drawing needs.
+//! Most components need nothing to handle input (`Input = ()`) and a good deal
+//! to draw, which is why the two are separate types. A returned
 //! `Effect` asks the application for work; `None` means the component handled
 //! it locally. A component cannot hand its own message on to the application:
 //! `Effect` has no variant for one.
@@ -14,15 +17,19 @@
 use crate::app::action::{Action, Effect};
 use ratatui::{Frame, crossterm::event::KeyEvent, layout::Rect};
 
-/// Interactive UI owner. Context is borrowed data, never the mutable application.
-/// Local updates stay here; a returned effect requests application-level work.
+/// Interactive UI owner. What it is given is borrowed data, never the mutable
+/// application. Local updates stay here; a returned effect requests
+/// application-level work.
 pub trait Component {
-    type Context<'a>;
+    /// What handling a key or a message needs to know beyond its own state.
+    type Input<'a>;
+    /// What drawing needs.
+    type View<'a>;
     type Message;
 
-    fn handle_key(&self, key: KeyEvent, context: &Self::Context<'_>) -> Option<Action>;
-    fn update(&mut self, message: Self::Message, context: &Self::Context<'_>) -> Option<Effect>;
-    fn render(&mut self, frame: &mut Frame<'_>, area: Rect, context: &Self::Context<'_>);
+    fn handle_key(&self, key: KeyEvent, input: &Self::Input<'_>) -> Option<Action>;
+    fn update(&mut self, message: Self::Message, input: &Self::Input<'_>) -> Option<Effect>;
+    fn render(&mut self, frame: &mut Frame<'_>, area: Rect, view: &Self::View<'_>);
 }
 
 pub fn step_index(current: usize, delta: i16, len: usize) -> usize {

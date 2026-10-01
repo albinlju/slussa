@@ -209,9 +209,10 @@ impl ReviewDialog {
 }
 
 impl Component for ReviewDialog {
-    type Context<'a> = ReviewContext<'a>;
+    type Input<'a> = ReviewContext<'a>;
+    type View<'a> = ReviewContext<'a>;
     type Message = ReviewAction;
-    fn handle_key(&self, key: KeyEvent, ctx: &Self::Context<'_>) -> Option<Action> {
+    fn handle_key(&self, key: KeyEvent, ctx: &ReviewContext<'_>) -> Option<Action> {
         if key.code == KeyCode::Tab && ctx.pending.is_some_and(|r| !r.comments.is_empty()) {
             return Some(ReviewAction::Preview.into());
         }

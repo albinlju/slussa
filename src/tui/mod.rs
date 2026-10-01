@@ -4,7 +4,7 @@ use crate::{
         navigation::Screen,
         state::AppState,
     },
-    tui::components::search_input::SearchInput,
+    tui::components::search_input::{SearchInput, SearchKind},
 };
 use component::Component;
 use ratatui::{
@@ -110,14 +110,8 @@ pub fn key_to_action(state: &AppState, key: KeyEvent) -> Option<Action> {
         return state.ui.detail.handle_key(key, ctx);
     }
 
-    if let Some((search, highlight)) = active_search(state)
-        && let Some(action) = search.handle_key(
-            key,
-            &components::search_input::SearchContext {
-                highlight,
-                matches: 0,
-            },
-        )
+    if let Some((search, kind)) = active_search(state)
+        && let Some(action) = search.handle_key(key, &kind)
     {
         return Some(action);
     }
@@ -153,10 +147,10 @@ fn normalize_key(mut key: KeyEvent) -> KeyEvent {
     key
 }
 
-fn active_search(state: &AppState) -> Option<(&SearchInput, bool)> {
+fn active_search(state: &AppState) -> Option<(&SearchInput, SearchKind)> {
     match state.screen {
         Screen::List => (!state.ui.list.filter_picker_open && !state.ui.list.help_open)
-            .then_some((&state.ui.list.search, false)),
+            .then_some((&state.ui.list.search, SearchKind::Filter)),
         Screen::Detail { tab, .. } => state.ui.detail.active_search(tab),
     }
 }
@@ -212,7 +206,7 @@ impl Ui {
                     Screen::Detail { .. } => (self.detail.help_open, &mut self.detail.help),
                 };
                 if open {
-                    help.update(delta, &&[][..]);
+                    help.update(delta, &());
                 }
                 None
             }

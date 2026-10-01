@@ -11,11 +11,11 @@ use crate::{
     },
     tui::{
         component::Component,
-        components::diff_viewer::DiffContext,
+        components::{comment_editor::EditorView, diff_viewer::DiffContext},
         layout,
         screens::pr_detail::{
             DetailContext, DetailView, PrDetailScreen,
-            tabs::{DetailTab, commits},
+            tabs::{DetailTab, commits, description::DescriptionView, overview::OverviewContext},
         },
         theme,
     },
@@ -30,10 +30,9 @@ use ratatui::{
 
 fn render_tabs_and_content(
     frame: &mut Frame<'_>,
-    overview: &super::tabs::overview::OverviewContext<'_>,
+    ctx: &DetailContext<'_>,
     ui: &mut PrDetailScreen,
     pending: &[PendingComment],
-    tab: DetailTab,
     area: Rect,
 ) {
     let theme = theme::current();
@@ -57,11 +56,11 @@ fn render_tabs_and_content(
     let tabs_inner = tabs_block.inner(tabs_area);
     frame.render_widget(tabs_block, tabs_area);
     frame.render_widget(
-        Paragraph::new(tab_bar(tab, overview.capabilities, tabs_inner.width)),
+        Paragraph::new(tab_bar(ctx.tab, &ctx.store.capabilities, tabs_inner.width)),
         tabs_inner,
     );
 
-    render_content(frame, overview, ui, pending, tab, content_area);
+    render_content(frame, ctx, ui, pending, content_area);
 }
 
 fn tab_bar(tab: DetailTab, caps: &Capabilities, width: u16) -> Line<'static> {
@@ -95,14 +94,12 @@ fn tab_bar(tab: DetailTab, caps: &Capabilities, width: u16) -> Line<'static> {
 
 fn render_content(
     frame: &mut Frame<'_>,
-    overview: &super::tabs::overview::OverviewContext<'_>,
+    ctx: &DetailContext<'_>,
     ui: &mut PrDetailScreen,
     pending: &[PendingComment],
-    tab: DetailTab,
     area: Rect,
 ) {
-    let pr = overview.pr;
-    let pr_data = overview.data;
+    let (pr, pr_data, tab) = (ctx.pr, ctx.data, ctx.tab);
     let inset = match tab {
         DetailTab::Description => area,
         _ => Rect {
@@ -115,18 +112,23 @@ fn render_content(
         },
     };
     match tab {
-        DetailTab::Description => super::tabs::description::render(
+        DetailTab::Description => ui.description.render(
             frame,
-            pr,
-            pr_data.map(|data| &data.info),
-            &mut ui.description,
             inset,
+            &DescriptionView {
+                pr,
+                info: pr_data.map(|data| &data.info),
+            },
         ),
-        DetailTab::Overview => ui.overview.render_with_scrollbar(
+        DetailTab::Overview => ui.overview.render(
             frame,
             inset,
-            overview,
-            Rect::new(area.right(), area.y, 1, area.height),
+            &OverviewContext {
+                pr,
+                data: pr_data,
+                capabilities: &ctx.store.capabilities,
+                scrollbar: Rect::new(area.right(), area.y, 1, area.height),
+            },
         ),
         DetailTab::Diff => {
             let threads = activity_threads(pr_data);
@@ -147,7 +149,6 @@ fn render_content(
                 frame,
                 inset,
                 &commits::CommitContext {
-                    pr_id: pr.id,
                     data: pr_data,
                     pending,
                     author: &pr.author.username,
@@ -177,7 +178,7 @@ pub(super) fn render(
     area: Rect,
     ctx: &DetailContext<'_>,
 ) {
-    let (pr_id, tab, pr, pr_data) = (ctx.pr_id, ctx.tab, ctx.pr, ctx.data);
+    let (pr_id, pr, pr_data) = (ctx.pr_id, ctx.pr, ctx.data);
 
     let theme = theme::current();
     let [main_area, footer_area] = layout::split(
@@ -213,14 +214,9 @@ pub(super) fn render(
     );
     render_tabs_and_content(
         frame,
-        &super::tabs::overview::OverviewContext {
-            pr,
-            data: pr_data,
-            capabilities: &ctx.store.capabilities,
-        },
+        ctx,
         ui,
         pending_comments(ctx.store.reviews.get(&pr_id)),
-        tab,
         content_area,
     );
     let state = DetailView::new(ui, ctx);
@@ -254,11 +250,13 @@ pub(super) fn render(
         ))
     });
     if ui.editor.is_open() {
-        ui.editor.render_with_review(
+        ui.editor.render(
             frame,
             area,
-            ctx.store.operations.contains_key(&pr_id),
-            ctx.store.reviews.contains_key(&pr_id),
+            &EditorView {
+                sending: ctx.store.operations.contains_key(&pr_id),
+                review_active: ctx.store.reviews.contains_key(&pr_id),
+            },
         );
     }
     if ui.help_open {
@@ -292,6 +290,6 @@ pub(super) fn render(
         );
     }
     if let Some(msg) = ctx.store.errors.get(&pr_id) {
-        ui.error.render(frame, msg, area);
+        ui.error.render(frame, area, &msg.as_str());
     }
 }

@@ -17,7 +17,10 @@ use crate::{
     },
     tui::{
         component::Component,
-        components::diff_viewer::{DiffContext, DiffViewer},
+        components::{
+            diff_viewer::DiffViewer,
+            search_input::{SearchInput, SearchKind},
+        },
         screens::pr_detail::tabs::commits::CommitList,
     },
 };
@@ -93,7 +96,8 @@ impl PrDetailScreen {
 }
 
 impl Component for PrDetailScreen {
-    type Context<'a> = DetailContext<'a>;
+    type Input<'a> = DetailContext<'a>;
+    type View<'a> = DetailContext<'a>;
     type Message = DetailAction;
     fn handle_key(
         &self,
@@ -128,31 +132,24 @@ impl Component for PrDetailScreen {
         match action {
             DetailAction::Nav(action) => return self.navigate(action, pr_id, tab, ctx),
             DetailAction::BuildsScroll(delta) => {
-                self.builds.update(delta, &None);
+                self.builds.update(delta, &());
             }
             DetailAction::Description(action) => {
-                self.description.update(action, &ctx.pr);
+                self.description.update(action, &());
             }
             DetailAction::Timeline(action) => {
-                self.overview.update(
-                    action,
-                    &tabs::overview::OverviewContext {
-                        pr: ctx.pr,
-                        data: ctx.data,
-                        capabilities: &ctx.store.capabilities,
-                    },
-                );
+                self.overview.update(action, &());
             }
             DetailAction::Error(ErrorAction::Dismiss) => return Some(self.dismiss_error(pr_id)),
             DetailAction::Error(action @ ErrorAction::Scroll(_)) => {
-                self.error.update(action, &"");
+                self.error.update(action, &());
             }
             DetailAction::Confirm(action) => return self.confirm_action(action, pr_id),
             DetailAction::Review(action) => return self.review_action(action, pr_id, ctx),
             DetailAction::Merge(action) => return self.merge_action(action, pr_id, ctx),
             DetailAction::Editor(EditorAction::Submit) => return self.submit_editor(pr_id),
             DetailAction::Editor(action) => {
-                self.editor.update(action, &false);
+                self.editor.update(action, &());
             }
             DetailAction::Pr(action) => return self.pr_action(action, pr_id, ctx),
         }
@@ -187,14 +184,11 @@ impl PrDetailScreen {
         Some(Effect::Navigate(Screen::Detail { pr_id, tab }))
     }
 
-    pub const fn active_search(
-        &self,
-        tab: tabs::DetailTab,
-    ) -> Option<(&crate::tui::components::search_input::SearchInput, bool)> {
+    pub const fn active_search(&self, tab: tabs::DetailTab) -> Option<(&SearchInput, SearchKind)> {
         use tabs::DetailTab;
         match tab {
             DetailTab::Commits if self.commits.open_commit.is_none() => {
-                Some((&self.commits.search, false))
+                Some((&self.commits.search, SearchKind::Filter))
             }
             DetailTab::Diff | DetailTab::Commits => Some(self.active_diff_view().active_search()),
             DetailTab::Description | DetailTab::Overview | DetailTab::Builds => None,
@@ -208,38 +202,21 @@ impl PrDetailScreen {
     ) -> Option<Effect> {
         self.commits.update(
             action,
-            &tabs::commits::CommitContext {
-                pr_id: ctx.pr_id,
-                data: ctx.data,
-                pending: &[],
-                author: "",
-            },
+            &tabs::commits::CommitInput::new(ctx.pr_id, ctx.data),
         )
     }
 
     pub fn update_diff(&mut self, action: DiffAction, ctx: &DetailContext<'_>) -> Option<Effect> {
-        let diff_ctx = self.diff_input_context(ctx);
-        self.active_diff_view_mut().update(action, &diff_ctx)
+        let files = view::diff_files(ctx.data, self.commits.open_commit.as_deref());
+        self.active_diff_view_mut().update(action, &files)
     }
 
     pub fn update_search(&mut self, action: SearchAction, ctx: &DetailContext<'_>) {
         if ctx.tab == tabs::DetailTab::Commits && self.commits.open_commit.is_none() {
             self.commits.update_search(action);
         } else if self.active_search(ctx.tab).is_some() {
-            let diff_ctx = self.diff_input_context(ctx);
-            self.active_diff_view_mut().update_search(action, &diff_ctx);
-        }
-    }
-
-    /// The diff on screen, for input: which files there are to move between.
-    fn diff_input_context<'a>(&self, ctx: &DetailContext<'a>) -> DiffContext<'a> {
-        DiffContext {
-            diff: ctx
-                .data
-                .and_then(|d| d.diff_for(self.commits.open_commit.as_deref())),
-            threads: &[],
-            pending: &[],
-            author: "",
+            let files = view::diff_files(ctx.data, self.commits.open_commit.as_deref());
+            self.active_diff_view_mut().update_search(action, files);
         }
     }
 }

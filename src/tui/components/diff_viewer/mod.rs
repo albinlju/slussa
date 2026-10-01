@@ -13,7 +13,7 @@ use crate::{
         component::Component,
         components::{
             diff_viewer::file_tree::{TreeRow, build_visible_rows},
-            search_input::SearchInput,
+            search_input::{SearchInput, SearchKind},
         },
         screens::pr_detail::view::ThreadRef,
     },
@@ -31,15 +31,6 @@ pub struct DiffContext<'a> {
     pub threads: &'a [CommentThread],
     pub pending: &'a [PendingComment],
     pub author: &'a str,
-}
-
-impl DiffContext<'_> {
-    pub fn files(&self) -> &[FileDiff] {
-        match self.diff {
-            Some(LoadState::Loaded(diff)) => &diff.files,
-            _ => &[],
-        }
-    }
 }
 
 #[derive(Debug, Default)]
@@ -75,13 +66,14 @@ pub enum DiffFocus {
 }
 
 impl Component for DiffViewer {
-    type Context<'a> = DiffContext<'a>;
+    /// The files of the diff on screen, to move between.
+    type Input<'a> = &'a [FileDiff];
+    type View<'a> = DiffContext<'a>;
     type Message = DiffAction;
-    fn handle_key(&self, key: KeyEvent, _: &DiffContext<'_>) -> Option<Action> {
+    fn handle_key(&self, key: KeyEvent, _: &&[FileDiff]) -> Option<Action> {
         keys::key_to_action(key.code, self).map(Action::Diff)
     }
-    fn update(&mut self, action: DiffAction, ctx: &DiffContext<'_>) -> Option<Effect> {
-        let files = ctx.files();
+    fn update(&mut self, action: DiffAction, files: &&[FileDiff]) -> Option<Effect> {
         match action {
             DiffAction::MoveCursor(delta) => self.diff_move_cursor(files, delta),
             DiffAction::ToggleAtCursor => self.diff_toggle_at_cursor(files),
@@ -221,35 +213,26 @@ impl DiffViewer {
 }
 
 impl DiffViewer {
-    pub const fn active_search(&self) -> (&SearchInput, bool) {
+    /// The search field in use and what it does: the tree filters its files,
+    /// the pane finds text.
+    pub const fn active_search(&self) -> (&SearchInput, SearchKind) {
         match self.focus {
-            DiffFocus::Tree => (&self.tree_search, false),
-            DiffFocus::Pane => (&self.pane_search, true),
+            DiffFocus::Tree => (&self.tree_search, SearchKind::Filter),
+            DiffFocus::Pane => (&self.pane_search, SearchKind::Find),
         }
     }
-    pub fn update_search(
-        &mut self,
-        action: crate::app::action::SearchAction,
-        ctx: &DiffContext<'_>,
-    ) {
-        use crate::{app::action::SearchAction, tui::components::search_input::SearchContext};
-        let highlight = self.focus == DiffFocus::Pane;
-        let search = if highlight {
-            &mut self.pane_search
-        } else {
-            &mut self.tree_search
+    pub fn update_search(&mut self, action: crate::app::action::SearchAction, files: &[FileDiff]) {
+        use crate::app::action::SearchAction;
+        let (search, kind) = match self.focus {
+            DiffFocus::Tree => (&mut self.tree_search, SearchKind::Filter),
+            DiffFocus::Pane => (&mut self.pane_search, SearchKind::Find),
         };
-        search.update(
-            action,
-            &SearchContext {
-                highlight,
-                matches: 0,
-            },
-        );
-        if !highlight && !matches!(action, SearchAction::Open | SearchAction::Confirm) {
+        search.update(action, &kind);
+        if kind == SearchKind::Filter
+            && !matches!(action, SearchAction::Open | SearchAction::Confirm)
+        {
             self.cursor = 0;
-            if let Some(TreeRow::File { file_index, .. }) =
-                self.current_visible_rows(ctx.files()).first()
+            if let Some(TreeRow::File { file_index, .. }) = self.current_visible_rows(files).first()
             {
                 self.focus_file(*file_index);
             }

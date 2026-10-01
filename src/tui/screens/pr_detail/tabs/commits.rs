@@ -196,15 +196,33 @@ pub struct CommitList {
 }
 
 pub struct CommitContext<'a> {
-    pub pr_id: u64,
     pub data: Option<&'a PrData>,
     pub pending: &'a [PendingComment],
     pub author: &'a str,
 }
+
+/// The commits to move between, and the PR a commit's diff is asked for.
+pub struct CommitInput<'a> {
+    pub pr_id: u64,
+    pub commits: &'a [Commit],
+}
+
+impl<'a> CommitInput<'a> {
+    pub fn new(pr_id: u64, data: Option<&'a PrData>) -> Self {
+        Self {
+            pr_id,
+            commits: data
+                .and_then(|data| data.commits.loaded())
+                .map_or(&[], Vec::as_slice),
+        }
+    }
+}
+
 impl Component for CommitList {
-    type Context<'a> = CommitContext<'a>;
+    type Input<'a> = CommitInput<'a>;
+    type View<'a> = CommitContext<'a>;
     type Message = CommitsAction;
-    fn handle_key(&self, key: KeyEvent, _: &CommitContext<'_>) -> Option<Action> {
+    fn handle_key(&self, key: KeyEvent, _: &CommitInput<'_>) -> Option<Action> {
         let action = match key.code {
             KeyCode::Char('j') | KeyCode::Down => CommitsAction::MoveSelection(1),
             KeyCode::Char('k') | KeyCode::Up => CommitsAction::MoveSelection(-1),
@@ -219,12 +237,8 @@ impl Component for CommitList {
         };
         Some(Action::Commits(action))
     }
-    fn update(&mut self, action: CommitsAction, ctx: &CommitContext<'_>) -> Option<Effect> {
-        let commits = match ctx.data.map(|d| &d.commits) {
-            Some(LoadState::Loaded(c)) => c.as_slice(),
-            _ => &[],
-        };
-        let filtered = self.search.filter_commits(commits);
+    fn update(&mut self, action: CommitsAction, input: &CommitInput<'_>) -> Option<Effect> {
+        let filtered = self.search.filter_commits(input.commits);
         match action {
             CommitsAction::Back => {
                 self.open_commit = None;
@@ -247,7 +261,7 @@ impl Component for CommitList {
         self.open_commit = Some(oid.clone());
         self.diff = DiffViewer::default();
         Some(Effect::LoadCommitDiff {
-            pr_id: ctx.pr_id,
+            pr_id: input.pr_id,
             oid,
         })
     }
@@ -288,10 +302,7 @@ impl CommitList {
         use crate::app::action::SearchAction;
         self.search.update(
             action,
-            &crate::tui::components::search_input::SearchContext {
-                highlight: false,
-                matches: 0,
-            },
+            &crate::tui::components::search_input::SearchKind::Filter,
         );
         if !matches!(action, SearchAction::Open | SearchAction::Confirm) {
             self.selected = 0;

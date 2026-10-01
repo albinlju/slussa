@@ -129,7 +129,7 @@ impl PrDetailScreen {
             ReviewAction::Move(_) | ReviewAction::Preview => {
                 let review_ctx = ReviewContext {
                     options: self.view(ctx).review_context().options,
-                    pending: None,
+                    pending: ctx.store.reviews.get(&pr_id),
                 };
                 self.review_picker.as_mut()?.update(action, &review_ctx);
                 None

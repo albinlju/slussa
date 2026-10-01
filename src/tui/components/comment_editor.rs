@@ -90,10 +90,20 @@ impl CommentEditor {
         );
     }
 }
+/// What the editor's frame says besides the draft itself.
+#[derive(Debug, Clone, Copy)]
+pub struct EditorView {
+    /// The draft is on its way to the server.
+    pub sending: bool,
+    /// A review is being drafted, so a line comment is added to it.
+    pub review_active: bool,
+}
+
 impl Component for CommentEditor {
-    type Context<'a> = bool;
+    type Input<'a> = ();
+    type View<'a> = EditorView;
     type Message = EditorAction;
-    fn handle_key(&self, key: KeyEvent, _: &bool) -> Option<Action> {
+    fn handle_key(&self, key: KeyEvent, (): &()) -> Option<Action> {
         if !self.is_open() {
             return None;
         }
@@ -125,7 +135,7 @@ impl Component for CommentEditor {
         };
         Some(action.into())
     }
-    fn update(&mut self, action: EditorAction, _: &bool) -> Option<Effect> {
+    fn update(&mut self, action: EditorAction, (): &()) -> Option<Effect> {
         let pos = self.position();
         match action {
             EditorAction::Type(c) => self.insert_text(&c.to_string()),
@@ -185,19 +195,11 @@ impl Component for CommentEditor {
         }
         None
     }
-    fn render(&mut self, frame: &mut Frame<'_>, area: Rect, sending: &bool) {
-        self.render_with_review(frame, area, *sending, false);
-    }
-}
-
-impl CommentEditor {
-    pub fn render_with_review(
-        &mut self,
-        frame: &mut Frame<'_>,
-        area: Rect,
-        sending: bool,
-        review_active: bool,
-    ) {
+    fn render(&mut self, frame: &mut Frame<'_>, area: Rect, view: &EditorView) {
+        let EditorView {
+            sending,
+            review_active,
+        } = *view;
         if !self.is_open() {
             return;
         }
@@ -413,16 +415,16 @@ mod tests {
     #[test]
     fn multiline_editing_and_paste_do_not_submit_or_trigger_shortcuts() {
         let mut e = editor("å🦀");
-        e.update(EditorAction::Move(-1), &false);
+        e.update(EditorAction::Move(-1), &());
         e.insert_text("x\r\ny\tq\u{1b}");
         assert_eq!(e.draft.as_ref().unwrap().text, "åx\ny    q🦀");
-        e.update(EditorAction::Delete, &false);
-        e.update(EditorAction::Home, &false);
-        e.update(EditorAction::Vertical(-1), &false);
+        e.update(EditorAction::Delete, &());
+        e.update(EditorAction::Home, &());
+        e.update(EditorAction::Vertical(-1), &());
         e.insert_text("A");
         assert_eq!(e.draft.as_ref().unwrap().text, "Aåx\ny    q");
         assert!(matches!(
-            e.handle_key(KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE), &false),
+            e.handle_key(KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE), &()),
             Some(Action::Detail(DetailAction::Editor(EditorAction::Type(
                 '\n'
             ))))
@@ -430,7 +432,7 @@ mod tests {
         assert!(matches!(
             e.handle_key(
                 KeyEvent::new(KeyCode::Char('s'), KeyModifiers::CONTROL),
-                &false
+                &()
             ),
             Some(Action::Detail(DetailAction::Editor(EditorAction::Submit)))
         ));
@@ -438,17 +440,17 @@ mod tests {
     #[test]
     fn escape_keeps_work_and_discard_requires_confirmation() {
         let mut e = editor("keep");
-        e.update(EditorAction::Cancel, &false);
+        e.update(EditorAction::Cancel, &());
         assert!(!e.is_open());
         assert_eq!(e.draft.as_ref().unwrap().text, "keep");
         e.suspended = false;
-        e.update(EditorAction::Discard, &false);
+        e.update(EditorAction::Discard, &());
         e.insert_text("ignored");
         assert_eq!(e.draft.as_ref().unwrap().text, "keep");
-        e.update(EditorAction::Keep, &false);
+        e.update(EditorAction::Keep, &());
         assert!(e.is_open());
-        e.update(EditorAction::Discard, &false);
-        e.update(EditorAction::DiscardConfirm, &false);
+        e.update(EditorAction::Discard, &());
+        e.update(EditorAction::DiscardConfirm, &());
         assert!(e.draft.is_none());
     }
     #[test]

@@ -449,7 +449,8 @@ impl<'a> ListContext<'a> {
 }
 
 impl Component for PrListScreen {
-    type Context<'a> = ListContext<'a>;
+    type Input<'a> = ListContext<'a>;
+    type View<'a> = ListContext<'a>;
     type Message = ListAction;
     fn render(&mut self, frame: &mut Frame<'_>, area: Rect, ctx: &ListContext<'_>) {
         self.viewport = area.height.saturating_sub(4);
@@ -574,7 +575,7 @@ impl Component for PrListScreen {
             return match key.code {
                 KeyCode::Esc | KeyCode::Char('?') => Some(Action::List(ListAction::ToggleHelp)),
                 KeyCode::Char('q') => Some(Action::Effect(Effect::Quit)),
-                _ => self.help.handle_key(key, &HELP_KEYS),
+                _ => self.help.handle_key(key, &()),
             };
         }
         if key.modifiers.is_empty() {
@@ -728,10 +729,7 @@ impl PrListScreen {
         use crate::app::action::SearchAction;
         self.search.update(
             action,
-            &crate::tui::components::search_input::SearchContext {
-                highlight: false,
-                matches: 0,
-            },
+            &crate::tui::components::search_input::SearchKind::Filter,
         );
         if !matches!(action, SearchAction::Open | SearchAction::Confirm) {
             self.selected = 0;

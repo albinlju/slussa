@@ -439,9 +439,10 @@ pub struct Timeline {
 }
 
 impl Component for Timeline {
-    type Context<'a> = TimelineContext<'a>;
+    type Input<'a> = ();
+    type View<'a> = TimelineContext<'a>;
     type Message = TimelineAction;
-    fn handle_key(&self, key: KeyEvent, _: &Self::Context<'_>) -> Option<Action> {
+    fn handle_key(&self, key: KeyEvent, (): &()) -> Option<Action> {
         let control = key
             .modifiers
             .contains(crossterm::event::KeyModifiers::CONTROL);
@@ -460,7 +461,7 @@ impl Component for Timeline {
         };
         Some(action.into())
     }
-    fn update(&mut self, action: TimelineAction, _: &Self::Context<'_>) -> Option<Effect> {
+    fn update(&mut self, action: TimelineAction, (): &()) -> Option<Effect> {
         match action {
             TimelineAction::Scroll(delta) => {
                 self.scroll = scroll(self.scroll, delta);
@@ -492,7 +493,7 @@ impl Component for Timeline {
         }
         None
     }
-    fn render(&mut self, frame: &mut Frame<'_>, area: Rect, ctx: &Self::Context<'_>) {
+    fn render(&mut self, frame: &mut Frame<'_>, area: Rect, ctx: &TimelineContext<'_>) {
         render_timeline(frame, ctx.data, self, ctx.author, area, ctx.scrollbar);
     }
 }

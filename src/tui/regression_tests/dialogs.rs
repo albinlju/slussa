@@ -307,7 +307,13 @@ fn editor_distinguishes_queued_comments_from_direct_publication() {
             };
             let mut terminal = Terminal::new(TestBackend::new(width, 16)).unwrap();
             terminal
-                .draw(|frame| editor.render_with_review(frame, frame.area(), false, true))
+                .draw(|frame| {
+                    let view = EditorView {
+                        sending: false,
+                        review_active: true,
+                    };
+                    editor.render(frame, frame.area(), &view);
+                })
                 .unwrap();
             assert!(rendered_text(&terminal).contains(expected));
         }
@@ -370,7 +376,13 @@ fn resumed_editor_and_delete_dialog_identify_the_comment() {
         };
         let mut terminal = Terminal::new(TestBackend::new(width, 16)).unwrap();
         terminal
-            .draw(|frame| editor.render_with_review(frame, frame.area(), false, false))
+            .draw(|frame| {
+                let view = EditorView {
+                    sending: false,
+                    review_active: false,
+                };
+                editor.render(frame, frame.area(), &view);
+            })
             .unwrap();
         let text = rendered_text(&terminal);
         assert!(text.contains("Resuming draft"));

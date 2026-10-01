@@ -124,12 +124,14 @@ impl MergeDialog {
 }
 
 impl Component for MergeDialog {
-    type Context<'a> = &'a [crate::domain::pr::MergeStrategy];
+    /// The strategies on offer.
+    type Input<'a> = &'a [crate::domain::pr::MergeStrategy];
+    type View<'a> = &'a [crate::domain::pr::MergeStrategy];
     type Message = MergeAction;
-    fn handle_key(&self, key: KeyEvent, _: &Self::Context<'_>) -> Option<Action> {
+    fn handle_key(&self, key: KeyEvent, _: &Self::Input<'_>) -> Option<Action> {
         key_to_action(key.code).map(Action::from)
     }
-    fn update(&mut self, action: MergeAction, ctx: &Self::Context<'_>) -> Option<Effect> {
+    fn update(&mut self, action: MergeAction, ctx: &Self::Input<'_>) -> Option<Effect> {
         match action {
             MergeAction::Move(delta) => self.cursor = step_index(self.cursor, delta, ctx.len()),
             // Closing and merging are the screen's: it holds the dialog.
@@ -137,7 +139,7 @@ impl Component for MergeDialog {
         }
         None
     }
-    fn render(&mut self, frame: &mut Frame<'_>, area: Rect, ctx: &Self::Context<'_>) {
+    fn render(&mut self, frame: &mut Frame<'_>, area: Rect, ctx: &Self::View<'_>) {
         render(frame, ctx, self, area);
     }
 }

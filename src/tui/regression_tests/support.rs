@@ -11,7 +11,10 @@ pub(super) use crate::{
     },
     domain::{activity::Activity, ci::CiSummary, commit::Commit, diff::*, pr::*, user::User},
     tui::{
-        components::{comment_editor::CommentDraft, diff_viewer::DiffFocus},
+        components::{
+            comment_editor::{CommentDraft, EditorView},
+            diff_viewer::DiffFocus,
+        },
         screens::pr_detail::{
             dialogs::{
                 confirm::{ConfirmDialog, ConfirmKind},

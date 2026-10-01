@@ -115,12 +115,10 @@ fn commit_drilldown_uses_an_independent_diff_instance() {
 #[test]
 fn commit_component_emits_a_pr_scoped_load_request() {
     let mut app = app();
-    let ctx = tui::screens::pr_detail::tabs::commits::CommitContext {
-        pr_id: 42,
-        data: app.state.store.cache.details.get(&42),
-        pending: &[],
-        author: "alice",
-    };
+    let ctx = tui::screens::pr_detail::tabs::commits::CommitInput::new(
+        42,
+        app.state.store.cache.details.get(&42),
+    );
     let effect = app
         .state
         .ui

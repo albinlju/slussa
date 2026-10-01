@@ -17,7 +17,7 @@ use ratatui::{
 
 /// `info` holds the description for a provider whose list leaves it out. Until
 /// it arrives there is nothing to show but that it is loading.
-pub fn render(
+fn render(
     frame: &mut Frame<'_>,
     pr: &PullRequest,
     info: Option<&LoadState<PrInfo>>,
@@ -94,10 +94,18 @@ pub struct Description {
     pub max_horizontal: u16,
 }
 
+/// The PR whose description to show, and what was read for it when the list
+/// left the description out.
+pub struct DescriptionView<'a> {
+    pub pr: &'a PullRequest,
+    pub info: Option<&'a LoadState<PrInfo>>,
+}
+
 impl Component for Description {
-    type Context<'a> = &'a PullRequest;
+    type Input<'a> = ();
+    type View<'a> = DescriptionView<'a>;
     type Message = DescriptionAction;
-    fn handle_key(&self, key: KeyEvent, _: &Self::Context<'_>) -> Option<Action> {
+    fn handle_key(&self, key: KeyEvent, (): &()) -> Option<Action> {
         if matches!(key.code, KeyCode::Char('H' | 'L')) && self.max_horizontal > 0 {
             let delta = if key.code == KeyCode::Char('H') {
                 -8
@@ -115,7 +123,7 @@ impl Component for Description {
         };
         Some(DescriptionAction::Scroll(delta).into())
     }
-    fn update(&mut self, action: DescriptionAction, _: &Self::Context<'_>) -> Option<Effect> {
+    fn update(&mut self, action: DescriptionAction, (): &()) -> Option<Effect> {
         match action {
             DescriptionAction::Scroll(delta) => self.scroll = scroll(self.scroll, delta),
             DescriptionAction::Horizontal(delta) => {
@@ -124,7 +132,7 @@ impl Component for Description {
         }
         None
     }
-    fn render(&mut self, frame: &mut Frame<'_>, area: Rect, pr: &&PullRequest) {
-        render(frame, pr, None, self, area);
+    fn render(&mut self, frame: &mut Frame<'_>, area: Rect, view: &DescriptionView<'_>) {
+        render(frame, view.pr, view.info, self, area);
     }
 }

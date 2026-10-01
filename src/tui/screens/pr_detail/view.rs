@@ -7,6 +7,7 @@ use crate::{
     },
     domain::{
         comment::Comment,
+        diff::FileDiff,
         pr::{MergeStatus, Mergeability, PrStatus, PullRequest},
         review::ReviewVerdict,
     },
@@ -42,6 +43,12 @@ impl<'a> DetailContext<'a> {
     }
 }
 
+pub fn diff_files<'a>(data: Option<&'a PrData>, commit: Option<&str>) -> &'a [FileDiff] {
+    data.and_then(|data| data.diff_for(commit))
+        .and_then(LoadState::loaded)
+        .map_or(&[], |diff| diff.files.as_slice())
+}
+
 /// The screen's own state together with its context: what the read-only
 /// questions of key handling, the footer and rendering are asked of.
 pub struct DetailView<'a> {
@@ -65,6 +72,11 @@ impl<'a> DetailView<'a> {
             data: ctx.data,
             refreshing: ctx.refreshing,
         }
+    }
+
+    /// The files of the diff on screen: the PR's, or the open commit's.
+    pub fn diff_files(&self) -> &'a [FileDiff] {
+        diff_files(self.data, self.detail.commits.open_commit.as_deref())
     }
 
     pub fn review_context(&self) -> super::dialogs::review::ReviewContext<'a> {

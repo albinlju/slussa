@@ -12,8 +12,12 @@ pub struct ErrorDialog {
     pub scroll: u16,
     pub max_scroll: u16,
 }
-impl ErrorDialog {
-    pub fn render(&mut self, frame: &mut Frame<'_>, message: &str, area: Rect) {
+impl Component for ErrorDialog {
+    type Input<'a> = ();
+    /// The message to show.
+    type View<'a> = &'a str;
+    type Message = ErrorAction;
+    fn render(&mut self, frame: &mut Frame<'_>, area: Rect, message: &&str) {
         let width = area.width.min(64);
         let lines = widgets::wrap_text(message, width.saturating_sub(4).max(1) as usize);
         let body = widgets::dialog::frame(
@@ -32,12 +36,7 @@ impl ErrorDialog {
             body,
         );
     }
-}
-
-impl Component for ErrorDialog {
-    type Context<'a> = &'a str;
-    type Message = ErrorAction;
-    fn handle_key(&self, key: crossterm::event::KeyEvent, _: &Self::Context<'_>) -> Option<Action> {
+    fn handle_key(&self, key: crossterm::event::KeyEvent, (): &()) -> Option<Action> {
         use ratatui::crossterm::event::KeyCode;
         let action = match key.code {
             KeyCode::Esc | KeyCode::Enter => ErrorAction::Dismiss,
@@ -49,7 +48,7 @@ impl Component for ErrorDialog {
         };
         Some(action.into())
     }
-    fn update(&mut self, action: ErrorAction, _: &Self::Context<'_>) -> Option<Effect> {
+    fn update(&mut self, action: ErrorAction, (): &()) -> Option<Effect> {
         match action {
             ErrorAction::Scroll(delta) => {
                 self.scroll =
@@ -59,8 +58,5 @@ impl Component for ErrorDialog {
             ErrorAction::Dismiss => {}
         }
         None
-    }
-    fn render(&mut self, frame: &mut Frame<'_>, area: Rect, message: &Self::Context<'_>) {
-        self.render(frame, message, area);
     }
 }

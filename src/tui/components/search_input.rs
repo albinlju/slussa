@@ -36,14 +36,21 @@ impl SearchInput {
     }
 }
 
-pub struct SearchContext {
-    pub highlight: bool,
-    pub matches: usize,
+/// What a search field does with what is typed.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum SearchKind {
+    /// Narrows a list as it is typed; there is nothing for Enter to confirm.
+    Filter,
+    /// Marks matches to step through; Enter leaves the field and keeps them.
+    Find,
 }
+
 impl Component for SearchInput {
-    type Context<'a> = SearchContext;
+    type Input<'a> = SearchKind;
+    /// How many matches there are.
+    type View<'a> = usize;
     type Message = SearchAction;
-    fn handle_key(&self, key: KeyEvent, ctx: &SearchContext) -> Option<Action> {
+    fn handle_key(&self, key: KeyEvent, kind: &SearchKind) -> Option<Action> {
         if !self.open {
             return (key.code == KeyCode::Char('/')).then_some(Action::Search(SearchAction::Open));
         }
@@ -54,11 +61,13 @@ impl Component for SearchInput {
             KeyCode::Char(c) => Some(Action::Search(SearchAction::Type(c))),
             KeyCode::Backspace => Some(Action::Search(SearchAction::Backspace)),
             KeyCode::Esc => Some(Action::Search(SearchAction::Cancel)),
-            KeyCode::Enter if ctx.highlight => Some(Action::Search(SearchAction::Confirm)),
+            KeyCode::Enter if *kind == SearchKind::Find => {
+                Some(Action::Search(SearchAction::Confirm))
+            }
             _ => None,
         }
     }
-    fn update(&mut self, action: SearchAction, _: &SearchContext) -> Option<Effect> {
+    fn update(&mut self, action: SearchAction, _: &SearchKind) -> Option<Effect> {
         match action {
             SearchAction::Open => self.open = true,
             SearchAction::Confirm => self.open = false,
@@ -73,9 +82,9 @@ impl Component for SearchInput {
         }
         None
     }
-    fn render(&mut self, frame: &mut Frame<'_>, area: Rect, ctx: &SearchContext) {
+    fn render(&mut self, frame: &mut Frame<'_>, area: Rect, matches: &usize) {
         frame.render_widget(
-            Paragraph::new(widgets::search_prompt(&self.query, ctx.matches, area.width)),
+            Paragraph::new(widgets::search_prompt(&self.query, *matches, area.width)),
             area,
         );
     }

@@ -152,9 +152,10 @@ impl ConfirmDialog {
 }
 
 impl Component for ConfirmDialog {
-    type Context<'a> = ();
+    type Input<'a> = ();
+    type View<'a> = ();
     type Message = ConfirmAction;
-    fn handle_key(&self, key: KeyEvent, (): &Self::Context<'_>) -> Option<Action> {
+    fn handle_key(&self, key: KeyEvent, (): &()) -> Option<Action> {
         key_to_action(key.code).map(Action::from)
     }
     fn update(&mut self, action: ConfirmAction, (): &()) -> Option<Effect> {

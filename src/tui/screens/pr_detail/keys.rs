@@ -3,8 +3,7 @@ use crate::{
         Action, CommitsAction, DetailAction, DiffAction, Effect, NavAction, PrAction, SearchAction,
     },
     tui::{
-        component::Component,
-        components::diff_viewer::{DiffContext, DiffFocus},
+        component::Component, components::diff_viewer::DiffFocus,
         screens::pr_detail::tabs::DetailTab,
     },
 };
@@ -15,8 +14,8 @@ pub(in crate::tui) fn key_to_action(
     key: KeyEvent,
 ) -> Option<Action> {
     // Errors capture input; navigation reads the message rather than acting on the PR.
-    if let Some(error) = state.error() {
-        return state.detail.error.handle_key(key, &error);
+    if state.error().is_some() {
+        return state.detail.error.handle_key(key, &());
     }
     if state.operation_pending() && state.detail.editor.is_open() {
         return match key.code {
@@ -26,7 +25,7 @@ pub(in crate::tui) fn key_to_action(
         };
     }
     if state.detail.editor.is_open() {
-        return state.detail.editor.handle_key(key, &false);
+        return state.detail.editor.handle_key(key, &());
     }
     if key.code == KeyCode::Char('q') {
         return Some(Action::Effect(Effect::Quit));
@@ -57,7 +56,7 @@ pub(in crate::tui) fn key_to_action(
         return if code == KeyCode::Esc {
             Some(Action::from(NavAction::ToggleHelp))
         } else {
-            state.detail.help.handle_key(key, &&[][..])
+            state.detail.help.handle_key(key, &())
         };
     }
 
@@ -128,10 +127,7 @@ pub(in crate::tui) fn key_to_action(
     // then edit/delete the one you land on (the application gates on authorship).
     if tab == DetailTab::Overview {
         if key.modifiers.contains(KeyModifiers::CONTROL)
-            && let Some(action) = state
-                .detail
-                .overview
-                .handle_key(key, &overview_context(state))
+            && let Some(action) = state.detail.overview.handle_key(key, &())
         {
             return Some(action);
         }
@@ -216,15 +212,7 @@ fn tab_key(
         DetailTab::Diff => state
             .detail
             .active_diff_view()
-            .handle_key(
-                KeyEvent::new(code, KeyModifiers::NONE),
-                &DiffContext {
-                    diff: None,
-                    threads: &[],
-                    pending: &[],
-                    author: "",
-                },
-            )
+            .handle_key(KeyEvent::new(code, KeyModifiers::NONE), &state.diff_files())
             .or_else(|| tab_letters(code)),
         DetailTab::Commits if viewing_commit => match code {
             KeyCode::Char('[') => Some(Action::Commits(CommitsAction::StepCommit(-1))),
@@ -232,15 +220,7 @@ fn tab_key(
             _ => state
                 .detail
                 .active_diff_view()
-                .handle_key(
-                    KeyEvent::new(code, KeyModifiers::NONE),
-                    &DiffContext {
-                        diff: None,
-                        threads: &[],
-                        pending: &[],
-                        author: "",
-                    },
-                )
+                .handle_key(KeyEvent::new(code, KeyModifiers::NONE), &state.diff_files())
                 .or_else(|| tab_letters(code)),
         },
         DetailTab::Commits => state
@@ -248,42 +228,24 @@ fn tab_key(
             .commits
             .handle_key(
                 KeyEvent::new(code, KeyModifiers::NONE),
-                &super::tabs::commits::CommitContext {
-                    pr_id: state.pr_id,
-                    data: state.data,
-                    pending: &[],
-                    author: "",
-                },
+                &super::tabs::commits::CommitInput::new(state.pr_id, state.data),
             )
             .or_else(|| tab_nav(code)),
         DetailTab::Overview => state
             .detail
             .overview
-            .handle_key(
-                KeyEvent::new(code, KeyModifiers::NONE),
-                &overview_context(state),
-            )
+            .handle_key(KeyEvent::new(code, KeyModifiers::NONE), &())
             .or_else(|| tab_nav(code)),
         DetailTab::Description => state
             .detail
             .description
-            .handle_key(KeyEvent::new(code, KeyModifiers::NONE), &state.pr)
+            .handle_key(KeyEvent::new(code, KeyModifiers::NONE), &())
             .or_else(|| tab_nav(code)),
         DetailTab::Builds => state
             .detail
             .builds
-            .handle_key(KeyEvent::new(code, KeyModifiers::NONE), &None)
+            .handle_key(KeyEvent::new(code, KeyModifiers::NONE), &())
             .or_else(|| tab_nav(code)),
-    }
-}
-
-const fn overview_context<'a>(
-    state: &super::DetailView<'a>,
-) -> crate::tui::screens::pr_detail::tabs::overview::OverviewContext<'a> {
-    crate::tui::screens::pr_detail::tabs::overview::OverviewContext {
-        pr: state.pr,
-        data: state.data,
-        capabilities: &state.store.capabilities,
     }
 }
 

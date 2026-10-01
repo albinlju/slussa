@@ -132,7 +132,7 @@ fn footer_actions(state: &DetailView<'_>, tab: DetailTab) -> Vec<Hint> {
         let view = state.detail.active_diff_view();
         if view.focus == DiffFocus::Tree {
             let rows = crate::tui::components::diff_viewer::file_tree::build_visible_rows(
-                tree_files(state, state.data),
+                state.diff_files(),
                 &view.collapsed,
                 &view.tree_search.query,
             );
@@ -216,7 +216,7 @@ fn active_search(
     }
     let view = state.detail.active_diff_view();
     match view.focus {
-        DiffFocus::Tree => tree_search_prompt(&view.tree_search, tree_files(state, pr_data), width),
+        DiffFocus::Tree => tree_search_prompt(&view.tree_search, state.diff_files(), width),
         DiffFocus::Pane => pane_search_prompt(&view.pane_search, view.pane_matches.len(), width),
     }
 }
@@ -276,11 +276,4 @@ fn pane_search_prompt(
         right,
         width as usize,
     )))
-}
-
-fn tree_files<'a>(state: &DetailView<'_>, pr_data: Option<&'a PrData>) -> &'a [FileDiff] {
-    match pr_data.and_then(|d| d.diff_for(state.detail.commits.open_commit.as_deref())) {
-        Some(LoadState::Loaded(diff)) => &diff.files,
-        _ => &[],
-    }
 }
