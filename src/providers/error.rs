@@ -119,7 +119,10 @@ impl FetchError {
             | Self::Stale(_)
             | Self::Truncated(_)
             | Self::NotAuthenticated { .. } => false,
-            Self::HttpFailed { status, .. } => *status >= 500,
+            // A 4xx is the server saying no, except 408: a request that timed
+            // out on the way in may have been acted on. A 429 was turned away
+            // before it was handled.
+            Self::HttpFailed { status, .. } => *status >= 500 || *status == 408,
             Self::GraphQl(_)
             | Self::Timeout
             | Self::GhFailed { .. }
@@ -229,6 +232,7 @@ mod tests {
             FetchError::NotAuthenticated { host: "h".into() },
             http(409),
             http(403),
+            http(429),
         ] {
             assert!(!unsent.may_have_reached_server(), "{unsent:?}");
         }
@@ -242,6 +246,7 @@ mod tests {
                 stderr: String::new(),
             },
             http(502),
+            http(408),
         ] {
             assert!(open.may_have_reached_server(), "{open:?}");
         }
