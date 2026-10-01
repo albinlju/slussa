@@ -170,7 +170,7 @@ notion, applied to the PR's author, to comments and to commits.
   current head so a stale review reads as stale rather than wrong. A review
   that committed reads `AI review: 3 commits · a1b2c3d`. Collapses to nothing
   when no AI review exists, which is itself what the reviewer needs to know:
-  nothing has checked this PR but CI.
+  no AI review has checked this PR.
 - [ ] **Linked issues / cross-references** — "closes #123", shown in the
   header and openable. Moved here from *Handoff*: the linked issue is what was
   asked for, and checking the PR against it is the intent check the
