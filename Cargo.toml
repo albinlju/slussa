@@ -81,6 +81,8 @@ base64 = "0.22"
 
 [profile.release]
 strip = true
+lto = "thin"
+codegen-units = 1
 
 [profile.dev]
 # Faster incremental builds; keeps line tables for backtraces.
