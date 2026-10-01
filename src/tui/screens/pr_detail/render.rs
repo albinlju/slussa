@@ -128,6 +128,7 @@ fn render_content(
                 pr,
                 data: pr_data,
                 capabilities: &ctx.store.capabilities,
+                markers: &ctx.store.ai_markers,
                 scrollbar: Rect::new(area.right(), area.y, 1, area.height),
             },
         ),
@@ -246,7 +247,12 @@ pub(super) fn render(
         Some(Overlay::Help(help)) => help.render(
             frame,
             area,
-            &dialogs::help::entries(&ctx.store.capabilities, pr.url.is_some()).as_slice(),
+            &dialogs::help::entries(
+                &ctx.store.capabilities,
+                pr.url.is_some(),
+                !ctx.store.ai_markers.is_empty(),
+            )
+            .as_slice(),
         ),
         Some(Overlay::Confirm(dialog)) => dialog.render(frame, area, &PrSummary::of(pr)),
         Some(Overlay::Review(dialog)) => dialog.render(frame, area, &review_ctx),

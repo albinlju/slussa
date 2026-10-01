@@ -1,3 +1,4 @@
+mod blocks;
 mod sidebar;
 pub mod timeline;
 use crate::{
@@ -6,6 +7,7 @@ use crate::{
         store::PrData,
     },
     domain::{
+        authorship::AiMarkers,
         capabilities::{Capabilities, Feature},
         pr::PullRequest,
     },
@@ -25,6 +27,7 @@ pub struct OverviewContext<'a> {
     pub pr: &'a PullRequest,
     pub data: Option<&'a PrData>,
     pub capabilities: &'a Capabilities,
+    pub markers: &'a AiMarkers,
     /// Where the timeline's scrollbar goes: the screen's edge, not the tab's.
     pub scrollbar: Rect,
 }
@@ -94,6 +97,7 @@ fn render(
         &TimelineContext {
             data: pr_data,
             author: &pr.author.username,
+            markers: ctx.markers,
             scrollbar: scrollbar_area,
         },
     );

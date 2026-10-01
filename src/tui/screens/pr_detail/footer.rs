@@ -118,6 +118,12 @@ fn footer_actions(state: &DetailView<'_>, tab: DetailTab) -> Vec<Hint> {
                 "R: resolve thread"
             }));
         }
+        if !state.store.ai_markers.is_empty() {
+            parts.push(Hint::on(format!(
+                "f: comments ({})",
+                state.detail.overview.timeline.filter.label()
+            )));
+        }
         parts.extend(pr_action_hints(state));
         return parts;
     }

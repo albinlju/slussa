@@ -104,9 +104,17 @@ over SSH; inside tmux that needs `set -g set-clipboard on`.
 ```toml
 theme = "graphite"   # graphite (default), slate, gruvbox, catppuccin, terminal
 sort = "attention"   # attention (default) or recent
+
+[ai]
+# A comment whose first line starts with one of these is an AI agent's.
+markers = ["> **gator-agent**"]
 ```
 
 `SLUSSA_THEME` overrides the file.
+
+With `markers` set, `f` in the Overview shows all comments, only people's, or only
+the agents'. Without it nothing is marked and the key is not offered. Matching is
+by text, so it works on both providers and for agents that post with your own token.
 
 ## Documentation
 
