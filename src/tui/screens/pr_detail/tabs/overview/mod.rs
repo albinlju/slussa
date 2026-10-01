@@ -1,4 +1,5 @@
 mod blocks;
+mod hidden;
 mod sidebar;
 pub mod timeline;
 use crate::{

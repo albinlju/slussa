@@ -1,4 +1,4 @@
-use super::blocks::{TimelineItem, build_blocks, focusable_count, timeline_rail};
+use super::blocks::{Hidden, TimelineItem, build_blocks, focusable_count, timeline_rail};
 use crate::tui::widgets::{comment_fold::Folds, comment_meta::Roles};
 use crate::{
     app::{
@@ -8,7 +8,6 @@ use crate::{
     domain::{
         authorship::{AiMarkers, AuthorFilter},
         comment::{Comment, CommentId, CommentKey, CommentKind, CommentThread},
-        event::TimelineEvent,
     },
     tui::{
         component::{Component, saturating_u16, scroll, scroll_to_item, step_index},
@@ -62,30 +61,16 @@ fn render_timeline(
         },
     };
 
-    // What the filter leaves: events are not comments, so they go with it.
-    let comments: Vec<&Comment> = activity
+    // What the filter leaves, and what it hides: the events stay, and the hidden
+    // comments come back as a dimmed line where they were.
+    let (comments, hidden_comments): (Vec<&Comment>, Vec<&Comment>) = activity
         .comments
         .iter()
-        .filter(|c| ui.filter.shows(roles.markers.of_comment(c)))
-        .collect();
-    let threads: Vec<&CommentThread> = activity
+        .partition(|c| ui.filter.shows(roles.markers.of_comment(c)));
+    let (threads, hidden_threads): (Vec<&CommentThread>, Vec<&CommentThread>) = activity
         .threads
         .iter()
-        .filter(|t| ui.filter.shows(roles.markers.of_thread(t)))
-        .collect();
-    let events: &[TimelineEvent] = if ui.filter == AuthorFilter::All {
-        &activity.events
-    } else {
-        &[]
-    };
-    if comments.is_empty() && threads.is_empty() && events.is_empty() {
-        *ui = Timeline {
-            filter: ui.filter,
-            ..Timeline::default()
-        };
-        frame.render_widget(widgets::empty_state(ui.filter.empty_text()), area);
-        return;
-    }
+        .partition(|t| ui.filter.shows(roles.markers.of_thread(t)));
 
     // Anchored comments gain snippets (and suggestion context) from the diff.
     // On first load, reveal them together instead of resizing cards under the reader.
@@ -150,7 +135,12 @@ fn render_timeline(
     let blocks = build_blocks(
         &comments,
         &threads,
-        events,
+        &Hidden {
+            comments: &hidden_comments,
+            threads: &hidden_threads,
+            filter: ui.filter,
+        },
+        &activity.events,
         diff,
         area.width.saturating_sub(TIMELINE_RIGHT_PAD + RAIL_WIDTH),
         cursor,
@@ -274,10 +264,10 @@ impl Component for Timeline {
                 }
             }
             TimelineAction::CycleFilter => {
+                // From the top, with the cursor on the first comment left.
                 *self = Self {
                     filter: self.filter.next(),
                     expanded: std::mem::take(&mut self.expanded),
-                    reveal_selection: true,
                     ..Self::default()
                 };
             }
