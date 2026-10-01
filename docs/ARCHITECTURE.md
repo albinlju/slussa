@@ -50,10 +50,12 @@ src/
 ├── git_url.rs             Splits a git remote into host and path; web base URL
 ├── test_support.rs        Test-only: `FakeGh` and `MockHttp`
 ├── app/
-│   ├── mod.rs             Event loop, task channel and effect dispatch
+│   ├── mod.rs             Composes the modules below
+│   ├── event_loop.rs      `App`, the event loop, the task channel and effect dispatch
 │   ├── state.rs           AppState composition (Store, Ui, Screen)
-│   ├── store.rs           Cache, PR operations/errors, in-flight loads and reviews
-│   ├── action.rs          UI messages, application requests and load results
+│   ├── store.rs           Cache, PR operations/errors, in-flight loads, reviews, tickets
+│   ├── notice.rs          The one-line message over the footer
+│   ├── action.rs          `Action` (input), `Effect` (work), `TaskResult` (what came back)
 │   ├── navigation.rs     Screen identity, open PR and initiate missing loads
 │   ├── commands.rs       Execute resolved review/comment/lifecycle commands
 │   ├── reviews.rs        Review drafts, comment targets and anchors
@@ -62,7 +64,7 @@ src/
 │   ├── fetchers.rs        Run providers off the UI thread
 │   ├── loads.rs           Apply asynchronous results
 │   ├── refresh.rs         Manual and periodic refresh
-│   ├── preflight.rs       Provider detection and authentication checks
+│   ├── preflight.rs       Provider detection and authentication checks; `Session`
 │   └── remote.rs          Local repository/remote detection
 ├── tui/
 │   ├── mod.rs             UI composition, screen dispatch and input priority
@@ -72,18 +74,21 @@ src/
 │   ├── components/
 │   │   ├── search_input.rs
 │   │   ├── help_dialog.rs   Scrollable help shared by list and detail
-│   │   ├── comment_editor.rs
+│   │   ├── comment_editor.rs  The draft being written and its mode
+│   │   ├── text_buffer.rs     Text with a caret; wrapping
 │   │   └── diff_viewer/
-│   │       ├── mod.rs     DiffViewer state and updates
+│   │       ├── viewer.rs  DiffViewer state and updates; what the pane drew last
 │   │       ├── keys.rs    Tree/pane input
 │   │       ├── render.rs  Composition
 │   │       ├── tree.rs    Tree rendering
 │   │       ├── pane.rs    Diff and inline-thread rendering
 │   │       └── file_tree.rs  Visible tree projection
 │   ├── screens/
-│   │   ├── pr_list/       PrListScreen: table, filter and search
+│   │   ├── pr_list/
+│   │   │   ├── screen.rs  PrListScreen: selection, overlay, filter and search
+│   │   │   └── render.rs, columns.rs, filter.rs   Table, its columns, sort and status filter
 │   │   └── pr_detail/
-│   │       ├── mod.rs     PrDetailScreen: children and local dialog state
+│   │       ├── screen.rs  PrDetailScreen: children, the surface shown and the overlay
 │   │       ├── interactions.rs  Dialog/editor workflows and resolved commands
 │   │       ├── keys.rs    Modal, screen and focused-child routing
 │   │       ├── view.rs    Read-only component/store queries
@@ -105,7 +110,7 @@ src/
 │       ├── dialog.rs     Shared dialog geometry and footer
 │       ├── markdown.rs
 │       └── table.rs
-├── domain/               Provider-independent data models and rules
+├── domain/               Provider-independent data models, ids and rules
 └── providers/            Provider requests and payload mapping
     ├── github/           `gh` calls, GraphQL templates, pagination, threads
     ├── bitbucket_dc/     REST client, auth (keyring), probe, diff and activity mapping
@@ -114,33 +119,52 @@ src/
 
 ## Component contract
 
-`Component` has an associated borrowed `Context` and a typed `Message`:
+`Component` (`tui/component.rs`) has two borrowed contexts and a typed message:
 
-- `handle_key(&self, key, context) -> Option<Action>` translates input.
-- `update(&mut self, message, context) -> Option<Action>` changes local state.
-  A returned action requests application-level work; `None` means it was handled
+- `handle_key(&self, key, input) -> Option<Action>` translates input and
+  changes nothing.
+- `update(&mut self, message, input) -> Option<Effect>` changes local state. A
+  returned `Effect` asks the application for work; `None` means it was handled
   locally.
-- `render(&mut self, frame, area, context)` draws and updates layout-derived
-  values such as viewport size and visible diff anchors.
+- `render(&mut self, frame, area, view)` draws and records layout-derived
+  values such as the viewport size and what the diff pane's cursor is on.
 
-There is no shared mutable store inside a component and no `Arc<Mutex<AppState>>`.
-Contexts borrow only the data a component needs. The list receives PR data and a
-refresh indicator; the diff receives diff data, threads, queued comments and an
-author. The detail screen receives a read-only Store and navigation context.
+`Input` is what handling a key or a message needs to know; `View` is what
+drawing needs. Most components need nothing to handle input (`Input = ()`) and
+a good deal to draw, so the two are separate types and nobody builds a
+placeholder context to call a method that ignores it.
+
+Three message types keep the directions apart (`app/action.rs`):
+
+- **`Action`** is input: what a key or a paste becomes. It is grouped by the
+  component that consumes it (`List`, `Detail`, `Diff`, `Commits`, `Search`),
+  and `DetailAction` is grouped again by the part of the PR screen that handles
+  it (`Nav`, `Timeline`, `Confirm`, `Review`, `Merge`, `Editor`, `Pr`, ...), so
+  each part is handed only its own kind and matches it in full.
+- **`Effect`** is work for the application (`Navigate`, `Refresh`, `OpenPr`,
+  `Command`, `PrLink`, ...). Only these reach `App`, which matches them
+  exhaustively. A component cannot hand its own message on: `Effect` has no
+  variant for one.
+- **`TaskResult`** is what work off the UI thread sends back: a `Read`, a
+  finished write with its ticket, or a finished link action.
+
+There is no shared mutable store inside a component and no
+`Arc<Mutex<AppState>>`. Contexts borrow only the data a component needs. The PR
+screen gets a `DetailContext`, built once per key or frame by
+`DetailContext::new(store, pr_id, tab)`, which returns `None` unless the PR is
+in the list: nothing on the screen asks again whether there is a PR.
 
 The concrete implementations are `PrListScreen`, `PrDetailScreen`, `DiffViewer`,
-`CommitList`, `Overview`, `Timeline`, `Description`, `SearchInput`, `CommentEditor`,
-`ConfirmDialog`, `ReviewDialog` and `MergeDialog`.
-Small visual pieces, including badges, stay render
-functions. Tree and pane are internal parts of DiffViewer; its shared file
-selection and focus are coordinated by that owner. PrDetailScreen owns optional dialog instances and manages opening/closing them;
-each selectable dialog owns its private cursor. The screen resolves
-selected verdicts, merge strategies and accepted confirmations into `Command`
-payloads carrying the PR id. Application workflows never read dialog or editor
-state.
-`ErrorDialog` owns message scrolling and input capture. A shared `HelpDialog` component
-owns help scrolling; each screen owns opening/closing it and its help entries. Sidebar implements
-Ratatui `Widget` and borrows its data without owning navigation state.
+`CommitList`, `Overview`, `Timeline`, `Description`, `SearchInput`,
+`CommentEditor`, `ConfirmDialog`, `ReviewDialog`, `MergeDialog`, `ErrorDialog`
+and `HelpDialog`. Small visual pieces, including badges, stay render functions.
+Tree and pane are internal parts of DiffViewer; its shared file selection and
+focus are coordinated by that owner. `PrDetailScreen` holds at most one dialog
+(`Overlay`) and opens and closes it; each dialog owns its private cursor. The
+screen resolves selected verdicts, merge strategies and accepted confirmations
+into `Command` payloads carrying the PR id. Application workflows never read
+dialog or editor state. Sidebar implements Ratatui `Widget` and borrows its
+data without owning navigation state.
 
 ## State ownership
 
@@ -153,17 +177,27 @@ Ratatui `Widget` and borrows its data without owning navigation state.
   different PR.
 - **Ui** owns the list and detail screen instances. Refresh indicators derive
   from the Store's in-flight resources for the visible screen.
-- **PrListScreen** owns selection, status filter, filter picker and SearchInput.
-- **PrDetailScreen** owns its child components, editor and dialog state. Its
-  `open(pr_id)` lifecycle resets navigation and saves/restores editors by PR id.
-  A submission acknowledgement only clears the corresponding PR's editor.
-- **DiffViewer** owns file selection, tree expansion, focus, scroll, searches and
-  rendered line/thread anchors. CommitList owns a second DiffViewer instance,
-  so drilling into a commit cannot change the PR diff's cursor or search.
+- **PrListScreen** owns selection, status filter, sort, SearchInput and one
+  optional `ListOverlay` (help, or the filter picker with its highlighted row).
+- **PrDetailScreen** owns its child components, the editor and one optional
+  `Overlay` (help, confirm, review or merge), so two dialogs cannot be open at
+  once. `surface(tab)` says what the content area shows (`Surface`: a tab, and
+  on Commits whether a commit is open); the keys, the footer and the comment
+  targets all ask it. Its `open(pr_id)` lifecycle resets navigation and
+  saves/restores editors by PR id. A submission acknowledgement only clears the
+  corresponding PR's editor.
+- **DiffViewer** owns file selection, tree expansion, focus, scroll and
+  searches. What the pane drew last is one value, `PaneNav` (item count, search
+  matches and what the cursor is on: a line, a thread or a queued comment). The
+  renderer replaces it whole and empties it when no pane is drawn, so the keys
+  never act on rows from an earlier frame. CommitList holds its own DiffViewer
+  inside `CommitsView::Diff`, so drilling into a commit cannot change the PR
+  diff's cursor or search, and there is no commit diff without an open commit.
 - **Overview** composes Timeline and Sidebar; Timeline owns scroll, selected
   comments, reply/thread targets and Ctrl-j/k sub-navigation. Description owns
   its own scroll state.
-- **CommentEditor** owns the active text draft and editing behavior.
+- **CommentEditor** owns the draft being written: its target, a `TextBuffer`
+  and one mode (`Kept` after Esc or a restore, `Typing`, `ConfirmDiscard`).
 
 Review and editor drafts are persisted locally by `app/drafts.rs`, independently
 of the provider APIs.
@@ -191,10 +225,10 @@ terminal key (applied synchronously before the next key)
   → Action
   → Ui.update
       → component.update → local state
-      → optional application effect
+      → optional Effect
           → App commands / navigation / refresh
-          → provider task
-          → Loaded action
+          → provider task (needs a ticket)
+          → TaskResult
           → Store + PR-scoped component acknowledgement
   → render
 ```
@@ -203,11 +237,11 @@ An open editor or modal captures input before the underlying search field.
 Tab selection and its local resets are handled by PrDetailScreen, which returns
 a `Navigate` effect for the application to store. Diff navigation and search
 selection resets are delegated to the active DiffViewer; the root Ui only routes
-to screens. List and commit search resets live in their respective components. The current `Option<Action>` routing contract relies
+to screens. List and commit search resets live in their respective components. The `Option<Action>` routing contract relies
 on that explicit modal/focus priority: an ignored key in a modal does not fall
 through to content behind it.
 
-The action channel carries asynchronous results; local key actions are applied
+The task channel carries asynchronous results (`TaskResult`); local key actions are applied
 immediately so rapid input cannot use stale selection or dialog state.
 Provider tasks remain centralized. Components never
 start requests during rendering. Opening a commit emits a
@@ -217,10 +251,15 @@ work. Opening a PR similarly starts only missing initial loads.
 ## Startup and providers
 
 `main` initializes logging and dispatches the synchronous CLI. Preflight detects
-the repository host and authentication before the Tokio runtime starts.
+the repository host and authentication before the Tokio runtime starts and
+returns a `Session`: the provider together with the account it acts as. `App`
+is built from a session, so there is no app without a known user, and a
+`Username` is never empty. The theme is chosen once, by `theme::init`, before
+anything is drawn. `TerminalGuard` in `main` restores the terminal when it is
+dropped, on a normal exit, an early return or a panic.
 GitHub delegates authentication and requests to `gh`; Bitbucket DC uses a PAT
 from the OS keyring and blocking HTTP calls. `fetchers.rs` runs both providers
-through `spawn_blocking` and returns results through the action channel.
+through `spawn_blocking` and returns results through the task channel.
 
 The remote decides where a provider looks. An http(s) remote gives the web
 address (scheme, host, port and the context path before `scm/`), so a Bitbucket
@@ -283,10 +322,10 @@ Provider-side limits and server/version compatibility still require live checks.
 - **Provider and process calls block, and run off the UI thread.** GitHub
   spawns `gh`; Bitbucket Data Center uses `reqwest::blocking`. Both run through
   `App::spawn_fetch`, which wraps them in `spawn_blocking` and sends the result
-  back as an `Action::Loaded`. `gh` calls have a 60 second deadline. Do not add
+  back as a `TaskResult`. `gh` calls have a 60 second deadline. Do not add
   async HTTP or ad hoc threads; a new external call follows the same path.
 - **Nothing starts I/O while rendering or handling a key.** Components return
-  an `Action`; `App` decides whether work starts.
+  an `Effect`; `App` decides whether work starts.
 - **A child process that needs the terminal** (an editor, an agent) cannot use
   this path. It needs the suspend and resume sequence described in
   ROADMAP.md (*Suspend / resume*), which is not built yet.
@@ -295,43 +334,99 @@ Provider-side limits and server/version compatibility still require live checks.
 
 1. A screen opens or a refresh ticks; `App` calls a `spawn_load_*` function in
    `app/fetchers.rs`.
-2. It inserts the resource's `FetchKey` into `Store::fetches`. If the key is
-   already there, it returns.
+2. It asks `Store::begin_fetch(key)` for a `FetchTicket`. That registers the
+   resource's `FetchKey` in `Store::fetches`, refuses a resource the provider
+   does not have, and gives no ticket if the key is already there. `spawn_read`
+   takes the ticket, so a read cannot start unregistered.
 3. `spawn_fetch` runs the provider call on `spawn_blocking`.
-4. The result returns as `Action::Loaded(...)` and `app/loads.rs` applies it to
-   the `Cache` with `LoadState::reload`, which keeps loaded data if the reload
-   failed. It removes the key, records a refresh failure if needed, and starts
-   a follow-up fetch if `reload_after_fetch` names the resource.
+4. The result returns as `TaskResult::Read(read)`. A `Read` names its own
+   resource (`Read::key`), so `app/loads.rs` settles the bookkeeping for every
+   kind the same way and then stores the data with `LoadState::reload`, which
+   keeps loaded data if the reload failed. It removes the key, records a
+   refresh failure if needed, and starts a follow-up fetch if
+   `reload_after_fetch` names the resource.
 5. The next render reads the store.
 
 ## Lifecycle: a write
 
 1. A key press becomes a `DetailAction`; the screen turns the finished dialog
    or editor into a `Command` with the PR id (`pr_detail/interactions.rs`).
+   What a command carries is already checked: a comment's text is a `NonBlank`,
+   an edit or a delete a `CommentKey`, a thread to resolve a `ThreadHandle`.
 2. `App::execute` (`app/commands.rs`) rejects commands the provider does not
-   support (`Command::supported_by`) and ignores a second write while one is
-   pending for that PR.
-3. It records an `Operation` for the PR and calls `checkpoint_submission`,
-   which saves drafts first. If that save fails, nothing is sent.
-4. A `spawn_*` function sends the write and returns a `LoadedAction`.
-5. On success the operation and the matching draft are cleared and activity,
-   PR metadata and mergeability are refetched. On failure the error is stored
-   under that PR, the draft stays, and the user can retry explicitly.
+   support (`Command::supported_by`).
+3. `App::begin_write(pr_id, operation)` asks `Store::begin_write` for a
+   `WriteTicket`, which records the `Operation` and gives none while another
+   write is pending for that PR, and then calls `checkpoint_submission`, which
+   saves drafts first. If that save fails, nothing is sent.
+4. A `spawn_*` function takes the ticket and sends the write. A line comment
+   becomes a `ReviewComment` in `fetchers::postable`, the one place that
+   refuses a comment whose diff revision is unknown.
+5. The result returns as `TaskResult::Written { ticket, result }`. On success
+   the operation and the matching draft are cleared and activity, PR metadata
+   and mergeability are refetched. On failure the error is stored under that
+   PR, the draft stays, and the user can retry explicitly. The PR is marked
+   "may have reached the server" only if `WriteError::may_have_reached_server`
+   says so: a write refused locally, or by a stated server refusal, is not.
+
+## Errors
+
+A provider call returns `FetchError` (`providers/error.rs`), an enum that keeps
+its cause. It travels as a value through `spawn_fetch`, `Read` and
+`LoadState::Failed`, and is turned into text by `user_message()` only where it
+is shown; the log gets its `Display`. A review that goes out as several
+requests can end as `ReviewError::Partial`, which says how much arrived, and
+becomes `WriteError::PartialReview` in the app. A worker that panicked is
+`FetchError::WorkerPanicked`, not a lost result.
+
+## Types that carry the rules
+
+A state that should not exist is made impossible to write, rather than checked
+where it is used. Three shapes, in the order to reach for them:
+
+- **An enum with the data in the variant it belongs to**, instead of a struct
+  with a flag and optional fields. `Overlay`, `ListOverlay`, `Surface`,
+  `CommitsView`, `EditMode`, `NavTarget`, `Mergeability` (the reasons are in
+  `Conflicts` and `Blocked`), `ThreadHandle`, `LineRef`, `CommentKind`. A
+  `match` on one of these names every variant, so a new one is a compile error
+  wherever it has to be handled. Clippy's `wildcard_enum_match_arm` enforces
+  that in `app`, `domain` and `providers`; `tui` matches crossterm's `KeyCode`
+  in every key handler, where a catch-all is right, so there it is a review
+  rule.
+- **A newtype with one constructor**, for a value with a rule. `Username`
+  (never empty), `NonBlank` (comment text), `WebUrl` (safe to hand to a
+  browser), `ReviewComment` (its diff revision is known), `CommentKey` (the
+  comment has an id), `Pat` (never printed). The ids `PrId`, `CommentId` and
+  `CommitOid` have no rule; they exist so that two numbers or two strings
+  cannot be passed in each other's place.
+- **A ticket or a constructor that requires its data**, instead of a call order
+  to remember. `FetchTicket`, `WriteTicket`, `Session`, `DetailContext`,
+  `TerminalGuard`.
+
+The types in `app/reviews.rs`, with `CommentAnchor` and `DiffRevision`, are
+written to the draft file, and a file that cannot be read stops slussa from
+starting. The strong types sit on the UI and provider side of that boundary
+and keep the file's spelling through serde (`#[serde(transparent)]` on the
+ids, `review: bool` for `CommentKind`). The version 1 fixture in
+`app/drafts.rs` pins the format.
 
 ## Checklists
 
 **A new provider write.** Add the method to `Provider` and to both provider
 modules. Add a `Feature` in `domain/capabilities` and set it in each provider's
 capabilities. Add a `Command` variant and its `supported_by` arm, and an
-`Operation` if it is a new kind. Add the `DetailAction`, key, help entry and
-footer hint, and resolve it to the `Command` in `interactions.rs`. Add the
-`execute` arm and a `spawn_*` function, handle the `LoadedAction` in `loads.rs`,
-and write a regression test that injects the result.
+`Operation` if it is a new kind. Add the message to the sub-enum of
+`DetailAction` that owns it, with its key, help entry and footer hint, and
+resolve it to the `Command` in `interactions.rs`. Add the `execute` arm, which
+gets a `WriteTicket` from `begin_write`, and a `spawn_*` function that takes
+it. The compiler lists the matches that need the new variants. Write a
+regression test that injects the result.
 
-**A new read resource.** Add a `FetchKey` and a `LoadState` field on `PrData`.
-Extend `has_cached_data`, `refreshing` and `refresh_failed` in `app/store.rs`,
-add a `spawn_load_*` function and a `LoadedAction`, apply it in `loads.rs`, and
-choose its cadence in `app/refresh.rs`.
+**A new read resource.** Add a `FetchKey`, a `Read` variant with its `key` and
+`failure` arms, and a `LoadState` field on `PrData`. Extend `has_cached_data`,
+`refreshing` and `refresh_failed` in `app/store.rs`, add a `spawn_load_*`
+function, apply the `Read` in `loads.rs`, and choose its cadence in
+`app/refresh.rs`.
 
 ## Verification and adding behavior
 
@@ -381,9 +476,10 @@ merge strategies. Unsupported features are hidden in tabs, footer hints and
 help, blocked in keyboard/action handling, and checked again before commands
 execute. Optional builds/mergeability fetches are skipped too.
 
-Review submission semantics are explicit: GitHub requires a single revision
-for an atomic review; Bitbucket submits sequentially with partial-progress
-recovery. Unapprove is offered by the Bitbucket adapter only. Components use
+Review support is one optional value, `Capabilities::review`
+(`ReviewCaps`: the verdicts, the ones an author may give on their own PR, and
+how a review is submitted). GitHub requires a single revision for an atomic
+review; Bitbucket submits sequentially with partial-progress recovery. Unapprove is offered by the Bitbucket adapter only. Components use
 capabilities rather than branching on the provider enum. New adapters can
 expose their supported subset without adopting GitHub's complete feature set.
 
@@ -438,11 +534,13 @@ construct platform-specific routes. In either list or detail, `o` opens the PR
 in the browser and `y` copies its URL; missing URLs suppress both actions and
 their help entries. Search, editor and modal input retain precedence.
 
-`Action::PrLink` captures the target PR id. The app resolves the cached URL and
+`Effect::PrLink` captures the target PR id. The app resolves the cached URL and
 runs the desktop effect off the UI thread, independently of PR mutations and
 draft recovery. A brief notice reports completion or failure, identifies the
-PR, and leaves the selection unchanged. HTTP(S) URLs are validated before use;
-helper processes receive argument arrays or stdin, not interpolated commands.
+PR, and leaves the selection unchanged. The URL is checked once, by
+`WebUrl::parse` (HTTP(S), a host, no credentials or control characters), and
+the helpers take only a `WebUrl`; they receive argument arrays or stdin, not
+interpolated commands.
 
 macOS uses `open`/`pbcopy`; Windows uses the URL handler and PowerShell clipboard;
 Linux uses `xdg-open` and an available `wl-copy`, `xclip` or `xsel`. Over SSH,

@@ -244,12 +244,6 @@ rank below the decision path.
 - [ ] **Config** — repos / providers, default filters, keybindings, agent
   commands. *(theme is done: `~/.config/slussa/config.toml` `theme = "…"`,
   overridden by `SLUSSA_THEME`)*
-- [ ] **No-panic audit** — audit fetch/parse paths so a bad response never
-  panics (use `LoadState::Failed` / the popup everywhere instead of
-  `unwrap`/`unreachable!`). *Done for the parse paths:* a GraphQL or REST
-  answer of the wrong shape is a load error (it indexed into the value and
-  could panic), and scroll positions past 65 535 rows are capped instead of
-  wrapping. The four `unreachable!` left go with *Split `Action`*.
 - [ ] **Empty / loading / error states** per view (use `LoadState` everywhere).
 - [ ] **Release** — *released:* 0.1.0 (2026-10-01), then 0.1.1, which is also on
   crates.io (`cargo install slussa --locked`). The repository is public, the
@@ -276,9 +270,9 @@ a decision-path feature needs them:
 
 ## Engineering
 
-**State on 2026-09-30:** single crate, about 23 600 lines of Rust, 254 tests,
-`clippy::pedantic` clean, CI on Linux and macOS, a release workflow that has
-been rehearsed, a README.
+**State on 2026-10-01:** single crate, about 26 200 lines of Rust, 305 tests,
+`clippy::pedantic` and `nursery` clean with the no-panic lints on, CI on Linux
+and macOS, two releases, a README.
 
 Rule of thumb for everything below: **do the refactors when a feature touches
 the code anyway, do the tooling now.** Every open item has a trigger; do not do
@@ -290,23 +284,15 @@ tighter than their `App` struct with 20 `pending_*` flags, and it stays.
 
 ### Code, with the next feature that touches the area
 
-- [ ] **Split `Action` into local and app-level.** Today one enum carries both
-  component-local actions (`Detail`, `Diff`, `List`, `Search`, `Commits`,
-  `Paste`, `HelpScroll`) and application effects (`Navigate`, `Refresh`,
-  `Command`, `Loaded`, `PrLink`). `App::apply_inner` and `Ui::update` assert
-  with `unreachable!` that the local ones were consumed. Make components return
-  `Option<Effect>` where `Effect` holds only the app-level variants; local
-  messages never reach the app. Removes the last `unreachable!`s (four remain
-  after the panic audit: `app/mod.rs` twice, `pr_detail/interactions.rs`,
-  `pr_detail/mod.rs`; do not patch them separately) and makes the contract
-  visible in the signature. *Trigger:* first feature that adds an app-level
-  action (agent handoff, run-a-review).
 - [ ] **Keybinding table for the PR view.** `pr_detail/keys.rs` is a long
   function of conditions, each mixing key, tab, modifiers and PR state, with
   the help overlay maintained separately by hand. Replace with a slice of
   `Binding { key, mods, tabs, gate: fn(&DetailView, pr_id) -> bool, action,
   help }`; routing and help are then derived from one source, and
-  `supports_action` in `view.rs` becomes the gate. *Trigger:* first feature
+  `supports_action` in `view.rs` becomes the gate. With the keys in a table,
+  `clippy::wildcard_enum_match_arm` can cover `tui` as well: today 27
+  matches on crossterm's `KeyCode` end in a catch-all, so the lint is on
+  only in `app`, `domain` and `providers`. *Trigger:* first feature
   that adds two or more keys to the PR view.
 - [ ] **Provider trait instead of enum dispatch.** `providers/mod.rs` matches
   on `Provider` in every method; fine for two providers. Move to a
@@ -335,14 +321,13 @@ tighter than their `App` struct with 20 `pending_*` flags, and it stays.
 - [ ] **Error classification for the caller.** Add `FetchError::kind()`
   (`Retryable | NeedsAuth | Gone | Invalid | Unknown`) so the error dialog
   decides whether to offer *retry*, *re-login* or just *dismiss* from the
-  classification instead of from prose in the message. `user_message()`
-  already covers the human text, and the split between log message and user
-  message is right and should be kept. *Trigger:* next change to the error
+  classification instead of from prose in the message. *Done so far:*
+  `FetchError` is an enum that keeps its cause and reaches the screen as a
+  value (`LoadState::Failed(FetchError)`, `WriteError`), and
+  `may_have_reached_server()` already decides whether a failed write is marked
+  for checking. `user_message()` covers the human text, and the split between
+  log message and user message is right and should be kept. *Trigger:* next change to the error
   dialog or a new provider.
-- [ ] **Types that carry invariants.** slussa already does this for
-  `CommentAnchor` + `DiffRevision`. Extend it to the screen/app boundary: a
-  `ResolvedCommand` that only `pr_detail/interactions.rs` can construct, so
-  `app/commands.rs` never re-checks dialog state. Pairs with *Split `Action`*.
 - [ ] **Conformance test for the provider boundary.** One
   `tests/provider_conformance.rs` over a fake GitHub and a fake Bitbucket,
   covering list, open, comment, review, merge and the error paths. *Trigger:*
@@ -356,12 +341,43 @@ tighter than their `App` struct with 20 `pending_*` flags, and it stays.
   than `github/pagination.rs` and the right shape for *Search older PRs and show the total*
   under *Features to build*.
 - [ ] **Split the files that exceed the size rule when next touched
-  substantially** (modules stay under about 500 lines, `mod.rs` composes): the
-  files `widgets/comment.rs`, `diff_viewer/pane.rs`, `pr_list/mod.rs` and
-  `timeline.rs`. Not a refactor-only change. *Done for the tests:* the four
-  suites over the limit (`app/tests`, `app/flow_tests`,
-  `providers/transport_tests`, `tui/regression_tests`) are directories with a
-  file per concern and a shared `support.rs`.
+  substantially** (modules stay under about 500 lines, `mod.rs` composes).
+  Two files are over: `widgets/comment.rs` (679) and `diff_viewer/pane.rs`
+  (564). Five `mod.rs` files still implement instead of composing: `tui/`,
+  `tui/widgets/`, `providers/`, `providers/github/` and
+  `providers/bitbucket_dc/`; the two provider ones go with *Provider trait*.
+  Not a refactor-only change. *Done:* `pr_list`, `pr_detail`, `diff_viewer`
+  and `app` have a `mod.rs` that only composes, `timeline.rs` is under the
+  limit, and the four test suites over it are directories with a file per
+  concern and a shared `support.rs`.
+- [ ] **Cache rendered Markdown.** `markdown::render` runs for the
+  description, and `render_no_margin` for every comment in the Overview and in
+  the diff, on every frame. Keep the lines per comment and width, and drop
+  them when the activity is re-read. *Trigger:* a PR whose conversation
+  scrolls slowly, or the AI-review threads, which make conversations longer.
+- [ ] **One place for text width.** Width is measured by `chars().count()` in
+  three places and by ratatui's `width()` in the rest; they disagree on wide
+  and combining characters. Move truncation, padding and wrapping into one
+  module. *Trigger:* the next layout bug with CJK text or emoji.
+- [ ] **Ratatui's `Scrollbar` and `Tabs`** instead of the hand-drawn ones in
+  `widgets/mod.rs` and the PR screen's tab row. *Trigger:* the next change to
+  either.
+- [ ] **Select by id, not by index.** The list and the commit list keep a
+  position and reconcile it by id when the data changes. Holding the id makes
+  the reconciling unnecessary. *Trigger:* *Unread / updated*, or any feature
+  that reorders the list while it is open.
+- [ ] **The open tab is stored twice**, in `Screen::Detail { tab }` and in
+  `PrDetailScreen::active_tab`, and kept in step by `navigate`. One should be
+  derived from the other. *Trigger:* the next change to tab navigation.
+- [ ] **Functions over 100 lines.** `too_many_lines` is allowed crate-wide;
+  the long ones are renderers (`pane.rs`, `comment.rs`, `timeline.rs`) and
+  `pr_detail/keys.rs`. *Trigger:* *Render-context structs* and *Keybinding
+  table*, which split them anyway.
+- [ ] **Small type changes left out of the 2026-10 type work**, because none
+  removes a check today: a `PrInfoSource` in `Capabilities` instead of
+  `Feature::PrInfo`, and `sort` and `theme` parsed by serde instead of by
+  `Sort::from_config` and `theme::init` (each is already parsed once, at
+  startup). *Trigger:* *Config*, for the second.
 - [ ] **The first load is slow on a large repository.** On `cli/cli` (63 open
   PRs) the first frame took about 0.75 s for `git`, `gh --version`,
   `gh auth status` and `gh api user`, and the first page of 30 open PRs 2.0 to
@@ -383,13 +399,10 @@ tighter than their `App` struct with 20 `pending_*` flags, and it stays.
   100x30 and 40x12 for the list and all five detail tabs, but with placeholder
   data: one PR, no diff, no threads. Add a snapshot with a diff with an inline
   thread, several commits and a failing build at both sizes, and one at 80x24.
+  Consider `insta` then: one file per screen and a review step for changes,
+  instead of one text file compared whole.
 - [ ] **`cargo nextest`** in CI (parallel, per-test timeouts, clearer failure
   output). Local `cargo test` stays fine.
-- [ ] **`clippy::wildcard_enum_match_arm`.** It refuses a `_ =>` arm on an
-  enum, so a new variant is a compile error where it was forgotten instead of
-  falling into the catch-all. 75 arms match today; most are on `Action` and
-  `DetailAction` and go with *Split `Action`*. Turn it on then, with an
-  `#[expect]` on key handlers that match crossterm's `KeyCode`.
 - [ ] **reqwest 0.13.** The crate is on 0.12; 0.13 is out. Not looked into.
 - [ ] **CodeRabbit on the repository.** An automatic AI reviewer on every PR.
   *Trigger:* the repository becomes public (see *Release* under *Features to build*).
@@ -444,8 +457,26 @@ domain model against it:
 
 Kept as one line each; the detail is in git history.
 
-- **Panic audit:** 12 of 16 `expect`/`unreachable!` in non-test code removed;
-  four remain and go with *Split `Action`*.
+- **Panic audit:** no `expect`, `unreachable!` or `#[allow]` is left in
+  non-test code. A GraphQL or REST answer of the wrong shape is a load error
+  (it indexed into the value and could panic), and scroll positions past
+  65 535 rows are capped instead of wrapping.
+- **Types before runtime checks (2026-10):** the rule in AGENTS.md and what it
+  produced, listed in ARCHITECTURE.md (*Types that carry the rules*).
+  `Action` is split into `Action` (input), `Effect` (work for the app) and
+  `TaskResult` (what came back), and `DetailAction` into a sub-enum per
+  handler, which removed the last four `unreachable!`. Components have
+  separate `Input` and `View` contexts. A read needs a `FetchTicket` and a
+  write a `WriteTicket`. `FetchError` is a typed enum carried as a value. The
+  PR screen's dialogs, the list's overlay, the editor and the diff pane each
+  hold one state instead of parallel flags. `PrId`, `CommentId` and
+  `CommitOid` replace bare numbers and strings. `wildcard_enum_match_arm` is
+  on in `app`, `domain` and `providers`. Bugs it found: `r` on the commit list
+  replied to the thread the Diff tab had left focused; the footer there offered
+  two keys that did nothing; every failed write was marked "may have reached
+  the server", also one refused before it was sent; keys moved the diff cursor
+  over rows no longer drawn. A printed Bitbucket provider would also have
+  included its token.
 - **Fixes from the 2026-10 quality review:** drafts are no longer synced to
   disk on every key typed in the editor; a Bitbucket 403 is shown as the
   server's refusal and not as a missing login; a failed account lookup at
