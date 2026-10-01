@@ -146,17 +146,6 @@ fn chdir_flag_reports_a_missing_directory() {
 }
 
 #[test]
-fn outside_a_git_repository_is_explained() {
-    let output = Sandbox::new().run_in_work(&[]);
-    assert_eq!(output.code, 1);
-    assert!(
-        output
-            .combined
-            .contains("must be run inside a git repository")
-    );
-}
-
-#[test]
 fn auth_login_needs_a_repository_too() {
     let output = Sandbox::new().run_in_work(&["auth", "login"]);
     assert_eq!(output.code, 1);
@@ -206,30 +195,24 @@ fn auth_login_on_bitbucket_cloud_says_it_is_unsupported() {
 }
 
 #[test]
-fn unparseable_remote_is_reported_with_the_remote() {
+fn without_a_terminal_it_exits_2_before_any_preflight() {
     let sandbox = Sandbox::new();
+    // A repository whose remote preflight would reject: the terminal check
+    // must come first, so that message never appears.
     sandbox.git(&["init", "-q"]);
     sandbox.git(&["remote", "add", "origin", "not-a-url"]);
     let output = sandbox.run_in_work(&[]);
-    assert_eq!(output.code, 1);
-    assert!(output.combined.contains("couldn't parse a host"));
-    assert!(output.combined.contains("not-a-url"));
-}
-
-#[test]
-fn bitbucket_cloud_is_reported_as_unsupported() {
-    let sandbox = Sandbox::new();
-    sandbox.git(&["init", "-q"]);
-    sandbox.git(&["remote", "add", "origin", "git@bitbucket.org:team/repo.git"]);
-    let output = sandbox.run_in_work(&[]);
-    assert_eq!(output.code, 1);
-    assert!(output.combined.contains("Bitbucket Cloud"));
-    assert!(output.combined.contains("isn't supported yet"));
+    assert_eq!(output.code, 2, "{}", output.combined);
     assert!(
-        output
-            .combined
-            .contains(&format!("{}/issues", env!("CARGO_PKG_REPOSITORY"))),
-        "the issue link points at this project: {}",
+        output.combined.contains("needs a terminal"),
+        "{}",
         output.combined
     );
+    assert!(output.combined.contains("slussa --help"));
+    assert!(
+        !output.combined.contains("not-a-url"),
+        "{}",
+        output.combined
+    );
+    assert!(!output.combined.contains('\u{1b}'), "no escape bytes");
 }

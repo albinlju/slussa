@@ -226,7 +226,7 @@ why a merge is blocked, the same on both providers. The rule that keeps this in
 step with the positioning: **agents may read and propose; only the human
 decides.** No new view: these are non-interactive subcommands that print and exit.
 
-- [ ] **Fail clearly without a terminal.** Today `slussa` run without a TTY does the
+- [x] **Fail clearly without a terminal.** Today `slussa` run without a TTY does the
   network preflight, then exits 1 with the operating system's own message
   (`couldn't start the terminal UI: Device not configured`) and a few escape bytes
   on stdout, which an agent cannot tell from any other failure. Check for a TTY
