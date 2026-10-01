@@ -9,7 +9,7 @@ use crate::{
         store::LoadState,
     },
     domain::{
-        comment::CommentThread,
+        comment::{CommentId, CommentThread},
         diff::{Diff, FileDiff},
     },
     tui::{
@@ -43,7 +43,7 @@ pub struct DiffViewer {
     pub pane: PaneNav,
     /// Root-comment ids of resolved threads the user has expanded (otherwise
     /// resolved threads render collapsed in the diff).
-    pub expanded_threads: HashSet<u64>,
+    pub expanded_threads: HashSet<CommentId>,
     pub focus: DiffFocus,
 }
 
@@ -85,7 +85,7 @@ impl FocusedNav {
     }
 
     /// The cursor on a thread whose root comment is `id`.
-    pub fn on_thread(id: u64) -> Self {
+    pub fn on_thread(id: CommentId) -> Self {
         Self::on(NavTarget::Thread(ThreadRef {
             handle: None,
             comment_id: Some(id),
@@ -170,7 +170,7 @@ impl DiffViewer {
     }
 
     /// The comment a reply from the pane cursor would answer.
-    pub const fn focused_reply(&self) -> Option<u64> {
+    pub const fn focused_reply(&self) -> Option<CommentId> {
         match self.focused_thread() {
             Some(thread) => thread.comment_id,
             None => None,

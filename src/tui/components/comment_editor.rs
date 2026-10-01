@@ -363,7 +363,7 @@ fn footer_lines(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::app::action::DetailAction;
+    use crate::{app::action::DetailAction, domain::comment::CommentId};
     fn editor(text: &str) -> CommentEditor {
         CommentEditor::start(CommentTarget::Pr, text.into())
     }
@@ -424,7 +424,7 @@ mod tests {
         assert!(!e.has_draft());
 
         let mut e = CommentEditor::restored(CommentDraft {
-            target: CommentTarget::Reply(7),
+            target: CommentTarget::Reply(CommentId(7)),
             text: "from last time".into(),
         });
         assert!(e.has_draft() && !e.is_open());
@@ -432,7 +432,10 @@ mod tests {
         assert!(e.is_open());
         e.insert_text("!");
         assert_eq!(e.draft().unwrap().text, "from last time!");
-        assert!(matches!(e.target(), Some(CommentTarget::Reply(7))));
+        assert!(matches!(
+            e.target(),
+            Some(CommentTarget::Reply(CommentId(7)))
+        ));
         e.clear();
         assert!(!e.has_draft());
     }

@@ -24,7 +24,7 @@ use chrono::{DateTime, Utc};
 use serde::Deserialize;
 use serde::de::DeserializeOwned;
 
-use crate::domain::comment::{Comment, Reaction};
+use crate::domain::comment::{Comment, CommentId, Reaction};
 use crate::domain::pr::{MergeStrategy, Mergeability, PrId};
 use crate::domain::review::{ReviewComment, ReviewVerdict};
 use crate::domain::user::{User, Username};
@@ -305,8 +305,9 @@ pub(super) fn map_gql_comment(c: GqlComment) -> Comment {
             })
         })
         .collect();
+    let id = c.database_id.map(CommentId);
     Comment {
-        id: c.database_id,
+        id,
         author: User {
             username: c.author.map(|a| a.login).unwrap_or_default(),
         },
@@ -315,7 +316,7 @@ pub(super) fn map_gql_comment(c: GqlComment) -> Comment {
         reactions,
         // Review-thread comments reply via this databaseId; issue comments are
         // flat and get None overridden in fetch_comments.
-        reply_to: c.database_id,
+        reply_to: id,
     }
 }
 

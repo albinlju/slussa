@@ -6,7 +6,7 @@ use crate::{
         store::{LoadState, PrData, Store},
     },
     domain::{
-        comment::{Comment, CommentKey, CommentKind, ThreadHandle},
+        comment::{Comment, CommentId, CommentKey, CommentKind, ThreadHandle},
         diff::FileDiff,
         pr::{Mergeability, PrId, PrStatus, PullRequest},
         review::ReviewVerdict,
@@ -284,12 +284,12 @@ impl<'a> DetailView<'a> {
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct CommentRef {
     /// `None` when the provider gave no id (can't edit/delete it).
-    pub id: Option<u64>,
+    pub id: Option<CommentId>,
     pub kind: CommentKind,
 }
 
 impl CommentRef {
-    pub const fn new(id: Option<u64>, kind: CommentKind) -> Self {
+    pub const fn new(id: Option<CommentId>, kind: CommentKind) -> Self {
         Self { id, kind }
     }
 
@@ -308,7 +308,7 @@ pub struct ThreadRef {
     /// What resolving it takes; none when it cannot be resolved.
     pub handle: Option<ThreadHandle>,
     /// Its root comment: what a reply hangs under and what folding remembers.
-    pub comment_id: Option<u64>,
+    pub comment_id: Option<CommentId>,
     pub resolved: bool,
 }
 

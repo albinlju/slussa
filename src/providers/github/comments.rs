@@ -1,5 +1,5 @@
 use crate::domain::{
-    comment::{Comment, CommentKey, CommentKind},
+    comment::{Comment, CommentId, CommentKey, CommentKind},
     diff::LineRef,
     pr::PrId,
     review::ReviewComment,
@@ -67,7 +67,7 @@ pub fn post_pr_comment(pr_number: PrId, body: &str) -> Result<(), FetchError> {
     Ok(())
 }
 
-pub fn reply_comment(pr_number: PrId, parent: u64, body: &str) -> Result<(), FetchError> {
+pub fn reply_comment(pr_number: PrId, parent: CommentId, body: &str) -> Result<(), FetchError> {
     super::cli::run_gh(&[
         "api",
         "--method",

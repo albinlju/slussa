@@ -272,7 +272,7 @@ mod tests {
     use super::*;
     use crate::app::reviews::{CommentAnchor, CommentTarget, PendingComment};
     use crate::domain::{
-        comment::{CommentKey, CommentKind},
+        comment::{CommentId, CommentKey, CommentKind},
         diff::DiffRevision,
     };
     static NEXT: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
@@ -306,7 +306,7 @@ mod tests {
                 (
                     PrId(1),
                     CommentDraft {
-                        target: CommentTarget::Reply(789),
+                        target: CommentTarget::Reply(CommentId(789)),
                         text: "å\n🦀".into(),
                     },
                 ),
@@ -341,7 +341,7 @@ mod tests {
         assert_eq!(restored.editors[&PrId(1)].text, "å\n🦀");
         assert!(matches!(
             restored.editors[&PrId(1)].target,
-            CommentTarget::Reply(789)
+            CommentTarget::Reply(CommentId(789))
         ));
         assert_eq!(
             restored.reviews[&PrId(2)].comments[0]
@@ -386,14 +386,14 @@ mod tests {
         let editors = &envelope.snapshot.editors;
         assert!(matches!(
             editors[&PrId(1)].target,
-            CommentTarget::Reply(789)
+            CommentTarget::Reply(CommentId(789))
         ));
         assert!(matches!(&editors[&PrId(2)].target, CommentTarget::Line(a) if a.line == 42));
         assert!(matches!(editors[&PrId(3)].target, CommentTarget::Pr));
         assert!(matches!(
             editors[&PrId(4)].target,
             CommentTarget::Edit(CommentKey {
-                id: 5,
+                id: CommentId(5),
                 kind: CommentKind::Review
             })
         ));

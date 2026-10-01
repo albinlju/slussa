@@ -1,7 +1,7 @@
 use crate::{
     app::reviews::{CommentAnchor, PendingComment},
     domain::{
-        comment::CommentThread,
+        comment::{CommentId, CommentThread, ThreadHandle},
         diff::{Diff, DiffLine, FileDiff, LineRef},
     },
     tui::{
@@ -142,8 +142,8 @@ enum NavKind {
     Thread {
         line: usize,
         removed: bool,
-        reply_to: Option<u64>,
-        handle: Option<crate::domain::comment::ThreadHandle>,
+        reply_to: Option<CommentId>,
+        handle: Option<ThreadHandle>,
         resolved: bool,
     },
     /// A queued (not-yet-posted) review comment — `index` into the pending review.
@@ -203,7 +203,7 @@ fn build_diff_body(
     active: Option<usize>,
     query: &str,
     author: &str,
-    expanded: &HashSet<u64>,
+    expanded: &HashSet<CommentId>,
 ) -> DiffBody {
     let theme = theme::current();
     let mut lines: Vec<Line<'_>> = Vec::new();

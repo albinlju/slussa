@@ -127,14 +127,14 @@ fn github_refusing_a_reopen_reaches_the_user_in_githubs_words() {
 
 #[test]
 fn github_edits_and_deletes_a_comment_where_its_kind_lives() {
-    use crate::domain::comment::{CommentKey, CommentKind};
+    use crate::domain::comment::{CommentId, CommentKey, CommentKind};
     let installed = FakeGh::new().on("api", "{}").install();
     let review = CommentKey {
-        id: 11,
+        id: CommentId(11),
         kind: CommentKind::Review,
     };
     let conversation = CommentKey {
-        id: 12,
+        id: CommentId(12),
         kind: CommentKind::Conversation,
     };
     Provider::GitHub
@@ -161,7 +161,7 @@ fn github_edits_and_deletes_a_comment_where_its_kind_lives() {
 
 #[test]
 fn github_resolves_a_thread_by_its_node_id_and_refuses_another_providers_handle() {
-    use crate::domain::comment::ThreadHandle;
+    use crate::domain::comment::{CommentId, ThreadHandle};
     let installed = FakeGh::new().on("api", "{}").install();
     Provider::GitHub
         .set_thread_resolved(PrId(7), &ThreadHandle::NodeId("PRRT_1".into()), true)
@@ -171,8 +171,11 @@ fn github_resolves_a_thread_by_its_node_id_and_refuses_another_providers_handle(
     assert!(calls[0].contains("resolveReviewThread"), "{calls:?}");
     assert!(calls[0].contains("PRRT_1"), "{calls:?}");
 
-    let refused =
-        Provider::GitHub.set_thread_resolved(PrId(7), &ThreadHandle::RootComment(3), true);
+    let refused = Provider::GitHub.set_thread_resolved(
+        PrId(7),
+        &ThreadHandle::RootComment(CommentId(3)),
+        true,
+    );
     assert!(matches!(refused, Err(FetchError::InvalidInput(_))));
     assert_eq!(installed.calls().len(), 1, "nothing was sent for it");
 }

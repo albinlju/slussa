@@ -13,14 +13,14 @@ fn timeline_keeps_thread_selection_and_sidebar_is_responsive() {
     };
     let comments = (10..12)
         .map(|id| Comment {
-            id: Some(id),
+            id: Some(CommentId(id)),
             author: User {
                 username: "alice".into(),
             },
             content: format!("Comment {id}"),
             created: chrono::Utc::now(),
             reactions: vec![],
-            reply_to: Some(10),
+            reply_to: Some(CommentId(10)),
         })
         .collect();
     state
@@ -34,7 +34,7 @@ fn timeline_keeps_thread_selection_and_sidebar_is_responsive() {
         events: vec![],
         threads: vec![CommentThread {
             comments,
-            reply_to: Some(10),
+            reply_to: Some(CommentId(10)),
             anchor: Some(ThreadAnchor {
                 revision: None,
                 path: "src/main.rs".into(),
@@ -90,7 +90,7 @@ fn timeline_keeps_thread_selection_and_sidebar_is_responsive() {
         )
         .unwrap();
         assert_eq!(text.contains("Reviewers"), width >= 80);
-        assert_eq!(state.ui.detail.overview.timeline.reply, Some(10));
+        assert_eq!(state.ui.detail.overview.timeline.reply, Some(CommentId(10)));
         assert_eq!(
             state.detail_view().focused_thread().unwrap().handle,
             Some(ThreadHandle::NodeId("thread-1".into()))
@@ -104,7 +104,10 @@ fn timeline_keeps_thread_selection_and_sidebar_is_responsive() {
         std::fs::write(path, &preview).unwrap();
     }
     assert_eq!(preview, std::fs::read_to_string(path).unwrap());
-    assert_eq!(state.detail_view().editable_selected().unwrap().id, 10);
+    assert_eq!(
+        state.detail_view().editable_selected().unwrap().id,
+        CommentId(10)
+    );
     let action = key_to_action(
         &state,
         KeyEvent::new(KeyCode::Char('j'), KeyModifiers::CONTROL),
@@ -118,7 +121,10 @@ fn timeline_keeps_thread_selection_and_sidebar_is_responsive() {
     );
     let mut terminal = Terminal::new(TestBackend::new(100, 30)).unwrap();
     terminal.draw(|frame| render(frame, &mut state)).unwrap();
-    assert_eq!(state.detail_view().editable_selected().unwrap().id, 11);
+    assert_eq!(
+        state.detail_view().editable_selected().unwrap().id,
+        CommentId(11)
+    );
 }
 
 #[test]
@@ -206,16 +212,16 @@ fn diff_fold_keeps_target_and_shows_the_next_action() {
             events: vec![],
             threads: vec![CommentThread {
                 comments: vec![Comment {
-                    id: Some(10),
+                    id: Some(CommentId(10)),
                     author: User {
                         username: "alice".into(),
                     },
                     content: "Keep the error context.".into(),
                     created: chrono::Utc::now(),
                     reactions: vec![],
-                    reply_to: Some(10),
+                    reply_to: Some(CommentId(10)),
                 }],
-                reply_to: Some(10),
+                reply_to: Some(CommentId(10)),
                 anchor: Some(ThreadAnchor {
                     revision: None,
                     path: "src/main.rs".into(),
@@ -242,14 +248,14 @@ fn diff_fold_keeps_target_and_shows_the_next_action() {
         );
         assert!(folded.contains("space: expand thread"));
         assert!(!folded.contains("Keep the error context."));
-        assert_eq!(state.ui.detail.diff.focused_reply(), Some(10));
+        assert_eq!(state.ui.detail.diff.focused_reply(), Some(CommentId(10)));
         local_key(&mut state, KeyCode::Char(' '));
         terminal.draw(|frame| render(frame, &mut state)).unwrap();
         let expanded = rendered_text(&terminal);
         assert!(expanded.contains("⌄ 1 comment · ✓ resolved"));
         assert!(expanded.contains("space: collapse thread"));
         assert!(expanded.contains("Keep the error context."));
-        assert_eq!(state.ui.detail.diff.focused_reply(), Some(10));
+        assert_eq!(state.ui.detail.diff.focused_reply(), Some(CommentId(10)));
         local_key(&mut state, KeyCode::Char(' '));
         terminal.draw(|frame| render(frame, &mut state)).unwrap();
         assert_eq!(rendered_text(&terminal), folded);
@@ -273,7 +279,7 @@ fn overview_reveals_selected_reply_and_allows_scrolling_long_text() {
         content: text,
         created: now,
         reactions: vec![],
-        reply_to: Some(10),
+        reply_to: Some(CommentId(10)),
     };
     state
         .store
@@ -282,14 +288,14 @@ fn overview_reveals_selected_reply_and_allows_scrolling_long_text() {
         .get_mut(&PrId(42))
         .unwrap()
         .activity = LoadState::Loaded(Activity {
-        comments: vec![comment(20, "Another discussion".into())],
+        comments: vec![comment(CommentId(20), "Another discussion".into())],
         events: vec![],
         threads: vec![CommentThread {
             comments: vec![
-                comment(10, "Long comment paragraph.\n\n".repeat(35)),
-                comment(11, "Selected reply is visible".into()),
+                comment(CommentId(10), "Long comment paragraph.\n\n".repeat(35)),
+                comment(CommentId(11), "Selected reply is visible".into()),
             ],
-            reply_to: Some(10),
+            reply_to: Some(CommentId(10)),
             anchor: None,
         }],
     });
@@ -313,7 +319,7 @@ fn overview_reveals_selected_reply_and_allows_scrolling_long_text() {
     assert!(rendered_text(&terminal).contains("Selected reply is visible"));
     assert_eq!(
         state.ui.detail.overview.timeline.selected.unwrap().id,
-        Some(11)
+        Some(CommentId(11))
     );
     let stable = state.ui.detail.overview.timeline.scroll;
     terminal.draw(|frame| render(frame, &mut state)).unwrap();
@@ -340,17 +346,17 @@ fn overview_reveals_selected_reply_and_allows_scrolling_long_text() {
         .unwrap()
         .activity
     {
-        let mut newer = comment(30, "New discussion arrived".into());
+        let mut newer = comment(CommentId(30), "New discussion arrived".into());
         newer.created = now + chrono::Duration::seconds(10);
         activity.comments.push(newer);
         activity.threads[0]
             .comments
-            .insert(1, comment(12, "Earlier reply inserted".into()));
+            .insert(1, comment(CommentId(12), "Earlier reply inserted".into()));
     }
     terminal.draw(|frame| render(frame, &mut state)).unwrap();
     assert_eq!(
         state.ui.detail.overview.timeline.selected.unwrap().id,
-        Some(11)
+        Some(CommentId(11))
     );
     assert_eq!(state.ui.detail.overview.timeline.cursor, 2);
     assert_eq!(state.ui.detail.overview.timeline.sub, 2);
@@ -363,12 +369,14 @@ fn overview_reveals_selected_reply_and_allows_scrolling_long_text() {
         .unwrap()
         .activity
     {
-        activity.threads[0].comments.retain(|c| c.id != Some(11));
+        activity.threads[0]
+            .comments
+            .retain(|c| c.id != Some(CommentId(11)));
     }
     terminal.draw(|frame| render(frame, &mut state)).unwrap();
     assert_ne!(
         state.ui.detail.overview.timeline.selected.unwrap().id,
-        Some(11)
+        Some(CommentId(11))
     );
 }
 
@@ -392,16 +400,16 @@ fn a_thread_taller_than_the_diff_pane_is_shown_from_its_first_row() {
         events: vec![],
         threads: vec![CommentThread {
             comments: vec![Comment {
-                id: Some(10),
+                id: Some(CommentId(10)),
                 author: User {
                     username: "alice".into(),
                 },
                 content: format!("TOP_OF_THREAD\n\n{}", paragraphs.join("\n\n")),
                 created: chrono::Utc::now(),
                 reactions: vec![],
-                reply_to: Some(10),
+                reply_to: Some(CommentId(10)),
             }],
-            reply_to: Some(10),
+            reply_to: Some(CommentId(10)),
             anchor: Some(ThreadAnchor {
                 revision: None,
                 path: "src/main.rs".into(),
@@ -424,7 +432,7 @@ fn a_thread_taller_than_the_diff_pane_is_shown_from_its_first_row() {
     }
     assert_eq!(
         state.ui.detail.diff.focused_reply(),
-        Some(10),
+        Some(CommentId(10)),
         "on the thread"
     );
 
@@ -452,16 +460,16 @@ fn a_reply_being_written_names_the_comment_it_answers() {
         events: vec![],
         threads: vec![CommentThread {
             comments: vec![Comment {
-                id: Some(10),
+                id: Some(CommentId(10)),
                 author: User {
                     username: "alice".into(),
                 },
                 content: "Why this name?\nSecond line".into(),
                 created: chrono::Utc::now(),
                 reactions: vec![],
-                reply_to: Some(10),
+                reply_to: Some(CommentId(10)),
             }],
-            reply_to: Some(10),
+            reply_to: Some(CommentId(10)),
             anchor: None,
         }],
     });
@@ -469,7 +477,8 @@ fn a_reply_being_written_names_the_comment_it_answers() {
     terminal.draw(|frame| render(frame, &mut state)).unwrap();
     assert!(!rendered_text(&terminal).contains("@alice: Why this name?"));
 
-    state.ui.detail.editor = CommentEditor::start(CommentTarget::Reply(10), "Because".into());
+    state.ui.detail.editor =
+        CommentEditor::start(CommentTarget::Reply(CommentId(10)), "Because".into());
     terminal.draw(|frame| render(frame, &mut state)).unwrap();
     let text = rendered_text(&terminal);
     assert!(text.contains("@alice: Why this name?"), "{text}");

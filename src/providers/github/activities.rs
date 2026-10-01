@@ -70,7 +70,7 @@ fn fetch_parts(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::domain::{event::EventKind, user::User};
+    use crate::domain::{comment::CommentId, event::EventKind, user::User};
     use std::{sync::mpsc, time::Duration};
 
     #[test]
@@ -88,7 +88,7 @@ mod tests {
                 || {
                     await_release(comments_gate);
                     Ok(vec![Comment {
-                        id: Some(7),
+                        id: Some(CommentId(7)),
                         author: User {
                             username: "alice".into(),
                         },
@@ -110,7 +110,7 @@ mod tests {
                     await_release(threads_gate);
                     Ok(vec![CommentThread {
                         comments: vec![],
-                        reply_to: Some(9),
+                        reply_to: Some(CommentId(9)),
                         anchor: None,
                     }])
                 },
@@ -125,9 +125,9 @@ mod tests {
         release_events.send(()).unwrap();
         release_threads.send(()).unwrap();
         let activity = worker.join().unwrap().unwrap();
-        assert_eq!(activity.comments[0].id, Some(7));
+        assert_eq!(activity.comments[0].id, Some(CommentId(7)));
         assert_eq!(activity.events[0].kind, EventKind::Approved);
-        assert_eq!(activity.threads[0].reply_to, Some(9));
+        assert_eq!(activity.threads[0].reply_to, Some(CommentId(9)));
     }
 
     #[test]

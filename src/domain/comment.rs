@@ -1,17 +1,29 @@
 use super::user::User;
 use chrono::{DateTime, Utc};
 
+/// A comment's id at its provider. A type of its own, so that it cannot be
+/// passed where a PR's number is expected.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, serde::Serialize, serde::Deserialize)]
+#[serde(transparent)]
+pub struct CommentId(pub u64);
+
+impl std::fmt::Display for CommentId {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        self.0.fmt(f)
+    }
+}
+
 #[derive(Debug, Clone)]
 pub struct Comment {
     /// The comment's own id (GitHub `databaseId`, Bitbucket `id`), used to edit
     /// or delete it. `None` when the provider didn't supply one.
-    pub id: Option<u64>,
+    pub id: Option<CommentId>,
     pub author: User,
     pub content: String,
     pub created: DateTime<Utc>,
     pub reactions: Vec<Reaction>,
     /// Id to hang a reply under, when the provider threads this comment (None = no threading).
-    pub reply_to: Option<u64>,
+    pub reply_to: Option<CommentId>,
 }
 
 /// Text with something in it besides whitespace: what a comment has to be
@@ -55,7 +67,7 @@ pub enum CommentKind {
 /// A comment that can be edited or deleted: the provider gave it an id.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
 pub struct CommentKey {
-    pub id: u64,
+    pub id: CommentId,
     /// Saved drafts spell this `review: bool`; the file is older than the enum.
     #[serde(rename = "review", with = "review_flag")]
     pub kind: CommentKind,
@@ -117,7 +129,7 @@ pub fn split_suggestions(body: &str) -> (String, Vec<String>) {
 pub struct CommentThread {
     pub comments: Vec<Comment>,
     /// Id of the comment a reply should hang under (None = can't reply, e.g. no id parsed).
-    pub reply_to: Option<u64>,
+    pub reply_to: Option<CommentId>,
     /// Code-review context: where the thread is anchored and its resolution.
     /// `None` for a general discussion thread (no code location, not resolvable).
     pub anchor: Option<ThreadAnchor>,
@@ -143,7 +155,7 @@ pub enum ThreadHandle {
     /// GitHub: the GraphQL node id of the review thread.
     NodeId(String),
     /// Bitbucket: the thread's root comment, whose state is toggled.
-    RootComment(u64),
+    RootComment(CommentId),
 }
 
 impl CommentThread {

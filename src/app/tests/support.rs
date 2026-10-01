@@ -8,7 +8,7 @@ pub(super) use crate::{
         store::{LoadState, WriteTicket},
     },
     domain::{
-        comment::{CommentKey, CommentKind, ThreadHandle},
+        comment::{CommentId, CommentKey, CommentKind, ThreadHandle},
         pr::PrId,
     },
     providers::{FetchError, Provider},

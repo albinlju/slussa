@@ -142,7 +142,7 @@ fn read_only_capabilities_block_shortcuts_commands_and_optional_loads() {
         Command::Merge(MergeStrategy::Merge),
         Command::Decline,
         Command::DeleteComment(CommentKey {
-            id: 1,
+            id: CommentId(1),
             kind: CommentKind::Conversation,
         }),
         Command::ResolveThread {

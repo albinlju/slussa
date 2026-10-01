@@ -25,7 +25,7 @@ mod transport_tests;
 use crate::domain::{
     activity::Activity,
     ci::Build,
-    comment::{CommentKey, ThreadHandle},
+    comment::{CommentId, CommentKey, ThreadHandle},
     commit::Commit,
     diff::Diff,
     pr::{MergeStrategy, Mergeability, PrBatch, PrGroup, PrId, PrInfo},
@@ -195,7 +195,12 @@ impl Provider {
         }
     }
 
-    pub fn reply_comment(&self, pr_id: PrId, parent: u64, body: &str) -> Result<(), FetchError> {
+    pub fn reply_comment(
+        &self,
+        pr_id: PrId,
+        parent: CommentId,
+        body: &str,
+    ) -> Result<(), FetchError> {
         match self {
             Self::GitHub => github::reply_comment(pr_id, parent, body),
             Self::BitbucketDc(c) => bitbucket_dc::reply_comment(c, pr_id, parent, body),

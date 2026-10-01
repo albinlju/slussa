@@ -10,7 +10,12 @@ pub(super) use crate::{
         store::{LoadState, PrData},
     },
     domain::{
-        activity::Activity, ci::CiSummary, comment::ThreadHandle, commit::Commit, diff::*, pr::*,
+        activity::Activity,
+        ci::CiSummary,
+        comment::{CommentId, ThreadHandle},
+        commit::Commit,
+        diff::*,
+        pr::*,
         user::User,
     },
     tui::{

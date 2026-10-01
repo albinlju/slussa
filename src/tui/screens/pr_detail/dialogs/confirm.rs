@@ -237,7 +237,7 @@ mod tests {
         assert!(text.contains("Closes without merging"), "{text}");
 
         let kind = ConfirmKind::DeleteComment(crate::domain::comment::CommentKey {
-            id: 3,
+            id: crate::domain::comment::CommentId(3),
             kind: crate::domain::comment::CommentKind::Conversation,
         });
         let text = drawn(&mut ConfirmDialog::new(kind).with_preview("@ann: typo".into()));

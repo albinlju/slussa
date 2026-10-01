@@ -150,11 +150,11 @@ fn reply_shortcut_in_diff_opens_editor_for_the_focused_thread() {
     let mut app = app();
     detail(&mut app, DetailTab::Diff);
     app.state.ui.detail.diff.focus = DiffFocus::Pane;
-    app.state.ui.detail.diff.pane.focused = Some(FocusedNav::on_thread(987));
+    app.state.ui.detail.diff.pane.focused = Some(FocusedNav::on_thread(CommentId(987)));
     press(&mut app, KeyCode::Char('r'));
     assert!(matches!(
         app.state.ui.detail.editor.target().unwrap(),
-        CommentTarget::Reply(987)
+        CommentTarget::Reply(CommentId(987))
     ));
 }
 
@@ -260,7 +260,7 @@ fn comment_lookup_keeps_review_and_pr_ids_separate() {
     app.state.store.current_user = "reviewer".into();
     detail(&mut app, DetailTab::Overview);
     let comment = |author: &str, text: &str| Comment {
-        id: Some(7),
+        id: Some(CommentId(7)),
         author: User {
             username: author.into(),
         },
@@ -280,7 +280,7 @@ fn comment_lookup_keeps_review_and_pr_ids_separate() {
         events: vec![],
         threads: vec![CommentThread {
             comments: vec![comment("reviewer", "My review comment")],
-            reply_to: Some(7),
+            reply_to: Some(CommentId(7)),
             anchor: Some(ThreadAnchor {
                 revision: None,
                 path: "src/main.rs".into(),
@@ -291,7 +291,7 @@ fn comment_lookup_keeps_review_and_pr_ids_separate() {
         }],
     });
     app.state.ui.detail.overview.timeline.selected = Some(
-        tui::screens::pr_detail::view::CommentRef::new(Some(7), CommentKind::Review),
+        tui::screens::pr_detail::view::CommentRef::new(Some(CommentId(7)), CommentKind::Review),
     );
     press(&mut app, KeyCode::Char('e'));
     let draft = app.state.ui.detail.editor.draft().unwrap();
@@ -299,7 +299,7 @@ fn comment_lookup_keeps_review_and_pr_ids_separate() {
     assert!(matches!(
         draft.target,
         CommentTarget::Edit(CommentKey {
-            id: 7,
+            id: CommentId(7),
             kind: CommentKind::Review
         })
     ));
@@ -308,7 +308,7 @@ fn comment_lookup_keeps_review_and_pr_ids_separate() {
     assert_eq!(
         app.state.ui.detail.confirm().unwrap().kind(),
         ConfirmKind::DeleteComment(CommentKey {
-            id: 7,
+            id: CommentId(7),
             kind: CommentKind::Review
         })
     );

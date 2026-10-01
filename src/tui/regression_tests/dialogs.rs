@@ -291,7 +291,7 @@ fn editor_distinguishes_queued_comments_from_direct_publication() {
             "add to review",
         ),
         (CommentTarget::Pr, "post comment"),
-        (CommentTarget::Reply(10), "post reply"),
+        (CommentTarget::Reply(CommentId(10)), "post reply"),
         (
             CommentTarget::Review {
                 verdict: crate::domain::review::ReviewVerdict::Comment,
@@ -355,7 +355,7 @@ fn resumed_editor_and_delete_dialog_identify_the_comment() {
     use crate::tui::{component::Component, components::comment_editor::CommentEditor};
     for width in [40, 100] {
         let mut editor = CommentEditor::restored(CommentDraft {
-            target: CommentTarget::Reply(7),
+            target: CommentTarget::Reply(CommentId(7)),
             text: "My draft".into(),
         });
         assert!(editor.resume());
@@ -377,7 +377,7 @@ fn resumed_editor_and_delete_dialog_identify_the_comment() {
         assert!(text.contains("post reply"));
         let mut dialog = ConfirmDialog::new(ConfirmKind::DeleteComment(
             crate::domain::comment::CommentKey {
-                id: 7,
+                id: CommentId(7),
                 kind: crate::domain::comment::CommentKind::Review,
             },
         ))

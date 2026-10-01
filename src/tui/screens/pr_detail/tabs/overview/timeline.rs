@@ -4,7 +4,7 @@ use crate::{
         store::{LoadState, PrData},
     },
     domain::{
-        comment::{Comment, CommentKind, CommentThread},
+        comment::{Comment, CommentId, CommentKind, CommentThread},
         diff::Diff,
         event::{EventKind, TimelineEvent},
     },
@@ -209,7 +209,7 @@ struct TimelineBlock {
     /// Colour of the dash after the node — tracks the box's left border
     /// (muted-light when focused, divider otherwise).
     border: Color,
-    reply_to: Option<u64>,
+    reply_to: Option<CommentId>,
     /// Comments and review threads are focus targets for j/k; events render
     /// inline for context but the cursor skips them.
     focusable: bool,
@@ -223,7 +223,7 @@ struct ItemNav {
     start: usize,
     span: usize,
     selected_range: Option<std::ops::Range<usize>>,
-    reply_to: Option<u64>,
+    reply_to: Option<CommentId>,
     focusable: bool,
     comments: Vec<CommentRef>,
     resolve: Option<ThreadRef>,
@@ -418,7 +418,7 @@ pub struct Timeline {
     pub scroll: u16,
     pub cursor: usize,
     pub item_count: usize,
-    pub reply: Option<u64>,
+    pub reply: Option<CommentId>,
     pub thread: Option<ThreadRef>,
     pub sub: usize,
     pub block_len: usize,

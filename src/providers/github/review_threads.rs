@@ -1,7 +1,7 @@
 use serde::Deserialize;
 
 use crate::domain::{
-    comment::{CommentThread, ThreadAnchor, ThreadHandle},
+    comment::{CommentId, CommentThread, ThreadAnchor, ThreadHandle},
     diff::LineRef,
     pr::PrId,
 };
@@ -107,7 +107,12 @@ fn map_thread(t: GqlThread) -> CommentThread {
         LineRef::New
     };
     let line = t.line.or(t.original_line).map(side);
-    let reply_to = t.comments.nodes.first().and_then(|c| c.database_id);
+    let reply_to = t
+        .comments
+        .nodes
+        .first()
+        .and_then(|c| c.database_id)
+        .map(CommentId);
     let revision = t
         .comments
         .nodes
@@ -165,9 +170,9 @@ mod tests {
         assert_eq!(threads[0].comments.len(), 1);
         assert_eq!(
             threads[1].comments.iter().map(|c| c.id).collect::<Vec<_>>(),
-            vec![Some(1), Some(2)]
+            vec![Some(CommentId(1)), Some(CommentId(2))]
         );
-        assert_eq!(threads[1].reply_to, Some(1));
+        assert_eq!(threads[1].reply_to, Some(CommentId(1)));
         // Resolved through the thread's own id, not a comment's.
         assert_eq!(
             threads[1].anchor.as_ref().unwrap().handle,
@@ -249,7 +254,7 @@ mod tests {
         let anchor = t.anchor.as_ref().unwrap();
         assert!(anchor.resolved);
         assert_eq!(anchor.line, Some(LineRef::Old(7)));
-        assert_eq!(t.reply_to, Some(555));
+        assert_eq!(t.reply_to, Some(CommentId(555)));
 
         let reactions = &t.comments[0].reactions;
         assert_eq!(reactions.len(), 2);

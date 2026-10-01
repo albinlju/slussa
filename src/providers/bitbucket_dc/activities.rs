@@ -5,7 +5,7 @@ use crate::domain::activity::Activity;
 use crate::domain::event::{EventKind, PushedCommit, TimelineEvent};
 use crate::domain::user::User;
 use crate::domain::{
-    comment::{Comment, CommentThread, Reaction, ThreadAnchor, ThreadHandle},
+    comment::{Comment, CommentId, CommentThread, Reaction, ThreadAnchor, ThreadHandle},
     diff::LineRef,
     pr::PrId,
 };
@@ -181,9 +181,10 @@ fn make_thread(anchor: Anchor, root: &BbComment) -> CommentThread {
     };
     let mut comments = Vec::new();
     collect_replies(root, &mut comments);
+    let root_id = comment_id(root);
     CommentThread {
         comments,
-        reply_to: (root.id != 0).then_some(root.id),
+        reply_to: root_id,
         anchor: Some(ThreadAnchor {
             revision: anchor.to_hash,
             path: anchor.path,
@@ -191,7 +192,7 @@ fn make_thread(anchor: Anchor, root: &BbComment) -> CommentThread {
             // Resolved by the "Resolve" button (threadResolved) or, for a task,
             // by closing the task (state == RESOLVED).
             resolved: root.thread_resolved || root.state.eq_ignore_ascii_case("RESOLVED"),
-            handle: (root.id != 0).then_some(ThreadHandle::RootComment(root.id)),
+            handle: root_id.map(ThreadHandle::RootComment),
         }),
     }
 }
@@ -203,7 +204,7 @@ fn make_general_thread(root: &BbComment) -> CommentThread {
     collect_replies(root, &mut comments);
     CommentThread {
         comments,
-        reply_to: (root.id != 0).then_some(root.id),
+        reply_to: comment_id(root),
         anchor: None,
     }
 }
@@ -215,8 +216,13 @@ fn collect_replies(c: &BbComment, out: &mut Vec<Comment>) {
     }
 }
 
+/// A comment's id; none where the server sent none (it then parses as 0).
+fn comment_id(comment: &BbComment) -> Option<CommentId> {
+    (comment.id != 0).then_some(CommentId(comment.id))
+}
+
 fn map_comment(c: &BbComment) -> Comment {
-    let id = (c.id != 0).then_some(c.id);
+    let id = comment_id(c);
     Comment {
         id,
         author: map_user(&c.author),
@@ -299,10 +305,10 @@ mod tests {
         assert_eq!(anchor.path, "src/x.rs");
         assert_eq!(anchor.line, Some(LineRef::New(42)));
         assert_eq!(bundle.threads[0].comments.len(), 2);
-        assert_eq!(bundle.threads[0].reply_to, Some(2));
+        assert_eq!(bundle.threads[0].reply_to, Some(CommentId(2)));
         assert!(!anchor.resolved); // state OPEN, no threadResolved
         // Resolved through its root comment.
-        assert_eq!(anchor.handle, Some(ThreadHandle::RootComment(2)));
+        assert_eq!(anchor.handle, Some(ThreadHandle::RootComment(CommentId(2))));
 
         assert_eq!(bundle.events.len(), 3);
         assert_eq!(bundle.events[0].kind, EventKind::Opened);

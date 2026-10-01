@@ -7,6 +7,7 @@ use crate::{
     },
     domain::{
         capabilities::Feature,
+        comment::CommentId,
         pr::{PrId, PrStatus},
     },
     tui::{
@@ -236,7 +237,7 @@ fn commit_list_after_the_diff_pane(focused: FocusedNav) -> AppState {
 
 #[test]
 fn the_commit_list_does_not_reply_to_the_thread_the_diff_tab_left_focused() {
-    let state = commit_list_after_the_diff_pane(FocusedNav::on_thread(7));
+    let state = commit_list_after_the_diff_pane(FocusedNav::on_thread(CommentId(7)));
     let r = key_to_action(
         &state,
         KeyEvent::new(KeyCode::Char('r'), KeyModifiers::NONE),
@@ -251,7 +252,7 @@ fn the_commit_list_does_not_reply_to_the_thread_the_diff_tab_left_focused() {
 
 #[test]
 fn the_commit_list_footer_offers_only_keys_that_work_there() {
-    let mut state = commit_list_after_the_diff_pane(FocusedNav::on_thread(7));
+    let mut state = commit_list_after_the_diff_pane(FocusedNav::on_thread(CommentId(7)));
     let footer = footer_of(&mut state);
     assert!(footer.contains("v: finish draft"), "{footer}");
     assert!(!footer.contains("r: reply"), "{footer}");
