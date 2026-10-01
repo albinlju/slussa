@@ -100,7 +100,7 @@ fn render_timeline(
                     .iter()
                     .position(|comment| comment.id == selected.id)
                     .map(|sub| (cursor, sub)),
-                _ => None,
+                TimelineItem::Comment(_) | TimelineItem::Review(_) | TimelineItem::Event(_) => None,
             });
         if let Some((cursor, sub)) = found {
             ui.cursor = cursor;

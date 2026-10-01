@@ -208,11 +208,16 @@ impl Ui {
                 let help = match screen {
                     Screen::List => match &mut self.list.overlay {
                         Some(pr_list::ListOverlay::Help(help)) => Some(help),
-                        _ => None,
+                        Some(pr_list::ListOverlay::FilterPicker { .. }) | None => None,
                     },
                     Screen::Detail { .. } => match &mut self.detail.overlay {
                         Some(pr_detail::Overlay::Help(help)) => Some(help),
-                        _ => None,
+                        Some(
+                            pr_detail::Overlay::Confirm(_)
+                            | pr_detail::Overlay::Review(_)
+                            | pr_detail::Overlay::Merge(_),
+                        )
+                        | None => None,
                     },
                 };
                 if let Some(help) = help {

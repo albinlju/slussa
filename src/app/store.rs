@@ -399,19 +399,17 @@ impl Store {
 
     pub fn refreshing(&self, screen: crate::app::navigation::Screen) -> bool {
         use crate::app::navigation::Screen;
-        self.fetches.iter().any(|key| match (screen, key) {
-            (_, FetchKey::Prs(_)) => true,
-            (
-                Screen::Detail { pr_id, .. },
-                FetchKey::Commits(id)
-                | FetchKey::Diff(id)
-                | FetchKey::Builds(id)
-                | FetchKey::Activity(id)
-                | FetchKey::Mergeability(id)
-                | FetchKey::Info(id)
-                | FetchKey::CommitDiff(id, _),
-            ) => pr_id == *id,
-            _ => false,
+        self.fetches.iter().any(|key| match key {
+            FetchKey::Prs(_) => true,
+            FetchKey::Commits(id)
+            | FetchKey::Diff(id)
+            | FetchKey::Builds(id)
+            | FetchKey::Activity(id)
+            | FetchKey::Mergeability(id)
+            | FetchKey::Info(id)
+            | FetchKey::CommitDiff(id, _) => {
+                matches!(screen, Screen::Detail { pr_id, .. } if pr_id == *id)
+            }
         })
     }
 }
@@ -446,30 +444,27 @@ impl Store {
     }
     pub fn refresh_failed(&self, screen: crate::app::navigation::Screen) -> bool {
         use crate::{app::navigation::Screen, tui::screens::pr_detail::tabs::DetailTab};
-        self.refresh_failures.iter().any(|key| match (screen, key) {
-            (_, FetchKey::Prs(_)) => true,
-            (Screen::Detail { pr_id, tab }, FetchKey::Diff(id)) => {
-                pr_id == *id && tab == DetailTab::Diff
+        // Whether the screen is this PR on one of the tabs that show the data.
+        let on = |id: &PrId, shows: fn(DetailTab) -> bool| matches!(screen, Screen::Detail { pr_id, tab } if pr_id == *id && shows(tab));
+        self.refresh_failures.iter().any(|key| match key {
+            FetchKey::Prs(_) => true,
+            FetchKey::Diff(id) => on(id, |tab| tab == DetailTab::Diff),
+            FetchKey::Activity(id) => on(id, |tab| {
+                matches!(
+                    tab,
+                    DetailTab::Overview | DetailTab::Diff | DetailTab::Commits
+                )
+            }),
+            FetchKey::Builds(id) => on(id, |tab| {
+                matches!(tab, DetailTab::Overview | DetailTab::Builds)
+            }),
+            FetchKey::Mergeability(id) => on(id, |_| true),
+            FetchKey::Info(id) => on(id, |tab| {
+                matches!(tab, DetailTab::Overview | DetailTab::Description)
+            }),
+            FetchKey::Commits(id) | FetchKey::CommitDiff(id, _) => {
+                on(id, |tab| tab == DetailTab::Commits)
             }
-            (Screen::Detail { pr_id, tab }, FetchKey::Activity(id)) => {
-                pr_id == *id
-                    && matches!(
-                        tab,
-                        DetailTab::Overview | DetailTab::Diff | DetailTab::Commits
-                    )
-            }
-            (Screen::Detail { pr_id, tab }, FetchKey::Builds(id)) => {
-                pr_id == *id && matches!(tab, DetailTab::Overview | DetailTab::Builds)
-            }
-            (Screen::Detail { pr_id, .. }, FetchKey::Mergeability(id)) => pr_id == *id,
-            (Screen::Detail { pr_id, tab }, FetchKey::Info(id)) => {
-                pr_id == *id && matches!(tab, DetailTab::Overview | DetailTab::Description)
-            }
-            (
-                Screen::Detail { pr_id, tab },
-                FetchKey::Commits(id) | FetchKey::CommitDiff(id, _),
-            ) => pr_id == *id && tab == DetailTab::Commits,
-            _ => false,
         })
     }
 }
