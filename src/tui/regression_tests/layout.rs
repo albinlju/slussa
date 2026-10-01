@@ -292,7 +292,7 @@ fn commit_list_returns_to_the_same_viewport_after_opening_a_commit() {
     let before = rendered_text(&terminal);
     local_key(&mut state, KeyCode::Enter);
     terminal.draw(|frame| render(frame, &mut state)).unwrap();
-    assert!(state.ui.detail.commits.open_commit.is_some());
+    assert!(state.ui.detail.commits.open_commit().is_some());
     local_key(&mut state, KeyCode::Esc);
     terminal.draw(|frame| render(frame, &mut state)).unwrap();
     assert_eq!(rendered_text(&terminal), before);

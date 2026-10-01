@@ -227,7 +227,7 @@ impl PrDetailScreen {
                 Command::AbandonReview
             }
             PrAction::RemovePendingComment => {
-                Command::RemovePendingComment(self.active_diff_view().pane_pending?)
+                Command::RemovePendingComment(self.surface(ctx.tab).diff_viewer()?.pane_pending?)
             }
             PrAction::OpenMergePicker => {
                 if !ctx.store.capabilities.merge_strategies.is_empty() {

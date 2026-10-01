@@ -3,8 +3,9 @@ use crate::{
         Action, CommitsAction, DetailAction, DiffAction, Effect, NavAction, PrAction, SearchAction,
     },
     tui::{
-        component::Component, components::diff_viewer::DiffFocus,
-        screens::pr_detail::tabs::DetailTab,
+        component::Component,
+        components::diff_viewer::DiffFocus,
+        screens::pr_detail::{Surface, tabs::DetailTab},
     },
 };
 use ratatui::crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
@@ -31,7 +32,7 @@ pub(in crate::tui) fn key_to_action(
         return Some(Action::Effect(Effect::Quit));
     }
     let (tab, pr_id) = (state.tab, state.pr_id);
-    let viewing_commit = state.detail.commits.open_commit.is_some();
+    let surface = state.surface();
     let code = key.code;
     // Single-letter actions fire only unmodified, so Ctrl-d/Ctrl-e/etc. (scroll,
     // muscle memory) don't accidentally trigger comment/approve actions.
@@ -142,44 +143,45 @@ pub(in crate::tui) fn key_to_action(
     // `d` on a queued review comment (diff pane) removes it from the review.
     if plain
         && code == KeyCode::Char('d')
-        && (tab == DetailTab::Diff || (tab == DetailTab::Commits && viewing_commit))
-        && state.detail.active_diff_view().pane_pending.is_some()
+        && surface
+            .diff_viewer()
+            .is_some_and(|viewer| viewer.pane_pending.is_some())
     {
         return Some(Action::Detail(DetailAction::Pr(
             PrAction::RemovePendingComment,
         )));
     }
 
-    escape_action(state, tab, viewing_commit, code)
+    escape_action(surface, code)
         .or_else(|| tab_select_key(code))
-        .or_else(|| tab_key(state, tab, viewing_commit, code))
+        .or_else(|| tab_key(state, surface, code))
         // `[`/`]` switch tabs, but only after tab_key so the commit-diff view
         // keeps them for stepping commits.
         .or_else(|| tab_bracket_key(code))
 }
 
-fn escape_action(
-    state: &super::DetailView<'_>,
-    tab: DetailTab,
-    viewing_commit: bool,
-    code: KeyCode,
-) -> Option<Action> {
+/// Esc steps out one level: the pane's search, the pane, the open commit, and
+/// then the PR.
+fn escape_action(surface: Surface<'_>, code: KeyCode) -> Option<Action> {
     if code != KeyCode::Esc {
         return None;
     }
-    let view = state.detail.active_diff_view();
-    let in_diff_pane = view.focus == DiffFocus::Pane
-        && (tab == DetailTab::Diff || (tab == DetailTab::Commits && viewing_commit));
-    if in_diff_pane {
+    if let Some(view) = surface.diff_viewer()
+        && view.focus == DiffFocus::Pane
+    {
         if !view.pane_search.query.is_empty() {
             return Some(Action::Search(SearchAction::Cancel));
         }
         return Some(Action::Diff(DiffAction::FocusTree));
     }
-    if tab == DetailTab::Commits && viewing_commit {
-        return Some(Action::Commits(CommitsAction::Back));
-    }
-    Some(Action::from(NavAction::Back))
+    Some(match surface {
+        Surface::CommitDiff(_) => Action::Commits(CommitsAction::Back),
+        Surface::Description
+        | Surface::Overview
+        | Surface::Diff(_)
+        | Surface::CommitList
+        | Surface::Builds => Action::from(NavAction::Back),
+    })
 }
 
 fn tab_select_key(code: KeyCode) -> Option<Action> {
@@ -202,28 +204,19 @@ fn tab_bracket_key(code: KeyCode) -> Option<Action> {
     }
 }
 
-fn tab_key(
-    state: &super::DetailView<'_>,
-    tab: DetailTab,
-    viewing_commit: bool,
-    code: KeyCode,
-) -> Option<Action> {
-    match tab {
-        DetailTab::Diff => state
-            .detail
-            .active_diff_view()
+fn tab_key(state: &super::DetailView<'_>, surface: Surface<'_>, code: KeyCode) -> Option<Action> {
+    match surface {
+        Surface::Diff(viewer) => viewer
             .handle_key(KeyEvent::new(code, KeyModifiers::NONE), &state.diff_files())
             .or_else(|| tab_letters(code)),
-        DetailTab::Commits if viewing_commit => match code {
+        Surface::CommitDiff(viewer) => match code {
             KeyCode::Char('[') => Some(Action::Commits(CommitsAction::StepCommit(-1))),
             KeyCode::Char(']') => Some(Action::Commits(CommitsAction::StepCommit(1))),
-            _ => state
-                .detail
-                .active_diff_view()
+            _ => viewer
                 .handle_key(KeyEvent::new(code, KeyModifiers::NONE), &state.diff_files())
                 .or_else(|| tab_letters(code)),
         },
-        DetailTab::Commits => state
+        Surface::CommitList => state
             .detail
             .commits
             .handle_key(
@@ -231,17 +224,17 @@ fn tab_key(
                 &super::tabs::commits::CommitInput::new(state.pr_id, state.data),
             )
             .or_else(|| tab_nav(code)),
-        DetailTab::Overview => state
+        Surface::Overview => state
             .detail
             .overview
             .handle_key(KeyEvent::new(code, KeyModifiers::NONE), &())
             .or_else(|| tab_nav(code)),
-        DetailTab::Description => state
+        Surface::Description => state
             .detail
             .description
             .handle_key(KeyEvent::new(code, KeyModifiers::NONE), &())
             .or_else(|| tab_nav(code)),
-        DetailTab::Builds => state
+        Surface::Builds => state
             .detail
             .builds
             .handle_key(KeyEvent::new(code, KeyModifiers::NONE), &())

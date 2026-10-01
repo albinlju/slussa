@@ -27,6 +27,31 @@ use crate::{
 use ratatui::{Frame, layout::Rect};
 
 pub use view::{DetailContext, DetailView};
+
+/// What the content area shows: the tab, and on Commits whether a commit is
+/// open. The keys, the footer and the comment targets all ask this, so they
+/// cannot disagree about which diff is on screen, if any.
+#[derive(Debug, Clone, Copy)]
+pub enum Surface<'a> {
+    Description,
+    Overview,
+    /// The PR's diff.
+    Diff(&'a DiffViewer),
+    CommitList,
+    /// The diff of one commit.
+    CommitDiff(&'a DiffViewer),
+    Builds,
+}
+
+impl<'a> Surface<'a> {
+    /// The diff viewer on screen, if a diff is what is shown.
+    pub const fn diff_viewer(self) -> Option<&'a DiffViewer> {
+        match self {
+            Self::Diff(viewer) | Self::CommitDiff(viewer) => Some(viewer),
+            Self::Description | Self::Overview | Self::CommitList | Self::Builds => None,
+        }
+    }
+}
 #[derive(Debug, Default)]
 pub struct PrDetailScreen {
     pub overview: tabs::overview::Overview,
@@ -78,19 +103,28 @@ impl PrDetailScreen {
             || self.editor.is_open()
     }
 
-    pub const fn active_diff_view(&self) -> &DiffViewer {
-        if self.commits.open_commit.is_some() {
-            &self.commits.diff
-        } else {
-            &self.diff
+    /// What the content area shows on `tab`.
+    pub const fn surface(&self, tab: tabs::DetailTab) -> Surface<'_> {
+        use tabs::DetailTab;
+        match tab {
+            DetailTab::Description => Surface::Description,
+            DetailTab::Overview => Surface::Overview,
+            DetailTab::Diff => Surface::Diff(&self.diff),
+            DetailTab::Commits => match self.commits.diff() {
+                Some(viewer) => Surface::CommitDiff(viewer),
+                None => Surface::CommitList,
+            },
+            DetailTab::Builds => Surface::Builds,
         }
     }
 
-    pub const fn active_diff_view_mut(&mut self) -> &mut DiffViewer {
-        if self.commits.open_commit.is_some() {
-            &mut self.commits.diff
-        } else {
-            &mut self.diff
+    /// The diff viewer on screen, to change it.
+    const fn diff_viewer_mut(&mut self, tab: tabs::DetailTab) -> Option<&mut DiffViewer> {
+        use tabs::DetailTab;
+        match tab {
+            DetailTab::Diff => Some(&mut self.diff),
+            DetailTab::Commits => self.commits.diff_mut(),
+            DetailTab::Description | DetailTab::Overview | DetailTab::Builds => None,
         }
     }
 }
@@ -180,18 +214,15 @@ impl PrDetailScreen {
             NavAction::SelectTab(tab) => tab,
         };
         self.active_tab = tab;
-        self.commits.open_commit = None;
+        self.commits.close_commit();
         Some(Effect::Navigate(Screen::Detail { pr_id, tab }))
     }
 
     pub const fn active_search(&self, tab: tabs::DetailTab) -> Option<(&SearchInput, SearchKind)> {
-        use tabs::DetailTab;
-        match tab {
-            DetailTab::Commits if self.commits.open_commit.is_none() => {
-                Some((&self.commits.search, SearchKind::Filter))
-            }
-            DetailTab::Diff | DetailTab::Commits => Some(self.active_diff_view().active_search()),
-            DetailTab::Description | DetailTab::Overview | DetailTab::Builds => None,
+        match self.surface(tab) {
+            Surface::CommitList => Some((&self.commits.search, SearchKind::Filter)),
+            Surface::Diff(viewer) | Surface::CommitDiff(viewer) => Some(viewer.active_search()),
+            Surface::Description | Surface::Overview | Surface::Builds => None,
         }
     }
 
@@ -207,16 +238,16 @@ impl PrDetailScreen {
     }
 
     pub fn update_diff(&mut self, action: DiffAction, ctx: &DetailContext<'_>) -> Option<Effect> {
-        let files = view::diff_files(ctx.data, self.commits.open_commit.as_deref());
-        self.active_diff_view_mut().update(action, &files)
+        let files = view::diff_files(ctx.data, self.commits.open_commit());
+        self.diff_viewer_mut(ctx.tab)?.update(action, &files)
     }
 
     pub fn update_search(&mut self, action: SearchAction, ctx: &DetailContext<'_>) {
-        if ctx.tab == tabs::DetailTab::Commits && self.commits.open_commit.is_none() {
-            self.commits.update_search(action);
-        } else if self.active_search(ctx.tab).is_some() {
-            let files = view::diff_files(ctx.data, self.commits.open_commit.as_deref());
-            self.active_diff_view_mut().update_search(action, files);
+        let files = view::diff_files(ctx.data, self.commits.open_commit());
+        match self.diff_viewer_mut(ctx.tab) {
+            Some(viewer) => viewer.update_search(action, files),
+            None if ctx.tab == tabs::DetailTab::Commits => self.commits.update_search(action),
+            None => {}
         }
     }
 }

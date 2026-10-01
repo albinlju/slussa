@@ -6,7 +6,7 @@ use crate::{
     domain::{capabilities::Feature, diff::FileDiff},
     tui::{
         components::{diff_viewer::DiffFocus, search_input::SearchInput},
-        screens::pr_detail::{DetailView, tabs::DetailTab},
+        screens::pr_detail::{DetailView, Surface, tabs::DetailTab},
         theme,
         widgets::{self, Hint},
     },
@@ -25,7 +25,7 @@ pub(super) fn render(frame: &mut Frame<'_>, state: &DetailView<'_>, area: Rect) 
         Line::default()
     } else if state.operation_pending() {
         widgets::loading("sending…  Esc: back · q: quit")
-    } else if let Some(search) = active_search(state, pr_data, tab, area.width) {
+    } else if let Some(search) = active_search(state, pr_data, area.width) {
         search
     } else {
         widgets::footer(area.width, &footer_actions(state, tab), state.refreshing)
@@ -71,9 +71,10 @@ fn footer_actions(state: &DetailView<'_>, tab: DetailTab) -> Vec<Hint> {
             "v: finish draft ({})",
             review.comments.len()
         ))];
-        if state.detail.active_diff_view().pane_pending.is_some()
-            && state.detail.active_diff_view().focus == DiffFocus::Pane
-            && matches!(tab, DetailTab::Diff | DetailTab::Commits)
+        if state
+            .surface()
+            .diff_viewer()
+            .is_some_and(|viewer| viewer.pane_pending.is_some() && viewer.focus == DiffFocus::Pane)
         {
             parts.push(Hint::on("d: remove pending"));
         }
@@ -126,10 +127,7 @@ fn footer_actions(state: &DetailView<'_>, tab: DetailTab) -> Vec<Hint> {
         parts.extend(pr_action_hints(state));
         return parts;
     }
-    if tab == DetailTab::Diff
-        || (tab == DetailTab::Commits && state.detail.commits.open_commit.is_some())
-    {
-        let view = state.detail.active_diff_view();
+    if let Some(view) = state.surface().diff_viewer() {
         if view.focus == DiffFocus::Tree {
             let rows = crate::tui::components::diff_viewer::file_tree::build_visible_rows(
                 state.diff_files(),
@@ -204,17 +202,15 @@ fn footer_actions(state: &DetailView<'_>, tab: DetailTab) -> Vec<Hint> {
 fn active_search(
     state: &DetailView<'_>,
     pr_data: Option<&PrData>,
-    tab: DetailTab,
     width: u16,
 ) -> Option<Line<'static>> {
-    let viewing_commit = state.detail.commits.open_commit.is_some();
-    if tab == DetailTab::Commits && !viewing_commit {
-        return commits_search_prompt(&state.detail.commits.search, pr_data, width);
-    }
-    if tab != DetailTab::Diff && !(tab == DetailTab::Commits && viewing_commit) {
-        return None;
-    }
-    let view = state.detail.active_diff_view();
+    let view = match state.surface() {
+        Surface::CommitList => {
+            return commits_search_prompt(&state.detail.commits.search, pr_data, width);
+        }
+        Surface::Diff(view) | Surface::CommitDiff(view) => view,
+        Surface::Description | Surface::Overview | Surface::Builds => return None,
+    };
     match view.focus {
         DiffFocus::Tree => tree_search_prompt(&view.tree_search, state.diff_files(), width),
         DiffFocus::Pane => pane_search_prompt(&view.pane_search, view.pane_matches.len(), width),

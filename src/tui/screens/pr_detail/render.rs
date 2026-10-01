@@ -132,7 +132,7 @@ fn render_content(
         ),
         DetailTab::Diff => {
             let threads = activity_threads(pr_data);
-            let diff = pr_data.and_then(|d| d.diff_for(ui.commits.open_commit.as_deref()));
+            let diff = pr_data.map(|d| &d.diff);
             ui.diff.render(
                 frame,
                 inset,

@@ -1,4 +1,4 @@
-use super::PrDetailScreen;
+use super::{PrDetailScreen, Surface};
 use crate::{
     app::{
         navigation::Screen,
@@ -11,7 +11,10 @@ use crate::{
         pr::{MergeStatus, Mergeability, PrStatus, PullRequest},
         review::ReviewVerdict,
     },
-    tui::{components::diff_viewer::DiffFocus, screens::pr_detail::tabs::DetailTab},
+    tui::{
+        components::diff_viewer::{DiffFocus, DiffViewer},
+        screens::pr_detail::tabs::DetailTab,
+    },
 };
 
 /// What the PR screen works from: the PR it shows, already looked up, with its
@@ -76,7 +79,7 @@ impl<'a> DetailView<'a> {
 
     /// The files of the diff on screen: the PR's, or the open commit's.
     pub fn diff_files(&self) -> &'a [FileDiff] {
-        diff_files(self.data, self.detail.commits.open_commit.as_deref())
+        diff_files(self.data, self.detail.commits.open_commit())
     }
 
     pub fn review_context(&self) -> super::dialogs::review::ReviewContext<'a> {
@@ -173,14 +176,16 @@ impl<'a> DetailView<'a> {
 
     /// The thread the cursor is on, for resolve/unresolve (`R`).
     pub const fn focused_thread(&self) -> Option<&'a ThreadRef> {
-        match self.tab {
-            DetailTab::Overview => self.detail.overview.timeline.thread.as_ref(),
-            DetailTab::Diff => self.detail.active_diff_view().pane_thread.as_ref(),
-            DetailTab::Commits if self.detail.commits.open_commit.is_some() => {
-                self.detail.active_diff_view().pane_thread.as_ref()
-            }
-            _ => None,
+        match self.surface() {
+            Surface::Overview => self.detail.overview.timeline.thread.as_ref(),
+            Surface::Diff(viewer) | Surface::CommitDiff(viewer) => viewer.pane_thread.as_ref(),
+            Surface::Description | Surface::CommitList | Surface::Builds => None,
         }
+    }
+
+    /// What the content area shows.
+    pub const fn surface(&self) -> Surface<'a> {
+        self.detail.surface(self.tab)
     }
 
     /// The overview sub-selected comment, but only when it's the viewer's own
@@ -208,17 +213,14 @@ impl<'a> DetailView<'a> {
     /// Target for a brand-new comment (`c`): a top-level PR comment in Overview,
     /// or the focused line in the Diff / commit pane.
     pub fn comment_target(&self) -> Option<CommentTarget> {
-        match self.tab {
-            DetailTab::Overview => self
+        match self.surface() {
+            Surface::Overview => self
                 .store
                 .capabilities
                 .supports(crate::domain::capabilities::Feature::PrComments)
                 .then_some(CommentTarget::Pr),
-            DetailTab::Diff => self.pane_line_target(),
-            DetailTab::Commits if self.detail.commits.open_commit.is_some() => {
-                self.pane_line_target()
-            }
-            _ => None,
+            Surface::Diff(viewer) | Surface::CommitDiff(viewer) => self.pane_line_target(viewer),
+            Surface::Description | Surface::CommitList | Surface::Builds => None,
         }
     }
 
@@ -232,26 +234,22 @@ impl<'a> DetailView<'a> {
         {
             return None;
         }
-        match self.tab {
-            DetailTab::Overview => self
+        match self.surface() {
+            Surface::Overview => self
                 .detail
                 .overview
                 .timeline
                 .reply
                 .map(CommentTarget::Reply),
-            DetailTab::Diff | DetailTab::Commits => {
-                let view = self.detail.active_diff_view();
-                (view.focus == DiffFocus::Pane)
-                    .then_some(view.pane_reply)
-                    .flatten()
-                    .map(CommentTarget::Reply)
-            }
-            _ => None,
+            Surface::Diff(view) | Surface::CommitDiff(view) => (view.focus == DiffFocus::Pane)
+                .then_some(view.pane_reply)
+                .flatten()
+                .map(CommentTarget::Reply),
+            Surface::Description | Surface::CommitList | Surface::Builds => None,
         }
     }
 
-    fn pane_line_target(&self) -> Option<CommentTarget> {
-        let view = self.detail.active_diff_view();
+    fn pane_line_target(&self, view: &DiffViewer) -> Option<CommentTarget> {
         if view.focus != DiffFocus::Pane {
             return None;
         }

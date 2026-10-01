@@ -100,15 +100,21 @@ fn commit_drilldown_uses_an_independent_diff_instance() {
     ))));
     press(&mut app, KeyCode::Enter);
     assert_eq!(
-        app.state.ui.detail.commits.open_commit.as_deref(),
+        app.state.ui.detail.commits.open_commit(),
         Some("abcdef123456")
     );
-    app.state.ui.detail.commits.diff.pane_item_count = 5;
+    app.state
+        .ui
+        .detail
+        .commits
+        .diff_mut()
+        .unwrap()
+        .pane_item_count = 5;
     app.apply(Action::Diff(DiffAction::MovePaneCursor(2)));
-    assert_eq!(app.state.ui.detail.commits.diff.pane_cursor, 2);
+    assert_eq!(app.state.ui.detail.commits.diff().unwrap().pane_cursor, 2);
     assert_eq!(app.state.ui.detail.diff.pane_cursor, 7);
     press(&mut app, KeyCode::Esc);
-    assert!(app.state.ui.detail.commits.open_commit.is_none());
+    assert!(app.state.ui.detail.commits.open_commit().is_none());
     assert_eq!(app.state.ui.detail.diff.pane_cursor, 7);
 }
 

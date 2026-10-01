@@ -106,7 +106,7 @@ pub fn render_commit_diff(
     author: &str,
     area: Rect,
 ) {
-    let Some(oid) = cv.open_commit.clone() else {
+    let CommitsView::Diff { oid, viewer } = &mut cv.view else {
         return;
     };
     let [banner_area, diff_area] = layout::split(
@@ -115,10 +115,10 @@ pub fn render_commit_diff(
         [Constraint::Length(2), Constraint::Min(0)],
     );
 
-    render_commit_banner(frame, pr_data, &oid, banner_area);
+    render_commit_banner(frame, pr_data, oid, banner_area);
 
-    let diff_state = pr_data.and_then(|d| d.diff_for(Some(&oid)));
-    cv.diff.render(
+    let diff_state = pr_data.and_then(|d| d.diff_for(Some(oid)));
+    viewer.render(
         frame,
         diff_area,
         &DiffContext {
@@ -191,8 +191,19 @@ pub struct CommitList {
     list_state: ListState,
     pub viewport: u16,
     pub search: SearchInput,
-    pub open_commit: Option<String>,
-    pub diff: DiffViewer,
+    view: CommitsView,
+}
+
+/// What the Commits tab shows. A commit's diff has a viewer of its own, made
+/// when the commit is opened, so it never moves the PR diff's cursor or search.
+#[derive(Debug, Default)]
+enum CommitsView {
+    #[default]
+    List,
+    Diff {
+        oid: String,
+        viewer: Box<DiffViewer>,
+    },
 }
 
 pub struct CommitContext<'a> {
@@ -241,7 +252,7 @@ impl Component for CommitList {
         let filtered = self.search.filter_commits(input.commits);
         match action {
             CommitsAction::Back => {
-                self.open_commit = None;
+                self.close_commit();
                 return None;
             }
             CommitsAction::MoveSelection(delta) => {
@@ -258,15 +269,17 @@ impl Component for CommitList {
             CommitsAction::Open => {}
         }
         let oid = filtered.get(self.selected)?.oid.clone();
-        self.open_commit = Some(oid.clone());
-        self.diff = DiffViewer::default();
+        self.view = CommitsView::Diff {
+            oid: oid.clone(),
+            viewer: Box::default(),
+        };
         Some(Effect::LoadCommitDiff {
             pr_id: input.pr_id,
             oid,
         })
     }
     fn render(&mut self, frame: &mut Frame<'_>, area: Rect, ctx: &CommitContext<'_>) {
-        if self.open_commit.is_some() {
+        if self.open_commit().is_some() {
             let threads = match ctx.data.map(|d| &d.activity) {
                 Some(LoadState::Loaded(a)) => a.threads.as_slice(),
                 _ => &[],
@@ -287,6 +300,34 @@ impl Component for CommitList {
 }
 
 impl CommitList {
+    /// The commit whose diff is open, if one is.
+    pub fn open_commit(&self) -> Option<&str> {
+        match &self.view {
+            CommitsView::List => None,
+            CommitsView::Diff { oid, .. } => Some(oid),
+        }
+    }
+
+    /// The open commit's diff viewer.
+    pub const fn diff(&self) -> Option<&DiffViewer> {
+        match &self.view {
+            CommitsView::List => None,
+            CommitsView::Diff { viewer, .. } => Some(viewer),
+        }
+    }
+
+    pub const fn diff_mut(&mut self) -> Option<&mut DiffViewer> {
+        match &mut self.view {
+            CommitsView::List => None,
+            CommitsView::Diff { viewer, .. } => Some(viewer),
+        }
+    }
+
+    /// Back to the list of commits.
+    pub fn close_commit(&mut self) {
+        self.view = CommitsView::List;
+    }
+
     pub fn reconcile(&mut self, old: &[Commit], new: &[Commit]) {
         let id = self
             .search

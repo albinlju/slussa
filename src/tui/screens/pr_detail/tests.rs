@@ -210,3 +210,64 @@ fn a_pr_that_is_not_in_the_list_gives_no_context_and_only_the_way_out() {
     assert!(effect.is_none());
     assert!(state.ui.detail.editor.draft.is_none());
 }
+
+/// The Commits list, reached after the Diff tab was left with its pane on a
+/// thread and on a queued comment, and with a review in progress.
+fn commit_list_after_the_diff_pane() -> AppState {
+    let mut state = overview_of(PrStatus::Open);
+    state.ui.detail.diff.focus = DiffFocus::Pane;
+    state.ui.detail.diff.pane_reply = Some(7);
+    state.ui.detail.diff.pane_pending = Some(0);
+    state.store.reviews.entry(42).or_default();
+    state.screen = Screen::Detail {
+        pr_id: 42,
+        tab: DetailTab::Commits,
+    };
+    state
+}
+
+#[test]
+fn the_commit_list_does_not_reply_to_the_thread_the_diff_tab_left_focused() {
+    let state = commit_list_after_the_diff_pane();
+    let r = key_to_action(
+        &state,
+        KeyEvent::new(KeyCode::Char('r'), KeyModifiers::NONE),
+    );
+    assert!(r.is_none(), "{r:?}");
+    let c = key_to_action(
+        &state,
+        KeyEvent::new(KeyCode::Char('c'), KeyModifiers::NONE),
+    );
+    assert!(c.is_none(), "{c:?}");
+}
+
+#[test]
+fn the_commit_list_footer_offers_only_keys_that_work_there() {
+    let mut state = commit_list_after_the_diff_pane();
+    let footer = footer_of(&mut state);
+    assert!(footer.contains("v: finish draft"), "{footer}");
+    assert!(!footer.contains("d: remove pending"), "{footer}");
+    assert!(!footer.contains("r: reply"), "{footer}");
+
+    // On the diff itself both are offered, as before.
+    state.screen = Screen::Detail {
+        pr_id: 42,
+        tab: DetailTab::Diff,
+    };
+    state.ui.detail.diff.focus = DiffFocus::Pane;
+    state.ui.detail.diff.pane_reply = Some(7);
+    state.ui.detail.diff.pane_pending = Some(0);
+    let d = key_to_action(
+        &state,
+        KeyEvent::new(KeyCode::Char('d'), KeyModifiers::NONE),
+    );
+    assert!(
+        matches!(
+            d,
+            Some(Action::Detail(DetailAction::Pr(
+                PrAction::RemovePendingComment
+            )))
+        ),
+        "{d:?}"
+    );
+}
