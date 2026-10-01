@@ -75,13 +75,9 @@ impl App {
                     self.spawn_delete_comment(ticket, comment);
                 }
             }
-            Command::ResolveThread {
-                node_id,
-                comment_id,
-                resolved,
-            } => {
+            Command::ResolveThread { thread, resolved } => {
                 if let Some(ticket) = self.begin_write(pr_id, Operation::Moderation) {
-                    self.spawn_resolve_thread(ticket, node_id, comment_id, resolved);
+                    self.spawn_resolve_thread(ticket, thread, resolved);
                 }
             }
         }

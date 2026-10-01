@@ -9,7 +9,10 @@ pub(super) use crate::{
         state::*,
         store::{LoadState, PrData},
     },
-    domain::{activity::Activity, ci::CiSummary, commit::Commit, diff::*, pr::*, user::User},
+    domain::{
+        activity::Activity, ci::CiSummary, comment::ThreadHandle, commit::Commit, diff::*, pr::*,
+        user::User,
+    },
     tui::{
         components::{
             comment_editor::{CommentDraft, CommentEditor, EditorView},

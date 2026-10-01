@@ -2,7 +2,7 @@ use serde::Deserialize;
 
 use super::{Config, ms_to_utc};
 use crate::domain::activity::Activity;
-use crate::domain::comment::{Comment, CommentThread, Reaction, ThreadAnchor};
+use crate::domain::comment::{Comment, CommentThread, Reaction, ThreadAnchor, ThreadHandle};
 use crate::domain::event::{EventKind, PushedCommit, TimelineEvent};
 use crate::domain::user::User;
 use crate::providers::bitbucket_dc::http::get_all;
@@ -188,7 +188,7 @@ fn make_thread(anchor: Anchor, root: &BbComment) -> CommentThread {
             // Resolved by the "Resolve" button (threadResolved) or, for a task,
             // by closing the task (state == RESOLVED).
             resolved: root.thread_resolved || root.state.eq_ignore_ascii_case("RESOLVED"),
-            node_id: None,
+            handle: (root.id != 0).then_some(ThreadHandle::RootComment(root.id)),
         }),
     }
 }
@@ -298,6 +298,8 @@ mod tests {
         assert_eq!(bundle.threads[0].comments.len(), 2);
         assert_eq!(bundle.threads[0].reply_to, Some(2));
         assert!(!anchor.resolved); // state OPEN, no threadResolved
+        // Resolved through its root comment.
+        assert_eq!(anchor.handle, Some(ThreadHandle::RootComment(2)));
 
         assert_eq!(bundle.events.len(), 3);
         assert_eq!(bundle.events[0].kind, EventKind::Opened);

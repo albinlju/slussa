@@ -296,7 +296,7 @@ fn build_blocks(
                         // Only anchored threads can be resolved — general
                         // discussion has no resolve target (so `R` no-ops).
                         resolve: t.anchor.as_ref().map(|a| ThreadRef {
-                            node_id: a.node_id.clone(),
+                            handle: a.handle.clone(),
                             comment_id: t.reply_to,
                             resolved: a.resolved,
                         }),

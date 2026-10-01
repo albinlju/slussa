@@ -1,6 +1,6 @@
 use serde::Deserialize;
 
-use crate::domain::comment::{CommentThread, ThreadAnchor};
+use crate::domain::comment::{CommentThread, ThreadAnchor, ThreadHandle};
 use crate::providers::error::FetchError;
 use crate::providers::github::{COMMENT_FIELDS, GqlComment, map_gql_comment};
 
@@ -126,7 +126,7 @@ fn map_thread(t: GqlThread) -> CommentThread {
             line,
             old_line,
             resolved: t.is_resolved,
-            node_id: (!t.id.is_empty()).then_some(t.id),
+            handle: (!t.id.is_empty()).then_some(ThreadHandle::NodeId(t.id)),
         }),
     }
 }
@@ -165,6 +165,11 @@ mod tests {
             vec![Some(1), Some(2)]
         );
         assert_eq!(threads[1].reply_to, Some(1));
+        // Resolved through the thread's own id, not a comment's.
+        assert_eq!(
+            threads[1].anchor.as_ref().unwrap().handle,
+            Some(ThreadHandle::NodeId("long".into()))
+        );
     }
 
     #[test]

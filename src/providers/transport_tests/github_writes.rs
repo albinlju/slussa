@@ -155,3 +155,20 @@ fn github_edits_and_deletes_a_comment_where_its_kind_lives() {
         ]
     );
 }
+
+#[test]
+fn github_resolves_a_thread_by_its_node_id_and_refuses_another_providers_handle() {
+    use crate::domain::comment::ThreadHandle;
+    let installed = FakeGh::new().on("api", "{}").install();
+    Provider::GitHub
+        .set_thread_resolved(7, &ThreadHandle::NodeId("PRRT_1".into()), true)
+        .unwrap();
+    let calls = installed.calls();
+    assert_eq!(calls.len(), 1, "{calls:?}");
+    assert!(calls[0].contains("resolveReviewThread"), "{calls:?}");
+    assert!(calls[0].contains("PRRT_1"), "{calls:?}");
+
+    let refused = Provider::GitHub.set_thread_resolved(7, &ThreadHandle::RootComment(3), true);
+    assert!(matches!(refused, Err(FetchError::InvalidInput(_))));
+    assert_eq!(installed.calls().len(), 1, "nothing was sent for it");
+}

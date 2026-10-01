@@ -283,12 +283,8 @@ impl PrDetailScreen {
             }
             PrAction::ResolveThread => {
                 let thread = self.view(ctx).focused_thread()?;
-                if thread.node_id.is_none() && thread.comment_id.is_none() {
-                    return None;
-                }
                 Command::ResolveThread {
-                    node_id: thread.node_id.clone(),
-                    comment_id: thread.comment_id,
+                    thread: thread.handle.clone()?,
                     resolved: !thread.resolved,
                 }
             }

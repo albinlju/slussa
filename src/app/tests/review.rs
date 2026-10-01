@@ -278,7 +278,7 @@ fn comment_lookup_keeps_review_and_pr_ids_separate() {
                 line: Some(1),
                 old_line: None,
                 resolved: false,
-                node_id: Some("thread".into()),
+                handle: Some(ThreadHandle::NodeId("thread".into())),
             }),
         }],
     });

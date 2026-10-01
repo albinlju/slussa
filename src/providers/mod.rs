@@ -25,7 +25,7 @@ mod transport_tests;
 use crate::domain::{
     activity::Activity,
     ci::Build,
-    comment::CommentKey,
+    comment::{CommentKey, ThreadHandle},
     commit::Commit,
     diff::Diff,
     pr::{MergeStatus, MergeStrategy, PrBatch, PrGroup, PrInfo},
@@ -244,28 +244,24 @@ impl Provider {
         }
     }
 
-    /// Resolve/unresolve a thread. GitHub needs the GraphQL thread `node_id`;
-    /// Bitbucket toggles the root comment's state via `comment_id`.
+    /// Resolve or reopen a thread, addressed the way this provider read it.
     pub fn set_thread_resolved(
         &self,
         pr_id: u64,
-        node_id: Option<&str>,
-        comment_id: Option<u64>,
+        thread: &ThreadHandle,
         resolved: bool,
     ) -> Result<(), FetchError> {
-        match self {
-            Self::GitHub => match node_id {
-                Some(id) => github::set_thread_resolved(id, resolved),
-                None => Err(FetchError::InvalidInput(
-                    "This thread cannot be resolved by this provider.".into(),
-                )),
-            },
-            Self::BitbucketDc(c) => match comment_id {
-                Some(id) => bitbucket_dc::set_thread_resolved(c, pr_id, id, resolved),
-                None => Err(FetchError::InvalidInput(
-                    "This thread cannot be resolved by this provider.".into(),
-                )),
-            },
+        match (self, thread) {
+            (Self::GitHub, ThreadHandle::NodeId(id)) => github::set_thread_resolved(id, resolved),
+            (Self::BitbucketDc(c), ThreadHandle::RootComment(id)) => {
+                bitbucket_dc::set_thread_resolved(c, pr_id, *id, resolved)
+            }
+            // A handle from the other provider: threads are read and resolved
+            // by the same one, so this is a thread it never returned.
+            (Self::GitHub, ThreadHandle::RootComment(_))
+            | (Self::BitbucketDc(_), ThreadHandle::NodeId(_)) => Err(FetchError::InvalidInput(
+                "This thread cannot be resolved by this provider.".into(),
+            )),
         }
     }
 

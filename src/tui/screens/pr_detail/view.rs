@@ -6,7 +6,7 @@ use crate::{
         store::{LoadState, PrData, Store},
     },
     domain::{
-        comment::{Comment, CommentKey, CommentKind},
+        comment::{Comment, CommentKey, CommentKind, ThreadHandle},
         diff::FileDiff,
         pr::{MergeStatus, Mergeability, PrStatus, PullRequest},
         review::ReviewVerdict,
@@ -309,12 +309,12 @@ impl CommentRef {
     }
 }
 
-/// Identity of a focused thread, for resolve/unresolve.
+/// The thread the cursor is on.
 #[derive(Debug, Clone)]
 pub struct ThreadRef {
-    /// GitHub GraphQL thread id.
-    pub node_id: Option<String>,
-    /// Root comment id (Bitbucket toggles its state).
+    /// What resolving it takes; none when it cannot be resolved.
+    pub handle: Option<ThreadHandle>,
+    /// Its root comment: what a reply hangs under and what folding remembers.
     pub comment_id: Option<u64>,
     pub resolved: bool,
 }

@@ -143,7 +143,7 @@ enum NavKind {
         line: usize,
         removed: bool,
         reply_to: Option<u64>,
-        node_id: Option<String>,
+        handle: Option<crate::domain::comment::ThreadHandle>,
         resolved: bool,
     },
     /// A queued (not-yet-posted) review comment — `index` into the pending review.
@@ -174,11 +174,11 @@ impl NavItem {
             NavKind::Line { .. } => NavTarget::Line,
             NavKind::Thread {
                 reply_to,
-                node_id,
+                handle,
                 resolved,
                 ..
             } => NavTarget::Thread(ThreadRef {
-                node_id: node_id.clone(),
+                handle: handle.clone(),
                 comment_id: *reply_to,
                 resolved: *resolved,
             }),
@@ -267,7 +267,7 @@ fn build_diff_body(
                         line,
                         removed,
                         reply_to: thread.reply_to,
-                        node_id: thread.anchor.as_ref().and_then(|a| a.node_id.clone()),
+                        handle: thread.anchor.as_ref().and_then(|a| a.handle.clone()),
                         resolved: thread.resolved(),
                     },
                 });

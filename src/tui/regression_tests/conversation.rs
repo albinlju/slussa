@@ -35,7 +35,7 @@ fn timeline_keeps_thread_selection_and_sidebar_is_responsive() {
                 line: Some(1),
                 old_line: None,
                 resolved: false,
-                node_id: Some("thread-1".into()),
+                handle: Some(ThreadHandle::NodeId("thread-1".into())),
             }),
         }],
     });
@@ -87,13 +87,8 @@ fn timeline_keeps_thread_selection_and_sidebar_is_responsive() {
         assert_eq!(text.contains("Reviewers"), width >= 80);
         assert_eq!(state.ui.detail.overview.timeline.reply, Some(10));
         assert_eq!(
-            state
-                .detail_view()
-                .focused_thread()
-                .unwrap()
-                .node_id
-                .as_deref(),
-            Some("thread-1")
+            state.detail_view().focused_thread().unwrap().handle,
+            Some(ThreadHandle::NodeId("thread-1".into()))
         );
     }
     let path = concat!(
@@ -216,7 +211,7 @@ fn diff_fold_keeps_target_and_shows_the_next_action() {
                     line: Some(1),
                     old_line: None,
                     resolved: true,
-                    node_id: Some("thread-10".into()),
+                    handle: Some(ThreadHandle::NodeId("thread-10".into())),
                 }),
             }],
         });
@@ -381,7 +376,7 @@ fn a_thread_taller_than_the_diff_pane_is_shown_from_its_first_row() {
                 line: Some(1),
                 old_line: None,
                 resolved: false,
-                node_id: Some("thread-10".into()),
+                handle: Some(ThreadHandle::NodeId("thread-10".into())),
             }),
         }],
     });

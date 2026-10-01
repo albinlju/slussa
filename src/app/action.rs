@@ -417,8 +417,7 @@ pub enum Command {
     Reopen,
     DeleteComment(crate::domain::comment::CommentKey),
     ResolveThread {
-        node_id: Option<String>,
-        comment_id: Option<u64>,
+        thread: crate::domain::comment::ThreadHandle,
         resolved: bool,
     },
 }

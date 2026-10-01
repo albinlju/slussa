@@ -110,7 +110,7 @@ fn footer_actions(state: &DetailView<'_>, tab: DetailTab) -> Vec<Hint> {
         if state.store.capabilities.supports(Feature::ResolveThreads)
             && let Some(thread) = state
                 .focused_thread()
-                .filter(|thread| thread.node_id.is_some() || thread.comment_id.is_some())
+                .filter(|thread| thread.handle.is_some())
         {
             parts.push(Hint::on(if thread.resolved {
                 "R: reopen thread"
@@ -165,7 +165,7 @@ fn footer_actions(state: &DetailView<'_>, tab: DetailTab) -> Vec<Hint> {
         if state.store.capabilities.supports(Feature::ResolveThreads)
             && let Some(thread) = state
                 .focused_thread()
-                .filter(|thread| thread.node_id.is_some() || thread.comment_id.is_some())
+                .filter(|thread| thread.handle.is_some())
         {
             hints.push(Hint::on(if thread.resolved {
                 "R: reopen thread"

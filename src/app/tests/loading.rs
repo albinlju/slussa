@@ -130,8 +130,7 @@ fn read_only_capabilities_block_shortcuts_commands_and_optional_loads() {
             kind: CommentKind::Conversation,
         }),
         Command::ResolveThread {
-            node_id: Some("thread".into()),
-            comment_id: Some(1),
+            thread: ThreadHandle::NodeId("thread".into()),
             resolved: true,
         },
     ] {

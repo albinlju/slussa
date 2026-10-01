@@ -9,7 +9,7 @@ use crate::{
         store::{FetchKey, FetchTicket, OpenChain, WriteTicket},
     },
     domain::{
-        comment::CommentKey,
+        comment::{CommentKey, ThreadHandle},
         pr::{MergeStrategy, PrGroup},
         review::{ReviewComment, ReviewVerdict},
     },
@@ -299,14 +299,13 @@ impl App {
     pub(super) fn spawn_resolve_thread(
         &self,
         ticket: WriteTicket,
-        node_id: Option<String>,
-        comment_id: Option<u64>,
+        thread: ThreadHandle,
         resolved: bool,
     ) {
         let provider = self.provider.clone();
         let pr_id = ticket.pr_id();
         self.spawn_write(ticket, move || {
-            provider.set_thread_resolved(pr_id, node_id.as_deref(), comment_id, resolved)
+            provider.set_thread_resolved(pr_id, &thread, resolved)
         });
     }
 }

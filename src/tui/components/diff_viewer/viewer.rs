@@ -87,7 +87,7 @@ impl FocusedNav {
     /// The cursor on a thread whose root comment is `id`.
     pub fn on_thread(id: u64) -> Self {
         Self::on(NavTarget::Thread(ThreadRef {
-            node_id: None,
+            handle: None,
             comment_id: Some(id),
             resolved: false,
         }))

@@ -103,9 +103,19 @@ pub struct ThreadAnchor {
     pub line: Option<usize>,
     pub old_line: Option<usize>,
     pub resolved: bool,
-    /// GitHub GraphQL thread node id, needed to resolve/unresolve. None on Bitbucket
-    /// (which toggles the root comment's state instead).
-    pub node_id: Option<String>,
+    /// What resolving or reopening the thread takes; none when the provider
+    /// gave nothing to address it by.
+    pub handle: Option<ThreadHandle>,
+}
+
+/// How a provider addresses a thread to resolve or reopen it. The provider
+/// that read the thread makes the handle, so there is exactly one way.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum ThreadHandle {
+    /// GitHub: the GraphQL node id of the review thread.
+    NodeId(String),
+    /// Bitbucket: the thread's root comment, whose state is toggled.
+    RootComment(u64),
 }
 
 impl CommentThread {
@@ -204,7 +214,7 @@ mod tests {
             line: Some(3),
             old_line: None,
             resolved,
-            node_id: None,
+            handle: None,
         }
     }
 
