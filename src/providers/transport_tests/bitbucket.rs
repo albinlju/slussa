@@ -119,6 +119,33 @@ fn bitbucket_rejected_token_is_reported_as_not_authenticated() {
 }
 
 #[test]
+fn bitbucket_a_refused_action_is_not_reported_as_a_missing_login() {
+    let body = json!({"errors": [{"message": "You are not permitted to merge this pull request"}]})
+        .to_string();
+    let server = MockHttp::start(vec![Route::get(&open_url(0), 403, &body)]);
+    let error = bitbucket(&server)
+        .fetch_prs(PrGroup::Open, None)
+        .unwrap_err();
+
+    assert!(
+        matches!(error, FetchError::HttpFailed { status: 403, .. }),
+        "{error:?}"
+    );
+    assert_eq!(
+        error.user_message(),
+        "You are not permitted to merge this pull request"
+    );
+
+    let server = MockHttp::start(vec![Route::get(&open_url(0), 403, "")]);
+    let message = bitbucket(&server)
+        .fetch_prs(PrGroup::Open, None)
+        .unwrap_err()
+        .user_message();
+    assert!(message.contains("permissions"), "{message}");
+    assert!(!message.contains("auth login"), "{message}");
+}
+
+#[test]
 fn bitbucket_asking_who_is_logged_in_with_a_rejected_token_says_so() {
     let server = MockHttp::start(vec![Route::get(
         "/rest/api/1.0/application-properties",
