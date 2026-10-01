@@ -1,9 +1,11 @@
 //! The blocks of the Overview timeline: one per comment, thread or event, and
 //! the rail that joins them.
 
+use super::hidden::HiddenRun;
 use crate::tui::widgets::comment_meta::Roles;
 use crate::{
     domain::{
+        authorship::AuthorFilter,
         comment::{Comment, CommentId, CommentKind, CommentThread},
         diff::Diff,
         event::{EventKind, TimelineEvent},
@@ -18,7 +20,7 @@ use ratatui::{
     style::{Color, Modifier, Style},
     text::{Line, Span},
 };
-use std::cmp::Reverse;
+use std::{cmp::Reverse, mem};
 
 pub(super) enum TimelineItem<'a> {
     Comment(&'a Comment),
@@ -70,10 +72,18 @@ pub(super) fn focusable_count(comments: &[&Comment], threads: &[&CommentThread])
     comments.len() + threads.iter().filter(|t| !t.comments.is_empty()).count()
 }
 
+/// What the filter left out, to be put back as dimmed lines between the blocks.
+pub(super) struct Hidden<'a> {
+    pub(super) comments: &'a [&'a Comment],
+    pub(super) threads: &'a [&'a CommentThread],
+    pub(super) filter: AuthorFilter,
+}
+
 #[expect(clippy::too_many_arguments, reason = "render inputs; see ROADMAP")]
 pub(super) fn build_blocks(
     comments: &[&Comment],
     threads: &[&CommentThread],
+    hidden: &Hidden<'_>,
     events: &[TimelineEvent],
     diff: Option<&Diff>,
     width: u16,
@@ -81,12 +91,30 @@ pub(super) fn build_blocks(
     sub: usize,
     roles: Roles<'_>,
 ) -> Vec<TimelineBlock> {
-    let mut items: Vec<TimelineItem<'_>> =
-        Vec::with_capacity(comments.len() + threads.len() + events.len());
-    items.extend(comments.iter().copied().map(TimelineItem::Comment));
-    items.extend(threads.iter().copied().map(TimelineItem::Review));
-    items.extend(events.iter().map(TimelineItem::Event));
-    items.sort_by_key(|item| Reverse(item.timestamp()));
+    // Each item with whether the filter hid it, newest first.
+    let mut items: Vec<(bool, TimelineItem<'_>)> = Vec::with_capacity(
+        comments.len()
+            + threads.len()
+            + events.len()
+            + hidden.comments.len()
+            + hidden.threads.len(),
+    );
+    items.extend(comments.iter().map(|c| (false, TimelineItem::Comment(c))));
+    items.extend(threads.iter().map(|t| (false, TimelineItem::Review(t))));
+    items.extend(events.iter().map(|e| (false, TimelineItem::Event(e))));
+    items.extend(
+        hidden
+            .comments
+            .iter()
+            .map(|c| (true, TimelineItem::Comment(c))),
+    );
+    items.extend(
+        hidden
+            .threads
+            .iter()
+            .map(|t| (true, TimelineItem::Review(t))),
+    );
+    items.sort_by_key(|(_, item)| Reverse(item.timestamp()));
 
     let theme = theme::current();
     let now = Utc::now();
@@ -94,7 +122,17 @@ pub(super) fn build_blocks(
     // `focus_idx` counts only focusable blocks, so the cursor (which indexes
     // comments/threads) lines up with the block we mark active.
     let mut focus_idx = 0;
-    for item in &items {
+    let mut run = HiddenRun::default();
+    for (is_hidden, item) in &items {
+        if *is_hidden {
+            match item {
+                TimelineItem::Comment(_) => run.add_conversation_comment(),
+                TimelineItem::Review(t) => run.add_thread(t, roles),
+                TimelineItem::Event(_) => {}
+            }
+            continue;
+        }
+        blocks.extend(hidden_block(&mem::take(&mut run), hidden.filter, width));
         let active = focus_idx == focused;
         match item {
             TimelineItem::Comment(c) => {
@@ -154,7 +192,24 @@ pub(super) fn build_blocks(
             }
         }
     }
+    blocks.extend(hidden_block(&run, hidden.filter, width));
     blocks
+}
+
+/// The block for a run of hidden comments: dim, and not somewhere the cursor
+/// can land.
+fn hidden_block(run: &HiddenRun, filter: AuthorFilter, width: u16) -> Option<TimelineBlock> {
+    let theme = theme::current();
+    Some(TimelineBlock {
+        lines: vec![run.line(filter, width)?],
+        selected_range: None,
+        node: theme.muted,
+        border: theme.divider,
+        reply_to: None,
+        focusable: false,
+        comments: Vec::new(),
+        resolve: None,
+    })
 }
 
 pub(super) fn timeline_rail(blocks: Vec<TimelineBlock>) -> (Vec<Line<'static>>, Vec<ItemNav>) {
