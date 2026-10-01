@@ -1,5 +1,5 @@
-//! A long comment in the diff's inline threads is folded until `space` opens
-//! the thread.
+//! A long comment in the diff's inline threads is folded until `space` on its
+//! fold row opens it.
 
 use super::support::*;
 use crate::domain::{
