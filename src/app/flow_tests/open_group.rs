@@ -84,7 +84,7 @@ fn open_page(ids: &[u64], more: Option<&str>) -> String {
     gh_list_page(&prs, more)
 }
 
-/// Three open pages: PRs 3 and 2, then 1, then 0.
+/// Three open pages: PR 1, then 2, then 4.
 fn three_open_pages() -> FakeGh {
     FakeGh::new()
         .on("after: \"p2\"", &open_page(&[4], None))
