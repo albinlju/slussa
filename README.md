@@ -104,9 +104,21 @@ over SSH; inside tmux that needs `set -g set-clipboard on`.
 ```toml
 theme = "graphite"   # graphite (default), slate, gruvbox, catppuccin, terminal
 sort = "attention"   # attention (default) or recent
+
+[ai]
+# Optional. For an agent that posts as a person: a comment whose first line
+# starts with one of these is its.
+markers = ["> **gator-agent**"]
 ```
 
 `SLUSSA_THEME` overrides the file.
+
+A comment by an AI agent has `[AI]` after the author's name, in the Overview and in
+the diff. `f` in the Overview shows all comments, only
+people's, or only the agents'. On GitHub the agents are the bot accounts (CodeRabbit,
+for one), so this needs no setup. `markers` is for an agent that posts
+with your own token, which no account tells apart; it works on both providers.
+Bitbucket Data Center does not mark bot accounts, so there only `markers` applies.
 
 ## Documentation
 

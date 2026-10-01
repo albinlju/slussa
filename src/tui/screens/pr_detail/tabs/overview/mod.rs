@@ -1,11 +1,14 @@
+mod blocks;
 mod sidebar;
 pub mod timeline;
+use crate::tui::widgets::comment_meta::Roles;
 use crate::{
     app::{
         action::{Action, Effect, TimelineAction},
         store::PrData,
     },
     domain::{
+        authorship::{AiMarkers, AuthorFilter},
         capabilities::{Capabilities, Feature},
         pr::PullRequest,
     },
@@ -21,10 +24,20 @@ use timeline::{Timeline, TimelineContext};
 const SIDEBAR_WIDTH: u16 = 30;
 const SIDEBAR_BREAKPOINT: u16 = 64;
 
+/// Whether `f` is offered: when the PR has an agent's comment to filter on, or
+/// a filter is on already, which must not become impossible to turn off.
+pub fn offers_filter(markers: &AiMarkers, data: Option<&PrData>, current: AuthorFilter) -> bool {
+    current != AuthorFilter::All
+        || data
+            .and_then(|d| d.activity.loaded())
+            .is_some_and(|activity| markers.any_in(activity))
+}
+
 pub struct OverviewContext<'a> {
     pub pr: &'a PullRequest,
     pub data: Option<&'a PrData>,
     pub capabilities: &'a Capabilities,
+    pub markers: &'a AiMarkers,
     /// Where the timeline's scrollbar goes: the screen's edge, not the tab's.
     pub scrollbar: Rect,
 }
@@ -93,7 +106,10 @@ fn render(
         body_area,
         &TimelineContext {
             data: pr_data,
-            author: &pr.author.username,
+            roles: Roles {
+                pr_author: &pr.author.username,
+                markers: ctx.markers,
+            },
             scrollbar: scrollbar_area,
         },
     );

@@ -1,4 +1,4 @@
-use super::user::User;
+use super::user::{AccountKind, User};
 use chrono::{DateTime, Utc};
 
 /// A comment's id at its provider. A type of its own, so that it cannot be
@@ -19,6 +19,8 @@ pub struct Comment {
     /// or delete it. `None` when the provider didn't supply one.
     pub id: Option<CommentId>,
     pub author: User,
+    /// Whether the account is a bot's; what the provider could not tell is a person's.
+    pub account: AccountKind,
     pub content: String,
     pub created: DateTime<Utc>,
     pub reactions: Vec<Reaction>,

@@ -22,6 +22,7 @@ const HELP_KEYS: &[(&str, &str)] = &[
     ("c", "comment"),
     ("r", "reply"),
     ("^j/^k", "step comment"),
+    ("f", "show all / people's / AI comments (Overview)"),
     ("e", "edit own"),
     ("d", "delete own"),
     ("R", "resolve thread"),
@@ -33,6 +34,7 @@ const HELP_KEYS: &[(&str, &str)] = &[
 pub(in crate::tui::screens::pr_detail) fn entries(
     caps: &Capabilities,
     has_pr_link: bool,
+    has_ai_filter: bool,
 ) -> Vec<(&'static str, &'static str)> {
     let keys: Vec<_> = HELP_KEYS
         .iter()
@@ -51,6 +53,7 @@ pub(in crate::tui::screens::pr_detail) fn entries(
             "e" => caps.supports(Feature::EditComments),
             "d" => caps.supports(Feature::DeleteComments) || caps.reviews(),
             "R" => caps.supports(Feature::ResolveThreads),
+            "f" => has_ai_filter,
             _ => true,
         })
         .map(|(key, desc)| {

@@ -1,4 +1,5 @@
 use super::{dialogs, footer, header};
+use crate::tui::widgets::comment_meta::Roles;
 use crate::{
     app::{
         reviews::{PendingComment, PendingReview},
@@ -128,6 +129,7 @@ fn render_content(
                 pr,
                 data: pr_data,
                 capabilities: &ctx.store.capabilities,
+                markers: &ctx.store.ai_markers,
                 scrollbar: Rect::new(area.right(), area.y, 1, area.height),
             },
         ),
@@ -141,7 +143,10 @@ fn render_content(
                     diff,
                     threads,
                     pending,
-                    author: &pr.author.username,
+                    roles: Roles {
+                        pr_author: &pr.author.username,
+                        markers: &ctx.store.ai_markers,
+                    },
                 },
             );
         }
@@ -152,7 +157,10 @@ fn render_content(
                 &commits::CommitContext {
                     data: pr_data,
                     pending,
-                    author: &pr.author.username,
+                    roles: Roles {
+                        pr_author: &pr.author.username,
+                        markers: &ctx.store.ai_markers,
+                    },
                 },
             );
         }
@@ -246,7 +254,16 @@ pub(super) fn render(
         Some(Overlay::Help(help)) => help.render(
             frame,
             area,
-            &dialogs::help::entries(&ctx.store.capabilities, pr.url.is_some()).as_slice(),
+            &dialogs::help::entries(
+                &ctx.store.capabilities,
+                pr.url.is_some(),
+                super::tabs::overview::offers_filter(
+                    &ctx.store.ai_markers,
+                    pr_data,
+                    ui.overview.timeline.filter,
+                ),
+            )
+            .as_slice(),
         ),
         Some(Overlay::Confirm(dialog)) => dialog.render(frame, area, &PrSummary::of(pr)),
         Some(Overlay::Review(dialog)) => dialog.render(frame, area, &review_ctx),

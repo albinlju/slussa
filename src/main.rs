@@ -75,6 +75,11 @@ fn run_tui(session: Session) -> ExitCode {
             }
         };
         app.state.ui.list.sort = tui::screens::pr_list::Sort::from_config(config.sort.as_deref());
+        let (markers, blank) = domain::authorship::AiMarkers::from_config(&config.ai.markers);
+        if blank > 0 {
+            tracing::warn!("ignoring {blank} blank entries in `ai.markers` in the config");
+        }
+        app.state.store.ai_markers = markers;
         let mut guard = match TerminalGuard::enter() {
             Ok(guard) => guard,
             Err(err) => {

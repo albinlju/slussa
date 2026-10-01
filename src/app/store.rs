@@ -21,6 +21,7 @@
 use crate::{
     domain::{
         activity::Activity,
+        authorship::AiMarkers,
         capabilities::{Capabilities, Feature},
         ci::Build,
         commit::{Commit, CommitOid},
@@ -54,6 +55,8 @@ pub struct Store {
     pub open_extra: usize,
     pub current_user: Username,
     pub capabilities: Capabilities,
+    /// How comments by an AI agent are recognised; empty unless configured.
+    pub ai_markers: AiMarkers,
 }
 
 impl Store {
@@ -75,6 +78,7 @@ impl Store {
             open_extra: 0,
             current_user,
             capabilities,
+            ai_markers: AiMarkers::default(),
         }
     }
 }

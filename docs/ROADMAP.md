@@ -152,12 +152,14 @@ what it finds on the branch and comments only when it is unsure, so its review
 is a set of commits and may leave no thread at all. "AI actor" is therefore one
 notion, applied to the PR's author, to comments and to commits.
 
-- [ ] **AI-authored comments and commits marked** *(refined for comments)* —
-  detect AI authorship by *either* account (GitHub `isBot` / app login suffix;
-  Bitbucket DC a configurable account list) *or* a configurable first-line
-  marker (`> **gator-agent**`, `> **🏗️ build-from-issue-agent**`, …). Render
-  with a distinct marker and a per-file badge count separate from human
-  threads. Filter in the Overview: humans / AI / all. The same detection marks
+- [ ] **AI-authored comments and commits marked** *(refined for comments; for
+  comments, detection by GitHub bot account and by `[ai] markers`, the `[AI]`
+  tag after the author's name and the Overview filter on `f` are done; the
+  per-file badge and the commits are not)* — detect AI authorship by *either*
+  account (GitHub `isBot` / app login suffix; Bitbucket DC a configurable
+  account list) *or* a configurable first-line marker (`> **gator-agent**`,
+  `> **🏗️ build-from-issue-agent**`, …). Render with a distinct marker and a
+  per-file badge count separate from human threads. Filter in the Overview: humans / AI / all. The same detection marks
   commits in the Commits tab, by author account or a configurable trailer, so
   the commits a reviewing agent added can be told from the implementer's and
   read as one diff. **Open for commits:** `Commit` carries only an author

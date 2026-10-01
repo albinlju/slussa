@@ -27,7 +27,7 @@ use serde::de::DeserializeOwned;
 use crate::domain::comment::{Comment, CommentId, Reaction};
 use crate::domain::pr::{MergeStrategy, Mergeability, PrId};
 use crate::domain::review::{ReviewComment, ReviewVerdict};
-use crate::domain::user::{User, Username};
+use crate::domain::user::{AccountKind, User, Username};
 use crate::providers::error::FetchError;
 
 pub fn current_user() -> Result<Username, FetchError> {
@@ -248,7 +248,7 @@ struct GqlRepository<P> {
     pull_request: P,
 }
 
-pub(super) const COMMENT_FIELDS: &str = "databaseId body createdAt author { login } \
+pub(super) const COMMENT_FIELDS: &str = "databaseId body createdAt author { login __typename } \
     reactionGroups { content viewerHasReacted users { totalCount } }";
 
 #[derive(Debug, Deserialize)]
@@ -272,6 +272,9 @@ pub(super) struct GqlComment {
 struct GqlAuthor {
     #[serde(default)]
     login: String,
+    /// `User`, `Bot`, `Organization`, `Mannequin`, ...
+    #[serde(default, rename = "__typename")]
+    typename: String,
 }
 
 #[derive(Debug, Deserialize)]
@@ -306,11 +309,17 @@ pub(super) fn map_gql_comment(c: GqlComment) -> Comment {
         })
         .collect();
     let id = c.database_id.map(CommentId);
+    let account = match c.author.as_ref().map(|a| a.typename.as_str()) {
+        Some("Bot") => AccountKind::Bot,
+        // A foreign string: any other kind of account is a person's for this.
+        Some(_) | None => AccountKind::Person,
+    };
     Comment {
         id,
         author: User {
             username: c.author.map(|a| a.login).unwrap_or_default(),
         },
+        account,
         content: c.body,
         created: c.created_at,
         reactions,
@@ -362,6 +371,49 @@ mod revision_tests {
         let mut other = first.clone();
         other.revision.head = "new-sha".into();
         assert!(review_payload("COMMENT", "summary", &revision, &[first, other]).is_err());
+    }
+}
+
+#[cfg(test)]
+mod account_tests {
+    use super::*;
+
+    fn comment_by(author: &serde_json::Value) -> Comment {
+        map_gql_comment(
+            serde_json::from_value(serde_json::json!({
+                "databaseId": 1, "body": "text", "createdAt": "2026-01-01T00:00:00Z",
+                "author": author,
+            }))
+            .unwrap(),
+        )
+    }
+
+    #[test]
+    fn a_bot_account_is_a_bot_and_everything_else_is_a_person() {
+        let kind = |author: serde_json::Value| comment_by(&author).account;
+        assert_eq!(
+            kind(serde_json::json!({"login": "coderabbitai", "__typename": "Bot"})),
+            AccountKind::Bot
+        );
+        assert_eq!(
+            kind(serde_json::json!({"login": "alice", "__typename": "User"})),
+            AccountKind::Person
+        );
+        assert_eq!(
+            kind(serde_json::json!({"login": "acme", "__typename": "Organization"})),
+            AccountKind::Person
+        );
+        // An answer without the type (an older fixture, a deleted account).
+        assert_eq!(
+            kind(serde_json::json!({"login": "alice"})),
+            AccountKind::Person
+        );
+        assert_eq!(kind(serde_json::Value::Null), AccountKind::Person);
+    }
+
+    #[test]
+    fn the_comment_selection_asks_for_the_account_type() {
+        assert!(COMMENT_FIELDS.contains("author { login __typename }"));
     }
 }
 

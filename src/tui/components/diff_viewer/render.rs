@@ -5,7 +5,7 @@ use crate::{
         comment::CommentThread,
         diff::{Diff, DiffLine, FileDiff, LineRef},
     },
-    tui::{layout, widgets},
+    tui::{layout, widgets, widgets::comment_meta::Roles},
 };
 use ratatui::{
     Frame,
@@ -19,7 +19,7 @@ pub(super) fn render(
     threads: &[CommentThread],
     pending: &[PendingComment],
     ui_diff: &mut DiffViewer,
-    author: &str,
+    roles: Roles<'_>,
     area: Rect,
 ) {
     // Until a pane is drawn below, there is nothing in it to act on.
@@ -80,7 +80,7 @@ pub(super) fn render(
             threads,
             pending,
             pane_focused,
-            author,
+            roles,
             pane_area,
         );
     }

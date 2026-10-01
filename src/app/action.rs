@@ -199,6 +199,8 @@ pub enum TimelineAction {
     Scroll(i16),
     /// Step between the comments of the focused thread.
     SubMove(i16),
+    /// Show all comments, only people's, or only the agents'.
+    CycleFilter,
 }
 
 #[derive(Debug, Clone, Copy)]

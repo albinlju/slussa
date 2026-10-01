@@ -1,6 +1,7 @@
 use crate::{
     app::action::{
         Action, CommitsAction, DetailAction, DiffAction, Effect, NavAction, PrAction, SearchAction,
+        TimelineAction,
     },
     tui::{
         component::Component,
@@ -127,6 +128,16 @@ pub(in crate::tui) fn key_to_action(
             && let Some(action) = state.detail.overview.handle_key(key, &())
         {
             return Some(action);
+        }
+        if plain
+            && code == KeyCode::Char('f')
+            && crate::tui::screens::pr_detail::tabs::overview::offers_filter(
+                &state.store.ai_markers,
+                state.data,
+                state.detail.overview.timeline.filter,
+            )
+        {
+            return Some(Action::from(TimelineAction::CycleFilter));
         }
         if plain && code == KeyCode::Char('e') {
             return Some(Action::from(PrAction::EditComment));

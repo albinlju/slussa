@@ -8,6 +8,17 @@ pub struct Config {
     pub theme: Option<String>,
     /// `"attention"` (default) or `"recent"`: how the PR list is ordered.
     pub sort: Option<String>,
+    #[serde(default)]
+    pub ai: AiConfig,
+}
+
+/// The `[ai]` table: how comments by an AI agent are recognised.
+#[derive(Debug, Default, Deserialize)]
+pub struct AiConfig {
+    /// First lines that agents start their comments with, such as
+    /// `> **gator-agent**`.
+    #[serde(default)]
+    pub markers: Vec<String>,
 }
 
 fn config_path() -> Option<PathBuf> {
@@ -58,6 +69,15 @@ mod tests {
         let config = parse("theme = \"slate\"\nsort = \"recent\"\n").unwrap();
         assert_eq!(config.theme.as_deref(), Some("slate"));
         assert_eq!(config.sort.as_deref(), Some("recent"));
+    }
+
+    #[test]
+    fn reads_the_ai_markers_and_defaults_to_none() {
+        let config = parse("[ai]\nmarkers = [\"> **gator-agent**\", \"> **build**\"]\n").unwrap();
+        assert_eq!(config.ai.markers, ["> **gator-agent**", "> **build**"]);
+        assert!(parse("theme = \"slate\"\n").unwrap().ai.markers.is_empty());
+        assert!(parse("[ai]\n").unwrap().ai.markers.is_empty());
+        assert!(parse("[ai]\nmarkers = \"one\"\n").is_err());
     }
 
     #[test]

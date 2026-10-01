@@ -118,6 +118,16 @@ fn footer_actions(state: &DetailView<'_>, tab: DetailTab) -> Vec<Hint> {
                 "R: resolve thread"
             }));
         }
+        if crate::tui::screens::pr_detail::tabs::overview::offers_filter(
+            &state.store.ai_markers,
+            state.data,
+            state.detail.overview.timeline.filter,
+        ) {
+            parts.push(Hint::on(format!(
+                "f: comments ({})",
+                state.detail.overview.timeline.filter.label()
+            )));
+        }
         parts.extend(pr_action_hints(state));
         return parts;
     }
