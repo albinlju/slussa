@@ -68,7 +68,7 @@ fn set_more(state: &mut AppState, group: PrGroup, more: bool) {
 }
 
 fn ids(list: &PrListScreen, prs: &LoadState<Vec<PullRequest>>, viewer: &str) -> Vec<u64> {
-    list.filtered_prs(prs, viewer)
+    list.filtered_prs(prs, &viewer.into())
         .iter()
         .map(|pr| pr.id)
         .collect()
@@ -142,14 +142,14 @@ fn the_heading_says_more_is_coming_while_the_open_prs_are_read() {
 }
 
 #[test]
-fn recent_order_and_an_unknown_viewer_leave_the_provider_order_alone() {
+fn recent_order_and_a_viewer_no_pr_involves_leave_the_provider_order_alone() {
     let recent = PrListScreen {
         sort: Sort::Recent,
         ..PrListScreen::default()
     };
     assert_eq!(ids(&recent, &prs(), "me"), [5, 4, 3, 2, 1]);
     let attention = PrListScreen::default();
-    assert_eq!(ids(&attention, &prs(), ""), [5, 4, 3, 2, 1]);
+    assert_eq!(ids(&attention, &prs(), "nobody"), [5, 4, 3, 2, 1]);
 }
 
 #[test]
@@ -180,7 +180,7 @@ fn toggling_the_sort_follows_the_highlighted_pr() {
     let ctx = ListContext {
         prs: &prs,
         refreshing: false,
-        viewer: "me",
+        viewer: &"me".into(),
         more: false,
         loading_more: false,
         view_loading: false,
@@ -366,7 +366,7 @@ fn choosing_another_view_asks_the_app_to_read_it_and_choosing_the_same_one_does_
     let ctx = ListContext {
         prs: &prs,
         refreshing: false,
-        viewer: "me",
+        viewer: &"me".into(),
         more: false,
         loading_more: false,
         view_loading: false,

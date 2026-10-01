@@ -14,6 +14,7 @@ use chrono::{DateTime, TimeZone, Utc};
 
 use crate::domain::pr::{MergeStatus, Mergeability};
 use crate::domain::review::{ReviewComment, ReviewVerdict};
+use crate::domain::user::Username;
 use crate::providers::error::{FetchError, ReviewError};
 
 pub use activities::fetch as fetch_activity;
@@ -28,7 +29,7 @@ pub use prs::fetch_prs;
 
 pub(super) const APP_PROPERTIES_PATH: &str = "/rest/api/1.0/application-properties";
 
-pub fn current_user(config: &Config) -> Result<String, FetchError> {
+pub fn current_user(config: &Config) -> Result<Username, FetchError> {
     http::current_user(&config.repo.base_url, APP_PROPERTIES_PATH, &config.pat)
 }
 

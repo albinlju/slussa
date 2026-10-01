@@ -27,16 +27,13 @@ use serde::de::DeserializeOwned;
 use crate::domain::comment::{Comment, Reaction};
 use crate::domain::pr::{MergeStatus, MergeStrategy, Mergeability};
 use crate::domain::review::{ReviewComment, ReviewVerdict};
-use crate::domain::user::User;
+use crate::domain::user::{User, Username};
 use crate::providers::error::FetchError;
 
-pub fn current_user() -> Result<String, FetchError> {
+pub fn current_user() -> Result<Username, FetchError> {
     let out = cli::run_gh(&["api", "user", "--jq", ".login"])?;
-    let login = String::from_utf8_lossy(&out).trim().to_owned();
-    if login.is_empty() {
-        return Err(FetchError::ParseFailed("gh named no login".into()));
-    }
-    Ok(login)
+    Username::parse(&String::from_utf8_lossy(&out))
+        .ok_or_else(|| FetchError::ParseFailed("gh named no login".into()))
 }
 
 pub fn fetch_mergeability(pr_number: u64) -> Result<MergeStatus, FetchError> {

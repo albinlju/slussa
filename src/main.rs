@@ -11,8 +11,9 @@ mod tui;
 
 use std::process::ExitCode;
 
-use crate::app::App;
-use crate::providers::Provider;
+use ratatui::DefaultTerminal;
+
+use crate::app::{App, preflight::Session};
 
 fn main() -> ExitCode {
     if let Err(err) = logging::init() {
@@ -21,11 +22,35 @@ fn main() -> ExitCode {
 
     match cli::dispatch(std::env::args().collect()) {
         cli::Dispatch::Done(code) => code,
-        cli::Dispatch::RunTui(provider) => run_tui(provider),
+        cli::Dispatch::RunTui(session) => run_tui(session),
     }
 }
 
-fn run_tui(provider: Provider) -> ExitCode {
+/// The terminal in TUI mode. Dropping it hands the terminal back as it was,
+/// also when the event loop returns early or a panic unwinds past it.
+struct TerminalGuard {
+    terminal: DefaultTerminal,
+}
+
+impl TerminalGuard {
+    fn enter() -> std::io::Result<Self> {
+        let guard = Self {
+            terminal: ratatui::try_init()?,
+        };
+        // If this fails the guard is dropped, which restores the terminal.
+        crossterm::execute!(std::io::stdout(), crossterm::event::EnableBracketedPaste)?;
+        Ok(guard)
+    }
+}
+
+impl Drop for TerminalGuard {
+    fn drop(&mut self) {
+        let _ = crossterm::execute!(std::io::stdout(), crossterm::event::DisableBracketedPaste);
+        ratatui::restore();
+    }
+}
+
+fn run_tui(session: Session) -> ExitCode {
     let rt = match tokio::runtime::Builder::new_multi_thread()
         .enable_all()
         .build()
@@ -37,30 +62,20 @@ fn run_tui(provider: Provider) -> ExitCode {
         }
     };
 
-    // Drafts are stored per account, and "is this mine?" needs one too. Without
-    // it the reason is shown here instead of a later, unrelated-looking failure.
-    let current_user = match provider.current_user() {
-        Ok(user) => user,
-        Err(err) => {
-            tracing::error!("couldn't identify the account: {err}");
-            eprintln!(
-                "slussa: couldn't identify the logged-in account: {}",
-                err.user_message()
-            );
-            return ExitCode::from(1);
-        }
-    };
+    let config = config::load();
+    tui::theme::init(config.theme.as_deref());
 
     let result = rt.block_on(async move {
-        let mut app = App::new(provider, current_user);
-        app.state.ui.list.sort =
-            tui::screens::pr_list::Sort::from_config(config::load().sort.as_deref());
-        if let Err(err) = app.enable_drafts() {
-            eprintln!("slussa: {err}");
-            return ExitCode::from(1);
-        }
-        let mut terminal = match ratatui::try_init() {
-            Ok(terminal) => terminal,
+        let mut app = match App::open(session) {
+            Ok(app) => app,
+            Err(err) => {
+                eprintln!("slussa: {err}");
+                return ExitCode::from(1);
+            }
+        };
+        app.state.ui.list.sort = tui::screens::pr_list::Sort::from_config(config.sort.as_deref());
+        let mut guard = match TerminalGuard::enter() {
+            Ok(guard) => guard,
             Err(err) => {
                 // `try_init` turns raw mode on before the steps that can still
                 // fail, so hand the terminal back before saying why.
@@ -69,13 +84,9 @@ fn run_tui(provider: Provider) -> ExitCode {
                 return ExitCode::from(1);
             }
         };
-        let result =
-            match crossterm::execute!(std::io::stdout(), crossterm::event::EnableBracketedPaste) {
-                Ok(()) => app.run(&mut terminal).await,
-                Err(err) => Err(err),
-            };
-        let _ = crossterm::execute!(std::io::stdout(), crossterm::event::DisableBracketedPaste);
-        ratatui::restore();
+        let result = app.run(&mut guard.terminal).await;
+        // Back to the normal screen before anything is printed.
+        drop(guard);
         match result {
             Ok(()) => ExitCode::SUCCESS,
             Err(err) => {

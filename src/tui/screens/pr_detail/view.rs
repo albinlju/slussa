@@ -48,14 +48,11 @@ impl<'a> DetailView<'a> {
     }
 
     pub fn viewing_own_pr(&self, pr_id: u64) -> bool {
-        if self.store.current_user.is_empty() {
-            return false;
-        }
         let LoadState::Loaded(prs) = &self.store.cache.prs else {
             return false;
         };
         prs.iter()
-            .any(|pr| pr.id == pr_id && pr.author.username == self.store.current_user)
+            .any(|pr| pr.id == pr_id && self.store.current_user.is(&pr.author.username))
     }
 
     fn pr_status(&self, pr_id: u64) -> Option<PrStatus> {
@@ -179,7 +176,9 @@ impl<'a> DetailView<'a> {
         let sel = self.detail.overview.timeline.selected?;
         let id = sel.id?;
         let comment = self.find_comment(id, sel.review)?;
-        (!self.store.current_user.is_empty() && comment.author.username == self.store.current_user)
+        self.store
+            .current_user
+            .is(&comment.author.username)
             .then_some(sel)
     }
 

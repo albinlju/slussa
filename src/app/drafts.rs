@@ -7,8 +7,10 @@
 //! than overwritten.
 use super::{
     App,
+    preflight::Session,
     reviews::{CommentDraft, PendingReview},
 };
+use crate::{domain::user::Username, providers::Provider};
 use serde::{Deserialize, Serialize};
 use std::{
     collections::{BTreeMap, BTreeSet},
@@ -130,47 +132,76 @@ fn private_options() -> OpenOptions {
     }
     options
 }
+/// Where drafts are kept. Outside tests that is always the disk: an app that
+/// "saved" drafts nowhere cannot be built.
+pub enum Drafts {
+    Disk(DraftStorage),
+    /// A test that does not look at the draft file.
+    #[cfg(test)]
+    Nowhere,
+}
+
+/// The name drafts are filed under: one file per provider, host, repository
+/// and account.
+fn scope(provider: &Provider, remote: &str, user: &Username) -> io::Result<String> {
+    let (authority, repo) = crate::git_url::split(remote)
+        .ok_or_else(|| io::Error::other("Cannot identify repository for drafts"))?;
+    let host = authority.rsplit('@').next().unwrap_or(authority);
+    let provider = match provider {
+        Provider::GitHub => "github",
+        Provider::BitbucketDc(_) => "bitbucket-dc",
+    };
+    Ok(serde_json::to_string(&(
+        provider,
+        host,
+        repo.trim_end_matches(".git"),
+        user.as_str(),
+    ))?)
+}
+
 impl App {
-    pub fn enable_drafts(&mut self) -> io::Result<()> {
-        if self.state.store.current_user.is_empty() {
-            return Err(io::Error::other(
-                "Cannot identify the account for draft storage. Check authentication and retry.",
-            ));
-        }
+    /// The application with its draft storage open and what it held restored.
+    pub fn open(session: Session) -> io::Result<Self> {
         let remote = super::remote::origin_url().map_err(io::Error::other)?;
-        let (authority, repo) = crate::git_url::split(&remote)
-            .ok_or_else(|| io::Error::other("Cannot identify repository for drafts"))?;
-        let host = authority.rsplit('@').next().unwrap_or(authority);
-        let provider = match self.provider {
-            crate::providers::Provider::GitHub => "github",
-            crate::providers::Provider::BitbucketDc(_) => "bitbucket-dc",
-        };
-        let scope = serde_json::to_string(&(
-            provider,
-            host,
-            repo.trim_end_matches(".git"),
-            &self.state.store.current_user,
-        ))?;
+        let scope = scope(session.provider(), &remote, session.user())?;
         let root = dirs::data_local_dir()
             .ok_or_else(|| io::Error::other("Cannot locate local data directory"))?
             .join("slussa/drafts");
         let (storage, snapshot) = DraftStorage::open(&root, scope)?;
-        self.restore_drafts(storage, snapshot);
-        Ok(())
+        let mut app = Self::new(session, Drafts::Disk(storage));
+        app.restore(snapshot);
+        Ok(app)
     }
-    pub(super) fn restore_drafts(&mut self, storage: DraftStorage, snapshot: Snapshot) {
+
+    fn restore(&mut self, snapshot: Snapshot) {
         self.state.ui.detail.restore_drafts(snapshot.editors);
         self.state.store.reviews = snapshot.reviews.into_iter().collect();
         for &id in &snapshot.interrupted {
             self.state.store.errors.insert(id, "A previous request was interrupted and may have reached the server. Check the PR before sending it again; nothing was resent automatically.".into());
         }
         self.state.store.uncertain_submissions = snapshot.interrupted;
-        self.drafts = Some(storage);
     }
+
+    /// Give a test's app a draft file, as `open` does.
+    #[cfg(test)]
+    pub(super) fn restore_drafts(&mut self, storage: DraftStorage, snapshot: Snapshot) {
+        self.drafts = Drafts::Disk(storage);
+        self.restore(snapshot);
+    }
+
+    #[cfg_attr(
+        not(test),
+        expect(
+            clippy::infallible_destructuring_match,
+            reason = "`Drafts` has a second variant in test builds"
+        )
+    )]
     pub(super) fn save_drafts(&mut self) -> bool {
         self.drafts_dirty = false;
-        let Some(storage) = &mut self.drafts else {
-            return true;
+        let storage = match &mut self.drafts {
+            Drafts::Disk(storage) => storage,
+            #[cfg(test)]
+            Drafts::Nowhere => return true,
         };
         let snapshot = Snapshot {
             editors: self.state.ui.detail.draft_snapshot(),
@@ -362,6 +393,26 @@ mod tests {
                 .is_none()
         );
         assert_eq!(serde_json::to_string(&envelope).unwrap(), VERSION_1);
+    }
+
+    /// The scope names the draft file, so a change to it would hide every
+    /// draft saved before.
+    #[test]
+    fn the_scope_names_provider_host_repository_and_account() {
+        let user = Username::parse("octocat").unwrap();
+        let expected = r#"["github","github.com","albinlju/slussa","octocat"]"#;
+        for remote in [
+            "git@github.com:albinlju/slussa.git",
+            "https://github.com/albinlju/slussa.git",
+            "https://github.com/albinlju/slussa",
+        ] {
+            assert_eq!(
+                scope(&Provider::GitHub, remote, &user).unwrap(),
+                expected,
+                "{remote}"
+            );
+        }
+        assert!(scope(&Provider::GitHub, "not a remote", &user).is_err());
     }
 
     #[test]

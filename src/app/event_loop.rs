@@ -1,7 +1,9 @@
 use crate::{
     app::{
         action::{Action, Effect, TaskResult},
-        drafts, refresh,
+        drafts::Drafts,
+        preflight::Session,
+        refresh,
         state::AppState,
         store::{self, FetchKey, LoadState},
     },
@@ -25,7 +27,7 @@ const SPINNER_INTERVAL: Duration = Duration::from_millis(100);
 const DRAFT_SAVE_INTERVAL: Duration = Duration::from_millis(500);
 
 pub struct App {
-    pub(super) drafts: Option<drafts::DraftStorage>,
+    pub(super) drafts: Drafts,
     /// Text was typed since the draft file was last written.
     pub(super) drafts_dirty: bool,
     pub state: AppState,
@@ -43,19 +45,15 @@ pub(super) enum Next {
 }
 
 impl App {
-    pub fn new(provider: Provider, current_user: String) -> Self {
+    /// The application for `session`, keeping its drafts in `drafts`.
+    /// `App::open` is the way in outside tests: it opens the draft storage.
+    pub(super) fn new(session: Session, drafts: Drafts) -> Self {
         let (results_tx, results_rx) = mpsc::unbounded_channel();
+        let (provider, user) = session.into_parts();
         Self {
-            drafts: None,
+            drafts,
             drafts_dirty: false,
-            state: AppState {
-                store: store::Store {
-                    current_user,
-                    capabilities: provider.capabilities(),
-                    ..store::Store::default()
-                },
-                ..AppState::default()
-            },
+            state: AppState::new(store::Store::new(user, provider.capabilities())),
             provider,
             results_tx,
             results_rx,

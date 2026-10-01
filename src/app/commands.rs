@@ -104,7 +104,7 @@ impl App {
     ) {
         let own_pr = self.state.store.cache.prs.loaded().is_some_and(|prs| {
             prs.iter()
-                .any(|pr| pr.id == pr_id && pr.author.username == self.state.store.current_user)
+                .any(|pr| pr.id == pr_id && self.state.store.current_user.is(&pr.author.username))
         });
         if !self
             .state
@@ -130,7 +130,7 @@ impl App {
             self.state.store.errors.insert(pr_id, "This provider requires one diff revision per review. Submit different revisions separately.".into());
             return;
         }
-        let user = self.state.store.current_user.clone();
+        let user = self.state.store.current_user.as_str().to_owned();
         let review = self.state.store.reviews.entry(pr_id).or_default();
         let body = if review.submitted_summary.as_ref() == Some(&body) {
             String::new()

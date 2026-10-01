@@ -132,7 +132,7 @@ fn render_table_body(
     list_state: &mut ListState,
     area: Rect,
     columns: &[usize],
-    viewer: &str,
+    viewer: &crate::domain::user::Username,
 ) {
     let theme = theme::current();
     let items: Vec<ListItem<'_>> = prs
@@ -217,7 +217,7 @@ fn attention_cell(reason: Option<Attention>) -> Cell {
     })
 }
 
-fn row_cells(pr: &PullRequest, viewer: &str) -> Vec<Cell> {
+fn row_cells(pr: &PullRequest, viewer: &crate::domain::user::Username) -> Vec<Cell> {
     let theme = theme::current();
     let muted = Style::default().fg(theme.muted);
 
@@ -424,7 +424,7 @@ pub struct ListContext<'a> {
     pub prs: &'a LoadState<Vec<PullRequest>>,
     pub refreshing: bool,
     /// Who is looking, for the attention column and order.
-    pub viewer: &'a str,
+    pub viewer: &'a crate::domain::user::Username,
     /// More PRs exist, in a group this view shows, that have not been loaded.
     pub more: bool,
     /// The open PRs are being read page by page.
@@ -668,7 +668,7 @@ impl PrListScreen {
     pub fn filtered_prs<'a>(
         &self,
         prs: &'a LoadState<Vec<PullRequest>>,
-        viewer: &str,
+        viewer: &crate::domain::user::Username,
     ) -> Vec<&'a PullRequest> {
         let LoadState::Loaded(prs) = prs else {
             return Vec::new();

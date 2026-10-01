@@ -8,6 +8,7 @@ use super::{
     ci::CiSummary,
     pr::{PrStatus, PullRequest},
     review::ReviewerState,
+    user::Username,
 };
 
 /// Why a PR needs you. Variants are declared from most to least urgent, and
@@ -37,11 +38,11 @@ impl Attention {
 
 /// The reason `pr` needs `viewer`, if any. Only open PRs ask for anything.
 /// Usernames compare without regard to case, as providers differ on that.
-pub fn attention(pr: &PullRequest, viewer: &str) -> Option<Attention> {
-    if viewer.is_empty() || pr.status != PrStatus::Open {
+pub fn attention(pr: &PullRequest, viewer: &Username) -> Option<Attention> {
+    if pr.status != PrStatus::Open {
         return None;
     }
-    let is = |name: &str| name.eq_ignore_ascii_case(viewer);
+    let is = |name: &str| viewer.is(name);
     if is(&pr.author.username) {
         let states = || pr.reviewers.iter().map(|r| &r.state);
         if states().any(|s| *s == ReviewerState::ChangesRequested) {
@@ -108,11 +109,11 @@ mod tests {
             vec![reviewer("me", ReviewerState::Requested)],
         );
         assert_eq!(
-            attention(&requested, "me"),
+            attention(&requested, &"me".into()),
             Some(Attention::ReviewRequested)
         );
-        assert_eq!(attention(&requested, "alice"), None);
-        assert_eq!(attention(&requested, "someone-else"), None);
+        assert_eq!(attention(&requested, &"alice".into()), None);
+        assert_eq!(attention(&requested, &"someone-else".into()), None);
     }
 
     #[test]
@@ -123,7 +124,7 @@ mod tests {
             ReviewerState::Commented,
         ] {
             let given = pr("alice", CiSummary::Success, vec![reviewer("me", state)]);
-            assert_eq!(attention(&given, "me"), None);
+            assert_eq!(attention(&given, &"me".into()), None);
         }
     }
 
@@ -134,9 +135,12 @@ mod tests {
             CiSummary::Failed,
             vec![reviewer("bob", ReviewerState::ChangesRequested)],
         );
-        assert_eq!(attention(&both, "me"), Some(Attention::ChangesRequested));
+        assert_eq!(
+            attention(&both, &"me".into()),
+            Some(Attention::ChangesRequested)
+        );
         let ci_only = pr("me", CiSummary::Failed, Vec::new());
-        assert_eq!(attention(&ci_only, "me"), Some(Attention::CiFailed));
+        assert_eq!(attention(&ci_only, &"me".into()), Some(Attention::CiFailed));
     }
 
     #[test]
@@ -149,7 +153,7 @@ mod tests {
                 reviewer("carol", ReviewerState::Approved),
             ],
         );
-        assert_eq!(attention(&all, "me"), Some(Attention::Approved));
+        assert_eq!(attention(&all, &"me".into()), Some(Attention::Approved));
         let waiting = pr(
             "me",
             CiSummary::Success,
@@ -158,9 +162,9 @@ mod tests {
                 reviewer("carol", ReviewerState::Requested),
             ],
         );
-        assert_eq!(attention(&waiting, "me"), None);
+        assert_eq!(attention(&waiting, &"me".into()), None);
         assert_eq!(
-            attention(&pr("me", CiSummary::Success, Vec::new()), "me"),
+            attention(&pr("me", CiSummary::Success, Vec::new()), &"me".into()),
             None
         );
     }
@@ -169,12 +173,13 @@ mod tests {
     fn only_open_prs_with_a_known_viewer_ask_anything() {
         let mut merged = pr("me", CiSummary::Failed, Vec::new());
         merged.status = PrStatus::Merged;
-        assert_eq!(attention(&merged, "me"), None);
+        assert_eq!(attention(&merged, &"me".into()), None);
         let mut draft = pr("me", CiSummary::Failed, Vec::new());
         draft.status = PrStatus::Draft;
-        assert_eq!(attention(&draft, "me"), None);
+        assert_eq!(attention(&draft, &"me".into()), None);
+        // A deleted account has no name, and its PR is nobody's.
         assert_eq!(
-            attention(&pr("me", CiSummary::Failed, Vec::new()), ""),
+            attention(&pr("", CiSummary::Failed, Vec::new()), &"me".into()),
             None
         );
     }
@@ -187,11 +192,11 @@ mod tests {
             vec![reviewer("Me", ReviewerState::Requested)],
         );
         assert_eq!(
-            attention(&requested, "me"),
+            attention(&requested, &"me".into()),
             Some(Attention::ReviewRequested)
         );
         assert_eq!(
-            attention(&pr("ME", CiSummary::Failed, Vec::new()), "me"),
+            attention(&pr("ME", CiSummary::Failed, Vec::new()), &"me".into()),
             Some(Attention::CiFailed)
         );
     }

@@ -332,7 +332,7 @@ fn github_asking_who_is_logged_in_fails_instead_of_naming_nobody() {
     );
 
     let _installed = FakeGh::new().on("api user", "octocat\n").install();
-    assert_eq!(Provider::GitHub.current_user().unwrap(), "octocat");
+    assert_eq!(Provider::GitHub.current_user().unwrap().as_str(), "octocat");
 }
 
 #[test]

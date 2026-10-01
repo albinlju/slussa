@@ -4,6 +4,7 @@ use std::time::Duration;
 use reqwest::blocking::Client;
 use serde::de::DeserializeOwned;
 
+use crate::domain::user::Username;
 use crate::providers::error::FetchError;
 
 pub(super) fn build_client(timeout: Duration) -> reqwest::Result<Client> {
@@ -78,7 +79,7 @@ pub(super) fn get_json<T: DeserializeOwned>(
     })
 }
 
-pub(super) fn current_user(base_url: &str, path: &str, pat: &str) -> Result<String, FetchError> {
+pub(super) fn current_user(base_url: &str, path: &str, pat: &str) -> Result<Username, FetchError> {
     let url = format!("{base_url}{path}");
     tracing::debug!("GET {url} (whoami)");
     let response = client()?.get(&url).bearer_auth(pat).send().map_err(|e| {
@@ -93,8 +94,8 @@ pub(super) fn current_user(base_url: &str, path: &str, pat: &str) -> Result<Stri
         .headers()
         .get("X-AUSERNAME")
         .and_then(|v| v.to_str().ok())
-        .map(str::to_owned)
-        .filter(|u| !u.is_empty() && u != "anonymous")
+        .filter(|name| *name != "anonymous")
+        .and_then(Username::parse)
         .ok_or_else(|| FetchError::ParseFailed("no X-AUSERNAME header".into()))
 }
 

@@ -16,7 +16,10 @@ pub(super) use serde_json::json;
 pub(super) use std::time::Duration;
 
 pub(super) fn app() -> App {
-    App::new(Provider::GitHub, "me".into())
+    App::new(
+        crate::app::preflight::Session::for_test(Provider::GitHub, "me"),
+        crate::app::drafts::Drafts::Nowhere,
+    )
 }
 
 /// Apply provider results until nothing is in flight.

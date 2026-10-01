@@ -1,10 +1,56 @@
 use thiserror::Error;
 
 use super::remote;
-use crate::providers::{Provider, bitbucket_dc, github};
+use crate::{
+    domain::user::Username,
+    providers::{Provider, bitbucket_dc, github},
+};
+
+/// What the TUI starts from: a provider that passed preflight and the account
+/// it acts as. Only `connect` makes one, so the app never runs without either.
+#[derive(Debug)]
+pub struct Session {
+    provider: Provider,
+    user: Username,
+}
+
+impl Session {
+    pub const fn provider(&self) -> &Provider {
+        &self.provider
+    }
+
+    pub const fn user(&self) -> &Username {
+        &self.user
+    }
+
+    pub fn into_parts(self) -> (Provider, Username) {
+        (self.provider, self.user)
+    }
+
+    #[cfg(test)]
+    pub fn for_test(provider: Provider, user: &str) -> Self {
+        Self {
+            provider,
+            user: user.into(),
+        }
+    }
+}
+
+/// Find the provider for this repository and who is logged in to it.
+pub fn connect() -> Result<Session, PreflightError> {
+    let provider = run()?;
+    // Asking who is logged in is also the first real request: a token that
+    // the server no longer accepts is found out here.
+    let user = provider
+        .current_user()
+        .map_err(PreflightError::AccountUnknown)?;
+    Ok(Session { provider, user })
+}
 
 #[derive(Debug, Error)]
 pub enum PreflightError {
+    #[error("couldn't identify the logged-in account: {}", .0.user_message())]
+    AccountUnknown(#[source] crate::providers::FetchError),
     #[error("git is not installed (or not on PATH).")]
     GitMissing,
     #[error("couldn't run git: {0}.")]
@@ -63,7 +109,7 @@ pub fn login_redirect(host: &str) -> Option<String> {
     }
 }
 
-pub fn run() -> Result<Provider, PreflightError> {
+fn run() -> Result<Provider, PreflightError> {
     let remote = remote::origin_url()?;
     let host = remote::parse_host(&remote).ok_or_else(|| PreflightError::UnparseableRemote {
         remote: remote.clone(),

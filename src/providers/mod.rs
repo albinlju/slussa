@@ -29,6 +29,7 @@ use crate::domain::{
     diff::Diff,
     pr::{MergeStatus, MergeStrategy, PrBatch, PrGroup, PrInfo},
     review::{ReviewComment, ReviewVerdict},
+    user::Username,
 };
 
 #[derive(Clone, Debug)]
@@ -292,7 +293,7 @@ impl Provider {
         }
     }
 
-    pub fn current_user(&self) -> Result<String, FetchError> {
+    pub fn current_user(&self) -> Result<Username, FetchError> {
         match self {
             Self::GitHub => github::current_user(),
             Self::BitbucketDc(c) => bitbucket_dc::current_user(c),

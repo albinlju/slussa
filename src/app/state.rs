@@ -6,7 +6,8 @@ use crate::{
     tui::Ui,
 };
 
-#[derive(Debug, Default)]
+#[derive(Debug)]
+#[cfg_attr(test, derive(Default))]
 pub struct AppState {
     pub store: Store,
     pub ui: Ui,
@@ -14,6 +15,14 @@ pub struct AppState {
 }
 
 impl AppState {
+    pub fn new(store: Store) -> Self {
+        Self {
+            store,
+            ui: Ui::default(),
+            screen: Screen::default(),
+        }
+    }
+
     #[cfg(test)]
     pub fn detail_view(&self) -> crate::tui::screens::pr_detail::DetailView<'_> {
         crate::tui::screens::pr_detail::DetailView {

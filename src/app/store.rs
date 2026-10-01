@@ -21,17 +21,18 @@
 use crate::{
     domain::{
         activity::Activity,
-        capabilities::Feature,
+        capabilities::{Capabilities, Feature},
         ci::Build,
         commit::Commit,
         diff::Diff,
         pr::{MergeStatus, PrGroup, PrInfo, PrStatus, PullRequest},
+        user::Username,
     },
     providers::FetchError,
 };
 use std::collections::{HashMap, HashSet};
 
-#[derive(Debug, Default)]
+#[derive(Debug)]
 pub struct Store {
     pub refresh_failures: HashSet<FetchKey>,
     pub link_pending: bool,
@@ -49,8 +50,39 @@ pub struct Store {
     pub open_chain: OpenChain,
     /// How many more batches of open PRs `L` has asked for.
     pub open_extra: usize,
-    pub current_user: String,
-    pub capabilities: crate::domain::capabilities::Capabilities,
+    pub current_user: Username,
+    pub capabilities: Capabilities,
+}
+
+impl Store {
+    pub fn new(current_user: Username, capabilities: Capabilities) -> Self {
+        Self {
+            refresh_failures: HashSet::new(),
+            link_pending: false,
+            notice: None,
+            draft_error: None,
+            uncertain_submissions: std::collections::BTreeSet::new(),
+            operations: HashMap::new(),
+            errors: HashMap::new(),
+            fetches: HashSet::new(),
+            reload_after_fetch: HashSet::new(),
+            reviews: HashMap::new(),
+            cache: Cache::default(),
+            groups: HashMap::new(),
+            open_chain: OpenChain::default(),
+            open_extra: 0,
+            current_user,
+            capabilities,
+        }
+    }
+}
+
+/// A store for a test that does not care who is looking.
+#[cfg(test)]
+impl Default for Store {
+    fn default() -> Self {
+        Self::new("viewer".into(), Capabilities::default())
+    }
 }
 
 /// Where the pages of the open group stand. They are read one after another.

@@ -1,6 +1,6 @@
 //! Imports and helpers shared by the files in this directory.
 
-pub(super) use crate::app::{App, action::*, event_loop::Next};
+pub(super) use crate::app::{App, action::*, drafts::Drafts, event_loop::Next, preflight::Session};
 pub(super) use crate::{
     app::{
         navigation::Screen,
@@ -45,7 +45,10 @@ pub(super) fn failed(message: &str) -> FetchError {
 }
 
 pub(super) fn app() -> App {
-    let mut app = App::new(Provider::GitHub, "reviewer".into());
+    let mut app = App::new(
+        Session::for_test(Provider::GitHub, "reviewer"),
+        Drafts::Nowhere,
+    );
     app.state = tui::regression_tests::fixture();
     app
 }
