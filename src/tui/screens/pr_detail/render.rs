@@ -255,12 +255,9 @@ pub(super) fn render(
         Some(Overlay::Review(dialog)) => dialog.render(frame, area, &review_ctx),
         Some(Overlay::Merge(dialog)) => {
             // What stands in the way of a merge, as far as the provider said.
-            let blockers = match pr_data.and_then(|data| data.mergeability.loaded()) {
-                Some(status) if status.state != Mergeability::Mergeable => {
-                    status.blockers.as_slice()
-                }
-                Some(_) | None => &[],
-            };
+            let blockers = pr_data
+                .and_then(|data| data.mergeability.loaded())
+                .map_or(&[][..], Mergeability::blockers);
             dialog.render(
                 frame,
                 area,

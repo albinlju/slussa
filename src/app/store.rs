@@ -25,7 +25,7 @@ use crate::{
         ci::Build,
         commit::Commit,
         diff::Diff,
-        pr::{MergeStatus, PrGroup, PrInfo, PrStatus, PullRequest},
+        pr::{Mergeability, PrGroup, PrInfo, PrStatus, PullRequest},
         user::Username,
     },
     providers::FetchError,
@@ -120,7 +120,7 @@ pub struct PrData {
     pub diff: LoadState<Diff>,
     pub builds: LoadState<Vec<Build>>,
     pub activity: LoadState<Activity>,
-    pub mergeability: LoadState<MergeStatus>,
+    pub mergeability: LoadState<Mergeability>,
     /// Description and labels, for a provider whose list leaves them out.
     pub info: LoadState<PrInfo>,
     pub commit_diffs: HashMap<String, LoadState<Diff>>,

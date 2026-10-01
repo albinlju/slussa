@@ -89,7 +89,7 @@ pub(crate) fn fixture() -> AppState {
                 threads: vec![],
             }),
             builds: LoadState::Loaded(vec![]),
-            mergeability: LoadState::Loaded(MergeStatus::new(Mergeability::Mergeable)),
+            mergeability: LoadState::Loaded(Mergeability::Mergeable),
             info: LoadState::Loaded(PrInfo {
                 description: Some("Review **this change**.".into()),
                 labels: vec!["rust".into()],

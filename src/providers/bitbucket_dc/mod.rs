@@ -12,7 +12,7 @@ pub mod remote;
 
 use chrono::{DateTime, TimeZone, Utc};
 
-use crate::domain::pr::{MergeStatus, Mergeability};
+use crate::domain::pr::Mergeability;
 use crate::domain::review::{ReviewComment, ReviewVerdict};
 use crate::domain::user::Username;
 use crate::providers::error::{FetchError, ReviewError};
@@ -116,7 +116,7 @@ fn publish_steps<T>(
     })
 }
 
-pub fn fetch_mergeability(config: &Config, pr_id: u64) -> Result<MergeStatus, FetchError> {
+pub fn fetch_mergeability(config: &Config, pr_id: u64) -> Result<Mergeability, FetchError> {
     #[derive(serde::Deserialize)]
     #[serde(rename_all = "camelCase")]
     struct Status {
@@ -151,17 +151,11 @@ pub fn fetch_mergeability(config: &Config, pr_id: u64) -> Result<MergeStatus, Fe
     };
     // A veto without a conflict is a merge check: approvals, builds, tasks.
     Ok(if status.conflicted {
-        MergeStatus::with(
-            Mergeability::Conflicts,
-            or_default("It has merge conflicts."),
-        )
+        Mergeability::Conflicts(or_default("It has merge conflicts."))
     } else if status.can_merge {
-        MergeStatus::new(Mergeability::Mergeable)
+        Mergeability::Mergeable
     } else {
-        MergeStatus::with(
-            Mergeability::Blocked,
-            or_default("Merge checks have not passed."),
-        )
+        Mergeability::Blocked(or_default("Merge checks have not passed."))
     })
 }
 

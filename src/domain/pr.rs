@@ -74,35 +74,27 @@ pub struct PrBatch {
     pub more: Option<String>,
 }
 
-/// Whether a PR can be merged into its target.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+/// Whether a PR can be merged into its target. What stands in the way is held
+/// by the state it belongs to, in words the provider gave or that were derived
+/// from its status fields, so a mergeable PR has no reasons to carry.
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Mergeability {
     Mergeable,
-    Conflicts,
+    Conflicts(Vec<String>),
     /// A provider rule stops the merge for a reason other than a conflict:
     /// missing approvals, required checks, a draft, a branch behind its base.
-    Blocked,
+    Blocked(Vec<String>),
     Unknown,
 }
 
-/// `Mergeability` plus, when something stands in the way, why in words the
-/// provider gave or that were derived from its status fields.
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct MergeStatus {
-    pub state: Mergeability,
-    pub blockers: Vec<String>,
-}
-
-impl MergeStatus {
-    pub const fn new(state: Mergeability) -> Self {
-        Self {
-            state,
-            blockers: Vec::new(),
+impl Mergeability {
+    /// Why it cannot be merged yet; empty when nothing is known to stand in
+    /// the way.
+    pub fn blockers(&self) -> &[String] {
+        match self {
+            Self::Conflicts(reasons) | Self::Blocked(reasons) => reasons,
+            Self::Mergeable | Self::Unknown => &[],
         }
-    }
-
-    pub const fn with(state: Mergeability, blockers: Vec<String>) -> Self {
-        Self { state, blockers }
     }
 }
 

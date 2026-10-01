@@ -25,7 +25,7 @@ use serde::Deserialize;
 use serde::de::DeserializeOwned;
 
 use crate::domain::comment::{Comment, Reaction};
-use crate::domain::pr::{MergeStatus, MergeStrategy, Mergeability};
+use crate::domain::pr::{MergeStrategy, Mergeability};
 use crate::domain::review::{ReviewComment, ReviewVerdict};
 use crate::domain::user::{User, Username};
 use crate::providers::error::FetchError;
@@ -36,7 +36,7 @@ pub fn current_user() -> Result<Username, FetchError> {
         .ok_or_else(|| FetchError::ParseFailed("gh named no login".into()))
 }
 
-pub fn fetch_mergeability(pr_number: u64) -> Result<MergeStatus, FetchError> {
+pub fn fetch_mergeability(pr_number: u64) -> Result<Mergeability, FetchError> {
     #[derive(Deserialize)]
     #[serde(rename_all = "camelCase")]
     struct MergeFields {
@@ -60,13 +60,12 @@ pub fn fetch_mergeability(pr_number: u64) -> Result<MergeStatus, FetchError> {
 /// the reason comes from the review decision when that explains it and is
 /// otherwise general. An administrator may still be able to merge a `Blocked`
 /// PR, which is why the state informs and does not forbid.
-fn merge_status(mergeable: &str, state: &str, review_decision: Option<&str>) -> MergeStatus {
-    let blocked = |reason: &str| MergeStatus::with(Mergeability::Blocked, vec![reason.to_owned()]);
+fn merge_status(mergeable: &str, state: &str, review_decision: Option<&str>) -> Mergeability {
+    let blocked = |reason: &str| Mergeability::Blocked(vec![reason.to_owned()]);
     match (mergeable, state) {
-        ("CONFLICTING", _) | (_, "DIRTY") => MergeStatus::with(
-            Mergeability::Conflicts,
-            vec!["It conflicts with the base branch.".into()],
-        ),
+        ("CONFLICTING", _) | (_, "DIRTY") => {
+            Mergeability::Conflicts(vec!["It conflicts with the base branch.".into()])
+        }
         (_, "DRAFT") => blocked("It is a draft."),
         (_, "BEHIND") => blocked("The branch is behind its base and must be updated."),
         (_, "BLOCKED") => blocked(match review_decision {
@@ -75,10 +74,8 @@ fn merge_status(mergeable: &str, state: &str, review_decision: Option<&str>) -> 
             _ => "Required checks or branch rules are not satisfied.",
         }),
         // `UNSTABLE` means failing checks that are not required; GitHub still merges.
-        ("MERGEABLE", "CLEAN" | "HAS_HOOKS" | "UNSTABLE") => {
-            MergeStatus::new(Mergeability::Mergeable)
-        }
-        _ => MergeStatus::new(Mergeability::Unknown),
+        ("MERGEABLE", "CLEAN" | "HAS_HOOKS" | "UNSTABLE") => Mergeability::Mergeable,
+        _ => Mergeability::Unknown,
     }
 }
 

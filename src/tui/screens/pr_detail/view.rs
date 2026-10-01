@@ -8,7 +8,7 @@ use crate::{
     domain::{
         comment::{Comment, CommentKey, CommentKind, ThreadHandle},
         diff::FileDiff,
-        pr::{MergeStatus, Mergeability, PrStatus, PullRequest},
+        pr::{Mergeability, PrStatus, PullRequest},
         review::ReviewVerdict,
     },
     tui::{
@@ -121,10 +121,7 @@ impl<'a> DetailView<'a> {
             .supports(crate::domain::capabilities::Feature::Mergeability)
             && matches!(
                 self.data.map(|d| &d.mergeability),
-                Some(LoadState::Loaded(MergeStatus {
-                    state: Mergeability::Conflicts,
-                    ..
-                }))
+                Some(LoadState::Loaded(Mergeability::Conflicts(_)))
             ))
         .then_some("conflicts")
     }

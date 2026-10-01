@@ -11,6 +11,11 @@ fn gh_merge_fields(mergeable: &str, state: &str, decision: Option<&str>) -> Stri
     .to_string()
 }
 
+/// The same state, whatever reasons it carries.
+fn same_state(a: &Mergeability, b: &Mergeability) -> bool {
+    std::mem::discriminant(a) == std::mem::discriminant(b)
+}
+
 #[test]
 fn github_merge_status_reads_the_state_and_explains_a_block() {
     let cases: [(&str, &str, Option<&str>, Mergeability, &str); 9] = [
@@ -26,36 +31,42 @@ fn github_merge_status_reads_the_state_and_explains_a_block() {
             "CONFLICTING",
             "DIRTY",
             None,
-            Mergeability::Conflicts,
+            Mergeability::Conflicts(vec![]),
             "conflicts with the base",
         ),
         (
             "MERGEABLE",
             "BEHIND",
             None,
-            Mergeability::Blocked,
+            Mergeability::Blocked(vec![]),
             "behind its base",
         ),
-        ("MERGEABLE", "DRAFT", None, Mergeability::Blocked, "draft"),
+        (
+            "MERGEABLE",
+            "DRAFT",
+            None,
+            Mergeability::Blocked(vec![]),
+            "draft",
+        ),
         (
             "MERGEABLE",
             "BLOCKED",
             Some("REVIEW_REQUIRED"),
-            Mergeability::Blocked,
+            Mergeability::Blocked(vec![]),
             "approving review",
         ),
         (
             "MERGEABLE",
             "BLOCKED",
             Some("CHANGES_REQUESTED"),
-            Mergeability::Blocked,
+            Mergeability::Blocked(vec![]),
             "requested changes",
         ),
         (
             "MERGEABLE",
             "BLOCKED",
             Some("APPROVED"),
-            Mergeability::Blocked,
+            Mergeability::Blocked(vec![]),
             "Required checks",
         ),
         ("UNKNOWN", "UNKNOWN", None, Mergeability::Unknown, ""),
@@ -66,14 +77,16 @@ fn github_merge_status_reads_the_state_and_explains_a_block() {
             .install();
         let status = Provider::GitHub.fetch_mergeability(7).unwrap();
 
-        assert_eq!(status.state, expected, "{mergeable} {state} {decision:?}");
+        assert!(
+            same_state(&status, &expected),
+            "{mergeable} {state} {decision:?}: {status:?}"
+        );
         if reason.is_empty() {
-            assert!(status.blockers.is_empty(), "{:?}", status.blockers);
+            assert!(status.blockers().is_empty(), "{status:?}");
         } else {
             assert!(
-                status.blockers.iter().any(|b| b.contains(reason)),
-                "{state} {decision:?}: {:?}",
-                status.blockers
+                status.blockers().iter().any(|b| b.contains(reason)),
+                "{state} {decision:?}: {status:?}"
             );
         }
         let calls = installed.calls();
@@ -100,13 +113,10 @@ fn bitbucket_merge_checks_become_blockers_with_the_servers_words() {
 
     assert_eq!(
         status,
-        MergeStatus::with(
-            Mergeability::Blocked,
-            vec![
-                "Not all required builds are successful yet".into(),
-                "At least 1 approval is required".into()
-            ]
-        )
+        Mergeability::Blocked(vec![
+            "Not all required builds are successful yet".into(),
+            "At least 1 approval is required".into()
+        ])
     );
 }
 
@@ -115,12 +125,12 @@ fn bitbucket_merge_status_covers_conflict_clean_and_a_veto_without_words() {
     let cases = [
         (
             json!({"canMerge": false, "conflicted": true, "vetoes": []}),
-            Mergeability::Conflicts,
+            Mergeability::Conflicts(vec![]),
             "merge conflicts",
         ),
         (
             json!({"canMerge": false, "conflicted": false}),
-            Mergeability::Blocked,
+            Mergeability::Blocked(vec![]),
             "Merge checks have not passed",
         ),
         (
@@ -133,12 +143,11 @@ fn bitbucket_merge_status_covers_conflict_clean_and_a_veto_without_words() {
         let server = MockHttp::start(vec![Route::get(&merge_url(9), 200, &body.to_string())]);
         let status = bitbucket(&server).fetch_mergeability(9).unwrap();
 
-        assert_eq!(status.state, expected, "{body}");
+        assert!(same_state(&status, &expected), "{body}: {status:?}");
         assert_eq!(
-            status.blockers.iter().any(|b| b.contains(reason)),
+            status.blockers().iter().any(|b| b.contains(reason)),
             !reason.is_empty(),
-            "{body}: {:?}",
-            status.blockers
+            "{body}: {status:?}"
         );
     }
 }

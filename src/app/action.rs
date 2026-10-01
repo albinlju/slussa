@@ -5,7 +5,7 @@ use crate::{
         ci::Build,
         commit::Commit,
         diff::Diff,
-        pr::{MergeStatus, PrBatch, PrGroup, PrInfo},
+        pr::{Mergeability, PrBatch, PrGroup, PrInfo},
     },
     providers::{FetchError, ReviewError},
     tui::screens::pr_detail::tabs::DetailTab,
@@ -309,7 +309,7 @@ pub enum Read {
     Diff(u64, Result<Diff, FetchError>),
     Builds(u64, Result<Vec<Build>, FetchError>),
     Activity(u64, Result<Activity, FetchError>),
-    Mergeability(u64, Result<MergeStatus, FetchError>),
+    Mergeability(u64, Result<Mergeability, FetchError>),
     Info(u64, Result<PrInfo, FetchError>),
     CommitDiff(u64, String, Result<Diff, FetchError>),
 }
