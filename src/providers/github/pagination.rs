@@ -104,6 +104,14 @@ pub(super) struct PageInfo {
     pub end_cursor: Option<String>,
 }
 
+/// One page of a GraphQL connection as GitHub sends it.
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub(super) struct Connection<T> {
+    pub nodes: Vec<T>,
+    pub page_info: PageInfo,
+}
+
 fn nodes<T: DeserializeOwned>(
     query: impl Fn(&str) -> String,
     path: &[&str],
@@ -145,11 +153,11 @@ fn fetch_page<T: DeserializeOwned>(
             .map(Value::take)
             .ok_or_else(|| FetchError::ParseFailed(format!("Missing {key}")))?;
     }
-    let info = serde_json::from_value(value["pageInfo"].take())
-        .map_err(|e| FetchError::ParseFailed(e.to_string()))?;
-    let items = serde_json::from_value(value["nodes"].take())
-        .map_err(|e| FetchError::ParseFailed(e.to_string()))?;
-    Ok((items, info))
+    // Decoded as a whole: indexing into a value that turned out not to be an
+    // object would panic.
+    let page: Connection<T> =
+        serde_json::from_value(value).map_err(|e| FetchError::ParseFailed(e.to_string()))?;
+    Ok((page.nodes, page.page_info))
 }
 
 #[cfg(test)]

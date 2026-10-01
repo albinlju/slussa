@@ -274,6 +274,29 @@ fn github_rejects_unparseable_output_and_graphql_errors() {
 }
 
 #[test]
+fn github_an_answer_of_the_wrong_shape_is_an_error_and_not_a_panic() {
+    // The connection is a list where an object with `nodes` and `pageInfo` belongs.
+    let wrong = json!({"data": {"repository": {"connection": [1, 2]}}}).to_string();
+    let (result, installed) = fetch_prs_with(FakeGh::new().on("graphql", &wrong));
+    drop(installed);
+    assert!(
+        matches!(result, Err(FetchError::ParseFailed(_))),
+        "{result:?}"
+    );
+
+    // A REST page that is a list where an object with `check_runs` belongs.
+    let _installed = FakeGh::new()
+        .on("check-runs", "[[1, 2]]")
+        .on("pulls/7", "abc\n")
+        .install();
+    let result = Provider::GitHub.fetch_builds(7);
+    assert!(
+        matches!(result, Err(FetchError::ParseFailed(_))),
+        "{result:?}"
+    );
+}
+
+#[test]
 fn github_asking_who_is_logged_in_fails_instead_of_naming_nobody() {
     let installed = FakeGh::new().on("api user", "\n").install();
     let result = Provider::GitHub.current_user();
