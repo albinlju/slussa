@@ -1,6 +1,14 @@
 use crate::domain::diff::FileDiff;
 use std::{cmp::Ordering, collections::HashSet};
 
+/// The comments on a file's visible lines: people's, and an AI agent's, which
+/// the file list shows apart.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+pub struct FileComments {
+    pub people: usize,
+    pub ai: usize,
+}
+
 #[derive(Debug, Clone)]
 pub enum TreeRow {
     Dir {

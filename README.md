@@ -114,7 +114,7 @@ markers = ["> **gator-agent**"]
 `SLUSSA_THEME` overrides the file.
 
 A comment by an AI agent has `[AI]` after the author's name, in the Overview and in
-the diff. `f` in the Overview shows all comments, only
+the diff, and the diff's file list counts them apart from people's (`• 1  ◆ 2`). `f` in the Overview shows all comments, only
 people's, or only the agents'; what it hides stays as a dimmed line
 (`◆ 2 AI threads hidden · …`), so a filtered timeline never looks empty. On GitHub the agents are the bot accounts (CodeRabbit,
 for one), so this needs no setup. `markers` is for an agent that posts

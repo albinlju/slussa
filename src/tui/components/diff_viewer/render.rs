@@ -1,7 +1,8 @@
-use super::{DiffFocus, DiffViewer, pane, tree};
+use super::{DiffFocus, DiffViewer, file_tree::FileComments, pane, tree};
 use crate::{
     app::{reviews::PendingComment, store::LoadState},
     domain::{
+        authorship::Authorship,
         comment::CommentThread,
         diff::{Diff, DiffLine, FileDiff, LineRef},
     },
@@ -44,10 +45,10 @@ pub(super) fn render(
     );
 
     let file_stats: Vec<(u32, u32)> = diff.files.iter().map(count_file_stats).collect();
-    let comment_counts: Vec<usize> = diff
+    let comment_counts: Vec<FileComments> = diff
         .files
         .iter()
-        .map(|f| file_comment_count(f, threads, diff.revision.as_ref()))
+        .map(|f| file_comment_count(f, threads, diff.revision.as_ref(), roles))
         .collect();
 
     let pane_focused = matches!(ui_diff.focus, DiffFocus::Pane);
@@ -90,7 +91,8 @@ fn file_comment_count(
     file: &FileDiff,
     threads: &[CommentThread],
     revision: Option<&crate::domain::diff::DiffRevision>,
-) -> usize {
+    roles: Roles<'_>,
+) -> FileComments {
     // Only anchored (code) threads count toward a file; general discussion doesn't.
     let on_file = || {
         threads
@@ -100,7 +102,7 @@ fn file_comment_count(
             .filter(|(_, a)| a.path == file.path)
     };
     if on_file().next().is_none() {
-        return 0;
+        return FileComments::default();
     }
     let mut new_lines: HashSet<usize> = HashSet::new();
     let mut old_lines: HashSet<usize> = HashSet::new();
@@ -126,8 +128,14 @@ fn file_comment_count(
             Some(LineRef::Old(line)) => old_lines.contains(&line),
             None => false,
         })
-        .map(|(t, _)| t.comments.len())
-        .sum()
+        .flat_map(|(t, _)| &t.comments)
+        .fold(FileComments::default(), |mut counts, comment| {
+            match roles.markers.of_comment(comment) {
+                Authorship::Human => counts.people += 1,
+                Authorship::Ai => counts.ai += 1,
+            }
+            counts
+        })
 }
 
 fn count_file_stats(file: &FileDiff) -> (u32, u32) {
