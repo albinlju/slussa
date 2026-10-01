@@ -125,3 +125,33 @@ fn github_refusing_a_reopen_reaches_the_user_in_githubs_words() {
         error.user_message()
     );
 }
+
+#[test]
+fn github_edits_and_deletes_a_comment_where_its_kind_lives() {
+    use crate::domain::comment::{CommentKey, CommentKind};
+    let installed = FakeGh::new().on("api", "{}").install();
+    let review = CommentKey {
+        id: 11,
+        kind: CommentKind::Review,
+    };
+    let conversation = CommentKey {
+        id: 12,
+        kind: CommentKind::Conversation,
+    };
+    Provider::GitHub.edit_comment(7, review, "new").unwrap();
+    Provider::GitHub
+        .edit_comment(7, conversation, "new")
+        .unwrap();
+    Provider::GitHub.delete_comment(7, review).unwrap();
+    Provider::GitHub.delete_comment(7, conversation).unwrap();
+
+    assert_eq!(
+        installed.calls(),
+        vec![
+            "api --method PATCH repos/{owner}/{repo}/pulls/comments/11 -f body=new",
+            "api --method PATCH repos/{owner}/{repo}/issues/comments/12 -f body=new",
+            "api --method DELETE repos/{owner}/{repo}/pulls/comments/11",
+            "api --method DELETE repos/{owner}/{repo}/issues/comments/12",
+        ]
+    );
+}

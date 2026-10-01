@@ -282,29 +282,27 @@ fn comment_lookup_keeps_review_and_pr_ids_separate() {
             }),
         }],
     });
-    app.state.ui.detail.overview.timeline.selected =
-        Some(tui::screens::pr_detail::view::CommentRef {
-            id: Some(7),
-            review: true,
-        });
+    app.state.ui.detail.overview.timeline.selected = Some(
+        tui::screens::pr_detail::view::CommentRef::new(Some(7), CommentKind::Review),
+    );
     press(&mut app, KeyCode::Char('e'));
     let draft = app.state.ui.detail.editor.draft().unwrap();
     assert_eq!(draft.text, "My review comment");
     assert!(matches!(
         draft.target,
-        CommentTarget::Edit {
+        CommentTarget::Edit(CommentKey {
             id: 7,
-            review: true
-        }
+            kind: CommentKind::Review
+        })
     ));
     app.state.ui.detail.editor = tui::components::comment_editor::CommentEditor::default();
     press(&mut app, KeyCode::Char('d'));
     assert_eq!(
         app.state.ui.detail.confirm().unwrap().kind(),
-        ConfirmKind::DeleteComment {
+        ConfirmKind::DeleteComment(CommentKey {
             id: 7,
-            review: true
-        }
+            kind: CommentKind::Review
+        })
     );
     press(&mut app, KeyCode::Esc);
     app.state
@@ -315,7 +313,7 @@ fn comment_lookup_keeps_review_and_pr_ids_separate() {
         .selected
         .as_mut()
         .unwrap()
-        .review = false;
+        .kind = CommentKind::Conversation;
     press(&mut app, KeyCode::Char('e'));
     assert!(!app.state.ui.detail.editor.has_draft());
 }

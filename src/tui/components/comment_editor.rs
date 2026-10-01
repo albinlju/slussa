@@ -220,7 +220,7 @@ impl Component for CommentEditor {
         let title = match &editing.target {
             CommentTarget::Line(a) => format!(" Comment {}:{} ", a.path, a.line),
             CommentTarget::Reply(id) => format!(" Reply to comment #{id} "),
-            CommentTarget::Edit { id, .. } => format!(" Edit comment #{id} "),
+            CommentTarget::Edit(comment) => format!(" Edit comment #{} ", comment.id),
             CommentTarget::Review { verdict } => format!(" {} review ", verdict.label()),
             CommentTarget::Pr => " PR comment ".into(),
         };
@@ -246,7 +246,7 @@ impl Component for CommentEditor {
                 CommentTarget::Line(_) if view.review_active => "add to review",
                 CommentTarget::Review { .. } => "submit review",
                 CommentTarget::Reply(_) => "post reply",
-                CommentTarget::Edit { .. } => "save changes",
+                CommentTarget::Edit(_) => "save changes",
                 CommentTarget::Line(_) | CommentTarget::Pr => "post comment",
             },
         );

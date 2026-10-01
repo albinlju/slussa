@@ -7,6 +7,7 @@ pub(super) use crate::{
         reviews::{CommentAnchor, CommentTarget},
         store::{LoadState, WriteTicket},
     },
+    domain::comment::{CommentKey, CommentKind},
     providers::{FetchError, Provider},
     tui::{
         self,

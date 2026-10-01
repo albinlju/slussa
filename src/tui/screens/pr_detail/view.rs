@@ -6,7 +6,7 @@ use crate::{
         store::{LoadState, PrData, Store},
     },
     domain::{
-        comment::Comment,
+        comment::{Comment, CommentKey, CommentKind},
         diff::FileDiff,
         pr::{MergeStatus, Mergeability, PrStatus, PullRequest},
         review::ReviewVerdict,
@@ -157,21 +157,21 @@ impl<'a> DetailView<'a> {
             .then_some("your PR")
     }
 
-    /// The loaded comment with `id` in the current PR's activity, if any.
-    pub fn find_comment(&self, id: u64, review: bool) -> Option<&'a Comment> {
+    /// The loaded comment with this key in the current PR's activity, if any.
+    pub fn find_comment(&self, key: CommentKey) -> Option<&'a Comment> {
         let activity = self.data?.activity.loaded()?;
         activity
             .comments
             .iter()
-            .filter(|_| !review)
+            .filter(|_| key.kind == CommentKind::Conversation)
             .chain(
                 activity
                     .threads
                     .iter()
-                    .filter(|thread| thread.anchor.is_some() == review)
+                    .filter(|thread| thread.kind() == key.kind)
                     .flat_map(|t| t.comments.iter()),
             )
-            .find(|c| c.id == Some(id))
+            .find(|c| c.id == Some(key.id))
     }
 
     /// The comment a draft is a reply to or an edit of; none for a new comment.
@@ -186,7 +186,7 @@ impl<'a> DetailView<'a> {
                 .find(|thread| thread.reply_to == Some(*id))?
                 .comments
                 .first(),
-            CommentTarget::Edit { id, review } => self.find_comment(*id, *review),
+            CommentTarget::Edit(key) => self.find_comment(*key),
             CommentTarget::Line(_) | CommentTarget::Review { .. } | CommentTarget::Pr => None,
         }
     }
@@ -207,14 +207,13 @@ impl<'a> DetailView<'a> {
 
     /// The overview sub-selected comment, but only when it's the viewer's own
     /// (so it can be edited/deleted). `None` otherwise.
-    pub fn editable_selected(&self) -> Option<CommentRef> {
-        let sel = self.detail.overview.timeline.selected?;
-        let id = sel.id?;
-        let comment = self.find_comment(id, sel.review)?;
+    pub fn editable_selected(&self) -> Option<CommentKey> {
+        let key = self.detail.overview.timeline.selected?.key()?;
+        let comment = self.find_comment(key)?;
         self.store
             .current_user
             .is(&comment.author.username)
-            .then_some(sel)
+            .then_some(key)
     }
 
     /// The review verdicts to offer in the menu — `Unapprove` only where the
@@ -289,12 +288,25 @@ impl<'a> DetailView<'a> {
 }
 
 /// The comment the overview sub-cursor points at within the focused block.
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct CommentRef {
     /// `None` when the provider gave no id (can't edit/delete it).
     pub id: Option<u64>,
-    /// A diff/line comment (vs a PR-level one) — GitHub edits them differently.
-    pub review: bool,
+    pub kind: CommentKind,
+}
+
+impl CommentRef {
+    pub const fn new(id: Option<u64>, kind: CommentKind) -> Self {
+        Self { id, kind }
+    }
+
+    /// What an edit or a delete needs; none for a comment without an id.
+    pub fn key(self) -> Option<CommentKey> {
+        Some(CommentKey {
+            id: self.id?,
+            kind: self.kind,
+        })
+    }
 }
 
 /// Identity of a focused thread, for resolve/unresolve.

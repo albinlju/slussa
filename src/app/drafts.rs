@@ -268,7 +268,10 @@ pub(super) fn reopen(root: &Path, scope: &str) -> io::Result<(DraftStorage, Snap
 mod tests {
     use super::*;
     use crate::app::reviews::{CommentAnchor, CommentTarget, PendingComment};
-    use crate::domain::diff::DiffRevision;
+    use crate::domain::{
+        comment::{CommentKey, CommentKind},
+        diff::DiffRevision,
+    };
     static NEXT: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
     pub(super) fn directory() -> PathBuf {
         std::env::temp_dir().join(format!(
@@ -383,7 +386,10 @@ mod tests {
         assert!(matches!(editors[&3].target, CommentTarget::Pr));
         assert!(matches!(
             editors[&4].target,
-            CommentTarget::Edit { id: 5, .. }
+            CommentTarget::Edit(CommentKey {
+                id: 5,
+                kind: CommentKind::Review
+            })
         ));
         assert!(matches!(editors[&5].target, CommentTarget::Review { .. }));
         assert!(

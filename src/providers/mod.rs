@@ -25,6 +25,7 @@ mod transport_tests;
 use crate::domain::{
     activity::Activity,
     ci::Build,
+    comment::CommentKey,
     commit::Commit,
     diff::Diff,
     pr::{MergeStatus, MergeStrategy, PrBatch, PrGroup, PrInfo},
@@ -222,30 +223,24 @@ impl Provider {
         }
     }
 
-    /// `review` distinguishes a diff/line comment from a PR-level one — GitHub
-    /// edits them via different endpoints; Bitbucket uses one for both.
+    /// GitHub edits a review comment and a PR comment through different
+    /// endpoints, so the key says which it is; Bitbucket uses one for both.
     pub fn edit_comment(
         &self,
         pr_id: u64,
-        comment_id: u64,
-        review: bool,
+        comment: CommentKey,
         body: &str,
     ) -> Result<(), FetchError> {
         match self {
-            Self::GitHub => github::edit_comment(comment_id, review, body),
-            Self::BitbucketDc(c) => bitbucket_dc::edit_comment(c, pr_id, comment_id, body),
+            Self::GitHub => github::edit_comment(comment, body),
+            Self::BitbucketDc(c) => bitbucket_dc::edit_comment(c, pr_id, comment.id, body),
         }
     }
 
-    pub fn delete_comment(
-        &self,
-        pr_id: u64,
-        comment_id: u64,
-        review: bool,
-    ) -> Result<(), FetchError> {
+    pub fn delete_comment(&self, pr_id: u64, comment: CommentKey) -> Result<(), FetchError> {
         match self {
-            Self::GitHub => github::delete_comment(comment_id, review),
-            Self::BitbucketDc(c) => bitbucket_dc::delete_comment(c, pr_id, comment_id),
+            Self::GitHub => github::delete_comment(comment),
+            Self::BitbucketDc(c) => bitbucket_dc::delete_comment(c, pr_id, comment.id),
         }
     }
 

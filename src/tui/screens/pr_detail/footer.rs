@@ -99,11 +99,7 @@ fn footer_actions(state: &DetailView<'_>, tab: DetailTab) -> Vec<Hint> {
         if state.reply_target().is_some() {
             parts.push(Hint::on("r: reply"));
         }
-        if state
-            .editable_selected()
-            .and_then(|comment| comment.id)
-            .is_some()
-        {
+        if state.editable_selected().is_some() {
             if state.store.capabilities.supports(Feature::EditComments) {
                 parts.push(Hint::on("e: edit"));
             }

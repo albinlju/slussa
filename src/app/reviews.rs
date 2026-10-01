@@ -15,11 +15,8 @@ pub enum CommentTarget {
     Line(CommentAnchor),
     Pr,
     Reply(u64),
-    /// Editing an existing comment; `review` picks the right provider endpoint.
-    Edit {
-        id: u64,
-        review: bool,
-    },
+    /// Editing an existing comment.
+    Edit(crate::domain::comment::CommentKey),
     /// The summary body of a review verdict that carries one (request changes /
     /// comment).
     Review {

@@ -1,4 +1,4 @@
-use crate::domain::comment::Comment;
+use crate::domain::comment::{Comment, CommentKey, CommentKind};
 use crate::providers::error::FetchError;
 use crate::providers::github::{COMMENT_FIELDS, GqlComment, map_gql_comment};
 
@@ -67,28 +67,32 @@ pub fn reply_comment(pr_number: u64, parent: u64, body: &str) -> Result<(), Fetc
     Ok(())
 }
 
-pub fn edit_comment(comment_id: u64, review: bool, body: &str) -> Result<(), FetchError> {
-    // Review (line) comments live under `pulls`, PR-level ones under `issues`.
-    let kind = if review { "pulls" } else { "issues" };
+/// Review comments live under `pulls`, comments on the PR under `issues`.
+fn comment_endpoint(comment: CommentKey) -> String {
+    let collection = match comment.kind {
+        CommentKind::Review => "pulls",
+        CommentKind::Conversation => "issues",
+    };
+    format!(
+        "repos/{{owner}}/{{repo}}/{collection}/comments/{}",
+        comment.id
+    )
+}
+
+pub fn edit_comment(comment: CommentKey, body: &str) -> Result<(), FetchError> {
     super::cli::run_gh(&[
         "api",
         "--method",
         "PATCH",
-        &format!("repos/{{owner}}/{{repo}}/{kind}/comments/{comment_id}"),
+        &comment_endpoint(comment),
         "-f",
         &format!("body={body}"),
     ])?;
     Ok(())
 }
 
-pub fn delete_comment(comment_id: u64, review: bool) -> Result<(), FetchError> {
-    let kind = if review { "pulls" } else { "issues" };
-    super::cli::run_gh(&[
-        "api",
-        "--method",
-        "DELETE",
-        &format!("repos/{{owner}}/{{repo}}/{kind}/comments/{comment_id}"),
-    ])?;
+pub fn delete_comment(comment: CommentKey) -> Result<(), FetchError> {
+    super::cli::run_gh(&["api", "--method", "DELETE", &comment_endpoint(comment)])?;
     Ok(())
 }
 

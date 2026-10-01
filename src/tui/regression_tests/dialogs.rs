@@ -375,10 +375,12 @@ fn resumed_editor_and_delete_dialog_identify_the_comment() {
         assert!(text.contains("@alice: Original comment"));
         assert!(text.contains("My draft"));
         assert!(text.contains("post reply"));
-        let mut dialog = ConfirmDialog::new(ConfirmKind::DeleteComment {
-            id: 7,
-            review: true,
-        })
+        let mut dialog = ConfirmDialog::new(ConfirmKind::DeleteComment(
+            crate::domain::comment::CommentKey {
+                id: 7,
+                kind: crate::domain::comment::CommentKind::Review,
+            },
+        ))
         .with_preview("@alice: Original comment".into());
         let pr = PrSummary {
             label: "PR #42 · Component migration".into(),

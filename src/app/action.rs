@@ -415,10 +415,7 @@ pub enum Command {
     Merge(crate::domain::pr::MergeStrategy),
     Decline,
     Reopen,
-    DeleteComment {
-        id: u64,
-        review: bool,
-    },
+    DeleteComment(crate::domain::comment::CommentKey),
     ResolveThread {
         node_id: Option<String>,
         comment_id: Option<u64>,
@@ -438,7 +435,7 @@ impl Command {
                 CommentTarget::Pr => caps.supports(Feature::PrComments),
                 CommentTarget::Line(_) => caps.supports(Feature::InlineComments),
                 CommentTarget::Reply(_) => caps.supports(Feature::Replies),
-                CommentTarget::Edit { .. } => caps.supports(Feature::EditComments),
+                CommentTarget::Edit(_) => caps.supports(Feature::EditComments),
                 CommentTarget::Review { verdict } => caps.can_submit_verdict(*verdict, false),
             },
             Self::Merge(strategy) => caps.merge_strategies.contains(strategy),

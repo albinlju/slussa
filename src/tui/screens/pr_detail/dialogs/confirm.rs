@@ -12,10 +12,7 @@ use ratatui::{
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum ConfirmKind {
-    DeleteComment {
-        id: u64,
-        review: bool,
-    },
+    DeleteComment(crate::domain::comment::CommentKey),
     Decline,
     /// Reopen a PR that was closed without merging.
     Reopen,
@@ -25,7 +22,7 @@ pub enum ConfirmKind {
 impl ConfirmKind {
     pub const fn prompt(self) -> &'static str {
         match self {
-            Self::DeleteComment { .. } => "Delete this comment?",
+            Self::DeleteComment(_) => "Delete this comment?",
             Self::Decline => "Close / decline this PR?",
             Self::Reopen => "Reopen this PR?",
             Self::DiscardReview => "Discard this review draft?",
@@ -46,7 +43,7 @@ impl ConfirmKind {
     /// routine and easy to undo; a new kind has to say which it is.
     const fn default_choice(self) -> Choice {
         match self {
-            Self::Reopen | Self::DeleteComment { .. } => Choice::Yes,
+            Self::Reopen | Self::DeleteComment(_) => Choice::Yes,
             Self::Decline | Self::DiscardReview => Choice::No,
         }
     }
@@ -54,7 +51,7 @@ impl ConfirmKind {
     const fn labels(self) -> [&'static str; 2] {
         match self {
             Self::DiscardReview => ["Discard review", "Keep reviewing"],
-            Self::DeleteComment { .. } | Self::Decline | Self::Reopen => ["Yes", "No"],
+            Self::DeleteComment(_) | Self::Decline | Self::Reopen => ["Yes", "No"],
         }
     }
 }
@@ -71,7 +68,7 @@ fn render(frame: &mut Frame<'_>, dialog: &ConfirmDialog, pr: &PrSummary<'_>, are
         ConfirmKind::Decline => (Some(pr.label.as_str()), Some(pr.target_branch)),
         // Reopening states no target: nothing is lost or merged by it.
         ConfirmKind::Reopen => (Some(pr.label.as_str()), None),
-        ConfirmKind::DeleteComment { .. } => (dialog.preview.as_deref(), None),
+        ConfirmKind::DeleteComment(_) => (dialog.preview.as_deref(), None),
         ConfirmKind::DiscardReview => (None, None),
     };
 
@@ -239,10 +236,10 @@ mod tests {
         assert!(text.contains("Target: main"), "{text}");
         assert!(text.contains("Closes without merging"), "{text}");
 
-        let kind = ConfirmKind::DeleteComment {
+        let kind = ConfirmKind::DeleteComment(crate::domain::comment::CommentKey {
             id: 3,
-            review: false,
-        };
+            kind: crate::domain::comment::CommentKind::Conversation,
+        });
         let text = drawn(&mut ConfirmDialog::new(kind).with_preview("@ann: typo".into()));
         assert!(text.contains("@ann: typo"), "{text}");
         assert!(!text.contains("PR #7"), "{text}");

@@ -122,9 +122,7 @@ impl PrDetailScreen {
                     ConfirmKind::Decline => Command::Decline,
                     ConfirmKind::Reopen => Command::Reopen,
                     ConfirmKind::DiscardReview => Command::AbandonReview,
-                    ConfirmKind::DeleteComment { id, review } => {
-                        Command::DeleteComment { id, review }
-                    }
+                    ConfirmKind::DeleteComment(comment) => Command::DeleteComment(comment),
                 };
                 Some(Self::command(pr_id, command))
             }
@@ -269,26 +267,18 @@ impl PrDetailScreen {
             }
             PrAction::EditComment => {
                 let view = self.view(ctx);
-                let selected = view.editable_selected()?;
-                let id = selected.id?;
-                let text = view.find_comment(id, selected.review)?.content.clone();
-                let review = selected.review;
+                let comment = view.editable_selected()?;
+                let text = view.find_comment(comment)?.content.clone();
                 if !self.editor.resume() {
-                    self.editor = CommentEditor::start(CommentTarget::Edit { id, review }, text);
+                    self.editor = CommentEditor::start(CommentTarget::Edit(comment), text);
                 }
                 return None;
             }
             PrAction::DeleteComment => {
-                let selected = self.view(ctx).editable_selected()?;
-                let comment = self.view(ctx).find_comment(selected.id?, selected.review)?;
+                let key = self.view(ctx).editable_selected()?;
+                let comment = self.view(ctx).find_comment(key)?;
                 let preview = format!("@{}: {}", comment.author.username, comment.content);
-                self.ask(
-                    ConfirmDialog::new(ConfirmKind::DeleteComment {
-                        id: selected.id?,
-                        review: selected.review,
-                    })
-                    .with_preview(preview),
-                );
+                self.ask(ConfirmDialog::new(ConfirmKind::DeleteComment(key)).with_preview(preview));
                 return None;
             }
             PrAction::ResolveThread => {

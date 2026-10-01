@@ -14,6 +14,49 @@ pub struct Comment {
     pub reply_to: Option<u64>,
 }
 
+/// Which of the two kinds of comment a provider keeps. GitHub edits and
+/// deletes them through different endpoints.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum CommentKind {
+    /// A comment on the PR as a whole.
+    Conversation,
+    /// A comment in a review thread on the code.
+    Review,
+}
+
+/// A comment that can be edited or deleted: the provider gave it an id.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
+pub struct CommentKey {
+    pub id: u64,
+    /// Saved drafts spell this `review: bool`; the file is older than the enum.
+    #[serde(rename = "review", with = "review_flag")]
+    pub kind: CommentKind,
+}
+
+mod review_flag {
+    use super::CommentKind;
+    use serde::{Deserialize, Deserializer, Serializer};
+
+    #[expect(
+        clippy::trivially_copy_pass_by_ref,
+        reason = "the signature is serde's"
+    )]
+    pub fn serialize<S: Serializer>(kind: &CommentKind, serializer: S) -> Result<S::Ok, S::Error> {
+        serializer.serialize_bool(match kind {
+            CommentKind::Review => true,
+            CommentKind::Conversation => false,
+        })
+    }
+
+    pub fn deserialize<'de, D: Deserializer<'de>>(source: D) -> Result<CommentKind, D::Error> {
+        Ok(if bool::deserialize(source)? {
+            CommentKind::Review
+        } else {
+            CommentKind::Conversation
+        })
+    }
+}
+
 #[derive(Debug, Clone)]
 pub struct Reaction {
     pub emoji: String,
@@ -70,6 +113,15 @@ impl CommentThread {
         self.anchor
             .as_ref()
             .is_some_and(|anchor| anchor.revision.as_deref() == revision.map(|r| r.head.as_str()))
+    }
+
+    /// Anchored threads hold review comments; a general discussion's are
+    /// comments on the PR.
+    pub const fn kind(&self) -> CommentKind {
+        match self.anchor {
+            Some(_) => CommentKind::Review,
+            None => CommentKind::Conversation,
+        }
     }
 
     /// A code-review thread that's been resolved. General discussion is never

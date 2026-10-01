@@ -9,6 +9,7 @@ use crate::{
         store::{FetchKey, FetchTicket, OpenChain, WriteTicket},
     },
     domain::{
+        comment::CommentKey,
         pr::{MergeStrategy, PrGroup},
         review::{ReviewComment, ReviewVerdict},
     },
@@ -251,7 +252,7 @@ impl App {
             CommentTarget::Line(a) => provider.post_comment(pr_id, &a, &text),
             CommentTarget::Pr => provider.post_pr_comment(pr_id, &text),
             CommentTarget::Reply(parent) => provider.reply_comment(pr_id, parent, &text),
-            CommentTarget::Edit { id, review } => provider.edit_comment(pr_id, id, review, &text),
+            CommentTarget::Edit(comment) => provider.edit_comment(pr_id, comment, &text),
             // Review verdicts are routed to `spawn_submit_full_review` upstream.
             CommentTarget::Review { .. } => Err(FetchError::InvalidInput(
                 "A review verdict cannot be posted as a plain comment.".into(),
@@ -259,12 +260,10 @@ impl App {
         });
     }
 
-    pub(super) fn spawn_delete_comment(&self, ticket: WriteTicket, comment_id: u64, review: bool) {
+    pub(super) fn spawn_delete_comment(&self, ticket: WriteTicket, comment: CommentKey) {
         let provider = self.provider.clone();
         let pr_id = ticket.pr_id();
-        self.spawn_write(ticket, move || {
-            provider.delete_comment(pr_id, comment_id, review)
-        });
+        self.spawn_write(ticket, move || provider.delete_comment(pr_id, comment));
     }
 
     /// Flush a whole review at once: the queued line `comments` plus the

@@ -4,7 +4,7 @@ use crate::{
         store::{LoadState, PrData},
     },
     domain::{
-        comment::{Comment, CommentThread},
+        comment::{Comment, CommentKind, CommentThread},
         diff::Diff,
         event::{EventKind, TimelineEvent},
     },
@@ -93,16 +93,16 @@ fn render_timeline(
             .iter()
             .enumerate()
             .find_map(|(cursor, item)| match item {
-                TimelineItem::Comment(comment) if !selected.review && comment.id == selected.id => {
+                TimelineItem::Comment(comment)
+                    if selected == CommentRef::new(comment.id, CommentKind::Conversation) =>
+                {
                     Some((cursor, 0))
                 }
-                TimelineItem::Review(thread) if selected.review == thread.anchor.is_some() => {
-                    thread
-                        .comments
-                        .iter()
-                        .position(|comment| comment.id == selected.id)
-                        .map(|sub| (cursor, sub))
-                }
+                TimelineItem::Review(thread) if selected.kind == thread.kind() => thread
+                    .comments
+                    .iter()
+                    .position(|comment| comment.id == selected.id)
+                    .map(|sub| (cursor, sub)),
                 _ => None,
             });
         if let Some((cursor, sub)) = found {
@@ -145,10 +145,8 @@ fn render_timeline(
     ui.selected = focused.and_then(|n| n.comments.get(sub).copied());
 
     let selected_row = focused.map(|n| n.selected_range.as_ref().map_or(n.start, |r| r.start));
-    if previous_selection.is_some_and(|old| {
-        ui.selected
-            .is_some_and(|new| old.id == new.id && old.review == new.review)
-    }) && let (Some(before), Some(after)) = (ui.selected_row, selected_row)
+    if previous_selection.is_some_and(|old| ui.selected.is_some_and(|new| old == new))
+        && let (Some(before), Some(after)) = (ui.selected_row, selected_row)
     {
         ui.scroll = saturating_u16(
             usize::from(ui.scroll)
@@ -272,10 +270,7 @@ fn build_blocks(
                     border: if active { theme.accent } else { theme.divider },
                     reply_to: c.reply_to,
                     focusable: true,
-                    comments: vec![CommentRef {
-                        id: c.id,
-                        review: false,
-                    }],
+                    comments: vec![CommentRef::new(c.id, CommentKind::Conversation)],
                     resolve: None,
                 });
                 focus_idx += 1;
@@ -296,12 +291,7 @@ fn build_blocks(
                         comments: t
                             .comments
                             .iter()
-                            .map(|c| CommentRef {
-                                id: c.id,
-                                // Anchored threads are review comments; a general
-                                // discussion's are PR-level (issue) comments.
-                                review: t.anchor.is_some(),
-                            })
+                            .map(|c| CommentRef::new(c.id, t.kind()))
                             .collect(),
                         // Only anchored threads can be resolved — general
                         // discussion has no resolve target (so `R` no-ops).

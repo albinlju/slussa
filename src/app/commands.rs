@@ -70,9 +70,9 @@ impl App {
                     self.spawn_reopen(ticket);
                 }
             }
-            Command::DeleteComment { id, review } => {
+            Command::DeleteComment(comment) => {
                 if let Some(ticket) = self.begin_write(pr_id, Operation::Moderation) {
-                    self.spawn_delete_comment(ticket, id, review);
+                    self.spawn_delete_comment(ticket, comment);
                 }
             }
             Command::ResolveThread {

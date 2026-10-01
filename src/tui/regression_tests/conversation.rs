@@ -104,10 +104,7 @@ fn timeline_keeps_thread_selection_and_sidebar_is_responsive() {
         std::fs::write(path, &preview).unwrap();
     }
     assert_eq!(preview, std::fs::read_to_string(path).unwrap());
-    assert_eq!(
-        state.detail_view().editable_selected().unwrap().id,
-        Some(10)
-    );
+    assert_eq!(state.detail_view().editable_selected().unwrap().id, 10);
     let action = key_to_action(
         &state,
         KeyEvent::new(KeyCode::Char('j'), KeyModifiers::CONTROL),
@@ -121,10 +118,7 @@ fn timeline_keeps_thread_selection_and_sidebar_is_responsive() {
     );
     let mut terminal = Terminal::new(TestBackend::new(100, 30)).unwrap();
     terminal.draw(|frame| render(frame, &mut state)).unwrap();
-    assert_eq!(
-        state.detail_view().editable_selected().unwrap().id,
-        Some(11)
-    );
+    assert_eq!(state.detail_view().editable_selected().unwrap().id, 11);
 }
 
 #[test]
