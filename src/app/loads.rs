@@ -194,11 +194,6 @@ impl App {
         state.ui.list.filtered_prs(&ctx)
     }
 
-    /// Take a group's read into the list. A first read replaces the group's
-    /// PRs; older closed PRs already loaded stay, and so does the position
-    /// reached, or a refresh every minute would throw them away. An older page
-    /// goes after what is there. The PR open in the detail screen is never
-    /// dropped, so a merge by someone else does not blank the screen.
     /// One page of the open group. A first reading shows each page as it
     /// arrives, in arrival order. A refresh holds the pages and swaps them in
     /// after the last one. Either way the next page is asked for until there is
@@ -261,6 +256,11 @@ impl App {
         }
     }
 
+    /// Take a group's read into the list. A first read replaces the group's
+    /// PRs; older closed PRs already loaded stay, and so does the position
+    /// reached, or a refresh every minute would throw them away. An older page
+    /// goes after what is there. The PR open in the detail screen is never
+    /// dropped, so a merge by someone else does not blank the screen.
     fn adopt_group(&mut self, group: PrGroup, older: bool, batch: PrBatch) {
         let viewing = match self.state.screen {
             Screen::Detail { pr_id, .. } => Some(pr_id),

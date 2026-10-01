@@ -248,6 +248,7 @@ impl Operation {
 /// `Store::begin_fetch` makes one, and starting the read takes it, so a read
 /// cannot be spawned without being registered first.
 #[derive(Debug)]
+#[must_use = "a registered read that is never started stays loading"]
 pub struct FetchTicket(FetchKey);
 
 impl FetchTicket {
@@ -260,6 +261,7 @@ impl FetchTicket {
 /// operation is recorded. Only `Store::begin_write` makes one, starting the
 /// write takes it, and it comes back with the result to say which write ended.
 #[derive(Debug)]
+#[must_use = "a recorded write that is never started blocks the PR"]
 pub struct WriteTicket {
     pr_id: PrId,
     operation: Operation,

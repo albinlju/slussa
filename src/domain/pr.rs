@@ -20,9 +20,6 @@ impl PrStatus {
     }
 }
 
-/// A slice of a repository's PRs that can be read on its own. `Open` holds open
-/// and draft PRs together, since a provider does not separate them when asked
-/// for the open ones.
 /// What a provider leaves out of the list because it is costly to read for
 /// every PR, and gives for one PR when it is opened.
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
@@ -31,6 +28,9 @@ pub struct PrInfo {
     pub labels: Vec<String>,
 }
 
+/// A slice of a repository's PRs that can be read on its own. `Open` holds open
+/// and draft PRs together, since a provider does not separate them when asked
+/// for the open ones.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub enum PrGroup {
     Open,
@@ -99,7 +99,7 @@ impl Mergeability {
 }
 
 /// How to integrate a PR. Which ones are offered depends on the provider — see
-/// `Provider::merge_strategies` (GitHub allows all three; Bitbucket DC just merges).
+/// `Capabilities::merge_strategies` (GitHub allows all three; Bitbucket DC just merges).
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum MergeStrategy {
     Merge,

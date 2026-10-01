@@ -16,7 +16,7 @@ pub struct Reviewer {
 }
 
 /// A review submission's verdict. `Unapprove` (withdraw approval) is only offered
-/// where a provider supports it — see `Provider::can_unapprove`.
+/// where a provider lists it — see `ReviewCaps::verdicts`.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
 pub enum ReviewVerdict {
     Approve,
