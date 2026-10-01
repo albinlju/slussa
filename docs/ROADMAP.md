@@ -40,10 +40,15 @@ What this rules in (each item says how far it is):
   review requests, failed CI, new activity since last look — with a short reason
   on the row. No separate inbox screen; the plain list is the same view with the
   attention sort turned off.
-- **AI review is a first-class thread** *(not built)*. Comments from an AI reviewer (Copilot,
-  Claude, a team bot) are shown inline with their own marker and summarized in the
-  header. Running a review from slussa and reading the result in place is a core
-  action, not a plugin.
+- **Merge risk beside the reason** *(not built)*. Whether a merge can be taken
+  back, and how far a mistake reaches, decides how closely a PR is read. slussa
+  shows what the PR declares next to what the changed paths say, so a
+  contradiction is visible.
+- **AI review is first-class** *(not built)*. What an AI reviewer (Copilot,
+  Claude, a team bot) did is marked as AI and summarized in the header, whether
+  it commented or committed fixes: that a review happened, and against which
+  commit. Running a review from slussa comes after handoff, since an automated
+  review belongs before the human opens the PR.
 - **Fast act-on-suggestion** *(not built)*. Suggestions get applied, not just displayed; the
   approve → merge path is as short as the provider allows.
 - **Handoff to the coding agent** *(not built)*. A thread, a file or a whole PR can be sent to
@@ -102,6 +107,23 @@ says so on the row.
   on the tab its reason points at, and remembering the `s` choice between runs.
 - [ ] **Unread / updated** *(refined)* — remember per PR when it was last opened
   and flag rows with activity since then. Local state, scoped like drafts.
+- [ ] **Merge risk** — how dangerous the merge is, beside why the PR needs
+  you: can it be reverted (a two-way door) or not (a one-way door: a
+  migration, data loss, something sent to users), and how far a mistake
+  reaches. Two sources, shown side by side and never folded into one. The
+  *declared* risk is read from the PR description by a configurable convention
+  (a heading or a first-line marker, as for AI comments). The *floor* comes
+  from path rules in `config.toml` (`one_way = ["migrations/**"]`) matched
+  against the changed files. The declared risk is a claim by the agent that
+  wrote the PR, so a floor that contradicts it is the signal: `declared
+  two-way · touches migrations/`. A marker in the PR header first; nothing is
+  shown when neither source says anything. Path rules cannot see a one-line
+  change that sends an email to 60 000 people, so the floor adds to reading
+  the PR and does not replace it. **Open:** which convention to read (none has
+  settled; see *From "Fixing the PR Bottleneck"* under *Engineering*); whether
+  a one-way door is an attention reason of its own or a marker beside the
+  existing one; and the row, which needs the description and the changed
+  paths, neither of which the list query reads today.
 - [ ] **Structured filters** — `author:`, `label:`, `review:approved`, `is:draft`,
   `status:`, plus `is:agent` (see *AI authorship* below).
 - [ ] **Sorting** — recently updated, created, comment count, CI status.
@@ -121,38 +143,44 @@ says so on the row.
 The AI reviewer's output has to be as easy to read and act on as a human's, and
 easier to tell apart.
 
-The model below follows how real autonomous reviewers already behave (see
-*Engineering*, *From OpenShell's AI reviewer*): one batched review per head SHA,
-a first-line marker on every comment, stable finding IDs carried across
-rounds, and a severity split where only evidenced findings block.
+An AI reviewer shows up in one of two ways, and slussa will meet both. One
+*comments* (see *Engineering*, *From OpenShell's AI reviewer*): one batched
+review per head SHA, a first-line marker on every comment, stable finding IDs
+carried across rounds, and a severity split where only evidenced findings
+block. The other *commits* (see *From "Fixing the PR Bottleneck"*): it fixes
+what it finds on the branch and comments only when it is unsure, so its review
+is a set of commits and may leave no thread at all. "AI actor" is therefore one
+notion, applied to the PR's author, to comments and to commits.
 
-- [ ] **AI-authored comments marked** *(refined)* — detect AI authorship by
-  *either* account (GitHub `isBot` / app login suffix; Bitbucket DC a
-  configurable account list) *or* a configurable first-line marker
-  (`> **gator-agent**`, `> **🏗️ build-from-issue-agent**`, …). Render with a
-  distinct marker and a per-file badge count separate from human threads.
-  Filter in the Overview: humans / AI / all.
-- [ ] **Review summary in the header** *(refined)* — one line:
+- [ ] **AI-authored comments and commits marked** *(refined for comments)* —
+  detect AI authorship by *either* account (GitHub `isBot` / app login suffix;
+  Bitbucket DC a configurable account list) *or* a configurable first-line
+  marker (`> **gator-agent**`, `> **🏗️ build-from-issue-agent**`, …). Render
+  with a distinct marker and a per-file badge count separate from human
+  threads. Filter in the Overview: humans / AI / all. The same detection marks
+  commits in the Commits tab, by author account or a configurable trailer, so
+  the commits a reviewing agent added can be told from the implementer's and
+  read as one diff. **Open for commits:** `Commit` carries only an author
+  name today, and an implementer and a reviewer that commit under the same
+  account can be told apart only by a trailer or a marker in the message.
+- [ ] **Review summary in the header** *(refined for comments)* — one line:
   `AI: 1 blocker · 3 suggestions · reviewed a1b2c3d (2 behind)`. Derived from
   the latest AI review: severity counts where the review exposes them,
   open/resolved counts otherwise, and the reviewed head SHA against the
-  current head so a stale review reads as stale rather than wrong. Collapses
-  to nothing when no AI review exists.
+  current head so a stale review reads as stale rather than wrong. A review
+  that committed reads `AI review: 3 commits · a1b2c3d`. Collapses to nothing
+  when no AI review exists, which is itself what the reviewer needs to know:
+  no AI review has checked this PR.
+- [ ] **Linked issues / cross-references** — "closes #123", shown in the
+  header and openable. Moved here from *Handoff*: the linked issue is what was
+  asked for, and checking the PR against it is the intent check the
+  positioning promises.
 - [ ] **Finding state per thread** — an AI thread is *open*, *fixed* (resolved
   after a later commit, or resolved by a maintainer) or *waived* (an explicit
   "won't fix" / "intentional" reply from a maintainer). Show the state on the
   thread, keep the finding ID when the review provides one, and never
   re-surface a waived thread as attention. Derivable from thread resolution +
   resolver identity + the marker; no reviewer-specific API.
-- [ ] **Run a review from slussa** *(refined)* — a key on the PR that runs a
-  configured command (default `claude -p` with a review prompt and the PR
-  context: title, body, diff) and posts the result either as one batched
-  review with line comments or as a local-only overlay the user can promote
-  to comments. The default prompt asks for each concern as "Before this PR,
-  `<who>` experienced `<old>`. With this PR, `<new>`, so `<impact>`." with a
-  `Critical | Warning | Suggestion` severity, and the posted review names the
-  head SHA it reviewed. Command and prompt in `config.toml`; the command runs
-  off the UI thread with the same deadline rules as `gh`.
 - [ ] **AI authorship of the PR** — flag PRs opened by an agent account or with
   an agent trailer / label, so the reviewer knows to read for intent. `is:agent`
   filter and an inbox reason.
@@ -171,7 +199,9 @@ rounds, and a severity split where only evidenced findings block.
   several into one commit. No provider exposes a clean "apply" API: fetch the
   file → replace the anchored line(s) → commit on the head branch. GitHub-only and
   same-repo to start; multi-line needs the range anchor below. Needs a free key
-  (`b` is unused).
+  (`b` is unused). Worth less where the AI reviewer commits its fixes, since
+  there is then no suggestion left to apply; check which kind of reviewer is
+  in use before building it.
 - [ ] **Multi-line (range) comments** — the anchor model carries one line today;
   needed for both range comments and multi-line suggestions.
 - [ ] **Mergeability detail** — *partly done.* A PR the provider will not merge
@@ -211,11 +241,24 @@ back on refresh.
   terminal pane and return immediately), or *headless* (`-p`, output in a
   dialog). Command per mode in `config.toml`; suspend is the default because
   it needs no multiplexer.
+- [ ] **Run a review from slussa** *(refined)* — a key on the PR that runs a
+  configured command (default `claude -p` with a review prompt and the PR
+  context: title, body, diff) and posts the result either as one batched
+  review with line comments or as a local-only overlay the user can promote
+  to comments. The default prompt asks for each concern as "Before this PR,
+  `<who>` experienced `<old>`. With this PR, `<new>`, so `<impact>`." with a
+  `Critical | Warning | Suggestion` severity, and the posted review names the
+  head SHA it reviewed. Command and prompt in `config.toml`; the command runs
+  off the UI thread with the same deadline rules as `gh`. Moved here from *AI
+  review integration* and placed after *Send to agent*: an automated review
+  belongs before the human opens the PR, and one that posts comments gives the
+  human more to read. When the header says no review has happened, sending
+  the PR to an agent that fixes is the shorter path; this stays for the
+  repository that has no reviewer in its pipeline.
 - [ ] **Check out PR locally** — precondition for most handoffs; also useful alone.
 - [ ] **Open focused file / line in editor** — `$EDITOR` at the anchored line
   (PR-level browser opening is implemented).
 - [ ] **Copy additional references** — SHA / branch / permalink to a line.
-- [ ] **Linked issues / cross-references** — "closes #123", shown and openable.
 
 #### The other direction: an agent calling slussa
 
@@ -255,6 +298,14 @@ decides.** No new view: these are non-interactive subcommands that print and exi
   retryable, needs auth, not found, invalid.
 - [ ] **`slussa threads <number> --unresolved`** — unresolved threads with file and
   line, and finding state once *Finding state per thread* exists.
+- [ ] **`slussa threads --since <duration>`** (retro export) — what humans
+  wrote in review, and which AI findings a maintainer waived, across the PRs
+  of a period instead of one PR. It is the input to a retrospective that turns
+  a repeated comment into an automated check or a coding standard, so that the
+  same comment is not written twice. `gh` gives the raw comments; slussa adds
+  who is human, who is AI and what was waived. Depends on *AI-authored
+  comments and commits marked* and *Finding state per thread*. **Open:** the
+  name and flags, and how many PRs one run may read.
 - [ ] **`slussa context <number>`** — one compact text package for an LLM (title,
   description, unresolved threads, CI, blockers). It is the package *Send to
   agent* needs too, so build it once; it needs a size rule for long threads and
@@ -262,7 +313,7 @@ decides.** No new view: these are non-interactive subcommands that print and exi
 - [ ] **Agents propose, the human decides** — `slussa draft comment …` and
   `slussa review import …` put proposals in a local inbox that the TUI shows
   marked as AI, and you send, edit or discard each. Depends on *AI-authored
-  comments marked* and on a store separate from the draft file, which the TUI
+  comments and commits marked* and on a store separate from the draft file, which the TUI
   holds locked for as long as it runs (`DraftStorage`) and rewrites whole when its
   content changes, so a second process cannot write into it. Needs de-duplication (a content hash or finding ID) and
   anchors that carry their `DiffRevision`. This is the part nobody else has;
@@ -485,7 +536,7 @@ tighter than their `App` struct with 20 `pending_*` flags, and it stays.
 
 OpenShell runs an autonomous PR reviewer in a sandbox. None of its code is
 reusable here, but the *contract* it enforces is what slussa will read and
-display once AI reviews are first-class threads (*AI review integration* above). Design the
+display once AI reviews are first-class (*AI review integration* above). Design the
 domain model against it:
 
 - [ ] **Marker-based AI detection, not just bot accounts.** Every gator comment
@@ -516,6 +567,45 @@ domain model against it:
   patches (same patch-id) are not re-reviewed. Show the round count and
   "unchanged since last review" so a human knows when the AI has stopped adding
   value.
+
+### From "Fixing the PR Bottleneck" (Matt Pocock), for the AI features
+
+A talk at AI Engineer Paris 2026 (<https://www.youtube.com/watch?v=LlgiOCmFG_w>)
+on the same problem slussa is positioned against: agents open PRs faster than
+humans can review them. Read from the automatic captions on 2026-10-01; the
+slides were not seen. It is a talk about the speaker's own skills, from
+experience and without data, so what is borrowed is the model, and each item
+below says what it rests on.
+
+- **Three layers before the decision.** Automated checks, automated review,
+  human review. A green CI does not mean the code is ready; the two upper
+  layers are there to catch checks that lie (a test that restates the
+  implementation, one that reads the source as text, one that cannot fail).
+  slussa is the surface for the third layer and shows what the first two did.
+- **One-way and two-way doors.** Not every review matters equally: a merge
+  that can be reverted needs little, one that cannot (a migration, data loss,
+  something sent to users) is reviewed closely, together with how far a
+  mistake reaches. His PRs carry this as a "merge danger" line at the bottom
+  of the description. It is the source of *Merge risk*. What he leaves open is
+  that the agent classifies its own PR, which is why slussa shows a floor from
+  path rules beside it.
+- **The reviewer commits; comments are the exception.** A reviewing agent that
+  comments gives the human more to read, so his fixes the code and comments
+  only when unsure. It reads coding standards from a file of its own, kept out
+  of AGENTS.md, and runs in its own context. This is why AI detection covers
+  commits and why *Run a review from slussa* sits after *Send to agent*. That
+  reviewers will commonly work this way is an assumption; the gator contract
+  above is the other model, and both are kept.
+- **Review the system, not only the code.** A human review comment should
+  become a check or a standard, so that it is never written twice; his "retro"
+  skill reads sessions and a period's PRs and reviews to propose them. It is
+  the source of the retro export among the agent commands.
+- **Not borrowed: diagrams in the description.** His PR descriptions lean on
+  pseudo-code and diagrams (Mermaid, images) to show what changed.
+  Pseudo-code reads well in a terminal; Mermaid is shown as its source and
+  slussa does not render it, and `o` opens the PR in the browser. His PR skill
+  was unreleased when this was written, so no convention for the description
+  is parsed until one exists to read.
 
 ### Done (engineering)
 
