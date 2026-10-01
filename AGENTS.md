@@ -33,10 +33,8 @@ for AI-generated PRs: triage, check intent, approve or merge.
 - **Modules stay under about 500 lines.** `mod.rs` composes and does not
   implement. Tests live inline, or in exactly one sibling `tests.rs`; suites that drive several modules through the doubles in `src/test_support.rs` are named `*_tests.rs`. A test
   suite that outgrows the limit becomes a directory with a file per concern and
-  a `support.rs` for what they share (`src/app/tests/`). Two
-  files already exceed the limit (`widgets/comment.rs` and
-  `diff_viewer/pane.rs`); split one when
-  you next change it substantially, and do not make them bigger.
+  a `support.rs` for what they share (`src/app/tests/`). No file exceeds the
+  limit now; when a change would push one over, split it first.
 - **Show only what the provider supports.** Hide unsupported actions; keep
   actions blocked by PR state visible with a reason.
 

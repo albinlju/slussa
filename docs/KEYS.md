@@ -29,7 +29,7 @@ connected provider does not support, so it can show fewer keys than this page.
 | `[` / `]` | previous / next tab; while a commit is open, previous / next commit |
 | `enter` | open or view; in the diff it moves from the file tree into the code |
 | `esc` | back; in the diff it moves from the code back to the file tree |
-| `space` | toggle a fold (a folder in the file tree, a resolved thread); in the Overview, open or fold a long comment |
+| `space` | toggle a fold (a folder in the file tree, a resolved thread); in the Overview, open or fold a long comment; in the diff's code pane, expand or collapse a resolved thread, or, on a long comment's fold row (`j`/`k` stop there), open or fold that comment |
 | `/` | search in the diff files or the commits; `n` / `N` jump to the next / previous match |
 | `H` / `L` | pan a wide Description |
 | `a` | submit a review verdict |

@@ -122,7 +122,10 @@ with your own token, which no account tells apart; it works on both providers.
 Bitbucket Data Center does not mark bot accounts, so there only `markers` applies.
 
 A comment longer than 12 lines shows its first 8 and a dimmed `… 34 more lines ·
-space expand`; `space` opens it or folds it again, in the Overview.
+space expand`; `space` opens it or folds it again, in the Overview. In the diff,
+a resolved thread opens and closes with `space`, and a long comment has a fold row
+that `j`/`k` can stop on: `space` there opens the comment, and `▲ fold` folds it
+again.
 
 ## Documentation
 

@@ -7,6 +7,7 @@ mod dialogs;
 mod keys;
 mod layout;
 mod long_comments;
+mod long_comments_diff;
 mod support;
 
 pub(crate) use support::fixture;

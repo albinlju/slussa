@@ -191,9 +191,11 @@ notion, applied to the PR's author, to comments and to commits.
 - [ ] **Review as a group (display)** — render a review's comments + summary +
   state as one grouped timeline entry. Matters more once AI reviews arrive as one
   batch with many comments.
-- [ ] **Long comments fold** *(the Overview is done; the diff's inline threads
-  still show them whole)* — a comment over 12 lines shows its first 8 and a
-  dimmed `… N more lines · space expand`; `space` opens or folds it. A bot's
+- [ ] **Long comments fold** *(done in the Overview and in the diff's inline
+  threads)* — a comment over 12 lines shows its first 8 and a dimmed `… N more
+  lines · space expand`; `space` opens or folds it. In the diff the fold row is
+  a stop for `j`/`k`, so `space` there opens or folds that comment, and `space`
+  on a resolved thread only expands or collapses the thread. A bot's
   walkthrough runs to dozens of lines. Counts of what a bot found (issues,
   nitpicks) are left out: they mean reading one reviewer's wording.
 - [ ] **Jump to next / prev unresolved thread** (`]c` / `[c`) — the core loop for
@@ -464,16 +466,15 @@ tighter than their `App` struct with 20 `pending_*` flags, and it stays.
   `next_page()` and `collect_all()`, tested with a counting closure. Cleaner
   than `github/pagination.rs` and the right shape for *Search older PRs and show the total*
   under *Features to build*.
-- [ ] **Split the files that exceed the size rule when next touched
-  substantially** (modules stay under about 500 lines, `mod.rs` composes).
-  Two files are over: `widgets/comment.rs` (679) and `diff_viewer/pane.rs`
-  (564). Five `mod.rs` files still implement instead of composing: `tui/`,
-  `tui/widgets/`, `providers/`, `providers/github/` and
-  `providers/bitbucket_dc/`; the two provider ones go with *Provider trait*.
-  Not a refactor-only change. *Done:* `pr_list`, `pr_detail`, `diff_viewer`
-  and `app` have a `mod.rs` that only composes, `timeline.rs` is under the
-  limit, and the four test suites over it are directories with a file per
-  concern and a shared `support.rs`.
+- [ ] **Keep the files under the size rule** (modules stay under about 500
+  lines, `mod.rs` composes). No file is over now: `widgets/comment.rs` (408)
+  and `diff_viewer/pane.rs` (475) were split by the AI-comment work. Five
+  `mod.rs` files still implement instead of composing: `tui/`, `tui/widgets/`,
+  `providers/`, `providers/github/` and `providers/bitbucket_dc/`; the two
+  provider ones go with *Provider trait*. Not a refactor-only change. *Done:*
+  `pr_list`, `pr_detail`, `diff_viewer` and `app` have a `mod.rs` that only
+  composes, `timeline.rs` is under the limit, and the four test suites over it
+  are directories with a file per concern and a shared `support.rs`.
 - [ ] **Cache rendered Markdown.** `markdown::render` runs for the
   description, and `render_no_margin` for every comment in the Overview and in
   the diff, on every frame. Keep the lines per comment and width, and drop
