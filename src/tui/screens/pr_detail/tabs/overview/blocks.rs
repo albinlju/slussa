@@ -1,6 +1,7 @@
 //! The blocks of the Overview timeline: one per comment, thread or event, and
 //! the rail that joins them.
 
+use crate::tui::widgets::comment_meta::Roles;
 use crate::{
     domain::{
         comment::{Comment, CommentId, CommentKind, CommentThread},
@@ -78,7 +79,7 @@ pub(super) fn build_blocks(
     width: u16,
     focused: usize,
     sub: usize,
-    author: &str,
+    roles: Roles<'_>,
 ) -> Vec<TimelineBlock> {
     let mut items: Vec<TimelineItem<'_>> =
         Vec::with_capacity(comments.len() + threads.len() + events.len());
@@ -98,7 +99,7 @@ pub(super) fn build_blocks(
         match item {
             TimelineItem::Comment(c) => {
                 blocks.push(TimelineBlock {
-                    lines: widgets::comment::comment_box(c, width, now, active, author),
+                    lines: widgets::comment::comment_box(c, width, now, active, roles),
                     selected_range: None,
                     node: theme.link,
                     border: if active { theme.accent } else { theme.divider },
@@ -113,7 +114,7 @@ pub(super) fn build_blocks(
                 // Mark the sub-selected comment only on the focused thread.
                 let selected = active.then_some(sub);
                 if let Some((lines, selected_range)) = widgets::comment::comment_thread_box(
-                    t, diff, width, now, active, selected, author,
+                    t, diff, width, now, active, selected, roles,
                 ) {
                     blocks.push(TimelineBlock {
                         lines,

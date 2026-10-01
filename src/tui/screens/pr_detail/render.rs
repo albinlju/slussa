@@ -1,4 +1,5 @@
 use super::{dialogs, footer, header};
+use crate::tui::widgets::comment_meta::Roles;
 use crate::{
     app::{
         reviews::{PendingComment, PendingReview},
@@ -142,7 +143,10 @@ fn render_content(
                     diff,
                     threads,
                     pending,
-                    author: &pr.author.username,
+                    roles: Roles {
+                        pr_author: &pr.author.username,
+                        markers: &ctx.store.ai_markers,
+                    },
                 },
             );
         }
@@ -153,7 +157,10 @@ fn render_content(
                 &commits::CommitContext {
                     data: pr_data,
                     pending,
-                    author: &pr.author.username,
+                    roles: Roles {
+                        pr_author: &pr.author.username,
+                        markers: &ctx.store.ai_markers,
+                    },
                 },
             );
         }

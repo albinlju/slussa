@@ -16,6 +16,7 @@ use crate::{
         component::Component,
         components::search_input::{SearchInput, SearchKind},
         screens::pr_detail::view::ThreadRef,
+        widgets::comment_meta::Roles,
     },
 };
 use ratatui::{Frame, crossterm::event::KeyEvent, layout::Rect};
@@ -25,7 +26,7 @@ pub struct DiffContext<'a> {
     pub diff: Option<&'a LoadState<Diff>>,
     pub threads: &'a [CommentThread],
     pub pending: &'a [PendingComment],
-    pub author: &'a str,
+    pub roles: Roles<'a>,
 }
 
 #[derive(Debug, Default)]
@@ -139,7 +140,7 @@ impl Component for DiffViewer {
             ctx.threads,
             ctx.pending,
             self,
-            ctx.author,
+            ctx.roles,
             area,
         );
     }

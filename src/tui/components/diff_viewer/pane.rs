@@ -9,7 +9,7 @@ use crate::{
         icons, layout,
         screens::pr_detail::view::ThreadRef,
         theme,
-        widgets::{self, comment::render_inline_thread, markdown},
+        widgets::{self, comment::render_inline_thread, comment_meta::Roles, markdown},
     },
 };
 use chrono::Utc;
@@ -34,7 +34,7 @@ pub(super) fn render(
     threads: &[CommentThread],
     pending: &[PendingComment],
     focused: bool,
-    author: &str,
+    roles: Roles<'_>,
     area: Rect,
 ) {
     ui_diff.pane_viewport = area.height.saturating_sub(4);
@@ -70,7 +70,7 @@ pub(super) fn render(
         body_area.width,
         active,
         query,
-        author,
+        roles,
         &ui_diff.expanded_threads,
     );
     let cursor = active.and_then(|i| nav_items.get(i));
@@ -202,7 +202,7 @@ fn build_diff_body(
     width: u16,
     active: Option<usize>,
     query: &str,
-    author: &str,
+    roles: Roles<'_>,
     expanded: &HashSet<CommentId>,
 ) -> DiffBody {
     let theme = theme::current();
@@ -257,7 +257,7 @@ fn build_diff_body(
                     now,
                     active == Some(idx),
                     diff_line.content(),
-                    author,
+                    roles,
                     is_expanded,
                 );
                 nav_items.push(NavItem {
@@ -421,7 +421,7 @@ fn push_thread_lines(
     now: chrono::DateTime<Utc>,
     active: bool,
     anchor_text: &str,
-    author: &str,
+    roles: Roles<'_>,
     expanded: bool,
 ) -> usize {
     let rendered = render_inline_thread(
@@ -430,7 +430,7 @@ fn push_thread_lines(
         now,
         active,
         Some(anchor_text),
-        author,
+        roles,
         expanded,
     );
     let count = rendered.len();

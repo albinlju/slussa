@@ -1,11 +1,12 @@
 use super::blocks::{TimelineItem, build_blocks, focusable_count, timeline_rail};
+use crate::tui::widgets::comment_meta::Roles;
 use crate::{
     app::{
         action::{Action, Effect, TimelineAction},
         store::{LoadState, PrData},
     },
     domain::{
-        authorship::{AiMarkers, AuthorFilter},
+        authorship::AuthorFilter,
         comment::{Comment, CommentId, CommentKind, CommentThread},
         event::TimelineEvent,
     },
@@ -28,8 +29,7 @@ const RAIL_WIDTH: u16 = 3;
 
 pub struct TimelineContext<'a> {
     pub data: Option<&'a PrData>,
-    pub author: &'a str,
-    pub markers: &'a AiMarkers,
+    pub roles: Roles<'a>,
     pub scrollbar: Rect,
 }
 
@@ -37,8 +37,7 @@ fn render_timeline(
     frame: &mut Frame<'_>,
     pr_data: Option<&PrData>,
     ui: &mut Timeline,
-    author: &str,
-    markers: &AiMarkers,
+    roles: Roles<'_>,
     area: Rect,
     scrollbar_area: Rect,
 ) {
@@ -58,12 +57,12 @@ fn render_timeline(
     let comments: Vec<&Comment> = activity
         .comments
         .iter()
-        .filter(|c| ui.filter.shows(markers.of_comment(c)))
+        .filter(|c| ui.filter.shows(roles.markers.of_comment(c)))
         .collect();
     let threads: Vec<&CommentThread> = activity
         .threads
         .iter()
-        .filter(|t| ui.filter.shows(markers.of_thread(t)))
+        .filter(|t| ui.filter.shows(roles.markers.of_thread(t)))
         .collect();
     let events: &[TimelineEvent] = if ui.filter == AuthorFilter::All {
         &activity.events
@@ -147,7 +146,7 @@ fn render_timeline(
         area.width.saturating_sub(TIMELINE_RIGHT_PAD + RAIL_WIDTH),
         cursor,
         ui.sub,
-        author,
+        roles,
     );
 
     let (content, navs) = timeline_rail(blocks);
@@ -283,14 +282,6 @@ impl Component for Timeline {
         None
     }
     fn render(&mut self, frame: &mut Frame<'_>, area: Rect, ctx: &TimelineContext<'_>) {
-        render_timeline(
-            frame,
-            ctx.data,
-            self,
-            ctx.author,
-            ctx.markers,
-            area,
-            ctx.scrollbar,
-        );
+        render_timeline(frame, ctx.data, self, ctx.roles, area, ctx.scrollbar);
     }
 }

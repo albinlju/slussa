@@ -153,3 +153,26 @@ fn a_filter_that_is_on_stays_offered_when_the_agents_comments_are_gone() {
         "nothing to filter on any more"
     );
 }
+
+#[test]
+fn an_agents_comment_carries_an_ai_tag_and_a_persons_does_not() {
+    let mut state = overview_with(&["Human note", "> **gator-agent**\nAgent finding"]);
+    let plain = screen(&mut state);
+    assert!(
+        !plain.contains("[AI]"),
+        "nothing is marked without a marker"
+    );
+
+    state.store.ai_markers = AiMarkers::from_config(&["> **gator-agent**".into()]).0;
+    let text: Vec<char> = screen(&mut state).chars().collect();
+    // The screen is 140 cells wide, with no line breaks in the text.
+    let rows: Vec<String> = text.chunks(140).map(|row| row.iter().collect()).collect();
+    let tagged: Vec<&String> = rows.iter().filter(|row| row.contains("[AI]")).collect();
+    assert_eq!(tagged.len(), 1, "{rows:#?}");
+    assert!(tagged[0].contains("alice [AI]"), "the tag follows the name");
+    assert!(
+        !rows
+            .iter()
+            .any(|row| row.contains("Human note") && row.contains("[AI]"))
+    );
+}

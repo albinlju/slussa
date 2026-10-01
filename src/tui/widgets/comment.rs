@@ -5,7 +5,11 @@ use crate::{
     },
     tui::{
         format, theme,
-        widgets::{self, markdown},
+        widgets::{
+            self,
+            comment_meta::{self, Roles},
+            markdown,
+        },
     },
 };
 use chrono::{DateTime, Utc};
@@ -25,7 +29,7 @@ pub(in crate::tui) fn render_inline_thread(
     now: DateTime<Utc>,
     active: bool,
     anchor_text: Option<&str>,
-    author: &str,
+    roles: Roles<'_>,
     expanded: bool,
 ) -> Vec<Line<'static>> {
     let theme = theme::current();
@@ -33,7 +37,7 @@ pub(in crate::tui) fn render_inline_thread(
 
     // A resolved thread collapses to a one-line summary until expanded (`space`).
     if thread.resolved() && !expanded {
-        return vec![collapse_summary(thread, false, active, width)];
+        return vec![collapse_summary(thread, false, active, width, roles)];
     }
 
     let pos = anchor_pos(thread).zip(anchor_text);
@@ -44,11 +48,11 @@ pub(in crate::tui) fn render_inline_thread(
 
     let mut out: Vec<Line<'static>> = Vec::new();
     if thread.resolved() {
-        out.push(collapse_summary(thread, true, active, width));
+        out.push(collapse_summary(thread, true, active, width, roles));
     } else if !has_suggestion {
         out.push(status_rule(status_label(thread.resolved()), width, frame));
     }
-    out.extend(conversation(thread, pos, width, now, author, frame, None, false).0);
+    out.extend(conversation(thread, pos, width, now, roles, frame, None, false).0);
     out
 }
 
@@ -59,6 +63,7 @@ fn collapse_summary(
     expanded: bool,
     active: bool,
     width: u16,
+    roles: Roles<'_>,
 ) -> Line<'static> {
     if width == 0 {
         return Line::default();
@@ -82,6 +87,9 @@ fn collapse_summary(
             format!(" · @{}", comment.author.username),
             Style::default().fg(theme.muted),
         ));
+        if roles.is_ai(comment) {
+            spans.push(comment_meta::ai_tag());
+        }
     }
     Line::from(widgets::truncate_to_width(spans, width as usize))
 }
@@ -101,17 +109,12 @@ pub(in crate::tui) fn comment_box(
     width: u16,
     now: DateTime<Utc>,
     active: bool,
-    author: &str,
+    roles: Roles<'_>,
 ) -> Vec<Line<'static>> {
     let theme = theme::current();
     let frame = if active { theme.accent } else { theme.divider };
     let header = header_line(
-        author_meta(
-            &comment.author.username,
-            comment_role(comment, author),
-            comment.created,
-            now,
-        ),
+        comment_meta::meta(comment, roles, comment.created, now),
         kind_label(comment),
         width,
     );
@@ -147,7 +150,7 @@ pub(in crate::tui) fn comment_thread_box(
     now: DateTime<Utc>,
     active: bool,
     selected: Option<usize>,
-    author: &str,
+    roles: Roles<'_>,
 ) -> Option<(Vec<Line<'static>>, Option<std::ops::Range<usize>>)> {
     let diff = diff.filter(|d| thread.matches_revision(d.revision.as_ref()));
     let theme = theme::current();
@@ -179,6 +182,9 @@ pub(in crate::tui) fn comment_thread_box(
         format!("@{}", first.author.username),
         Style::default().fg(theme.info).add_modifier(Modifier::BOLD),
     )];
+    if roles.is_ai(first) {
+        left.push(comment_meta::ai_tag());
+    }
     left.push(Span::styled(phrase, Style::default().fg(theme.muted)));
     if let Some(location) = location {
         left.push(Span::styled(location, Style::default().fg(theme.link)));
@@ -211,7 +217,7 @@ pub(in crate::tui) fn comment_thread_box(
     // skips its meta line to avoid repeating it.
     let offset = out.len();
     let (lines, selected_range) =
-        conversation(thread, pos, width, now, author, frame, selected, true);
+        conversation(thread, pos, width, now, roles, frame, selected, true);
     out.extend(lines);
     let selected_range = selected_range.map(|range| {
         if selected == Some(0) {
@@ -274,7 +280,7 @@ fn conversation(
     anchor: Option<(usize, &str)>,
     width: u16,
     now: DateTime<Utc>,
-    author: &str,
+    roles: Roles<'_>,
     frame: Color,
     selected: Option<usize>,
     skip_first_meta: bool,
@@ -294,12 +300,7 @@ fn conversation(
         let meta = if suppress {
             Vec::new()
         } else {
-            author_meta(
-                &comment.author.username,
-                comment_role(comment, author),
-                comment.created,
-                now,
-            )
+            comment_meta::meta(comment, roles, comment.created, now)
         };
         if !split_suggestions(&comment.content).1.is_empty() {
             let label = if suppress {
@@ -403,20 +404,6 @@ fn status_label(resolved: bool) -> Vec<Span<'static>> {
     vec![Span::styled(text, Style::default().fg(color))]
 }
 
-fn author_meta(
-    name: &str,
-    role: Option<&str>,
-    created: DateTime<Utc>,
-    now: DateTime<Utc>,
-) -> Vec<Span<'static>> {
-    let mut spans = author_title(name, role);
-    spans.push(Span::styled(
-        format!(" · {}", format::relative_age(created, now)),
-        Style::default().fg(theme::current().muted),
-    ));
-    spans
-}
-
 fn align_snippet(lines: Vec<Line<'static>>) -> Vec<Line<'static>> {
     lines
         .into_iter()
@@ -431,31 +418,6 @@ fn align_snippet(lines: Vec<Line<'static>>) -> Vec<Line<'static>> {
             Line::from(spans).style(style)
         })
         .collect()
-}
-
-fn comment_role(comment: &Comment, author: &str) -> Option<&'static str> {
-    if comment.author.username == author {
-        Some(" · author")
-    } else if !split_suggestions(&comment.content).1.is_empty() {
-        Some(" · suggested a change")
-    } else {
-        None
-    }
-}
-
-fn author_title(name: &str, note: Option<&str>) -> Vec<Span<'static>> {
-    let theme = theme::current();
-    let mut spans = vec![Span::styled(
-        name.to_string(),
-        Style::default().fg(theme.info).add_modifier(Modifier::BOLD),
-    )];
-    if let Some(note) = note {
-        spans.push(Span::styled(
-            note.to_string(),
-            Style::default().fg(theme.muted),
-        ));
-    }
-    spans
 }
 
 fn comment_body(

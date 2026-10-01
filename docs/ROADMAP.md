@@ -127,8 +127,8 @@ a first-line marker on every comment, stable finding IDs carried across
 rounds, and a severity split where only evidenced findings block.
 
 - [ ] **AI-authored comments marked** *(refined; detection by GitHub bot
-  account and by `[ai] markers`, and the Overview filter on `f`, are done; the
-  marker's look and the per-file badge are not)* — detect AI authorship by
+  account and by `[ai] markers`, the `[AI]` tag after the author's name and the
+  Overview filter on `f` are done; the per-file badge is not)* — detect AI authorship by
   *either* account (GitHub `isBot` / app login suffix; Bitbucket DC a
   configurable account list) *or* a configurable first-line marker
   (`> **gator-agent**`, `> **🏗️ build-from-issue-agent**`, …). Render with a
