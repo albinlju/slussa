@@ -43,7 +43,9 @@ reviews:
     - path: "src/providers/**"
       instructions: |
         Writes are not exactly-once: an ambiguous failure may follow a successful
-        server write, so check retry and partial-failure handling. Bitbucket Data
+        server write, so check retry and partial-failure handling. A log line
+        may carry a state, a resource key, a count or error text; flag one that
+        carries a PR's content (title, description, comment, diff) or a token. Bitbucket Data
         Center is in maintenance, so new features there are out of scope and
         bug fixes are welcome.
     - path: "**/*tests*.rs"

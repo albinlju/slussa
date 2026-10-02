@@ -34,7 +34,7 @@ pub enum FetchError {
     Network(#[source] Source),
     #[error("not logged in to {host} — run `slussa auth login`")]
     NotAuthenticated { host: String },
-    #[error("couldn't parse response: {0}")]
+    #[error("couldn't parse response: {}", without_quoted(&.0.to_string()))]
     ParseFailed(#[source] Source),
     #[error("worker thread panicked: {0}")]
     WorkerPanicked(String),
@@ -66,6 +66,33 @@ fn gh_failed(code: Option<i32>, stderr: &str) -> String {
         (None, false) => format!("gh failed: {stderr}"),
         (None, true) => "gh failed".to_owned(),
     }
+}
+
+/// A parser's message without the values it quotes from the answer. It says
+/// `invalid type: string "the title", expected u64`, and what is between the
+/// quotes is a PR's content, which the log never holds. The message stays whole
+/// in the error's source.
+fn without_quoted(message: &str) -> String {
+    let mut shown = String::with_capacity(message.len());
+    let mut chars = message.chars();
+    while let Some(c) = chars.next() {
+        if c != '"' {
+            shown.push(c);
+            continue;
+        }
+        shown.push_str("\"…\"");
+        // Up to the closing quote; a backslash escapes what follows it.
+        while let Some(quoted) = chars.next() {
+            match quoted {
+                '\\' => {
+                    chars.next();
+                }
+                '"' => break,
+                _ => {}
+            }
+        }
+    }
+    shown
 }
 
 fn http_failed(status: u16, body: &str) -> String {
@@ -279,6 +306,32 @@ mod tests {
             partial.to_string(),
             "review partially sent (2 comments, summary=true): request timed out"
         );
+    }
+
+    #[test]
+    fn a_parse_failure_is_logged_without_the_values_the_parser_quotes() {
+        use std::error::Error;
+        let answer = r#""the private \"title\" of a PR""#;
+        let parser = serde_json::from_str::<u64>(answer).unwrap_err();
+        assert!(parser.to_string().contains("the private"), "{parser}");
+
+        let error = FetchError::ParseFailed(parser.into());
+        let logged = error.to_string();
+        assert!(
+            logged.starts_with("couldn't parse response: invalid type: string \"…\", expected u64"),
+            "{logged}"
+        );
+        assert!(
+            !logged.contains("private") && !logged.contains("title"),
+            "{logged}"
+        );
+        // Whoever holds the error can still read all of it.
+        assert!(error.source().unwrap().to_string().contains("the private"));
+
+        // What slussa says itself quotes nothing and is logged as written.
+        let own = FetchError::ParseFailed("Missing pageInfo".into());
+        assert_eq!(own.to_string(), "couldn't parse response: Missing pageInfo");
+        assert_eq!(without_quoted(r#"a "b" c "d\"e" f"#), "a \"…\" c \"…\" f");
     }
 
     #[test]

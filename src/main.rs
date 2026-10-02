@@ -4,6 +4,7 @@ mod config;
 mod domain;
 mod git_url;
 mod logging;
+mod private_file;
 mod providers;
 #[cfg(test)]
 mod test_support;

@@ -77,4 +77,9 @@ library API than `rust-version` allows.
   be parsed stops slussa from starting. Change how they are spelled on disk
   only with a new file version; the version 1 fixture in `src/app/drafts.rs`
   fails otherwise.
+- The log holds states, resource keys, counts and error text, the server's
+  included. It never holds the content of a PR (a title, a description, a
+  comment, a diff) and never a token: an answer that could not be read is
+  logged by its size and where reading stopped, not by a sample of it. The log
+  file is for its owner only, as the drafts are (`src/private_file.rs`).
 - Commit and push only when asked.
