@@ -113,7 +113,8 @@ says so on the row.
   shown when neither source says anything. Path rules cannot see a one-line
   change that sends an email to 60 000 people, so the floor adds to reading
   the PR and does not replace it. **Open:** which convention to read (none has
-  settled; see *From "Fixing the PR Bottleneck"* under *Engineering*); whether
+  settled: the PR skill the idea comes from was unreleased on 2026-10-01, so
+  nothing in a description is parsed until there is a convention to read); whether
   a one-way door is an attention reason of its own or a marker beside the
   existing one; and the row, which needs the description and the changed
   paths, neither of which the list query reads today.
@@ -137,13 +138,17 @@ The AI reviewer's output has to be as easy to read and act on as a human's, and
 easier to tell apart.
 
 An AI reviewer shows up in one of two ways, and slussa will meet both. One
-*comments* (see *Engineering*, *From OpenShell's AI reviewer*): one batched
+*comments*, as the "gator" reviewer in
+[NVIDIA/OpenShell](https://github.com/NVIDIA/openshell) does: one batched
 review per head SHA, a first-line marker on every comment, stable finding IDs
 carried across rounds, and a severity split where only evidenced findings
-block. The other *commits* (see *From "Fixing the PR Bottleneck"*): it fixes
-what it finds on the branch and comments only when it is unsure, so its review
-is a set of commits and may leave no thread at all. "AI actor" is therefore one
-notion, applied to the PR's author, to comments and to commits.
+block. The other *commits*, the model in the talk
+[Fixing the PR Bottleneck](https://www.youtube.com/watch?v=LlgiOCmFG_w): it
+fixes what it finds on the branch and comments only when it is unsure, so its
+review is a set of commits and may leave no thread at all. That reviewers will
+commonly work the second way is an assumption, which is why both are kept. "AI
+actor" is therefore one notion, applied to the PR's author, to comments and to
+commits.
 
 - [ ] **AI-authored commits marked** *(refined)* — mark the commits an agent
   made in the Commits tab, by author account or a configurable trailer, so the
@@ -159,7 +164,12 @@ notion, applied to the PR's author, to comments and to commits.
   current head so a stale review reads as stale rather than wrong. A review
   that committed reads `AI review: 3 commits · a1b2c3d`. Collapses to nothing
   when no AI review exists, which is itself what the reviewer needs to know:
-  no AI review has checked this PR.
+  no AI review has checked this PR. Where the review exposes them, also the
+  round and "unchanged since last review": a reviewer that has gone to
+  critical findings only after three rounds, or that skipped a rebase with the
+  same patch, has stopped adding to what the human knows. Only a finding with
+  its evidence (behaviour on the base, on the head, the impact and a
+  reproducer) counts as a blocker in the summary; one without is a hypothesis.
 - [ ] **Linked issues / cross-references** — "closes #123", shown in the
   header and openable. Moved here from *Handoff*: the linked issue is what was
   asked for, and checking the PR against it is the intent check the
@@ -355,17 +365,9 @@ a decision-path feature needs them:
 
 ## Engineering
 
-**State on 2026-10-01:** single crate, about 26 200 lines of Rust, 305 tests,
-`clippy::pedantic` and `nursery` clean with the no-panic lints on, CI on Linux
-and macOS, two releases, a README.
-
 Rule of thumb for everything below: **do the refactors when a feature touches
 the code anyway, do the tooling now.** Every open item has a trigger; do not do
-it ahead of the feature that needs it. Part of this was assembled by reading
-[NVIDIA/OpenShell](https://github.com/NVIDIA/openshell) (about 40 crates, an
-agent-first Rust project with a ratatui TUI). What is borrowed is their
-engineering hygiene, not their TUI: slussa's component/store design is already
-tighter than their `App` struct with 20 `pending_*` flags, and it stays.
+it ahead of the feature that needs it.
 
 ### Code, with the next feature that touches the area
 
@@ -430,6 +432,13 @@ tighter than their `App` struct with 20 `pending_*` flags, and it stays.
   `mod.rs` files still implement instead of composing: `tui/`, `tui/widgets/`,
   `providers/`, `providers/github/` and `providers/bitbucket_dc/`; the two
   provider ones go with *Provider trait*. Not a refactor-only change.
+- [ ] **A workspace, when something else needs the core.** slussa is one crate
+  with clear module boundaries; a workspace adds compile-unit overhead and
+  manifest churn without a consumer for the split crates, and an attempt on a
+  branch (`domain` and `providers` as crates) was dropped for that reason. The
+  pieces would be `slussa-core`, `slussa-provider-github`,
+  `slussa-provider-bitbucket-dc` and `slussa-tui`. *Trigger:* a `slussa-core`
+  becomes a dependency of something else (a Neovim plugin, an MCP server).
 - [ ] **Cache rendered Markdown.** `markdown::render` runs for the
   description, and `render_no_margin` for every comment in the Overview and in
   the diff, on every frame. Keep the lines per comment and width, and drop
@@ -492,81 +501,6 @@ tighter than their `App` struct with 20 `pending_*` flags, and it stays.
      configuration reference on 2026-10-01). Keep it in step with AGENTS.md.
   3. It reviews pull requests, not direct pushes to `main`. `/code-review` is
      run by hand; the two cover different moments.
-
-### From OpenShell's AI reviewer ("gator"), for the AI features
-
-OpenShell runs an autonomous PR reviewer in a sandbox. None of its code is
-reusable here, but the *contract* it enforces is what slussa will read and
-display once AI reviews are first-class (*AI review integration* above). Design the
-domain model against it:
-
-- [ ] **Marker-based AI detection, not just bot accounts.** Every gator comment
-  starts with a first-line marker (`> **gator-agent**`); other skills use their
-  own. Detecting AI authorship needs a configurable list of first-line markers
-  *and* account names, not one or the other.
-- [ ] **One disposition per head SHA.** A review is one batched GitHub review
-  (summary + inline comments) that names the head SHA it reviewed. Show
-  *reviewed SHA vs. current head* on the AI summary line; a review of an older
-  SHA is stale, not wrong.
-- [ ] **Stable finding IDs across rounds.** Findings carry `GATOR-<sha8>-<nn>`
-  and are carried, resolved or waived across later commits; a maintainer's
-  "won't fix" reply is a waiver, an author's "fixed" is a claim to verify. The
-  open/fixed/waived state per finding is what a reviewer wants at a glance, and
-  it is derivable from thread resolution + resolver identity + the marker.
-- [ ] **Severity and evidence.** Findings are `Critical | Warning | Suggestion`,
-  and only ones with a full evidence record (base behaviour, head behaviour,
-  observable impact, reproducer, changed location) count as blockers; the rest
-  are hypotheses. Suggestions never block. If slussa's own *run a review*
-  command emits structured output, use this split: it gives the reviewer a
-  defensible "N blockers, M suggestions" header instead of a wall of comments.
-- [ ] **Concern format for the review prompt.** Their `review-github-pr` skill
-  requires every concern as "Before this PR, `<persona>` experienced `<old>`.
-  With this PR, `<new>`, so `<impact>`." with file:line only as evidence. A good
-  default prompt for slussa's run-a-review.
-- [ ] **Convergence rules worth copying into the display.** After three
-  finding-bearing rounds the reviewer goes `critical_only`; rebase-equivalent
-  patches (same patch-id) are not re-reviewed. Show the round count and
-  "unchanged since last review" so a human knows when the AI has stopped adding
-  value.
-
-### From "Fixing the PR Bottleneck" (Matt Pocock), for the AI features
-
-A talk at AI Engineer Paris 2026 (<https://www.youtube.com/watch?v=LlgiOCmFG_w>)
-on the same problem slussa is positioned against: agents open PRs faster than
-humans can review them. Read from the automatic captions on 2026-10-01; the
-slides were not seen. It is a talk about the speaker's own skills, from
-experience and without data, so what is borrowed is the model, and each item
-below says what it rests on.
-
-- **Three layers before the decision.** Automated checks, automated review,
-  human review. A green CI does not mean the code is ready; the two upper
-  layers are there to catch checks that lie (a test that restates the
-  implementation, one that reads the source as text, one that cannot fail).
-  slussa is the surface for the third layer and shows what the first two did.
-- **One-way and two-way doors.** Not every review matters equally: a merge
-  that can be reverted needs little, one that cannot (a migration, data loss,
-  something sent to users) is reviewed closely, together with how far a
-  mistake reaches. His PRs carry this as a "merge danger" line at the bottom
-  of the description. It is the source of *Merge risk*. What he leaves open is
-  that the agent classifies its own PR, which is why slussa shows a floor from
-  path rules beside it.
-- **The reviewer commits; comments are the exception.** A reviewing agent that
-  comments gives the human more to read, so his fixes the code and comments
-  only when unsure. It reads coding standards from a file of its own, kept out
-  of AGENTS.md, and runs in its own context. This is why AI detection covers
-  commits and why *Run a review from slussa* sits after *Send to agent*. That
-  reviewers will commonly work this way is an assumption; the gator contract
-  above is the other model, and both are kept.
-- **Review the system, not only the code.** A human review comment should
-  become a check or a standard, so that it is never written twice; his "retro"
-  skill reads sessions and a period's PRs and reviews to propose them. It is
-  the source of the retro export among the agent commands.
-- **Not borrowed: diagrams in the description.** His PR descriptions lean on
-  pseudo-code and diagrams (Mermaid, images) to show what changed.
-  Pseudo-code reads well in a terminal; Mermaid is shown as its source and
-  slussa does not render it, and `o` opens the PR in the browser. His PR skill
-  was unreleased when this was written, so no convention for the description
-  is parsed until one exists to read.
 
 ### Done (engineering)
 
@@ -645,31 +579,3 @@ Kept as one line each; the detail is in git history.
 - **Dropped:** automatic light/dark theme. All five themes are dark and
   `terminal` already follows a light terminal; revisit only if a light palette
   is added.
-
-### Not borrowed (and why)
-
-- **A Cargo workspace with many crates.** slussa is about 23 000 lines with
-  clear module boundaries; a workspace adds compile-unit overhead and manifest
-  churn without a consumer for the split crates. An earlier attempt on a
-  branch (a workspace with `domain` and `providers` crates) was dropped for the
-  same reason. Revisit only if a
-  `slussa-core` becomes a dependency for something else (a Neovim plugin, an
-  MCP server); then name the pieces `slussa-core`, `slussa-provider-github`,
-  `slussa-provider-bitbucket-dc`, `slussa-tui`.
-- **mise / Nix toolchain management.** `rust-toolchain.toml` covers a
-  one-language project.
-- **SPDX headers, CODEOWNERS, DCO and a vouch system.** Corporate open-source
-  process; nothing to gain with one maintainer.
-- **Their TUI structure.** Mouse capture, a splash screen, 20 `pending_*`
-  booleans polled after each key. slussa's typed `Action`/`Component` design is
-  the better pattern.
-- **OpenTelemetry / OCSF logging.** `tracing` with an env filter is enough for
-  a local TUI.
-- **Their file structure.** 39 files over 100 KB, `too_many_lines = "allow"`
-  used in full, three sibling-test conventions. slussa keeps `mod.rs` for
-  composition and one test convention, and writes the size rule down.
-- **Facade crates bridging parallel type trees** and the twenty-field
-  `Mutex<Option<...>>` mock-state bags.
-- **The gator agent itself** (sandboxed reviewer, label state machine, ledger
-  scripts). slussa *displays* reviews; it does not run an autonomous reviewer.
-  The contract above is what to read, not what to build.
