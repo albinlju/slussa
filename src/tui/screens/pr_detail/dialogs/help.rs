@@ -81,3 +81,13 @@ pub(in crate::tui::screens::pr_detail) fn entries(
         .collect();
     keys
 }
+
+#[cfg(test)]
+mod tests {
+    use super::HELP_KEYS;
+
+    #[test]
+    fn the_help_and_keys_md_name_the_same_keys_for_a_pr() {
+        crate::doc_contract::assert_keys_match(HELP_KEYS, "A PR");
+    }
+}
