@@ -45,7 +45,7 @@ keyboard-only use, and prefer an existing interaction over a new visual pattern.
 ```text
 src/
 ├── main.rs, cli.rs        Startup, logging and CLI dispatch (`auth login`, `-C`)
-├── config.rs              config.toml: theme and sort
+├── config.rs              config.toml: theme, sort and `[ai] markers`
 ├── logging.rs             Log file in the data directory (`SLUSSA_LOG`)
 ├── git_url.rs             Splits a git remote into host and path; web base URL
 ├── test_support.rs        Test-only: `FakeGh` and `MockHttp`
@@ -79,9 +79,12 @@ src/
 │   │   └── diff_viewer/
 │   │       ├── viewer.rs  DiffViewer state and updates; what the pane drew last
 │   │       ├── keys.rs    Tree/pane input
-│   │       ├── render.rs  Composition
-│   │       ├── tree.rs    Tree rendering
-│   │       ├── pane.rs    Diff and inline-thread rendering
+│   │       ├── render.rs  Composition; the comment counts per file
+│   │       ├── tree.rs    Tree rendering, the file rows with their counts
+│   │       ├── pane.rs    The code pane: diff lines, search and the cursor
+│   │       ├── threads.rs One inline thread: its lines and the stops in it
+│   │       ├── nav.rs     What the pane cursor can stand on (line, thread,
+│   │       │              fold row, queued comment)
 │   │       └── file_tree.rs  Visible tree projection
 │   ├── screens/
 │   │   ├── pr_list/
@@ -101,16 +104,24 @@ src/
 │   │       └── tabs/
 │   │           ├── overview/
 │   │           │   ├── mod.rs       Layout and child delegation
-│   │           │   ├── timeline.rs  Interactive Timeline component
+│   │           │   ├── timeline.rs  Interactive Timeline component: cursor,
+│   │           │   │                filter, folds and reading through a tall item
+│   │           │   ├── blocks.rs    The blocks of the timeline and the rail
+│   │           │   ├── hidden.rs    The dimmed line for hidden comments
 │   │           │   └── sidebar.rs   Stateless Ratatui Sidebar widget
 │   │           └── ...             Description, CommitList and Builds
 │   └── widgets/
 │       ├── mod.rs        Shared presentation primitives
-│       ├── comment.rs    Comments, threads, reactions and suggestions
+│       ├── comment.rs    Comments and threads: boxes, inline threads
+│       ├── comment_meta.rs   The author line, `[AI]`, and `Reading`
+│       ├── comment_fold.rs   Folding a long comment and its fold row
+│       ├── comment_frame.rs  Header line, left rail and box around a comment
+│       ├── comment_code.rs   A suggestion box and the diff around an anchor
 │       ├── dialog.rs     Shared dialog geometry and footer
 │       ├── markdown.rs
 │       └── table.rs
-├── domain/               Provider-independent data models, ids and rules
+├── domain/               Provider-independent data models, ids and rules;
+│                         `authorship.rs` says who wrote a comment
 └── providers/            Provider requests and payload mapping
     ├── github/           `gh` calls, GraphQL templates, pagination, threads
     ├── bitbucket_dc/     REST client, auth (keyring), probe, diff and activity mapping
@@ -388,15 +399,19 @@ where it is used. Three shapes, in the order to reach for them:
 
 - **An enum with the data in the variant it belongs to**, instead of a struct
   with a flag and optional fields. `Overlay`, `ListOverlay`, `Surface`,
-  `CommitsView`, `EditMode`, `NavTarget`, `Mergeability` (the reasons are in
-  `Conflicts` and `Blocked`), `ThreadHandle`, `LineRef`, `CommentKind`. A
+  `CommitsView`, `EditMode`, `NavTarget` (a thread, and a fold row that stands
+  for its thread), `Mergeability` (the reasons are in `Conflicts` and
+  `Blocked`), `ThreadHandle`, `LineRef`, `CommentKind`, `AccountKind` and
+  `Authorship` (who wrote a comment), `AuthorFilter` (and `hides`, which says
+  whose comments a filter leaves out), `Reveal` and `Folds`. A
   `match` on one of these names every variant, so a new one is a compile error
   wherever it has to be handled. Clippy's `wildcard_enum_match_arm` enforces
   that in `app`, `domain` and `providers`; `tui` matches crossterm's `KeyCode`
   in every key handler, where a catch-all is right, so there it is a review
   rule.
 - **A newtype with one constructor**, for a value with a rule. `Username`
-  (never empty), `NonBlank` (comment text), `WebUrl` (safe to hand to a
+  (never empty), `NonBlank` (comment text), `AiMarkers` (a blank marker cannot
+  be made, so none matches every comment), `WebUrl` (safe to hand to a
   browser), `ReviewComment` (its diff revision is known), `CommentKey` (the
   comment has an id), `Pat` (never printed). The ids `PrId`, `CommentId` and
   `CommitOid` have no rule; they exist so that two numbers or two strings
@@ -411,6 +426,33 @@ starting. The strong types sit on the UI and provider side of that boundary
 and keep the file's spelling through serde (`#[serde(transparent)]` on the
 ids, `review: bool` for `CommentKind`). The version 1 fixture in
 `app/drafts.rs` pins the format.
+
+## AI authorship, folds and reading
+
+A comment is an AI agent's when its account is a bot's, or its first line starts
+with one of the `[ai] markers` in the config. The account is known only to the
+provider: GitHub answers the type of the author (`__typename`), and
+`Comment::account` carries it as `AccountKind`; Bitbucket Data Center does not
+say, so it is always `Person`. The markers are text, so they work on both and
+for an agent that posts with a person's token. `domain/authorship.rs` decides
+(`AiMarkers::of_comment`, `of_thread`); `Store::ai_markers` holds them for the
+session, and the widgets get them in `Reading` with the PR's author and the
+folds. Nothing about a provider is asked for in a view: with no bot and no
+marker, the filter and its key are simply not offered.
+
+A comment over 12 lines is folded to its first 8 and a dimmed row
+(`widgets/comment_fold.rs`). `Folds::Open` is for a view with no key to open
+them. The Overview keeps the opened ones in `Timeline::expanded`; the diff keeps
+them in `DiffViewer::opened_comments`, where the fold row is a stop of its own
+(`NavTarget::Fold`) so that `j`/`k` reach it and `space` there opens or folds
+that comment, while `space` on the thread expands or collapses a resolved one.
+`render_inline_thread` returns the rows of the folds along with the lines, and
+`diff_viewer/threads.rs` turns them into stops.
+
+In the Overview `j` and `k` read on through an item taller than the screen
+before they move to the next one: `Timeline` keeps the rows of the focused item
+from the last draw, `TimelineAction::Move` decides between scrolling and
+moving, and `Reveal` says what the next draw does about the scroll position.
 
 ## Checklists
 
