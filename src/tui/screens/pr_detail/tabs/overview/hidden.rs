@@ -3,7 +3,7 @@
 
 use crate::{
     domain::{authorship::Authorship, comment::CommentThread},
-    tui::{theme, widgets, widgets::comment_meta::Reading},
+    tui::{theme, widgets},
 };
 use ratatui::{
     style::Style,
@@ -40,7 +40,7 @@ impl HiddenRun {
         self.conversation += 1;
     }
 
-    pub(super) fn add_thread(&mut self, thread: &CommentThread, reading: Reading<'_>) {
+    pub(super) fn add_thread(&mut self, thread: &CommentThread) {
         if thread.comments.is_empty() {
             return;
         }
@@ -50,7 +50,7 @@ impl HiddenRun {
             return;
         }
         for reply in thread.comments.iter().skip(1) {
-            if reading.markers.of_comment(reply) == Authorship::Human
+            if reply.authorship == Authorship::Human
                 && !self.replied.contains(&reply.author.username)
             {
                 self.replied.push(reply.author.username.clone());
@@ -108,11 +108,9 @@ fn plural(count: usize, noun: &str) -> String {
 mod tests {
     use super::*;
     use crate::domain::{
-        authorship::AiMarkers,
         comment::Comment,
         user::{AccountKind, User},
     };
-    use crate::tui::widgets::comment_fold::Folds;
 
     fn comment(name: &str, account: AccountKind) -> Comment {
         Comment {
@@ -121,6 +119,10 @@ mod tests {
                 username: name.into(),
             },
             account,
+            authorship: match account {
+                AccountKind::Bot => Authorship::Ai,
+                AccountKind::Person => Authorship::Human,
+            },
             content: "text".into(),
             created: chrono::Utc::now(),
             reactions: vec![],
@@ -142,28 +144,19 @@ mod tests {
 
     #[test]
     fn it_counts_threads_and_comments_and_names_a_persons_reply() {
-        let markers = AiMarkers::default();
-        let reading = Reading {
-            pr_author: "alice",
-            markers: &markers,
-            folds: Folds::Open,
-        };
         let mut run = HiddenRun::of(Authorship::Ai);
         assert!(run.line(100).is_none());
-        run.add_thread(&thread(vec![comment("bot", AccountKind::Bot)]), reading);
+        run.add_thread(&thread(vec![comment("bot", AccountKind::Bot)]));
         assert_eq!(
             text(&run.line(100).unwrap()),
             "◆ 1 AI thread hidden · 1 comment · f to cycle"
         );
-        run.add_thread(
-            &thread(vec![
-                comment("bot", AccountKind::Bot),
-                comment("sara.n", AccountKind::Person),
-                comment("sara.n", AccountKind::Person),
-                comment("bot", AccountKind::Bot),
-            ]),
-            reading,
-        );
+        run.add_thread(&thread(vec![
+            comment("bot", AccountKind::Bot),
+            comment("sara.n", AccountKind::Person),
+            comment("sara.n", AccountKind::Person),
+            comment("bot", AccountKind::Bot),
+        ]));
         assert_eq!(
             text(&run.line(100).unwrap()),
             "◆ 2 AI threads hidden · 5 comments · incl. a reply from sara.n · f to cycle"
@@ -183,12 +176,6 @@ mod tests {
 
     #[test]
     fn a_persons_reply_is_named_only_when_it_is_the_agents_threads_that_are_hidden() {
-        let markers = AiMarkers::default();
-        let reading = Reading {
-            pr_author: "alice",
-            markers: &markers,
-            folds: Folds::Open,
-        };
         let by_people = thread(vec![
             comment("alice", AccountKind::Person),
             comment("sara.n", AccountKind::Person),
@@ -196,31 +183,22 @@ mod tests {
         // The filter hides people's threads: every comment in them is a person's,
         // and naming a reply there would say nothing.
         let mut people = HiddenRun::of(Authorship::Human);
-        people.add_thread(&by_people, reading);
+        people.add_thread(&by_people);
         let line = text(&people.line(100).unwrap());
         assert_eq!(line, "◆ 1 human thread hidden · 2 comments · f to cycle");
         // The filter hides the agent's: a person's reply in one is what is lost.
         let mut agents = HiddenRun::of(Authorship::Ai);
-        agents.add_thread(
-            &thread(vec![
-                comment("bot", AccountKind::Bot),
-                comment("sara.n", AccountKind::Person),
-            ]),
-            reading,
-        );
+        agents.add_thread(&thread(vec![
+            comment("bot", AccountKind::Bot),
+            comment("sara.n", AccountKind::Person),
+        ]));
         assert!(text(&agents.line(100).unwrap()).contains("incl. a reply from sara.n"));
     }
 
     #[test]
     fn an_empty_thread_is_not_counted() {
-        let markers = AiMarkers::default();
-        let reading = Reading {
-            pr_author: "alice",
-            markers: &markers,
-            folds: Folds::Open,
-        };
         let mut run = HiddenRun::of(Authorship::Ai);
-        run.add_thread(&thread(vec![]), reading);
+        run.add_thread(&thread(vec![]));
         assert!(run.line(100).is_none());
     }
 }

@@ -129,7 +129,6 @@ fn render_content(
                 pr,
                 data: pr_data,
                 capabilities: &ctx.store.capabilities,
-                markers: &ctx.store.ai_markers,
                 scrollbar: Rect::new(area.right(), area.y, 1, area.height),
             },
         ),
@@ -145,7 +144,6 @@ fn render_content(
                     pending,
                     reading: Reading {
                         pr_author: &pr.author.username,
-                        markers: &ctx.store.ai_markers,
                         folds: Folds::Open,
                     },
                 },
@@ -160,7 +158,6 @@ fn render_content(
                     pending,
                     reading: Reading {
                         pr_author: &pr.author.username,
-                        markers: &ctx.store.ai_markers,
                         folds: Folds::Open,
                     },
                 },
@@ -259,11 +256,7 @@ pub(super) fn render(
             &dialogs::help::entries(
                 &ctx.store.capabilities,
                 pr.url.is_some(),
-                super::tabs::overview::offers_filter(
-                    &ctx.store.ai_markers,
-                    pr_data,
-                    ui.overview.timeline.filter,
-                ),
+                super::tabs::overview::offers_filter(pr_data, ui.overview.timeline.filter),
             )
             .as_slice(),
         ),

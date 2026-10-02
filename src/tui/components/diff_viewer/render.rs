@@ -48,7 +48,7 @@ pub(super) fn render(
     let comment_counts: Vec<FileComments> = diff
         .files
         .iter()
-        .map(|f| file_comment_count(f, threads, diff.revision.as_ref(), reading))
+        .map(|f| file_comment_count(f, threads, diff.revision.as_ref()))
         .collect();
 
     let pane_focused = matches!(ui_diff.focus, DiffFocus::Pane);
@@ -91,7 +91,6 @@ fn file_comment_count(
     file: &FileDiff,
     threads: &[CommentThread],
     revision: Option<&crate::domain::diff::DiffRevision>,
-    reading: Reading<'_>,
 ) -> FileComments {
     // Only anchored (code) threads count toward a file; general discussion doesn't.
     let on_file = || {
@@ -130,7 +129,7 @@ fn file_comment_count(
         })
         .flat_map(|(t, _)| &t.comments)
         .fold(FileComments::default(), |mut counts, comment| {
-            match reading.markers.of_comment(comment) {
+            match comment.authorship {
                 Authorship::Human => counts.people += 1,
                 Authorship::Ai => counts.ai += 1,
             }

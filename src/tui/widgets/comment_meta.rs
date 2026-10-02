@@ -2,10 +2,7 @@
 //! (its author, a bot) and when.
 
 use crate::{
-    domain::{
-        authorship::{AiMarkers, Authorship},
-        comment::{Comment, split_suggestions},
-    },
+    domain::comment::{Comment, split_suggestions},
     tui::{format, theme, widgets::comment_fold::Folds},
 };
 use chrono::{DateTime, Utc};
@@ -14,20 +11,13 @@ use ratatui::{
     text::Span,
 };
 
-/// What a comment is read against: the PR's author, what makes an account or a
-/// first line an AI agent's, and which long comments are folded.
+/// What a comment is read against: the PR's author, and which long comments are
+/// folded.
 #[derive(Clone, Copy)]
 pub struct Reading<'a> {
     pub pr_author: &'a str,
-    pub markers: &'a AiMarkers,
     /// Which long comments are folded; `Open` where nothing can open them.
     pub folds: Folds<'a>,
-}
-
-impl Reading<'_> {
-    pub fn is_ai(&self, comment: &Comment) -> bool {
-        self.markers.of_comment(comment) == Authorship::Ai
-    }
 }
 
 /// `[AI]` after a name, in the label colour so that it stands out from the
@@ -48,7 +38,7 @@ pub fn meta(comment: &Comment, reading: Reading<'_>, now: DateTime<Utc>) -> Vec<
         comment.author.username.clone(),
         Style::default().fg(theme.info).add_modifier(Modifier::BOLD),
     )];
-    if reading.is_ai(comment) {
+    if comment.is_ai() {
         spans.push(ai_tag());
     }
     if let Some(role) = role(comment, reading.pr_author) {
@@ -74,16 +64,20 @@ fn role(comment: &Comment, pr_author: &str) -> Option<&'static str> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::domain::user::{AccountKind, User};
+    use crate::domain::{
+        authorship::Authorship,
+        user::{AccountKind, User},
+    };
 
-    fn comment(name: &str, content: &str, account: AccountKind) -> Comment {
+    fn comment(name: &str, authorship: Authorship) -> Comment {
         Comment {
             id: None,
             author: User {
                 username: name.into(),
             },
-            account,
-            content: content.into(),
+            account: AccountKind::Person,
+            authorship,
+            content: "text".into(),
             created: Utc::now(),
             reactions: vec![],
             reply_to: None,
@@ -96,27 +90,15 @@ mod tests {
 
     #[test]
     fn an_agent_gets_the_tag_between_its_name_and_the_age() {
-        let markers = AiMarkers::from_config(&["> **gator**".into()]).0;
         let reading = Reading {
             pr_author: "alice",
-            markers: &markers,
             folds: Folds::Open,
         };
-        let now = Utc::now();
-        let line = |c: &Comment| text(&meta(c, reading, now));
-        assert!(
-            line(&comment("coderabbitai", "hi", AccountKind::Bot))
-                .starts_with("coderabbitai [AI] · ")
-        );
-        assert!(
-            line(&comment("bob", "> **gator**\nx", AccountKind::Person)).starts_with("bob [AI] · ")
-        );
-        let person = line(&comment("bob", "hi", AccountKind::Person));
+        let line = |c: &Comment| text(&meta(c, reading, Utc::now()));
+        assert!(line(&comment("coderabbitai", Authorship::Ai)).starts_with("coderabbitai [AI] · "));
+        let person = line(&comment("bob", Authorship::Human));
         assert!(!person.contains("[AI]"), "{person}");
-        // Both reading at once: an agent that is also the PR's author.
-        assert!(
-            line(&comment("alice", "> **gator**", AccountKind::Person))
-                .starts_with("alice [AI] · author · ")
-        );
+        // Both at once: an agent that is also the PR's author.
+        assert!(line(&comment("alice", Authorship::Ai)).starts_with("alice [AI] · author · "));
     }
 }

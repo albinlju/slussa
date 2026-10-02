@@ -2,6 +2,7 @@ use serde::Deserialize;
 
 use super::{Config, ms_to_utc};
 use crate::domain::activity::Activity;
+use crate::domain::authorship::Authorship;
 use crate::domain::event::{EventKind, PushedCommit, TimelineEvent};
 use crate::domain::user::User;
 use crate::domain::{
@@ -227,6 +228,7 @@ fn map_comment(c: &BbComment) -> Comment {
         id,
         author: map_user(&c.author),
         account: crate::domain::user::AccountKind::Person,
+        authorship: Authorship::Human,
         content: c.text.clone(),
         created: ms_to_utc(c.created_date),
         reactions: map_reactions(&c.properties),

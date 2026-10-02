@@ -6,7 +6,7 @@ use crate::{
         store::{LoadState, PrData},
     },
     domain::{
-        authorship::{AiMarkers, AuthorFilter},
+        authorship::AuthorFilter,
         comment::{Comment, CommentId, CommentKey, CommentKind, CommentThread},
     },
     tui::{
@@ -33,7 +33,6 @@ const RAIL_WIDTH: u16 = 3;
 pub struct TimelineContext<'a> {
     pub data: Option<&'a PrData>,
     pub pr_author: &'a str,
-    pub markers: &'a AiMarkers,
     pub scrollbar: Rect,
 }
 
@@ -41,7 +40,7 @@ fn render_timeline(
     frame: &mut Frame<'_>,
     pr_data: Option<&PrData>,
     ui: &mut Timeline,
-    (pr_author, markers): (&str, &AiMarkers),
+    pr_author: &str,
     area: Rect,
     scrollbar_area: Rect,
 ) {
@@ -59,7 +58,6 @@ fn render_timeline(
 
     let reading = Reading {
         pr_author,
-        markers,
         folds: Folds::Long {
             opened: &ui.expanded,
         },
@@ -70,11 +68,11 @@ fn render_timeline(
     let (comments, hidden_comments): (Vec<&Comment>, Vec<&Comment>) = activity
         .comments
         .iter()
-        .partition(|c| ui.filter.shows(reading.markers.of_comment(c)));
+        .partition(|c| ui.filter.shows(c.authorship));
     let (threads, hidden_threads): (Vec<&CommentThread>, Vec<&CommentThread>) = activity
         .threads
         .iter()
-        .partition(|t| ui.filter.shows(reading.markers.of_thread(t)));
+        .partition(|t| ui.filter.shows(t.authorship()));
 
     // Anchored comments gain snippets (and suggestion context) from the diff.
     // On first load, reveal them together instead of resizing cards under the reader.
@@ -356,13 +354,6 @@ impl Component for Timeline {
         None
     }
     fn render(&mut self, frame: &mut Frame<'_>, area: Rect, ctx: &TimelineContext<'_>) {
-        render_timeline(
-            frame,
-            ctx.data,
-            self,
-            (ctx.pr_author, ctx.markers),
-            area,
-            ctx.scrollbar,
-        );
+        render_timeline(frame, ctx.data, self, ctx.pr_author, area, ctx.scrollbar);
     }
 }

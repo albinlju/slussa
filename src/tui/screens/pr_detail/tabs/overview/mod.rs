@@ -8,7 +8,8 @@ use crate::{
         store::PrData,
     },
     domain::{
-        authorship::{AiMarkers, AuthorFilter},
+        activity::Activity,
+        authorship::AuthorFilter,
         capabilities::{Capabilities, Feature},
         pr::PullRequest,
     },
@@ -26,18 +27,17 @@ const SIDEBAR_BREAKPOINT: u16 = 64;
 
 /// Whether `f` is offered: when the PR has an agent's comment to filter on, or
 /// a filter is on already, which must not become impossible to turn off.
-pub fn offers_filter(markers: &AiMarkers, data: Option<&PrData>, current: AuthorFilter) -> bool {
+pub fn offers_filter(data: Option<&PrData>, current: AuthorFilter) -> bool {
     current != AuthorFilter::All
         || data
             .and_then(|d| d.activity.loaded())
-            .is_some_and(|activity| markers.any_in(activity))
+            .is_some_and(Activity::has_ai)
 }
 
 pub struct OverviewContext<'a> {
     pub pr: &'a PullRequest,
     pub data: Option<&'a PrData>,
     pub capabilities: &'a Capabilities,
-    pub markers: &'a AiMarkers,
     /// Where the timeline's scrollbar goes: the screen's edge, not the tab's.
     pub scrollbar: Rect,
 }
@@ -107,7 +107,6 @@ fn render(
         &TimelineContext {
             data: pr_data,
             pr_author: &pr.author.username,
-            markers: ctx.markers,
             scrollbar: scrollbar_area,
         },
     );

@@ -54,7 +54,10 @@ impl App {
             }
             Read::Diff(pr_id, result) => self.pr_data_mut(pr_id).diff.reload(result),
             Read::Builds(pr_id, result) => self.pr_data_mut(pr_id).builds.reload(result),
-            Read::Activity(pr_id, result) => self.pr_data_mut(pr_id).activity.reload(result),
+            Read::Activity(pr_id, result) => {
+                let result = result.map(|activity| self.state.store.judged(activity));
+                self.pr_data_mut(pr_id).activity.reload(result);
+            }
             Read::Mergeability(pr_id, result) => {
                 self.pr_data_mut(pr_id).mergeability.reload(result);
             }

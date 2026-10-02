@@ -435,11 +435,15 @@ known only to the
 provider: GitHub answers the type of the author (`__typename`), and
 `Comment::account` carries it as `AccountKind`; Bitbucket Data Center does not
 say, so it is always `Person`. The markers are text, so they work on both and
-for an agent that posts with a person's token. `domain/authorship.rs` decides
-(`AiMarkers::of_comment`, `of_thread`); `Store::ai_markers` holds them for the
-session, and the widgets get them in `Reading` with the PR's author and the
-folds. Nothing about a provider is asked for in a view: with no bot and no
-marker, the filter and its key are simply not offered.
+for an agent that posts with a person's token. It is decided once, when the
+activity arrives: `Store::judged` runs `AiMarkers::judge` (`domain/authorship.rs`)
+over it, and `Store::set_ai_markers` judges what is already cached, so
+`Comment::authorship` is current wherever it is read. A provider leaves it
+`Human`, and the markers are private to the store, so no view can ask the
+question a second way. Views read `Comment::is_ai`, `CommentThread::authorship`
+and `Activity::has_ai`; with no bot and no marker, the filter and its key are
+simply not offered. `Reading` carries the PR's author and the folds to the
+comment widgets.
 
 A comment over 12 lines is folded to its first 8 and a dimmed row
 (`widgets/comment_fold.rs`). `Folds::Open` is for a view with no key to open
