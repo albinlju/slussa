@@ -52,24 +52,19 @@ impl NavItem {
     }
 
     pub(super) fn target(&self) -> NavTarget {
+        let thread_ref = |thread: &ThreadNav| ThreadRef {
+            handle: thread.handle.clone(),
+            comment_id: thread.reply_to,
+            resolved: thread.resolved,
+        };
         match &self.kind {
             NavKind::Line { .. } => NavTarget::Line,
-            NavKind::Thread(thread) | NavKind::Fold { thread, .. } => {
-                NavTarget::Thread(ThreadRef {
-                    handle: thread.handle.clone(),
-                    comment_id: thread.reply_to,
-                    resolved: thread.resolved,
-                })
-            }
+            NavKind::Thread(thread) => NavTarget::Thread(thread_ref(thread)),
+            NavKind::Fold { thread, key } => NavTarget::Fold {
+                thread: thread_ref(thread),
+                key: *key,
+            },
             NavKind::Pending { index, .. } => NavTarget::Pending(*index),
-        }
-    }
-
-    /// The comment whose fold row the cursor is on.
-    pub(super) const fn fold(&self) -> Option<CommentKey> {
-        match &self.kind {
-            NavKind::Fold { key, .. } => Some(*key),
-            NavKind::Line { .. } | NavKind::Thread(_) | NavKind::Pending { .. } => None,
         }
     }
 }

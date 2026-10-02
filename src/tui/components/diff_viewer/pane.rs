@@ -131,7 +131,6 @@ pub(super) fn render(
                 removed,
             },
             target: item.target(),
-            fold: item.fold(),
         }
     });
     ui_diff.pane_scroll = scroll;
