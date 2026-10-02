@@ -17,14 +17,14 @@ use ratatui::{
 /// What a comment is read against: the PR's author, what makes an account or a
 /// first line an AI agent's, and which long comments are folded.
 #[derive(Clone, Copy)]
-pub struct Roles<'a> {
+pub struct Reading<'a> {
     pub pr_author: &'a str,
     pub markers: &'a AiMarkers,
     /// Which long comments are folded; `Open` where nothing can open them.
     pub folds: Folds<'a>,
 }
 
-impl Roles<'_> {
+impl Reading<'_> {
     pub fn is_ai(&self, comment: &Comment) -> bool {
         self.markers.of_comment(comment) == Authorship::Ai
     }
@@ -42,25 +42,20 @@ pub fn ai_tag() -> Span<'static> {
 }
 
 /// Name, then `[AI]` for an agent, then the role, then how long ago.
-pub fn meta(
-    comment: &Comment,
-    roles: Roles<'_>,
-    created: DateTime<Utc>,
-    now: DateTime<Utc>,
-) -> Vec<Span<'static>> {
+pub fn meta(comment: &Comment, reading: Reading<'_>, now: DateTime<Utc>) -> Vec<Span<'static>> {
     let theme = theme::current();
     let mut spans = vec![Span::styled(
         comment.author.username.clone(),
         Style::default().fg(theme.info).add_modifier(Modifier::BOLD),
     )];
-    if roles.is_ai(comment) {
+    if reading.is_ai(comment) {
         spans.push(ai_tag());
     }
-    if let Some(role) = role(comment, roles.pr_author) {
+    if let Some(role) = role(comment, reading.pr_author) {
         spans.push(Span::styled(role, Style::default().fg(theme.muted)));
     }
     spans.push(Span::styled(
-        format!(" · {}", format::relative_age(created, now)),
+        format!(" · {}", format::relative_age(comment.created, now)),
         Style::default().fg(theme.muted),
     ));
     spans
@@ -102,13 +97,13 @@ mod tests {
     #[test]
     fn an_agent_gets_the_tag_between_its_name_and_the_age() {
         let markers = AiMarkers::from_config(&["> **gator**".into()]).0;
-        let roles = Roles {
+        let reading = Reading {
             pr_author: "alice",
             markers: &markers,
             folds: Folds::Open,
         };
         let now = Utc::now();
-        let line = |c: &Comment| text(&meta(c, roles, c.created, now));
+        let line = |c: &Comment| text(&meta(c, reading, now));
         assert!(
             line(&comment("coderabbitai", "hi", AccountKind::Bot))
                 .starts_with("coderabbitai [AI] · ")
@@ -118,7 +113,7 @@ mod tests {
         );
         let person = line(&comment("bob", "hi", AccountKind::Person));
         assert!(!person.contains("[AI]"), "{person}");
-        // Both roles at once: an agent that is also the PR's author.
+        // Both reading at once: an agent that is also the PR's author.
         assert!(
             line(&comment("alice", "> **gator**", AccountKind::Person))
                 .starts_with("alice [AI] · author · ")

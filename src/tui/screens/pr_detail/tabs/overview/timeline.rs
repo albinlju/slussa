@@ -1,5 +1,5 @@
 use super::blocks::{Hidden, TimelineItem, build_blocks, focusable_count, timeline_rail};
-use crate::tui::widgets::{comment_fold::Folds, comment_meta::Roles};
+use crate::tui::widgets::{comment_fold::Folds, comment_meta::Reading};
 use crate::{
     app::{
         action::{Action, Effect, TimelineAction},
@@ -57,7 +57,7 @@ fn render_timeline(
         return;
     }
 
-    let roles = Roles {
+    let reading = Reading {
         pr_author,
         markers,
         folds: Folds::Long {
@@ -70,11 +70,11 @@ fn render_timeline(
     let (comments, hidden_comments): (Vec<&Comment>, Vec<&Comment>) = activity
         .comments
         .iter()
-        .partition(|c| ui.filter.shows(roles.markers.of_comment(c)));
+        .partition(|c| ui.filter.shows(reading.markers.of_comment(c)));
     let (threads, hidden_threads): (Vec<&CommentThread>, Vec<&CommentThread>) = activity
         .threads
         .iter()
-        .partition(|t| ui.filter.shows(roles.markers.of_thread(t)));
+        .partition(|t| ui.filter.shows(reading.markers.of_thread(t)));
 
     // Anchored comments gain snippets (and suggestion context) from the diff.
     // On first load, reveal them together instead of resizing cards under the reader.
@@ -152,7 +152,7 @@ fn render_timeline(
         area.width.saturating_sub(TIMELINE_RIGHT_PAD + RAIL_WIDTH),
         cursor,
         ui.sub,
-        roles,
+        reading,
     );
 
     let (content, navs) = timeline_rail(blocks);

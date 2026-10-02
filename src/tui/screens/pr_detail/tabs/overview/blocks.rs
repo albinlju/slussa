@@ -2,7 +2,7 @@
 //! the rail that joins them.
 
 use super::hidden::HiddenRun;
-use crate::tui::widgets::comment_meta::Roles;
+use crate::tui::widgets::comment_meta::Reading;
 use crate::{
     domain::{
         authorship::Authorship,
@@ -104,7 +104,7 @@ pub(super) fn build_blocks(
     width: u16,
     focused: usize,
     sub: usize,
-    roles: Roles<'_>,
+    reading: Reading<'_>,
 ) -> Vec<TimelineBlock> {
     // Each item, newest first.
     let mut items: Vec<Placed<'_>> = Vec::new();
@@ -149,7 +149,7 @@ pub(super) fn build_blocks(
                 let run = run.get_or_insert_with(|| HiddenRun::of(*side));
                 match item {
                     TimelineItem::Comment(_) => run.add_conversation_comment(),
-                    TimelineItem::Review(t) => run.add_thread(t, roles),
+                    TimelineItem::Review(t) => run.add_thread(t, reading),
                     TimelineItem::Event(_) => {}
                 }
                 continue;
@@ -161,7 +161,7 @@ pub(super) fn build_blocks(
         match item {
             TimelineItem::Comment(c) => {
                 blocks.push(TimelineBlock {
-                    lines: widgets::comment::comment_box(c, width, now, active, roles),
+                    lines: widgets::comment::comment_box(c, width, now, active, reading),
                     selected_range: None,
                     node: theme.link,
                     border: if active { theme.accent } else { theme.divider },
@@ -176,7 +176,7 @@ pub(super) fn build_blocks(
                 // Mark the sub-selected comment only on the focused thread.
                 let selected = active.then_some(sub);
                 if let Some((lines, selected_range)) = widgets::comment::comment_thread_box(
-                    t, diff, width, now, active, selected, roles,
+                    t, diff, width, now, active, selected, reading,
                 ) {
                     blocks.push(TimelineBlock {
                         lines,

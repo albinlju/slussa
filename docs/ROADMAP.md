@@ -191,7 +191,7 @@ notion, applied to the PR's author, to comments and to commits.
 - [ ] **Review as a group (display)** — render a review's comments + summary +
   state as one grouped timeline entry. Matters more once AI reviews arrive as one
   batch with many comments.
-- [ ] **Long comments fold** *(done in the Overview and in the diff's inline
+- [x] **Long comments fold** *(done in the Overview and in the diff's inline
   threads)* — a comment over 12 lines shows its first 8 and a dimmed `… N more
   lines · space expand`; `space` opens or folds it. In the diff the fold row is
   a stop for `j`/`k`, so `space` there opens or folds that comment, and `space`

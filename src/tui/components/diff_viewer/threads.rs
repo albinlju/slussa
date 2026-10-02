@@ -9,7 +9,7 @@ use crate::{
     domain::comment::CommentThread,
     tui::widgets::{
         comment::{InlineThread, render_inline_thread},
-        comment_meta::Roles,
+        comment_meta::Reading,
     },
 };
 use chrono::{DateTime, Utc};
@@ -23,7 +23,7 @@ pub(super) struct ThreadDraw<'a> {
     /// The item the cursor is on.
     pub(super) active: Option<usize>,
     pub(super) anchor_text: &'a str,
-    pub(super) roles: Roles<'a>,
+    pub(super) reading: Reading<'a>,
     /// A resolved thread shown in full.
     pub(super) expanded: bool,
 }
@@ -46,7 +46,7 @@ pub(super) fn push_thread(
             draw.now,
             lit,
             Some(draw.anchor_text),
-            draw.roles,
+            draw.reading,
             draw.expanded,
         )
     };

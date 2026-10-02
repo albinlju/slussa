@@ -11,7 +11,7 @@ use crate::{
     tui::{
         components::diff_viewer::{DiffViewer, FocusedNav, PaneNav},
         icons, layout, theme,
-        widgets::{self, comment_fold::Folds, comment_meta::Roles, markdown},
+        widgets::{self, comment_fold::Folds, comment_meta::Reading, markdown},
     },
 };
 use chrono::Utc;
@@ -36,7 +36,7 @@ pub(super) fn render(
     threads: &[CommentThread],
     pending: &[PendingComment],
     focused: bool,
-    roles: Roles<'_>,
+    reading: Reading<'_>,
     area: Rect,
 ) {
     ui_diff.pane_viewport = area.height.saturating_sub(4);
@@ -72,11 +72,11 @@ pub(super) fn render(
         body_area.width,
         active,
         query,
-        Roles {
+        Reading {
             folds: Folds::Long {
                 opened: &ui_diff.opened_comments,
             },
-            ..roles
+            ..reading
         },
         &ui_diff.expanded_threads,
     );
@@ -156,7 +156,7 @@ fn build_diff_body(
     width: u16,
     active: Option<usize>,
     query: &str,
-    roles: Roles<'_>,
+    reading: Reading<'_>,
     expanded: &HashSet<CommentId>,
 ) -> DiffBody {
     let theme = theme::current();
@@ -210,7 +210,7 @@ fn build_diff_body(
                         now,
                         active,
                         anchor_text: diff_line.content(),
-                        roles,
+                        reading,
                         expanded: thread.reply_to.is_none_or(|id| expanded.contains(&id)),
                     },
                 );

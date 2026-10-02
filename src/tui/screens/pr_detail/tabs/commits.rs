@@ -1,4 +1,4 @@
-use crate::tui::widgets::comment_meta::Roles;
+use crate::tui::widgets::comment_meta::Reading;
 use crate::{
     app::{
         action::{Action, CommitsAction, Effect},
@@ -108,7 +108,7 @@ pub fn render_commit_diff(
     threads: &[CommentThread],
     pending: &[PendingComment],
     cv: &mut CommitList,
-    roles: Roles<'_>,
+    reading: Reading<'_>,
     area: Rect,
 ) {
     let CommitsView::Diff { oid, viewer } = &mut cv.view else {
@@ -130,7 +130,7 @@ pub fn render_commit_diff(
             diff: diff_state,
             threads,
             pending,
-            roles,
+            reading,
         },
     );
 }
@@ -215,7 +215,7 @@ enum CommitsView {
 pub struct CommitContext<'a> {
     pub data: Option<&'a PrData>,
     pub pending: &'a [PendingComment],
-    pub roles: Roles<'a>,
+    pub reading: Reading<'a>,
 }
 
 /// The commits to move between, and the PR a commit's diff is asked for.
@@ -290,7 +290,15 @@ impl Component for CommitList {
                 Some(LoadState::Loaded(a)) => a.threads.as_slice(),
                 _ => &[],
             };
-            render_commit_diff(frame, ctx.data, threads, ctx.pending, self, ctx.roles, area);
+            render_commit_diff(
+                frame,
+                ctx.data,
+                threads,
+                ctx.pending,
+                self,
+                ctx.reading,
+                area,
+            );
         } else {
             render(frame, ctx.data, self, area);
         }
