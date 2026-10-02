@@ -113,7 +113,7 @@ says so on the row.
   shown when neither source says anything. Path rules cannot see a one-line
   change that sends an email to 60 000 people, so the floor adds to reading
   the PR and does not replace it. **Open:** which convention to read (none has
-  settled, so nothing in a description is parsed until there is one to read); whether
+  settled; see *From "Fixing the PR Bottleneck"* under *Engineering*); whether
   a one-way door is an attention reason of its own or a marker beside the
   existing one; and the row, which needs the description and the changed
   paths, neither of which the list query reads today.
@@ -139,11 +139,11 @@ easier to tell apart.
 An AI reviewer shows up in one of two ways, and slussa will meet both. One
 *comments*: one batched review per head SHA, a first-line marker on every
 comment, stable finding IDs carried across rounds, and a severity split where
-only evidenced findings block. The other *commits*: it fixes what it finds on
-the branch and comments only when it is unsure, so its review is a set of
-commits and may leave no thread at all. That reviewers will commonly work the
-second way is an assumption, which is why both are kept. "AI actor" is
-therefore one notion, applied to the PR's author, to comments and to commits.
+only evidenced findings block. The other *commits* (see *From "Fixing the PR
+Bottleneck"*): it fixes what it finds on the branch and comments only when it
+is unsure, so its review is a set of commits and may leave no thread at all.
+"AI actor" is therefore one notion, applied to the PR's author, to comments
+and to commits.
 
 - [ ] **AI-authored commits marked** *(refined)* — mark the commits an agent
   made in the Commits tab, by author account or a configurable trailer, so the
@@ -520,3 +520,42 @@ it ahead of the feature that needs it.
      configuration reference on 2026-10-01). Keep it in step with AGENTS.md.
   3. It reviews pull requests, not direct pushes to `main`. `/code-review` is
      run by hand; the two cover different moments.
+
+### From "Fixing the PR Bottleneck" (Matt Pocock), for the AI features
+
+A talk at AI Engineer Paris 2026 (<https://www.youtube.com/watch?v=LlgiOCmFG_w>)
+on the same problem slussa is positioned against: agents open PRs faster than
+humans can review them. Read from the automatic captions on 2026-10-01; the
+slides were not seen. It is a talk about the speaker's own skills, from
+experience and without data, so what is borrowed is the model, and each item
+below says what it rests on.
+
+- **Three layers before the decision.** Automated checks, automated review,
+  human review. A green CI does not mean the code is ready; the two upper
+  layers are there to catch checks that lie (a test that restates the
+  implementation, one that reads the source as text, one that cannot fail).
+  slussa is the surface for the third layer and shows what the first two did.
+- **One-way and two-way doors.** Not every review matters equally: a merge
+  that can be reverted needs little, one that cannot (a migration, data loss,
+  something sent to users) is reviewed closely, together with how far a
+  mistake reaches. His PRs carry this as a "merge danger" line at the bottom
+  of the description. It is the source of *Merge risk*. What he leaves open is
+  that the agent classifies its own PR, which is why slussa shows a floor from
+  path rules beside it.
+- **The reviewer commits; comments are the exception.** A reviewing agent that
+  comments gives the human more to read, so his fixes the code and comments
+  only when unsure. It reads coding standards from a file of its own, kept out
+  of AGENTS.md, and runs in its own context. This is why AI detection covers
+  commits and why *Run a review from slussa* sits after *Send to agent*. That
+  reviewers will commonly work this way is an assumption; the commenting
+  reviewer under *AI review integration* is the other model, and both are kept.
+- **Review the system, not only the code.** A human review comment should
+  become a check or a standard, so that it is never written twice; his "retro"
+  skill reads sessions and a period's PRs and reviews to propose them. It is
+  the source of the retro export among the agent commands.
+- **Not borrowed: diagrams in the description.** His PR descriptions lean on
+  pseudo-code and diagrams (Mermaid, images) to show what changed.
+  Pseudo-code reads well in a terminal; Mermaid is shown as its source and
+  slussa does not render it, and `o` opens the PR in the browser. His PR skill
+  was unreleased when this was written, so no convention for the description
+  is parsed until one exists to read.
