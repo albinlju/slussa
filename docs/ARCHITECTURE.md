@@ -50,7 +50,7 @@ src/
 ├── logging.rs             Log file in the data directory (`SLUSSA_LOG`), for its owner only
 ├── private_file.rs        Files only their owner may read: the drafts and the log
 ├── git_url.rs             Splits a git remote into host and path; web base URL
-├── test_support.rs        Test-only: `FakeGh` and `MockHttp`
+├── test_support/          Test-only: `FakeGh`, `MockHttp` and the payloads they answer with
 ├── doc_contract.rs        Test-only: reads KEYS.md and the README for the tests that hold the code to them
 ├── tui/                   The interactive program
 │   ├── mod.rs             Composes `app`, `ui` and `run`

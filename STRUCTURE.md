@@ -412,7 +412,6 @@ import rule is tooling, which the same rule says to do now.
 | `bindings.rs` with three outcomes | The next feature that adds a key to the PR view (the roadmap's *Keybinding table*) |
 | `handoff.rs`, `app/terminal.rs` | *Send to agent* |
 | `providers/conformance_tests.rs` | The provider trait |
-| `test_support/` | The next provider call that needs a new double |
 
 Nesting `app` and `ui` is mechanical but wide: nearly every file changes its
 import paths (`crate::app::` → `crate::tui::app::`, `crate::tui::` →
