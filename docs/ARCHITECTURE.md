@@ -429,8 +429,9 @@ ids, `review: bool` for `CommentKind`). The version 1 fixture in
 
 ## AI authorship, folds and reading
 
-A comment is an AI agent's when its account is a bot's, or its first line starts
-with one of the `[ai] markers` in the config. The account is known only to the
+A comment is an AI agent's when its account is a bot's, or its first non-empty,
+trimmed line starts with one of the `[ai] markers` in the config. The account is
+known only to the
 provider: GitHub answers the type of the author (`__typename`), and
 `Comment::account` carries it as `AccountKind`; Bitbucket Data Center does not
 say, so it is always `Person`. The markers are text, so they work on both and
