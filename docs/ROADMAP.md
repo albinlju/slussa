@@ -370,15 +370,17 @@ tighter than their `App` struct with 20 `pending_*` flags, and it stays.
 ### Code, with the next feature that touches the area
 
 - [ ] **Keybinding table for the PR view.** `pr_detail/keys.rs` is a long
-  function of conditions, each mixing key, tab, modifiers and PR state, with
-  the help overlay maintained separately by hand. Replace with a slice of
-  `Binding { key, mods, tabs, gate: fn(&DetailView, pr_id) -> bool, action,
-  help }`; routing and help are then derived from one source, and
-  `supports_action` in `view.rs` becomes the gate. With the keys in a table,
-  `clippy::wildcard_enum_match_arm` can cover `tui` as well: today 27
-  matches on crossterm's `KeyCode` end in a catch-all, so the lint is on
-  only in `app`, `domain` and `providers`. *Trigger:* first feature
-  that adds two or more keys to the PR view.
+  function of conditions, each mixing key, tab, modifiers and PR state, and
+  the help is a second table written apart from it (`dialogs/help.rs`, where
+  each entry names what it needs, held to `docs/KEYS.md` by a test). Replace
+  both with a slice of `Binding { key, mods, tabs, gate: fn(&DetailView,
+  pr_id) -> bool, action, help }`; routing and help are then derived from one
+  source, and `supports_action` in `view.rs` becomes the gate. With the keys
+  in a table, `clippy::wildcard_enum_match_arm` can cover `tui` as well:
+  today 27 matches on crossterm's `KeyCode` end in a catch-all, so the lint
+  is on only in `app`, `domain` and `providers`. *Trigger:* the next feature
+  that adds a key to the PR view; the AI-comment work added two (`f` and
+  `space`) without it.
 - [ ] **Provider trait instead of enum dispatch.** `providers/mod.rs` matches
   on `Provider` in every method; fine for two providers. Move to a
   `trait ProviderApi` (or keep the enum and implement it via the trait).
