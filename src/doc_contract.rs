@@ -60,13 +60,25 @@ pub fn readme_values(key: &str) -> Vec<String> {
         .collect()
 }
 
-/// The value the README marks `(default)` for `key`.
-pub fn readme_default(key: &str) -> Option<String> {
-    readme_choices(key).into_iter().find_map(|choice| {
-        choice
-            .strip_suffix(DEFAULT_MARK)
-            .map(|name| name.trim().to_owned())
-    })
+/// The value the README marks `(default)` for `key`. Exactly one has to be:
+/// two marks, or none, is a README that does not say what the default is.
+pub fn readme_default(key: &str) -> String {
+    let choices = readme_choices(key);
+    match defaults(&choices).as_slice() {
+        [only] => (*only).to_owned(),
+        marked => panic!(
+            "the README marks {} values `(default)` for `{key}`; it has to be one",
+            marked.len()
+        ),
+    }
+}
+
+/// The choices that carry the `(default)` mark, without it.
+fn defaults(choices: &[String]) -> Vec<&str> {
+    choices
+        .iter()
+        .filter_map(|choice| choice.strip_suffix(DEFAULT_MARK).map(str::trim))
+        .collect()
 }
 
 const ARROWS: &str = "arrows";
@@ -172,6 +184,17 @@ mod tests {
     #[test]
     fn the_readme_values_come_without_their_default_mark() {
         assert_eq!(readme_values("sort"), ["attention", "recent"]);
-        assert_eq!(readme_default("sort").as_deref(), Some("attention"));
+        assert_eq!(readme_default("sort"), "attention");
+    }
+
+    #[test]
+    fn every_marked_default_is_found_so_two_or_none_can_be_refused() {
+        let choices =
+            |written: &[&str]| written.iter().map(|c| (*c).to_owned()).collect::<Vec<_>>();
+        let one = choices(&["graphite (default)", "slate"]);
+        assert_eq!(defaults(&one), ["graphite"]);
+        let two = choices(&["graphite (default)", "slate (default)"]);
+        assert_eq!(defaults(&two), ["graphite", "slate"]);
+        assert!(defaults(&choices(&["graphite", "slate"])).is_empty());
     }
 }

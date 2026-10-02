@@ -143,8 +143,8 @@ mod tests {
             "the README's `sort` line against Sort"
         );
         let default = doc_contract::readme_default("sort");
-        assert_eq!(Sort::from_config(default.as_deref()), Sort::default());
-        assert_eq!(default.as_deref(), Some("attention"));
+        assert_eq!(Sort::from_config(Some(&default)), Sort::default());
+        assert_eq!(default, "attention");
     }
 
     #[test]

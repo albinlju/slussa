@@ -252,7 +252,7 @@ mod tests {
             "the README's `theme` line against THEMES"
         );
         let default = crate::doc_contract::readme_default("theme");
-        assert_eq!(default.as_deref().and_then(named), Some(DEFAULT));
+        assert_eq!(named(&default), Some(DEFAULT));
     }
 
     #[test]
