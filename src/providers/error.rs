@@ -26,8 +26,15 @@ pub enum FetchError {
     GraphQl(Vec<String>),
     #[error("request timed out")]
     Timeout,
-    #[error("{}", gh_failed(*code, stderr))]
-    GhFailed { code: Option<i32>, stderr: String },
+    /// `gh` ended with a failure. `stderr` is what it said; `stdout` is the
+    /// answer it printed, which can hold what the call was reading, since a
+    /// GraphQL query that fails on one field still answers the others.
+    #[error("{}", gh_failed(*code, stderr, stdout))]
+    GhFailed {
+        code: Option<i32>,
+        stderr: String,
+        stdout: String,
+    },
     #[error("{}", http_failed(*status, body))]
     HttpFailed { status: u16, body: String },
     #[error("network error: {0}")]
@@ -58,14 +65,42 @@ pub enum ReviewError {
     },
 }
 
-fn gh_failed(code: Option<i32>, stderr: &str) -> String {
-    let stderr = stderr.trim();
-    match (code, stderr.is_empty()) {
-        (Some(c), false) => format!("gh exited with code {c}: {stderr}"),
+fn gh_failed(code: Option<i32>, stderr: &str, stdout: &str) -> String {
+    let said = match (stderr.trim(), answer_for_log(stdout)) {
+        ("", None) => String::new(),
+        (stderr, None) => stderr.to_owned(),
+        ("", Some(answer)) => answer,
+        (stderr, Some(answer)) => format!("{stderr}; {answer}"),
+    };
+    match (code, said.is_empty()) {
+        (Some(c), false) => format!("gh exited with code {c}: {said}"),
         (Some(c), true) => format!("gh exited with code {c}"),
-        (None, false) => format!("gh failed: {stderr}"),
+        (None, false) => format!("gh failed: {said}"),
         (None, true) => "gh failed".to_owned(),
     }
+}
+
+/// The answer to a failed call, for the log: the error messages in it and its
+/// size as it arrived. Not the answer itself, which can hold a PR's content.
+/// The whole of it stays in the error, for `user_message`.
+fn answer_for_log(answer: &str) -> Option<String> {
+    let written = answer.trim();
+    if written.is_empty() {
+        return None;
+    }
+    let size = format!("[answer of {} bytes]", answer.len());
+    Some(match api_message(written) {
+        Some(message) => format!("{message} {size}"),
+        None => size,
+    })
+}
+
+/// What `gh` wrote on both streams, as one text: where its JSON error is
+/// depends on the command.
+fn gh_output(stderr: &str, stdout: &str) -> String {
+    format!("{} {}", stderr.trim(), stdout.trim())
+        .trim()
+        .to_owned()
 }
 
 /// A parser's message without the values it quotes from the answer. It says
@@ -96,11 +131,9 @@ fn without_quoted(message: &str) -> String {
 }
 
 fn http_failed(status: u16, body: &str) -> String {
-    let body = body.trim();
-    if body.is_empty() {
-        format!("http {status}")
-    } else {
-        format!("http {status}: {body}")
+    match answer_for_log(body) {
+        Some(answer) => format!("http {status}: {answer}"),
+        None => format!("http {status}"),
     }
 }
 
@@ -116,8 +149,9 @@ impl FetchError {
             Self::GraphQl(_) => "GitHub returned an incomplete GraphQL response.".to_owned(),
             Self::Timeout => "The request timed out. Check the PR before retrying: the server may have applied the change.".into(),
             Self::GhMissing => "GitHub CLI (gh) isn't installed or on your PATH.".to_owned(),
-            Self::GhFailed { stderr, .. } => {
-                api_message(stderr).unwrap_or_else(|| clean_gh(stderr))
+            Self::GhFailed { stderr, stdout, .. } => {
+                let output = gh_output(stderr, stdout);
+                api_message(&output).unwrap_or_else(|| clean_gh(&output))
             }
             Self::HttpFailed { status, body } => {
                 api_message(body).unwrap_or_else(|| match status {
@@ -233,6 +267,7 @@ mod tests {
                 \"errors\":[{\"resource\":\"PullRequestReview\",\"code\":\"custom\",\
                 \"message\":\"Can not approve your own pull request\"}]}"
                 .to_string(),
+            stdout: String::new(),
         };
         assert_eq!(err.user_message(), "Can not approve your own pull request");
     }
@@ -271,6 +306,7 @@ mod tests {
             FetchError::GhFailed {
                 code: Some(1),
                 stderr: String::new(),
+                stdout: String::new(),
             },
             http(502),
             http(408),
@@ -290,6 +326,7 @@ mod tests {
         let failed = FetchError::GhFailed {
             code: Some(1),
             stderr: " boom \n".into(),
+            stdout: String::new(),
         };
         assert_eq!(failed.to_string(), "gh exited with code 1: boom");
         let http = FetchError::HttpFailed {
@@ -335,10 +372,65 @@ mod tests {
     }
 
     #[test]
+    fn a_failed_calls_answer_is_logged_by_its_errors_and_size_not_by_what_it_read() {
+        // What `gh api graphql` printed when one field of a query failed: the
+        // fields it could read are in the answer.
+        let stdout = r#"{"data":{"repository":{"description":"the private description","pullRequest":null,"first":{"title":"the private title"}}},"errors":[{"type":"NOT_FOUND","path":["repository","pullRequest"],"message":"Could not resolve to a PullRequest with the number of 999999."}]}"#;
+        let failed = FetchError::GhFailed {
+            code: Some(1),
+            stderr: "gh: Could not resolve to a PullRequest with the number of 999999.".into(),
+            stdout: stdout.into(),
+        };
+        let logged = failed.to_string();
+        assert_eq!(
+            logged,
+            format!(
+                "gh exited with code 1: gh: Could not resolve to a PullRequest with the number \
+                 of 999999.; Could not resolve to a PullRequest with the number of 999999. \
+                 [answer of {} bytes]",
+                stdout.len()
+            )
+        );
+        assert!(!logged.contains("private"), "{logged}");
+        // The reader is told the same as before.
+        assert_eq!(
+            failed.user_message(),
+            "Could not resolve to a PullRequest with the number of 999999."
+        );
+
+        let refused = FetchError::HttpFailed {
+            status: 409,
+            body: r#"{"errors":[{"message":"out of date"}],"pullRequest":{"title":"the private title"}}"#.into(),
+        };
+        let logged = refused.to_string();
+        assert!(
+            logged.starts_with("http 409: out of date [answer of "),
+            "{logged}"
+        );
+        assert!(!logged.contains("private"), "{logged}");
+        assert_eq!(refused.user_message(), "out of date");
+
+        // An answer with no error in it that can be read is only its size, as
+        // it arrived: the newline at its end is counted.
+        let page = FetchError::HttpFailed {
+            status: 502,
+            body: "<html>the private page</html>\n".into(),
+        };
+        assert_eq!(page.to_string(), "http 502: [answer of 30 bytes]");
+        // Nothing but whitespace is no answer.
+        let empty = FetchError::HttpFailed {
+            status: 502,
+            body: " \n".into(),
+        };
+        assert_eq!(empty.to_string(), "http 502");
+    }
+
+    #[test]
     fn user_message_cleans_gh_noise_without_json() {
         let err = FetchError::GhFailed {
             code: Some(1),
             stderr: "gh: Could not resolve to a Repository (HTTP 404)".to_string(),
+            stdout: String::new(),
         };
         assert_eq!(err.user_message(), "Could not resolve to a Repository");
     }

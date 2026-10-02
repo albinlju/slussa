@@ -238,7 +238,7 @@ fn github_failure_carries_the_exit_code_and_stderr() {
     let (result, _installed) = fetch_prs_with(gh);
 
     match result.unwrap_err() {
-        FetchError::GhFailed { code, stderr } => {
+        FetchError::GhFailed { code, stderr, .. } => {
             assert_eq!(code, Some(1));
             assert!(stderr.contains("Bad credentials"), "{stderr}");
         }

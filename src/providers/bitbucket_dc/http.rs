@@ -51,7 +51,9 @@ fn check_status(
     }
     if !status.is_success() {
         let body = response.text().unwrap_or_default();
-        tracing::warn!("http {} on {url}: {body}", status.as_u16());
+        // The body is in the error; the log gets its size, and what it says
+        // where the read or the write is reported (`FetchError`'s `Display`).
+        tracing::warn!("http {} on {url} ({} bytes)", status.as_u16(), body.len());
         return Err(FetchError::HttpFailed {
             status: status.as_u16(),
             body,

@@ -45,6 +45,7 @@ pub(super) fn failed(message: &str) -> FetchError {
     FetchError::GhFailed {
         code: Some(1),
         stderr: message.into(),
+        stdout: String::new(),
     }
 }
 

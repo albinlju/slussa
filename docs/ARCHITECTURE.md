@@ -387,7 +387,10 @@ Provider-side limits and server/version compatibility still require live checks.
 A provider call returns `FetchError` (`providers/error.rs`), an enum that keeps
 its cause. It travels as a value through `spawn_fetch`, `Read` and
 `LoadState::Failed`, and is turned into text by `user_message()` only where it
-is shown; the log gets its `Display`. A review that goes out as several
+is shown; the log gets its `Display`. That form leaves out what the server
+answered with, since a failed GraphQL query still answers the fields it could
+read: of a failed call's answer it holds the error messages and the size, and
+of a parser's message not the values it quotes. A review that goes out as several
 requests can end as `ReviewError::Partial`, which says how much arrived, and
 becomes `WriteError::PartialReview` in the app. A worker that panicked is
 `FetchError::WorkerPanicked`, not a lost result. Opening or copying a link
