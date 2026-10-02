@@ -81,13 +81,8 @@ fn run_command(
     if !status.success() {
         return Err(FetchError::GhFailed {
             code: status.code(),
-            stderr: format!(
-                "{} {}",
-                String::from_utf8_lossy(&stderr).trim(),
-                String::from_utf8_lossy(&stdout).trim()
-            )
-            .trim()
-            .into(),
+            stderr: String::from_utf8_lossy(&stderr).trim().into(),
+            stdout: String::from_utf8_lossy(&stdout).trim().into(),
         });
     }
     receive(&writer, deadline)?;
@@ -162,6 +157,32 @@ mod tests {
         assert_eq!(
             run_command(&mut Command::new("cat"), &input, Duration::from_secs(2)).unwrap(),
             input
+        );
+    }
+
+    #[test]
+    fn a_failing_command_keeps_what_it_said_apart_from_what_it_answered() {
+        let failed = run_command(
+            Command::new("sh").args(["-c", "echo the answer; echo it went wrong >&2; exit 3"]),
+            &[],
+            Duration::from_secs(2),
+        )
+        .unwrap_err();
+        match &failed {
+            FetchError::GhFailed {
+                code,
+                stderr,
+                stdout,
+            } => {
+                assert_eq!(*code, Some(3));
+                assert_eq!(stderr, "it went wrong");
+                assert_eq!(stdout, "the answer");
+            }
+            other => panic!("expected GhFailed, got {other:?}"),
+        }
+        assert_eq!(
+            failed.to_string(),
+            "gh exited with code 3: it went wrong; [answer of 10 bytes]"
         );
     }
 
