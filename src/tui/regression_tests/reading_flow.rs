@@ -2,23 +2,8 @@
 //! before they move to the next one, so none of it is skipped.
 
 use super::support::*;
-use crate::domain::{comment::Comment, user::AccountKind};
 
 const LAST: &str = "walkthrough line 60";
-
-fn comment(id: u64, content: String, age_minutes: i64) -> Comment {
-    Comment {
-        id: Some(CommentId(id)),
-        author: User {
-            username: "alice".into(),
-        },
-        account: AccountKind::Person,
-        content,
-        created: chrono::Utc::now() - chrono::Duration::minutes(age_minutes),
-        reactions: vec![],
-        reply_to: None,
-    }
-}
 
 /// A tall comment, opened, above a short older one: the timeline is newest first.
 fn tall_then_short() -> AppState {
@@ -26,32 +11,19 @@ fn tall_then_short() -> AppState {
         .map(|n| format!("walkthrough line {n}"))
         .collect::<Vec<_>>()
         .join("\n\n");
-    let mut state = fixture();
-    state.screen = Screen::Detail {
-        pr_id: PrId(42),
-        tab: DetailTab::Overview,
-    };
-    state
-        .store
-        .cache
-        .details
-        .get_mut(&PrId(42))
-        .unwrap()
-        .activity = LoadState::Loaded(Activity {
-        comments: vec![comment(1, tall, 0), comment(2, "A short reply.".into(), 60)],
-        events: vec![],
-        threads: vec![],
-    });
+    let mut older = comment(2, "A short reply.");
+    older.created = chrono::Utc::now() - chrono::Duration::hours(1);
+    let mut state = pr_on(
+        DetailTab::Overview,
+        Activity {
+            comments: vec![comment(1, &tall), older],
+            ..Activity::default()
+        },
+    );
     screen(&mut state);
     local_key(&mut state, KeyCode::Char(' '));
     screen(&mut state);
     state
-}
-
-fn screen(state: &mut AppState) -> String {
-    let mut terminal = Terminal::new(TestBackend::new(140, 30)).unwrap();
-    terminal.draw(|frame| render(frame, state)).unwrap();
-    rendered_text(&terminal)
 }
 
 /// A key, then a draw, as in the event loop.
