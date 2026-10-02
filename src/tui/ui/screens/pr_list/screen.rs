@@ -10,7 +10,8 @@ use crate::{
         app::{
             effect::Effect,
             navigation::Screen,
-            store::{LoadState, OpenChain, Store},
+            pr_groups::OpenChain,
+            store::{LoadState, Store},
         },
         ui::{
             action::{Action, ListAction},

@@ -34,6 +34,7 @@ use crate::{
 use std::collections::{HashMap, HashSet};
 
 pub use super::notice::{Notice, NoticeKind};
+use super::pr_groups::{GroupState, OpenChain};
 
 #[derive(Debug)]
 pub struct Store {
@@ -106,29 +107,6 @@ impl Default for Store {
     fn default() -> Self {
         Self::new("viewer".into(), Capabilities::default())
     }
-}
-
-/// Where the pages of the open group stand. They are read one after another.
-#[derive(Debug, Default)]
-pub enum OpenChain {
-    #[default]
-    Idle,
-    /// The first reading: each page is shown as it arrives.
-    Appending,
-    /// A refresh: the pages are held and swapped in when the last has arrived,
-    /// so the list never shrinks to its first page in the meantime.
-    Collecting(Vec<PullRequest>),
-}
-
-/// What has been read of one group of PRs.
-#[derive(Debug, Default, Clone)]
-pub struct GroupState {
-    pub loaded: bool,
-    /// Where to continue reading older PRs of a closed group; `None` when
-    /// there are none left.
-    pub more: Option<String>,
-    /// Whether an older page was read, which a refresh must then keep.
-    pub older_loaded: bool,
 }
 
 #[derive(Debug, Default)]
@@ -368,10 +346,6 @@ pub enum FetchKey {
     Pr(PrResource, PrId),
 }
 
-/// How many open PRs are read without being asked to, and how many each `L`
-/// adds. Three pages on GitHub. A repository with fewer is read in full.
-pub const OPEN_BATCH: usize = 90;
-
 impl Store {
     /// Whether the provider has this resource at all.
     fn offers(&self, key: &FetchKey) -> bool {
@@ -416,29 +390,6 @@ impl Store {
                 Some(WriteTicket { pr_id, operation })
             }
         }
-    }
-
-    /// How many open PRs are read now: the first batch and what `L` added.
-    pub const fn open_limit(&self) -> usize {
-        OPEN_BATCH * (1 + self.open_extra)
-    }
-
-    /// Whether the group has been read. The open group counts as read as soon
-    /// as the list itself has loaded.
-    pub fn group_loaded(&self, group: PrGroup) -> bool {
-        self.groups.get(&group).is_some_and(|state| state.loaded)
-            || (group == PrGroup::Open && matches!(self.cache.prs, LoadState::Loaded(_)))
-    }
-
-    /// Whether older PRs remain to be read in the group.
-    pub fn group_has_more(&self, group: PrGroup) -> bool {
-        self.groups
-            .get(&group)
-            .is_some_and(|state| state.more.is_some())
-    }
-
-    pub fn group_loading(&self, group: PrGroup) -> bool {
-        self.fetches.contains(&FetchKey::Prs(group))
     }
 
     pub fn refreshing(&self, screen: crate::tui::app::navigation::Screen) -> bool {

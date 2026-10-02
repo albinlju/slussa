@@ -12,7 +12,7 @@ use crate::{
     tui::app::{
         App,
         effect::{Read, TaskResult, WriteError},
-        store::{FetchKey, FetchTicket, OpenChain, PrResource, WriteTicket},
+        store::{FetchKey, FetchTicket, PrResource, WriteTicket},
     },
 };
 use tokio::task::{self, JoinError};
@@ -83,61 +83,6 @@ impl App {
                 result,
             },
         );
-    }
-
-    /// Read whatever the current view shows that has not been read yet.
-    pub(super) fn ensure_view_loaded(&mut self) {
-        for &group in self.state.ui.list.filter.groups() {
-            if !self.state.store.group_loaded(group) {
-                self.spawn_load_prs(group, None);
-            }
-        }
-    }
-
-    /// `L`: the next batch of each group in the view that has more.
-    pub(super) fn load_older_prs(&mut self) {
-        for &group in self.state.ui.list.filter.groups() {
-            if group == PrGroup::Open {
-                self.load_more_open();
-                continue;
-            }
-            let more = self
-                .state
-                .store
-                .groups
-                .get(&group)
-                .and_then(|state| state.more.clone());
-            if let Some(after) = more {
-                self.spawn_load_prs(group, Some(after));
-            }
-        }
-    }
-
-    /// Read on in the open group, the next batch past what is shown.
-    fn load_more_open(&mut self) {
-        let store = &mut self.state.store;
-        let Some(after) = store
-            .groups
-            .get(&PrGroup::Open)
-            .and_then(|state| state.more.clone())
-        else {
-            return;
-        };
-        if store.group_loading(PrGroup::Open) || !matches!(store.open_chain, OpenChain::Idle) {
-            return;
-        }
-        store.open_extra += 1;
-        store.open_chain = OpenChain::Appending;
-        self.spawn_load_prs(PrGroup::Open, Some(after));
-    }
-
-    /// Read the open group again, and every other group already read.
-    pub(super) fn refresh_list(&mut self) {
-        for group in PrGroup::ALL {
-            if group == PrGroup::Open || self.state.store.group_loaded(group) {
-                self.spawn_load_prs(group, None);
-            }
-        }
     }
 
     pub(super) fn spawn_load_commits(&mut self, pr_id: PrId) {
