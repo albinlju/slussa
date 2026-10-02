@@ -29,6 +29,9 @@ for AI-generated PRs: triage, check intent, approve or merge.
   `WriteTicket`, `Session`). A `match` on one of our own enums names every
   variant; `_ =>` is for foreign enums such as `KeyCode` and for strings from a
   server. Clippy refuses the catch-all in `app`, `domain` and `providers`.
+  A relation between constants that the code relies on is a
+  `const _: () = assert!(..)` beside them (`HEAD < FOLD_ABOVE` in
+  `widgets/comment_fold.rs`), so changing one of them wrongly does not compile.
   ARCHITECTURE.md (*Types that carry the rules*) lists what exists.
 - **Modules stay under about 500 lines.** `mod.rs` composes and does not
   implement. Tests live inline, or in exactly one sibling `tests.rs`; suites that drive several modules through the doubles in `src/test_support.rs` are named `*_tests.rs`. A test

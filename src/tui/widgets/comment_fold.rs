@@ -14,6 +14,10 @@ const FOLD_ABOVE: usize = 12;
 /// How many of its lines stay visible.
 const HEAD: usize = 8;
 
+// `apply` takes `HEAD` from a length it has only compared with `FOLD_ABOVE`,
+// and a fold has to hide more than the row it adds.
+const _: () = assert!(HEAD < FOLD_ABOVE);
+
 /// Whether long comments are folded, and which ones the reader has opened. A
 /// view with no key to open them is `Open`, so nothing is ever folded out of
 /// reach.
