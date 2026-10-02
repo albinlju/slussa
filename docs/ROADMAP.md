@@ -137,13 +137,13 @@ The AI reviewer's output has to be as easy to read and act on as a human's, and
 easier to tell apart.
 
 An AI reviewer shows up in one of two ways, and slussa will meet both. One
-*comments* (see *Engineering*, *From OpenShell's AI reviewer*): one batched
-review per head SHA, a first-line marker on every comment, stable finding IDs
-carried across rounds, and a severity split where only evidenced findings
-block. The other *commits* (see *From "Fixing the PR Bottleneck"*): it fixes
-what it finds on the branch and comments only when it is unsure, so its review
-is a set of commits and may leave no thread at all. "AI actor" is therefore one
-notion, applied to the PR's author, to comments and to commits.
+*comments*: one batched review per head SHA, a first-line marker on every
+comment, stable finding IDs carried across rounds, and a severity split where
+only evidenced findings block. The other *commits* (see *From "Fixing the PR
+Bottleneck"*): it fixes what it finds on the branch and comments only when it
+is unsure, so its review is a set of commits and may leave no thread at all.
+"AI actor" is therefore one notion, applied to the PR's author, to comments
+and to commits.
 
 - [ ] **AI-authored commits marked** *(refined)* — mark the commits an agent
   made in the Commits tab, by author account or a configurable trailer, so the
@@ -181,6 +181,35 @@ notion, applied to the PR's author, to comments and to commits.
 - [ ] **Resolved / unresolved filter** in the Overview.
 - [ ] **Outdated comments** — hide threads whose anchored line is gone from the
   diff; keep them in the Overview timeline.
+
+What a commenting reviewer's review carries, to design the domain model
+against:
+
+- [ ] **One disposition per head SHA.** A review is one batched GitHub review
+  (summary + inline comments) that names the head SHA it reviewed. Show
+  *reviewed SHA vs. current head* on the AI summary line; a review of an older
+  SHA is stale, not wrong.
+- [ ] **Stable finding IDs across rounds.** Findings carry an ID such as
+  `GATOR-<sha8>-<nn>` and are carried, resolved or waived across later
+  commits; a maintainer's "won't fix" reply is a waiver, an author's "fixed"
+  is a claim to verify. The open/fixed/waived state per finding is what a
+  reviewer wants at a glance, and it is derivable from thread resolution +
+  resolver identity + the marker.
+- [ ] **Severity and evidence.** Findings are `Critical | Warning | Suggestion`,
+  and only ones with a full evidence record (base behaviour, head behaviour,
+  observable impact, reproducer, changed location) count as blockers; the rest
+  are hypotheses. Suggestions never block. If slussa's own *run a review*
+  command emits structured output, use this split: it gives the reviewer a
+  defensible "N blockers, M suggestions" header instead of a wall of comments.
+- [ ] **Concern format for the review prompt.** Every concern as "Before this
+  PR, `<persona>` experienced `<old>`. With this PR, `<new>`, so `<impact>`."
+  with file:line only as evidence. A good default prompt for slussa's
+  run-a-review.
+- [ ] **Convergence rules worth copying into the display.** After three
+  finding-bearing rounds a reviewer may report critical findings only, and a
+  rebase with the same patch (same patch-id) is not re-reviewed. Show the round
+  count and "unchanged since last review" so a human knows when the AI has
+  stopped adding value.
 
 ### 3. Act on suggestions, then merge
 
@@ -355,17 +384,9 @@ a decision-path feature needs them:
 
 ## Engineering
 
-**State on 2026-10-01:** single crate, about 26 200 lines of Rust, 305 tests,
-`clippy::pedantic` and `nursery` clean with the no-panic lints on, CI on Linux
-and macOS, two releases, a README.
-
 Rule of thumb for everything below: **do the refactors when a feature touches
 the code anyway, do the tooling now.** Every open item has a trigger; do not do
-it ahead of the feature that needs it. Part of this was assembled by reading
-[NVIDIA/OpenShell](https://github.com/NVIDIA/openshell) (about 40 crates, an
-agent-first Rust project with a ratatui TUI). What is borrowed is their
-engineering hygiene, not their TUI: slussa's component/store design is already
-tighter than their `App` struct with 20 `pending_*` flags, and it stays.
+it ahead of the feature that needs it.
 
 ### Code, with the next feature that touches the area
 
@@ -430,6 +451,13 @@ tighter than their `App` struct with 20 `pending_*` flags, and it stays.
   `mod.rs` files still implement instead of composing: `tui/`, `tui/widgets/`,
   `providers/`, `providers/github/` and `providers/bitbucket_dc/`; the two
   provider ones go with *Provider trait*. Not a refactor-only change.
+- [ ] **A workspace, when something else needs the core.** slussa is one crate
+  with clear module boundaries; a workspace adds compile-unit overhead and
+  manifest churn without a consumer for the split crates, and an attempt on a
+  branch (`domain` and `providers` as crates) was dropped for that reason. The
+  pieces would be `slussa-core`, `slussa-provider-github`,
+  `slussa-provider-bitbucket-dc` and `slussa-tui`. *Trigger:* a `slussa-core`
+  becomes a dependency of something else (a Neovim plugin, an MCP server).
 - [ ] **Cache rendered Markdown.** `markdown::render` runs for the
   description, and `render_no_margin` for every comment in the Overview and in
   the diff, on every frame. Keep the lines per comment and width, and drop
@@ -493,42 +521,6 @@ tighter than their `App` struct with 20 `pending_*` flags, and it stays.
   3. It reviews pull requests, not direct pushes to `main`. `/code-review` is
      run by hand; the two cover different moments.
 
-### From OpenShell's AI reviewer ("gator"), for the AI features
-
-OpenShell runs an autonomous PR reviewer in a sandbox. None of its code is
-reusable here, but the *contract* it enforces is what slussa will read and
-display once AI reviews are first-class (*AI review integration* above). Design the
-domain model against it:
-
-- [ ] **Marker-based AI detection, not just bot accounts.** Every gator comment
-  starts with a first-line marker (`> **gator-agent**`); other skills use their
-  own. Detecting AI authorship needs a configurable list of first-line markers
-  *and* account names, not one or the other.
-- [ ] **One disposition per head SHA.** A review is one batched GitHub review
-  (summary + inline comments) that names the head SHA it reviewed. Show
-  *reviewed SHA vs. current head* on the AI summary line; a review of an older
-  SHA is stale, not wrong.
-- [ ] **Stable finding IDs across rounds.** Findings carry `GATOR-<sha8>-<nn>`
-  and are carried, resolved or waived across later commits; a maintainer's
-  "won't fix" reply is a waiver, an author's "fixed" is a claim to verify. The
-  open/fixed/waived state per finding is what a reviewer wants at a glance, and
-  it is derivable from thread resolution + resolver identity + the marker.
-- [ ] **Severity and evidence.** Findings are `Critical | Warning | Suggestion`,
-  and only ones with a full evidence record (base behaviour, head behaviour,
-  observable impact, reproducer, changed location) count as blockers; the rest
-  are hypotheses. Suggestions never block. If slussa's own *run a review*
-  command emits structured output, use this split: it gives the reviewer a
-  defensible "N blockers, M suggestions" header instead of a wall of comments.
-- [ ] **Concern format for the review prompt.** Their `review-github-pr` skill
-  requires every concern as "Before this PR, `<persona>` experienced `<old>`.
-  With this PR, `<new>`, so `<impact>`." with file:line only as evidence. A good
-  default prompt for slussa's run-a-review.
-- [ ] **Convergence rules worth copying into the display.** After three
-  finding-bearing rounds the reviewer goes `critical_only`; rebase-equivalent
-  patches (same patch-id) are not re-reviewed. Show the round count and
-  "unchanged since last review" so a human knows when the AI has stopped adding
-  value.
-
 ### From "Fixing the PR Bottleneck" (Matt Pocock), for the AI features
 
 A talk at AI Engineer Paris 2026 (<https://www.youtube.com/watch?v=LlgiOCmFG_w>)
@@ -555,8 +547,8 @@ below says what it rests on.
   only when unsure. It reads coding standards from a file of its own, kept out
   of AGENTS.md, and runs in its own context. This is why AI detection covers
   commits and why *Run a review from slussa* sits after *Send to agent*. That
-  reviewers will commonly work this way is an assumption; the gator contract
-  above is the other model, and both are kept.
+  reviewers will commonly work this way is an assumption; the commenting
+  reviewer under *AI review integration* is the other model, and both are kept.
 - **Review the system, not only the code.** A human review comment should
   become a check or a standard, so that it is never written twice; his "retro"
   skill reads sessions and a period's PRs and reviews to propose them. It is
@@ -567,109 +559,3 @@ below says what it rests on.
   slussa does not render it, and `o` opens the PR in the browser. His PR skill
   was unreleased when this was written, so no convention for the description
   is parsed until one exists to read.
-
-### Done (engineering)
-
-Kept as one line each; the detail is in git history.
-
-- **Panic audit:** no `expect`, `unreachable!` or `#[allow]` is left in
-  non-test code. A GraphQL or REST answer of the wrong shape is a load error
-  (it indexed into the value and could panic), and scroll positions past
-  65 535 rows are capped instead of wrapping.
-- **Types before runtime checks (2026-10):** the rule in AGENTS.md and what it
-  produced, listed in ARCHITECTURE.md (*Types that carry the rules*).
-  `Action` is split into `Action` (input), `Effect` (work for the app) and
-  `TaskResult` (what came back), and `DetailAction` into a sub-enum per
-  handler, which removed the last four `unreachable!`. Components have
-  separate `Input` and `View` contexts. A read needs a `FetchTicket` and a
-  write a `WriteTicket`. `FetchError` is a typed enum carried as a value. The
-  PR screen's dialogs, the list's overlay, the editor and the diff pane each
-  hold one state instead of parallel flags. `PrId`, `CommentId` and
-  `CommitOid` replace bare numbers and strings. `wildcard_enum_match_arm` is
-  on in `app`, `domain` and `providers`. Bugs it found: `r` on the commit list
-  replied to the thread the Diff tab had left focused; the footer there offered
-  two keys that did nothing; every failed write was marked "may have reached
-  the server", also one refused before it was sent; keys moved the diff cursor
-  over rows no longer drawn; a Bitbucket verdict that failed with nothing
-  else sent was reported as a partly sent review; an HTTP 408 on a write was
-  read as a refusal. A printed Bitbucket provider would also have included
-  its token.
-- **Fixes from the 2026-10 quality review:** drafts are no longer synced to
-  disk on every key typed in the editor; a Bitbucket 403 is shown as the
-  server's refusal and not as a missing login; a failed account lookup at
-  startup says why; diff paths with spaces, quotes or non-ASCII letters are
-  read whole (they were cut at the first space, which also misplaced a comment
-  on such a file); a test build has no `gh` unless a fake is installed; a
-  thread taller than the diff pane is shown from its first row, as in the
-  Overview (it was scrolled to its last row); a terminal that fails to start
-  is handed back out of raw mode.
-- **README** (what it is, providers, install, usage, keys, config, develop) and
-  a demo gif recorded against a real repository.
-- **Readable GraphQL:** templates in `providers/github/graphql.rs`, compacted
-  when sent; a test pins the wire format.
-- **Bounded PR list:** open PRs in pages (limit 90, `L` for more), closed PRs
-  per view in batches; GitHub cursor, Bitbucket `merged|declined` offsets.
-- **Merge blocked is explained:** `Mergeability::Blocked` with reasons in the
-  header and the merge dialog; checked against real GitHub rulesets (a failing
-  required check only gives a general reason).
-- **GitHub's time limit:** a page of 100 PRs took 7 to 11 s on `cli/cli` and
-  once failed; the list reads 30 per request.
-- **Blocking-I/O rule** written down (ARCHITECTURE.md *Rules for I/O and
-  effects*, AGENTS.md) so agent handoff follows the same pattern.
-- **Tests:** domain thread logic (10 tests), the full app loop against `FakeGh`
-  (`app/flow_tests/`), the transport doubles `FakeGh` and `MockHttp` and their
-  18 transport tests, shared fixtures in `src/test_support.rs`, and CLI
-  integration tests (`tests/cli_integration.rs`, isolated HOME, no network).
-- **Lints:** `clippy::{all, pedantic, nursery}` and a `[lints.rust]` block, two
-  nursery lints allowed by name. The no-panic rule is a lint (`unwrap_used`,
-  `expect_used`, `panic`, `unreachable`, `unimplemented`, `indexing_slicing`),
-  `unsafe_code` is forbidden, truncating casts are refused again, and an
-  exception is an `#[expect]` with a reason: the switch from `#[allow]` found
-  two that were no longer needed. `rust-toolchain.toml` pins 1.98.1 and
-  `rust-version` stays 1.95, which CI builds with as well.
-- **CI** on Ubuntu and macOS (fmt, clippy, test, cargo-deny, a build with the
-  minimum Rust version, and cargo-deny again every week), actions pinned by
-  SHA; **cargo-deny** found RUSTSEC-2026-0285 in `rustls` 0.23.40 (fixed by
-  updating to 0.23.45); `colored` and `option-ext` are named MPL-2.0 exceptions.
-- **Dependabot** (weekly for Actions, monthly grouped for Cargo) and release
-  profile `strip = true`, `lto = "thin"`, `codegen-units = 1` (the macOS arm64
-  binary went from 7.0 to 6.1 MB), dev `debug = 1`. Not `panic = "abort"`:
-  Markdown rendering relies on catching a panic in the renderer.
-- **Release workflow** (`release.yml` + `package.sh`), dry-run twice on GitHub;
-  the publish step has still never run.
-- **OSC 52 clipboard:** helper first, OSC 52 as fallback, and first over SSH.
-- **Process docs:** AGENTS.md as the agent instruction surface (CLAUDE.md only imports it), ARCHITECTURE.md
-  lifecycles and checklists instead of a separate skill, `//!` contract docs on
-  the core modules, the file-size rule in AGENTS.md, CONTRIBUTING.md,
-  SECURITY.md and the PR and issue templates.
-- **Dropped:** automatic light/dark theme. All five themes are dark and
-  `terminal` already follows a light terminal; revisit only if a light palette
-  is added.
-
-### Not borrowed (and why)
-
-- **A Cargo workspace with many crates.** slussa is about 23 000 lines with
-  clear module boundaries; a workspace adds compile-unit overhead and manifest
-  churn without a consumer for the split crates. An earlier attempt on a
-  branch (a workspace with `domain` and `providers` crates) was dropped for the
-  same reason. Revisit only if a
-  `slussa-core` becomes a dependency for something else (a Neovim plugin, an
-  MCP server); then name the pieces `slussa-core`, `slussa-provider-github`,
-  `slussa-provider-bitbucket-dc`, `slussa-tui`.
-- **mise / Nix toolchain management.** `rust-toolchain.toml` covers a
-  one-language project.
-- **SPDX headers, CODEOWNERS, DCO and a vouch system.** Corporate open-source
-  process; nothing to gain with one maintainer.
-- **Their TUI structure.** Mouse capture, a splash screen, 20 `pending_*`
-  booleans polled after each key. slussa's typed `Action`/`Component` design is
-  the better pattern.
-- **OpenTelemetry / OCSF logging.** `tracing` with an env filter is enough for
-  a local TUI.
-- **Their file structure.** 39 files over 100 KB, `too_many_lines = "allow"`
-  used in full, three sibling-test conventions. slussa keeps `mod.rs` for
-  composition and one test convention, and writes the size rule down.
-- **Facade crates bridging parallel type trees** and the twenty-field
-  `Mutex<Option<...>>` mock-state bags.
-- **The gator agent itself** (sandboxed reviewer, label state machine, ledger
-  scripts). slussa *displays* reviews; it does not run an autonomous reviewer.
-  The contract above is what to read, not what to build.
