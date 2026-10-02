@@ -8,6 +8,7 @@ mod git_url;
 mod logging;
 mod private_file;
 mod providers;
+mod session;
 #[cfg(test)]
 mod test_support;
 mod tui;
@@ -16,7 +17,7 @@ use std::process::ExitCode;
 
 use ratatui::DefaultTerminal;
 
-use crate::app::{App, preflight::Session};
+use crate::{app::App, session::Session};
 
 fn main() -> ExitCode {
     if let Err(err) = logging::init() {

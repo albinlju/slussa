@@ -57,6 +57,7 @@ fn no_source_file_is_over_the_size_rule() -> io::Result<()> {
 const IMPORTS: &[(&str, &[&str])] = &[
     ("domain", &["domain"]),
     ("providers", &["domain", "providers", "git_url"]),
+    ("session", &["domain", "providers", "git_url", "session"]),
     ("tui", &["app", "domain", "tui"]),
 ];
 

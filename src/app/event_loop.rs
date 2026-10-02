@@ -2,13 +2,13 @@ use crate::{
     app::{
         action::{Action, Effect, TaskResult},
         drafts::Drafts,
-        preflight::Session,
         refresh,
         state::AppState,
         store::{self, FetchKey, LoadState},
     },
     domain::pr::PrGroup,
     providers::Provider,
+    session::Session,
     tui::{key_to_action, render},
 };
 use ratatui::{

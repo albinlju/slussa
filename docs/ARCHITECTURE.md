@@ -65,8 +65,10 @@ src/
 │   ├── desktop.rs        Browser and clipboard effects
 │   ├── fetchers.rs        Run providers off the UI thread
 │   ├── loads.rs           Apply asynchronous results
-│   ├── refresh.rs         Manual and periodic refresh
-│   ├── preflight.rs       Provider detection and authentication checks; `Session`
+│   └── refresh.rs         Manual and periodic refresh
+├── session/               Who and where, shared by the TUI and the subcommands
+│   ├── mod.rs             `Session`, `connect`
+│   ├── preflight.rs       Provider detection and authentication checks
 │   └── remote.rs          Local repository/remote detection
 ├── tui/
 │   ├── mod.rs             UI composition, screen dispatch and input priority
