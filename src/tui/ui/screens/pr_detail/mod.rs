@@ -1,3 +1,4 @@
+mod bindings;
 mod build_status;
 pub mod dialogs;
 mod footer;

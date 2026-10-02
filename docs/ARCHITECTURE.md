@@ -99,7 +99,9 @@ src/
 │       │   └── pr_detail/
 │       │       ├── screen.rs  PrDetailScreen: children, the surface shown and the overlay
 │       │       ├── interactions.rs  Dialog/editor workflows and resolved commands
-│       │       ├── keys.rs    Modal, screen and focused-child routing
+│       │       ├── bindings/  One row per key the screen routes itself: key, where, help,
+│       │       │              and what it does now (hidden, blocked, offered)
+│       │       ├── keys.rs    Modal priority, then the rows, then the focused child
 │       │       ├── view.rs    Read-only component/store queries
 │       │       ├── render.rs Screen layout and child rendering
 │       │       ├── header.rs
@@ -490,8 +492,9 @@ moving, and `Reveal` says what the next draw does about the scroll position.
 modules. Add a `Feature` in `domain/capabilities` and set it in each provider's
 capabilities. Add a `Command` variant and its `supported_by` arm, and an
 `Operation` if it is a new kind. Add the message to the sub-enum of
-`DetailAction` that owns it, with its key, help entry and footer hint, and
-resolve it to the `Command` in `interactions.rs`. Add the `execute` arm, which
+`DetailAction` that owns it, with its key as a row in `pr_detail/bindings/rows.rs`
+(the row gives the help entry and the footer hint, and `Offer` says when it is
+hidden, blocked or offered), and resolve it to the `Command` in `interactions.rs`. Add the `execute` arm, which
 gets a `WriteTicket` from `begin_write`, and a `spawn_*` function that takes
 it. The compiler lists the matches that need the new variants. Write a
 regression test that injects the result.

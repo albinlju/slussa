@@ -1,10 +1,8 @@
+use super::bindings;
 use crate::tui::{
     app::effect::Effect,
     ui::{
-        action::{
-            Action, CommitsAction, DetailAction, DiffAction, NavAction, PrAction, SearchAction,
-            TimelineAction,
-        },
+        action::{Action, CommitsAction, DetailAction, DiffAction, NavAction, SearchAction},
         component::Component,
         components::diff_viewer::DiffFocus,
         screens::pr_detail::{Overlay, Surface, tabs::DetailTab},
@@ -33,12 +31,8 @@ pub(in crate::tui::ui) fn key_to_action(
     if key.code == KeyCode::Char('q') {
         return Some(Action::Effect(Effect::Quit));
     }
-    let (tab, pr_id) = (state.tab, state.pr_id);
-    let surface = state.surface();
+    let (tab, surface) = (state.tab, state.surface());
     let code = key.code;
-    // Single-letter actions fire only unmodified, so Ctrl-d/Ctrl-e/etc. (scroll,
-    // muscle memory) don't accidentally trigger comment/approve actions.
-    let plain = key.modifiers.is_empty();
 
     match &state.detail.overlay {
         Some(Overlay::Confirm(dialog)) => return dialog.handle_key(key, &()),
@@ -59,107 +53,15 @@ pub(in crate::tui::ui) fn key_to_action(
         return Some(Action::from(NavAction::ToggleHelp));
     }
 
-    if plain && state.has_pr_link() {
-        let kind = match code {
-            KeyCode::Char('o') => Some(crate::tui::app::effect::LinkAction::Open),
-            KeyCode::Char('y') => Some(crate::tui::app::effect::LinkAction::Copy),
-            _ => None,
-        };
-        if let Some(kind) = kind {
-            return Some(Action::Effect(Effect::PrLink { pr_id, kind }));
-        }
+    if let Some(action) = bindings::route(state, key) {
+        return Some(action);
     }
-    // The PR-level actions (`a`, `v`, `m`, `x`) work on the tabs that read the PR
-    // itself, so a PR can be acted on straight from its description.
-    let acts_on_pr = matches!(tab, DetailTab::Overview | DetailTab::Description);
-    // `a` opens the review-verdict menu. Always available — even on your own PR
-    // you can leave a comment review; the picker dims the verdicts you can't use.
-    if plain && code == KeyCode::Char('a') && acts_on_pr {
-        return Some(Action::from(PrAction::OpenReviewPicker));
-    }
-    // `v` runs the batched review: it starts a review the first time, then finishes
-    // it (opening the verdict menu) once one's in progress. Line comments made
-    // while it's open queue into the review instead of posting.
-    if plain
-        && code == KeyCode::Char('v')
-        && (state.pending_review().is_some() || acts_on_pr || tab == DetailTab::Diff)
+    // Overview-only: step individual comments within the focused block (Ctrl-j/k).
+    if tab == DetailTab::Overview
+        && key.modifiers.contains(KeyModifiers::CONTROL)
+        && let Some(action) = state.detail.overview.handle_key(key, &())
     {
-        return Some(Action::from(if state.pending_review().is_some() {
-            PrAction::FinishReview
-        } else {
-            PrAction::StartReview
-        }));
-    }
-    // Shift+V discards an in-progress review and its queued comments.
-    if code == KeyCode::Char('V') && state.pending_review().is_some() {
-        return Some(Action::from(PrAction::AbandonReview));
-    }
-    // `m` opens the merge-strategy menu — only when the PR is mergeable. You can
-    // merge your own PR, so (unlike `a`) there's no own-PR gate.
-    if plain && code == KeyCode::Char('m') && acts_on_pr && state.can_merge() {
-        return Some(Action::from(PrAction::OpenMergePicker));
-    }
-    // `x` declines/closes the PR (with a confirm) while it's still open, and
-    // reopens it (with a confirm) once it has been declined.
-    if plain && code == KeyCode::Char('x') && acts_on_pr {
-        if state.pr_is_open() {
-            return Some(Action::from(PrAction::OpenDecline));
-        }
-        if state.pr_is_declined() && state.supports_action(DetailAction::Pr(PrAction::OpenReopen)) {
-            return Some(Action::from(PrAction::OpenReopen));
-        }
-    }
-    if plain && code == KeyCode::Char('c') {
-        return Some(Action::from(PrAction::OpenComment));
-    }
-    if plain && code == KeyCode::Char('r') {
-        return Some(Action::from(PrAction::OpenReply));
-    }
-    // Shift+R toggles resolve on the focused thread (application no-ops off-thread).
-    if code == KeyCode::Char('R') {
-        return Some(Action::from(PrAction::ResolveThread));
-    }
-    if code == KeyCode::Char('F') {
-        return Some(Action::Effect(Effect::Refresh));
-    }
-    // Overview-only: step individual comments within the focused block (Ctrl-j/k),
-    // then edit/delete the one you land on (the application gates on authorship).
-    if tab == DetailTab::Overview {
-        if key.modifiers.contains(KeyModifiers::CONTROL)
-            && let Some(action) = state.detail.overview.handle_key(key, &())
-        {
-            return Some(action);
-        }
-        if plain
-            && code == KeyCode::Char('f')
-            && crate::tui::ui::screens::pr_detail::tabs::overview::offers_filter(
-                state.data,
-                state.detail.overview.timeline.filter,
-            )
-        {
-            return Some(Action::from(TimelineAction::CycleFilter));
-        }
-        if plain && code == KeyCode::Char(' ') {
-            return Some(Action::from(TimelineAction::ToggleFold));
-        }
-        if plain && code == KeyCode::Char('e') {
-            return Some(Action::from(PrAction::EditComment));
-        }
-        if plain && code == KeyCode::Char('d') {
-            return Some(Action::from(PrAction::DeleteComment));
-        }
-    }
-
-    // `d` on a queued review comment (diff pane) removes it from the review.
-    if plain
-        && code == KeyCode::Char('d')
-        && surface
-            .diff_viewer()
-            .is_some_and(|viewer| viewer.focused_pending().is_some())
-    {
-        return Some(Action::Detail(DetailAction::Pr(
-            PrAction::RemovePendingComment,
-        )));
+        return Some(action);
     }
 
     escape_action(surface, code)
