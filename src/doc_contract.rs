@@ -8,10 +8,10 @@ use std::collections::BTreeSet;
 const KEYS_MD: &str = include_str!("../docs/KEYS.md");
 const README: &str = include_str!("../README.md");
 
-/// Fails unless a help table and `docs/KEYS.md` name the same keys for the view
-/// under `## heading`, and says which side lacks which key.
-pub fn assert_keys_match(table: &[(&str, &str)], heading: &str) {
-    let help = table_keys(table);
+/// Fails unless a help table's key cells and `docs/KEYS.md` name the same keys
+/// for the view under `## heading`, and says which side lacks which key.
+pub fn assert_keys_match<'a>(cells: impl IntoIterator<Item = &'a str>, heading: &str) {
+    let help: BTreeSet<String> = cells.into_iter().flat_map(split_keys).collect();
     let page = documented_keys(heading);
     let only_in_help: Vec<_> = help.difference(&page).collect();
     let only_on_page: Vec<_> = page.difference(&help).collect();
@@ -40,15 +40,6 @@ fn documented_keys(heading: &str) -> BTreeSet<String> {
         keys.insert(ARROWS.to_owned());
     }
     keys
-}
-
-/// The keys a help table names, one entry per key, spelled the way
-/// `documented_keys` reads them.
-fn table_keys(table: &[(&str, &str)]) -> BTreeSet<String> {
-    table
-        .iter()
-        .flat_map(|(keys, _)| split_keys(keys))
-        .collect()
 }
 
 /// The values the README's config example lists for `key`, in the order

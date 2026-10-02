@@ -434,5 +434,8 @@ fn choosing_another_view_asks_the_app_to_read_it_and_choosing_the_same_one_does_
 
 #[test]
 fn the_help_and_keys_md_name_the_same_keys_for_the_list() {
-    crate::doc_contract::assert_keys_match(render::HELP_KEYS, "The list");
+    crate::doc_contract::assert_keys_match(
+        render::HELP_KEYS.iter().map(|(keys, _)| *keys),
+        "The list",
+    );
 }
