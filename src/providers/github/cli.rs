@@ -82,7 +82,8 @@ fn run_command(
         return Err(FetchError::GhFailed {
             code: status.code(),
             stderr: String::from_utf8_lossy(&stderr).trim().into(),
-            stdout: String::from_utf8_lossy(&stdout).trim().into(),
+            // As written, so that the size the log gives is the size it had.
+            stdout: String::from_utf8_lossy(&stdout).into_owned(),
         });
     }
     receive(&writer, deadline)?;
@@ -176,13 +177,13 @@ mod tests {
             } => {
                 assert_eq!(*code, Some(3));
                 assert_eq!(stderr, "it went wrong");
-                assert_eq!(stdout, "the answer");
+                assert_eq!(stdout, "the answer\n");
             }
             other => panic!("expected GhFailed, got {other:?}"),
         }
         assert_eq!(
             failed.to_string(),
-            "gh exited with code 3: it went wrong; [answer of 10 bytes]"
+            "gh exited with code 3: it went wrong; [answer of 11 bytes]"
         );
     }
 

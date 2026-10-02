@@ -81,15 +81,15 @@ fn gh_failed(code: Option<i32>, stderr: &str, stdout: &str) -> String {
 }
 
 /// The answer to a failed call, for the log: the error messages in it and its
-/// size. Not the answer itself, which can hold a PR's content. The whole of it
-/// stays in the error, for `user_message`.
+/// size as it arrived. Not the answer itself, which can hold a PR's content.
+/// The whole of it stays in the error, for `user_message`.
 fn answer_for_log(answer: &str) -> Option<String> {
-    let answer = answer.trim();
-    if answer.is_empty() {
+    let written = answer.trim();
+    if written.is_empty() {
         return None;
     }
     let size = format!("[answer of {} bytes]", answer.len());
-    Some(match api_message(answer) {
+    Some(match api_message(written) {
         Some(message) => format!("{message} {size}"),
         None => size,
     })
@@ -410,12 +410,19 @@ mod tests {
         assert!(!logged.contains("private"), "{logged}");
         assert_eq!(refused.user_message(), "out of date");
 
-        // An answer with no error in it that can be read is only its size.
+        // An answer with no error in it that can be read is only its size, as
+        // it arrived: the newline at its end is counted.
         let page = FetchError::HttpFailed {
             status: 502,
-            body: "<html>the private page</html>".into(),
+            body: "<html>the private page</html>\n".into(),
         };
-        assert_eq!(page.to_string(), "http 502: [answer of 29 bytes]");
+        assert_eq!(page.to_string(), "http 502: [answer of 30 bytes]");
+        // Nothing but whitespace is no answer.
+        let empty = FetchError::HttpFailed {
+            status: 502,
+            body: " \n".into(),
+        };
+        assert_eq!(empty.to_string(), "http 502");
     }
 
     #[test]
