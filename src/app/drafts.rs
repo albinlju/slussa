@@ -126,13 +126,8 @@ impl DraftStorage {
     }
 }
 fn private_options() -> OpenOptions {
-    let mut options = OpenOptions::new();
+    let mut options = crate::private_file::options();
     options.read(true).write(true);
-    #[cfg(unix)]
-    {
-        use std::os::unix::fs::OpenOptionsExt;
-        options.mode(0o600);
-    }
     options
 }
 /// Where drafts are kept. Outside tests that is always the disk: an app that

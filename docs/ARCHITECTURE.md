@@ -46,7 +46,8 @@ keyboard-only use, and prefer an existing interaction over a new visual pattern.
 src/
 ├── main.rs, cli.rs        Startup, logging and CLI dispatch (`auth login`, `-C`)
 ├── config.rs              config.toml: theme, sort and `[ai] markers`
-├── logging.rs             Log file in the data directory (`SLUSSA_LOG`)
+├── logging.rs             Log file in the data directory (`SLUSSA_LOG`), for its owner only
+├── private_file.rs        Files only their owner may read: the drafts and the log
 ├── git_url.rs             Splits a git remote into host and path; web base URL
 ├── test_support.rs        Test-only: `FakeGh` and `MockHttp`
 ├── app/

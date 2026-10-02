@@ -125,10 +125,21 @@ fn receive<T>(
 pub(super) fn run_gh_json<T: serde::de::DeserializeOwned>(args: &[&str]) -> Result<T, FetchError> {
     let stdout = run_gh(args)?;
     serde_json::from_slice(&stdout).map_err(|e| {
-        let sample: String = String::from_utf8_lossy(&stdout).chars().take(200).collect();
-        tracing::warn!("gh json parse failed: {e} (first 200B: {sample})");
+        tracing::warn!("gh json parse failed: {}", unread(&e, stdout.len()));
         FetchError::ParseFailed(e.into())
     })
+}
+
+/// An answer that could not be read, for the log: what kind of failure, where
+/// reading stopped and how much there was. Not a sample of it and not the
+/// parser's message, which can quote a value: both are a PR's content.
+fn unread(error: &serde_json::Error, bytes: usize) -> String {
+    format!(
+        "{:?} at line {} column {} of {bytes} bytes",
+        error.classify(),
+        error.line(),
+        error.column()
+    )
 }
 
 #[cfg(all(test, unix))]
@@ -151,5 +162,16 @@ mod tests {
             run_command(&mut Command::new("cat"), &input, Duration::from_secs(2)).unwrap(),
             input
         );
+    }
+
+    #[test]
+    fn an_unreadable_answer_is_logged_by_place_and_size_not_by_content() {
+        // The parser's own message quotes the value it stopped at.
+        let answer = br#"{"title": "the private title"}"#;
+        let error = serde_json::from_slice::<Vec<u8>>(answer).unwrap_err();
+        assert!(error.to_string().contains("expected a sequence"), "{error}");
+
+        let logged = unread(&error, answer.len());
+        assert_eq!(logged, "Data at line 1 column 0 of 30 bytes");
     }
 }
