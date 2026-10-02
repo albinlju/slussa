@@ -83,6 +83,8 @@ base64 = "0.23"
 strip = true
 lto = "thin"
 codegen-units = 1
+# Not `panic = "abort"`: the Markdown widget catches a panic in the renderer
+# and shows the text as written instead (`tui/widgets/markdown.rs`).
 
 [profile.dev]
 # Faster incremental builds; keeps line tables for backtraces.
