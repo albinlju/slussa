@@ -453,6 +453,9 @@ them in `DiffViewer::opened_comments`, where the fold row is a stop of its own
 that comment, while `space` on the thread expands or collapses a resolved one.
 `render_inline_thread` returns the rows of the folds along with the lines, and
 `diff_viewer/threads.rs` turns them into stops.
+The fold row says how many lines it hides and nothing about what they hold: a
+count of what a bot found (issues, nitpicks) would mean reading one reviewer's
+wording, and slussa does not do that for any one reviewer.
 
 In the Overview `j` and `k` read on through an item taller than the screen
 before they move to the next one: `Timeline` keeps the rows of the focused item

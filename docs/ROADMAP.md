@@ -93,17 +93,11 @@ Grouped by the priority order in *Positioning*. Within a group, items marked
 Still one list, still one PR view. The list just knows what needs the user and
 says so on the row.
 
-- [ ] **Attention sort with a reason column** — *first version built.* The
-  list opens sorted by what needs you, with a "Needs you" column (90 columns
-  or wider, only when a row has a reason). Reasons, most urgent first:
-  `changes requested` and `CI failed` on your own PRs, `review requested` on
-  someone else's, and `approved` on yours when every reviewer approved. Only
-  open PRs count. `s` toggles plain newest-first order for the session;
-  `sort = "recent"` in `config.toml` sets the default. GitHub gets review
-  requests from `reviewRequests` (people only, not teams); Bitbucket from
-  reviewer status. **Still open:** a reason for new comments and mentions (it
-  needs the local *Unread* state below), team review requests, opening the PR
-  on the tab its reason points at, and remembering the `s` choice between runs.
+- [ ] **Attention reasons, the rest.** The list is sorted by what needs you,
+  with a reason column (the README says how). Still open: a reason for new
+  comments and mentions (it needs the local *Unread* state below), team review
+  requests (GitHub counts people only), opening the PR on the tab its reason
+  points at, and remembering the `s` choice between runs.
 - [ ] **Unread / updated** *(refined)* — remember per PR when it was last opened
   and flag rows with activity since then. Local state, scoped like drafts.
 - [ ] **Merge risk** — how dangerous the merge is, beside why the PR needs
@@ -151,21 +145,13 @@ what it finds on the branch and comments only when it is unsure, so its review
 is a set of commits and may leave no thread at all. "AI actor" is therefore one
 notion, applied to the PR's author, to comments and to commits.
 
-- [ ] **AI-authored comments and commits marked** *(refined for comments; for
-  comments, detection by GitHub bot account and by `[ai] markers`, the `[AI]`
-  tag after the author's name and the Overview filter on `f`, with a dimmed
-  line where it hides threads, and the per-file count in the diff's file list
-  are done; the commits are not)* — detect AI authorship by *either* account
-  (GitHub `isBot` / app login suffix; Bitbucket DC a configurable account list)
-  *or* a configurable first-line marker (`> **gator-agent**`, `> **🏗️
-  build-from-issue-agent**`, …). Render with a distinct marker and a per-file
-  badge count separate from human threads. Filter in the Overview: humans / AI
-  / all. The same detection marks commits in the Commits tab, by author account
-  or a configurable trailer, so the commits a reviewing agent added can be told
-  from the implementer's and read as one diff. **Open for commits:** `Commit`
-  carries only an author name today, and an implementer and a reviewer that
-  commit under the same account can be told apart only by a trailer or a marker
-  in the message.
+- [ ] **AI-authored commits marked** *(refined)* — mark the commits an agent
+  made in the Commits tab, by author account or a configurable trailer, so the
+  commits a reviewing agent added can be told from the implementer's and read
+  as one diff. It is the same notion of an AI actor as for comments (a bot
+  account, or a configured marker). **Open:** `Commit` carries only an author
+  name today, and an implementer and a reviewer that commit under the same
+  account can be told apart only by a trailer or a marker in the message.
 - [ ] **Review summary in the header** *(refined for comments)* — one line:
   `AI: 1 blocker · 3 suggestions · reviewed a1b2c3d (2 behind)`. Derived from
   the latest AI review: severity counts where the review exposes them,
@@ -190,19 +176,6 @@ notion, applied to the PR's author, to comments and to commits.
 - [ ] **Review as a group (display)** — render a review's comments + summary +
   state as one grouped timeline entry. Matters more once AI reviews arrive as one
   batch with many comments.
-- [x] **Long comments fold** *(done in the Overview and in the diff's inline
-  threads)* — a comment over 12 lines shows its first 8 and a dimmed `… N more
-  lines · space expand`; `space` opens or folds it. In the diff the fold row is
-  a stop for `j`/`k`, so `space` there opens or folds that comment, and `space`
-  on a resolved thread only expands or collapses the thread. A bot's
-  walkthrough runs to dozens of lines. Counts of what a bot found (issues,
-  nitpicks) are left out: they mean reading one reviewer's wording.
-- [x] **Read on through a tall comment.** In the Overview `j` scrolls a few
-  rows while the focused comment or thread runs below the screen, and moves to
-  the next one only when its end is in view; `k` does the same upward, and
-  steps back into a tall one at its end. Nothing is skipped when a comment is
-  taller than the screen, and skipping a long one stays a single press because
-  long comments are folded. The diff's code pane is not changed.
 - [ ] **Jump to next / prev unresolved thread** (`]c` / `[c`) — the core loop for
   walking through flags.
 - [ ] **Resolved / unresolved filter** in the Overview.
@@ -220,18 +193,11 @@ notion, applied to the PR's author, to comments and to commits.
   in use before building it.
 - [ ] **Multi-line (range) comments** — the anchor model carries one line today;
   needed for both range comments and multi-line suggestions.
-- [ ] **Mergeability detail** — *partly done.* A PR the provider will not merge
-  yet, for a reason other than a conflict, shows `blocked` in the header, and
-  the merge dialog lists why: GitHub from `mergeStateStatus` and
-  `reviewDecision` (draft, behind base, review required, changes requested,
-  required checks or rules), Bitbucket from the merge checks the server
-  reports. It informs and does not forbid, since an administrator may still be
-  allowed to merge. A merge the server refuses now shows Bitbucket's check
-  names too. Checked against a real GitHub ruleset on 2026-09-30: a missing
-  approval and a branch behind its base get specific reasons, a failing required
-  check only the general one. **Open:** *N commits behind base*, naming which
-  required check failed on GitHub (it reports `BLOCKED` without saying), and
-  tasks on Bitbucket.
+- [ ] **Mergeability detail.** The header shows `blocked` and the merge dialog
+  lists why; it informs and does not forbid, since an administrator may still
+  be allowed to merge. **Open:** *N commits behind base*, naming which required
+  check failed on GitHub (it reports `BLOCKED` without saying), and tasks on
+  Bitbucket.
 - [ ] **Update / sync branch** — merge or rebase base into the PR when behind.
 - [ ] **Repo-allowed merge strategies** — pre-filter the merge picker from repo
   settings instead of letting the server reject.
@@ -285,14 +251,6 @@ why a merge is blocked, the same on both providers. The rule that keeps this in
 step with the positioning: **agents may read and propose; only the human
 decides.** No new view: these are non-interactive subcommands that print and exit.
 
-- [x] **Fail clearly without a terminal.** Today `slussa` run without a TTY does the
-  network preflight, then exits 1 with the operating system's own message
-  (`couldn't start the terminal UI: Device not configured`) and a few escape bytes
-  on stdout, which an agent cannot tell from any other failure. Check for a TTY
-  first: print a message that names the subcommands and exit 2, before anything
-  touches the network. The CLI integration tests that run `slussa` with no
-  arguments expect the preflight messages and need adjusting. Small, and worth
-  doing whether or not the rest is built.
 - [ ] **`slussa <number>` (or a PR URL)** starts the TUI on that PR. The natural
   landing point when an agent says "PR 123 is ready for you"; it complements
   *Jump to PR by number* inside the TUI.
@@ -372,8 +330,7 @@ rank below the decision path.
 - [ ] **Normalized "requirements to merge"** — GitLab approvals, Bitbucket
   default reviewers / merge checks, GitHub branch protection → one shared model.
 - [ ] **Config** — repos / providers, default filters, keybindings, agent
-  commands. *(theme is done: `~/.config/slussa/config.toml` `theme = "…"`,
-  overridden by `SLUSSA_THEME`)*
+  commands.
 - [ ] **Empty / loading / error states** per view (use `LoadState` everywhere).
 - [ ] **Release gaps.** What is not there yet: a Homebrew tap; publishing to
   crates.io from the release workflow (today `cargo publish` is run by hand
@@ -449,12 +406,10 @@ tighter than their `App` struct with 20 `pending_*` flags, and it stays.
 - [ ] **Error classification for the caller.** Add `FetchError::kind()`
   (`Retryable | NeedsAuth | Gone | Invalid | Unknown`) so the error dialog
   decides whether to offer *retry*, *re-login* or just *dismiss* from the
-  classification instead of from prose in the message. *Done so far:*
-  `FetchError` is an enum that keeps its cause and reaches the screen as a
-  value (`LoadState::Failed(FetchError)`, `WriteError`), and
-  `may_have_reached_server()` already decides whether a failed write is marked
-  for checking. `user_message()` covers the human text, and the split between
-  log message and user message is right and should be kept. *Trigger:* next change to the error
+  classification instead of from prose in the message. `FetchError` already
+  keeps its cause as a value and `may_have_reached_server()` decides whether a
+  failed write is marked for checking; the split between log message and user
+  message is right and should be kept. *Trigger:* next change to the error
   dialog or a new provider.
 - [ ] **Conformance test for the provider boundary.** One
   `tests/provider_conformance.rs` over a fake GitHub and a fake Bitbucket,
@@ -469,14 +424,10 @@ tighter than their `App` struct with 20 `pending_*` flags, and it stays.
   than `github/pagination.rs` and the right shape for *Search older PRs and show the total*
   under *Features to build*.
 - [ ] **Keep the files under the size rule** (modules stay under about 500
-  lines, `mod.rs` composes). No file is over now: `widgets/comment.rs` (408)
-  and `diff_viewer/pane.rs` (475) were split by the AI-comment work. Five
-  `mod.rs` files still implement instead of composing: `tui/`, `tui/widgets/`,
-  `providers/`, `providers/github/` and `providers/bitbucket_dc/`; the two
-  provider ones go with *Provider trait*. Not a refactor-only change. *Done:*
-  `pr_list`, `pr_detail`, `diff_viewer` and `app` have a `mod.rs` that only
-  composes, `timeline.rs` is under the limit, and the four test suites over it
-  are directories with a file per concern and a shared `support.rs`.
+  lines, `mod.rs` composes). No file is over now. Five `mod.rs` files still
+  implement instead of composing: `tui/`, `tui/widgets/`, `providers/`,
+  `providers/github/` and `providers/bitbucket_dc/`; the two provider ones go
+  with *Provider trait*. Not a refactor-only change.
 - [ ] **Cache rendered Markdown.** `markdown::render` runs for the
   description, and `render_no_margin` for every comment in the Overview and in
   the diff, on every frame. Keep the lines per comment and width, and drop
@@ -506,19 +457,15 @@ tighter than their `App` struct with 20 `pending_*` flags, and it stays.
   `Sort::from_config` and `theme::init` (each is already parsed once, at
   startup). *Trigger:* *Config*, for the second.
 - [ ] **The first load is slow on a large repository.** On `cli/cli` (63 open
-  PRs) the first frame took about 0.75 s for `git`, `gh --version`,
-  `gh auth status` and `gh api user`, and the first page of 30 open PRs 2.0 to
-  2.7 s. The open pages are a cursor chain and cannot run in parallel; what a
-  page costs is the selection. Done: closed PRs are read per view; the list
-  query no longer reads the body and labels (read per PR on open); the open
-  group appears with its first page and the rest is appended in arrival order,
-  with the attention order applied once at the end; reading stops at 90 open
-  PRs and `L` reads 90 more. **Left, if it is still not enough:** two phases
-  (core fields first, reviews, CI and requests after; about 1.1 to 1.4 s a
-  page) and re-reading only what changed instead of the whole list every
-  minute. Searching for the PRs that need the viewer was considered and
-  declined, because the search index lags, and so was a persisted last list.
-  Timings are noisy: one network, one repository.
+  PRs) the first frame took about 0.75 s for `git`, `gh --version`, `gh auth
+  status` and `gh api user`, and the first page of 30 open PRs 2.0 to 2.7 s.
+  The open pages are a cursor chain and cannot run in parallel; what a page
+  costs is the selection. **Left, if it is still not enough:** two phases (core
+  fields first, reviews, CI and requests after; about 1.1 to 1.4 s a page) and
+  re-reading only what changed instead of the whole list every minute.
+  Searching for the PRs that need the viewer was considered and declined,
+  because the search index lags, and so was a persisted last list. Timings are
+  noisy: one network, one repository.
 
 ### Tests and tooling
 
