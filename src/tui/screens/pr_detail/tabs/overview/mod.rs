@@ -25,6 +25,9 @@ use timeline::{Timeline, TimelineContext};
 const SIDEBAR_WIDTH: u16 = 30;
 const SIDEBAR_BREAKPOINT: u16 = 64;
 
+// Where the sidebar is drawn, it and its gutter column leave the timeline room.
+const _: () = assert!(SIDEBAR_WIDTH + 1 < SIDEBAR_BREAKPOINT);
+
 /// Whether `f` is offered: when the PR has an agent's comment to filter on, or
 /// a filter is on already, which must not become impossible to turn off.
 pub fn offers_filter(data: Option<&PrData>, current: AuthorFilter) -> bool {

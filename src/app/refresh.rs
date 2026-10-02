@@ -9,6 +9,8 @@ use std::time::{Duration, Instant};
 pub const BUILDS_INTERVAL: Duration = Duration::from_secs(15);
 pub const FULL_INTERVAL: Duration = Duration::from_mins(1);
 
+const _: () = assert!(BUILDS_INTERVAL.as_millis() < FULL_INTERVAL.as_millis());
+
 impl App {
     /// Background tick: re-fetch the active view on its cadence. Fires on the
     /// `BUILDS_INTERVAL` clock; the slower `FULL_INTERVAL` is gated by elapsed time.
