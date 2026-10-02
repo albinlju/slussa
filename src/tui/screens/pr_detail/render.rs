@@ -1,5 +1,5 @@
 use super::{dialogs, footer, header};
-use crate::tui::widgets::{comment_fold::Folds, comment_meta::Roles};
+use crate::tui::widgets::{comment_fold::Folds, comment_meta::Reading};
 use crate::{
     app::{
         reviews::{PendingComment, PendingReview},
@@ -143,7 +143,7 @@ fn render_content(
                     diff,
                     threads,
                     pending,
-                    roles: Roles {
+                    reading: Reading {
                         pr_author: &pr.author.username,
                         markers: &ctx.store.ai_markers,
                         folds: Folds::Open,
@@ -158,7 +158,7 @@ fn render_content(
                 &commits::CommitContext {
                     data: pr_data,
                     pending,
-                    roles: Roles {
+                    reading: Reading {
                         pr_author: &pr.author.username,
                         markers: &ctx.store.ai_markers,
                         folds: Folds::Open,

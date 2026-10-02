@@ -2,10 +2,10 @@
 //! the rail that joins them.
 
 use super::hidden::HiddenRun;
-use crate::tui::widgets::comment_meta::Roles;
+use crate::tui::widgets::comment_meta::Reading;
 use crate::{
     domain::{
-        authorship::AuthorFilter,
+        authorship::Authorship,
         comment::{Comment, CommentId, CommentKind, CommentThread},
         diff::Diff,
         event::{EventKind, TimelineEvent},
@@ -20,7 +20,7 @@ use ratatui::{
     style::{Color, Modifier, Style},
     text::{Line, Span},
 };
-use std::{cmp::Reverse, mem};
+use std::cmp::Reverse;
 
 pub(super) enum TimelineItem<'a> {
     Comment(&'a Comment),
@@ -72,49 +72,69 @@ pub(super) fn focusable_count(comments: &[&Comment], threads: &[&CommentThread])
     comments.len() + threads.iter().filter(|t| !t.comments.is_empty()).count()
 }
 
-/// What the filter left out, to be put back as dimmed lines between the blocks.
+/// What the filter left out, all of it by one side, to be put back as dimmed
+/// lines between the blocks.
 pub(super) struct Hidden<'a> {
+    pub(super) side: Authorship,
     pub(super) comments: &'a [&'a Comment],
     pub(super) threads: &'a [&'a CommentThread],
-    pub(super) filter: AuthorFilter,
+}
+
+/// An item, and whose it is if the filter hid it.
+enum Placed<'a> {
+    Shown(TimelineItem<'a>),
+    Hidden(TimelineItem<'a>, Authorship),
+}
+
+impl Placed<'_> {
+    fn timestamp(&self) -> DateTime<Utc> {
+        match self {
+            Self::Shown(item) | Self::Hidden(item, _) => item.timestamp(),
+        }
+    }
 }
 
 #[expect(clippy::too_many_arguments, reason = "render inputs; see ROADMAP")]
 pub(super) fn build_blocks(
     comments: &[&Comment],
     threads: &[&CommentThread],
-    hidden: &Hidden<'_>,
+    hidden: Option<&Hidden<'_>>,
     events: &[TimelineEvent],
     diff: Option<&Diff>,
     width: u16,
     focused: usize,
     sub: usize,
-    roles: Roles<'_>,
+    reading: Reading<'_>,
 ) -> Vec<TimelineBlock> {
-    // Each item with whether the filter hid it, newest first.
-    let mut items: Vec<(bool, TimelineItem<'_>)> = Vec::with_capacity(
-        comments.len()
-            + threads.len()
-            + events.len()
-            + hidden.comments.len()
-            + hidden.threads.len(),
-    );
-    items.extend(comments.iter().map(|c| (false, TimelineItem::Comment(c))));
-    items.extend(threads.iter().map(|t| (false, TimelineItem::Review(t))));
-    items.extend(events.iter().map(|e| (false, TimelineItem::Event(e))));
+    // Each item, newest first.
+    let mut items: Vec<Placed<'_>> = Vec::new();
     items.extend(
-        hidden
-            .comments
+        comments
             .iter()
-            .map(|c| (true, TimelineItem::Comment(c))),
+            .map(|c| Placed::Shown(TimelineItem::Comment(c))),
     );
     items.extend(
-        hidden
-            .threads
+        threads
             .iter()
-            .map(|t| (true, TimelineItem::Review(t))),
+            .map(|t| Placed::Shown(TimelineItem::Review(t))),
     );
-    items.sort_by_key(|(_, item)| Reverse(item.timestamp()));
+    items.extend(events.iter().map(|e| Placed::Shown(TimelineItem::Event(e))));
+    if let Some(hidden) = hidden {
+        let side = hidden.side;
+        items.extend(
+            hidden
+                .comments
+                .iter()
+                .map(|c| Placed::Hidden(TimelineItem::Comment(c), side)),
+        );
+        items.extend(
+            hidden
+                .threads
+                .iter()
+                .map(|t| Placed::Hidden(TimelineItem::Review(t), side)),
+        );
+    }
+    items.sort_by_key(|placed| Reverse(placed.timestamp()));
 
     let theme = theme::current();
     let now = Utc::now();
@@ -122,22 +142,26 @@ pub(super) fn build_blocks(
     // `focus_idx` counts only focusable blocks, so the cursor (which indexes
     // comments/threads) lines up with the block we mark active.
     let mut focus_idx = 0;
-    let mut run = HiddenRun::default();
-    for (is_hidden, item) in &items {
-        if *is_hidden {
-            match item {
-                TimelineItem::Comment(_) => run.add_conversation_comment(),
-                TimelineItem::Review(t) => run.add_thread(t, roles),
-                TimelineItem::Event(_) => {}
+    let mut run: Option<HiddenRun> = None;
+    for placed in &items {
+        let item = match placed {
+            Placed::Hidden(item, side) => {
+                let run = run.get_or_insert_with(|| HiddenRun::of(*side));
+                match item {
+                    TimelineItem::Comment(_) => run.add_conversation_comment(),
+                    TimelineItem::Review(t) => run.add_thread(t, reading),
+                    TimelineItem::Event(_) => {}
+                }
+                continue;
             }
-            continue;
-        }
-        blocks.extend(hidden_block(&mem::take(&mut run), hidden.filter, width));
+            Placed::Shown(item) => item,
+        };
+        blocks.extend(run.take().and_then(|run| hidden_block(&run, width)));
         let active = focus_idx == focused;
         match item {
             TimelineItem::Comment(c) => {
                 blocks.push(TimelineBlock {
-                    lines: widgets::comment::comment_box(c, width, now, active, roles),
+                    lines: widgets::comment::comment_box(c, width, now, active, reading),
                     selected_range: None,
                     node: theme.link,
                     border: if active { theme.accent } else { theme.divider },
@@ -152,7 +176,7 @@ pub(super) fn build_blocks(
                 // Mark the sub-selected comment only on the focused thread.
                 let selected = active.then_some(sub);
                 if let Some((lines, selected_range)) = widgets::comment::comment_thread_box(
-                    t, diff, width, now, active, selected, roles,
+                    t, diff, width, now, active, selected, reading,
                 ) {
                     blocks.push(TimelineBlock {
                         lines,
@@ -192,16 +216,16 @@ pub(super) fn build_blocks(
             }
         }
     }
-    blocks.extend(hidden_block(&run, hidden.filter, width));
+    blocks.extend(run.and_then(|run| hidden_block(&run, width)));
     blocks
 }
 
 /// The block for a run of hidden comments: dim, and not somewhere the cursor
 /// can land.
-fn hidden_block(run: &HiddenRun, filter: AuthorFilter, width: u16) -> Option<TimelineBlock> {
+fn hidden_block(run: &HiddenRun, width: u16) -> Option<TimelineBlock> {
     let theme = theme::current();
     Some(TimelineBlock {
-        lines: vec![run.line(filter, width)?],
+        lines: vec![run.line(width)?],
         selected_range: None,
         node: theme.muted,
         border: theme.divider,

@@ -1,5 +1,5 @@
 use super::blocks::{Hidden, TimelineItem, build_blocks, focusable_count, timeline_rail};
-use crate::tui::widgets::{comment_fold::Folds, comment_meta::Roles};
+use crate::tui::widgets::{comment_fold::Folds, comment_meta::Reading};
 use crate::{
     app::{
         action::{Action, Effect, TimelineAction},
@@ -57,7 +57,7 @@ fn render_timeline(
         return;
     }
 
-    let roles = Roles {
+    let reading = Reading {
         pr_author,
         markers,
         folds: Folds::Long {
@@ -70,11 +70,11 @@ fn render_timeline(
     let (comments, hidden_comments): (Vec<&Comment>, Vec<&Comment>) = activity
         .comments
         .iter()
-        .partition(|c| ui.filter.shows(roles.markers.of_comment(c)));
+        .partition(|c| ui.filter.shows(reading.markers.of_comment(c)));
     let (threads, hidden_threads): (Vec<&CommentThread>, Vec<&CommentThread>) = activity
         .threads
         .iter()
-        .partition(|t| ui.filter.shows(roles.markers.of_thread(t)));
+        .partition(|t| ui.filter.shows(reading.markers.of_thread(t)));
 
     // Anchored comments gain snippets (and suggestion context) from the diff.
     // On first load, reveal them together instead of resizing cards under the reader.
@@ -127,7 +127,7 @@ fn render_timeline(
         } else {
             ui.sub = 0;
             ui.selected_row = None;
-            ui.reveal_selection = true;
+            ui.reveal = Reveal::Selection;
         }
     }
 
@@ -139,17 +139,20 @@ fn render_timeline(
     let blocks = build_blocks(
         &comments,
         &threads,
-        &Hidden {
-            comments: &hidden_comments,
-            threads: &hidden_threads,
-            filter: ui.filter,
-        },
+        ui.filter
+            .hides()
+            .map(|side| Hidden {
+                side,
+                comments: &hidden_comments,
+                threads: &hidden_threads,
+            })
+            .as_ref(),
         &activity.events,
         diff,
         area.width.saturating_sub(TIMELINE_RIGHT_PAD + RAIL_WIDTH),
         cursor,
         ui.sub,
-        roles,
+        reading,
     );
 
     let (content, navs) = timeline_rail(blocks);
@@ -180,24 +183,21 @@ fn render_timeline(
 
     let viewport = area.height as usize;
     let max_scroll = saturating_u16(content.len().saturating_sub(viewport));
-    let scroll = if ui.reveal_selection {
-        focused.map_or(ui.scroll, |n| {
+    let scroll = match (ui.reveal, focused) {
+        (Reveal::Keep, _) | (_, None) => ui.scroll,
+        (Reveal::End, Some(n)) if n.span > viewport => {
+            // Stepped back up into an item taller than the screen: show its end.
+            saturating_u16((n.start + n.span).saturating_sub(viewport))
+        }
+        (Reveal::Selection | Reveal::End, Some(n)) => {
             let range = n
                 .selected_range
                 .clone()
                 .unwrap_or(n.start..n.start + n.span);
-            if ui.reveal_end && n.span > viewport {
-                // Stepped back up into an item taller than the screen: show its end.
-                saturating_u16((n.start + n.span).saturating_sub(viewport))
-            } else {
-                scroll_to_item(ui.scroll, range.start, range.len(), content.len(), viewport)
-            }
-        })
-    } else {
-        ui.scroll
+            scroll_to_item(ui.scroll, range.start, range.len(), content.len(), viewport)
+        }
     };
-    ui.reveal_selection = false;
-    ui.reveal_end = false;
+    ui.reveal = Reveal::Keep;
     ui.scroll = scroll.min(max_scroll);
     ui.viewport = area.height;
 
@@ -211,6 +211,19 @@ fn render_timeline(
         let bar = widgets::scrollbar(ui.scroll, max_scroll, scrollbar_area.height);
         frame.render_widget(Paragraph::new(bar), scrollbar_area);
     }
+}
+
+/// What the next draw does about the scroll position.
+#[derive(Debug, Default, Clone, Copy, PartialEq, Eq)]
+enum Reveal {
+    /// Leave it where it is.
+    #[default]
+    Keep,
+    /// Bring the selected comment into view, moving as little as possible.
+    Selection,
+    /// Bring the end of the focused item into view: it was stepped back into
+    /// from below.
+    End,
 }
 
 #[derive(Debug, Default)]
@@ -227,9 +240,8 @@ pub struct Timeline {
     pub filter: AuthorFilter,
     /// The long comments the reader has opened with `space`.
     pub expanded: HashSet<CommentKey>,
-    reveal_selection: bool,
-    /// Land on the end of the item that was stepped back into, not its start.
-    reveal_end: bool,
+    /// What the next draw does about the scroll position.
+    reveal: Reveal,
     /// The rows the focused item takes, so that `j` and `k` can read on through it.
     focused_rows: Option<std::ops::Range<usize>>,
     selected_row: Option<usize>,
@@ -284,7 +296,7 @@ impl Component for Timeline {
         match action {
             TimelineAction::Scroll(delta) => {
                 self.scroll = scroll(self.scroll, delta);
-                self.reveal_selection = false;
+                self.reveal = Reveal::Keep;
             }
             TimelineAction::Move(delta) => {
                 if self.item_count <= 1 {
@@ -292,7 +304,7 @@ impl Component for Timeline {
                 } else if let Some(step) = self.read_on(delta) {
                     // Some of this item is out of view the way the reader is going.
                     self.scroll = scroll(self.scroll, step);
-                    self.reveal_selection = false;
+                    self.reveal = Reveal::Keep;
                 } else {
                     let next = step_index(self.cursor, delta, self.item_count);
                     if next != self.cursor {
@@ -300,8 +312,13 @@ impl Component for Timeline {
                         self.selected_row = None;
                         self.cursor = next;
                         self.sub = 0;
-                        self.reveal_selection = true;
-                        self.reveal_end = delta < 0;
+                        // Stepping back up, the end of what was stepped into is the
+                        // part that is next to where the reader was.
+                        self.reveal = if delta < 0 {
+                            Reveal::End
+                        } else {
+                            Reveal::Selection
+                        };
                     }
                 }
             }
@@ -320,7 +337,7 @@ impl Component for Timeline {
                     self.expanded.insert(key);
                 }
                 // Keep the comment the reader is on in view as it grows or shrinks.
-                self.reveal_selection = true;
+                self.reveal = Reveal::Selection;
             }
             TimelineAction::SubMove(delta) => {
                 let next = step_index(self.sub, delta, self.block_len);
@@ -328,7 +345,11 @@ impl Component for Timeline {
                     self.selected = None;
                     self.selected_row = None;
                 }
-                self.reveal_selection = next != self.sub;
+                self.reveal = if next == self.sub {
+                    Reveal::Keep
+                } else {
+                    Reveal::Selection
+                };
                 self.sub = next;
             }
         }

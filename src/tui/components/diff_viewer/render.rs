@@ -6,7 +6,7 @@ use crate::{
         comment::CommentThread,
         diff::{Diff, DiffLine, FileDiff, LineRef},
     },
-    tui::{layout, widgets, widgets::comment_meta::Roles},
+    tui::{layout, widgets, widgets::comment_meta::Reading},
 };
 use ratatui::{
     Frame,
@@ -20,7 +20,7 @@ pub(super) fn render(
     threads: &[CommentThread],
     pending: &[PendingComment],
     ui_diff: &mut DiffViewer,
-    roles: Roles<'_>,
+    reading: Reading<'_>,
     area: Rect,
 ) {
     // Until a pane is drawn below, there is nothing in it to act on.
@@ -48,7 +48,7 @@ pub(super) fn render(
     let comment_counts: Vec<FileComments> = diff
         .files
         .iter()
-        .map(|f| file_comment_count(f, threads, diff.revision.as_ref(), roles))
+        .map(|f| file_comment_count(f, threads, diff.revision.as_ref(), reading))
         .collect();
 
     let pane_focused = matches!(ui_diff.focus, DiffFocus::Pane);
@@ -81,7 +81,7 @@ pub(super) fn render(
             threads,
             pending,
             pane_focused,
-            roles,
+            reading,
             pane_area,
         );
     }
@@ -91,7 +91,7 @@ fn file_comment_count(
     file: &FileDiff,
     threads: &[CommentThread],
     revision: Option<&crate::domain::diff::DiffRevision>,
-    roles: Roles<'_>,
+    reading: Reading<'_>,
 ) -> FileComments {
     // Only anchored (code) threads count toward a file; general discussion doesn't.
     let on_file = || {
@@ -130,7 +130,7 @@ fn file_comment_count(
         })
         .flat_map(|(t, _)| &t.comments)
         .fold(FileComments::default(), |mut counts, comment| {
-            match roles.markers.of_comment(comment) {
+            match reading.markers.of_comment(comment) {
                 Authorship::Human => counts.people += 1,
                 Authorship::Ai => counts.ai += 1,
             }

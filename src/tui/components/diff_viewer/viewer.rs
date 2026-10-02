@@ -16,7 +16,7 @@ use crate::{
         component::Component,
         components::search_input::{SearchInput, SearchKind},
         screens::pr_detail::view::ThreadRef,
-        widgets::comment_meta::Roles,
+        widgets::comment_meta::Reading,
     },
 };
 use ratatui::{Frame, crossterm::event::KeyEvent, layout::Rect};
@@ -26,7 +26,7 @@ pub struct DiffContext<'a> {
     pub diff: Option<&'a LoadState<Diff>>,
     pub threads: &'a [CommentThread],
     pub pending: &'a [PendingComment],
-    pub roles: Roles<'a>,
+    pub reading: Reading<'a>,
 }
 
 #[derive(Debug, Default)]
@@ -70,9 +70,6 @@ pub struct FocusedNav {
     /// The line it is on or attached to: where a new comment would go.
     pub anchor: CommentAnchor,
     pub target: NavTarget,
-    /// The comment whose fold row the cursor is on, if it is on one; the target
-    /// is then its thread.
-    pub fold: Option<CommentKey>,
 }
 
 #[cfg(test)]
@@ -87,7 +84,6 @@ impl FocusedNav {
                 removed: false,
             },
             target,
-            fold: None,
         }
     }
 
@@ -107,6 +103,12 @@ impl FocusedNav {
 pub enum NavTarget {
     Line,
     Thread(ThreadRef),
+    /// The row that opens or folds one long comment of a thread. It stands for the
+    /// thread when a reply or a resolve is asked for.
+    Fold {
+        thread: ThreadRef,
+        key: CommentKey,
+    },
     /// A queued review comment, by its index in the pending review.
     Pending(usize),
 }
@@ -147,7 +149,7 @@ impl Component for DiffViewer {
             ctx.threads,
             ctx.pending,
             self,
-            ctx.roles,
+            ctx.reading,
             area,
         );
     }
@@ -166,7 +168,7 @@ impl DiffViewer {
     pub const fn focused_thread(&self) -> Option<&ThreadRef> {
         match &self.pane.focused {
             Some(FocusedNav {
-                target: NavTarget::Thread(thread),
+                target: NavTarget::Thread(thread) | NavTarget::Fold { thread, .. },
                 ..
             }) => Some(thread),
             Some(FocusedNav {
@@ -193,7 +195,7 @@ impl DiffViewer {
                 ..
             }) => Some(*index),
             Some(FocusedNav {
-                target: NavTarget::Line | NavTarget::Thread(_),
+                target: NavTarget::Line | NavTarget::Thread(_) | NavTarget::Fold { .. },
                 ..
             })
             | None => None,
@@ -221,8 +223,18 @@ impl DiffViewer {
     }
 
     /// The comment whose fold row the pane cursor is on.
-    pub fn focused_fold(&self) -> Option<CommentKey> {
-        self.pane.focused.as_ref().and_then(|focused| focused.fold)
+    pub const fn focused_fold(&self) -> Option<CommentKey> {
+        match &self.pane.focused {
+            Some(FocusedNav {
+                target: NavTarget::Fold { key, .. },
+                ..
+            }) => Some(*key),
+            Some(FocusedNav {
+                target: NavTarget::Line | NavTarget::Thread(_) | NavTarget::Pending(_),
+                ..
+            })
+            | None => None,
+        }
     }
 
     pub(crate) const fn focus_file(&mut self, file_index: usize) {

@@ -10,7 +10,7 @@ use crate::{
             comment_code::{diff_snippet, suggestion_box},
             comment_fold::{Fold, Folds},
             comment_frame::{bracket, framed, header_line, prefix_gutter, status_rule},
-            comment_meta::{self, Roles},
+            comment_meta::{self, Reading},
             markdown,
         },
     },
@@ -38,7 +38,7 @@ pub(in crate::tui) fn render_inline_thread(
     now: DateTime<Utc>,
     active: bool,
     anchor_text: Option<&str>,
-    roles: Roles<'_>,
+    reading: Reading<'_>,
     expanded: bool,
 ) -> InlineThread {
     let theme = theme::current();
@@ -47,7 +47,7 @@ pub(in crate::tui) fn render_inline_thread(
     // A resolved thread collapses to a one-line summary until expanded (`space`).
     if thread.resolved() && !expanded {
         return InlineThread {
-            lines: vec![collapse_summary(thread, false, active, width, roles)],
+            lines: vec![collapse_summary(thread, false, active, width, reading)],
             folds: Vec::new(),
         };
     }
@@ -60,12 +60,12 @@ pub(in crate::tui) fn render_inline_thread(
 
     let mut out: Vec<Line<'static>> = Vec::new();
     if thread.resolved() {
-        out.push(collapse_summary(thread, true, active, width, roles));
+        out.push(collapse_summary(thread, true, active, width, reading));
     } else if !has_suggestion {
         out.push(status_rule(status_label(thread.resolved()), width, frame));
     }
     let before = out.len();
-    let (lines, _, mut folds) = conversation(thread, pos, width, now, roles, frame, None, false);
+    let (lines, _, mut folds) = conversation(thread, pos, width, now, reading, frame, None, false);
     out.extend(lines);
     for fold in &mut folds {
         fold.row += before;
@@ -80,7 +80,7 @@ fn collapse_summary(
     expanded: bool,
     active: bool,
     width: u16,
-    roles: Roles<'_>,
+    reading: Reading<'_>,
 ) -> Line<'static> {
     if width == 0 {
         return Line::default();
@@ -104,7 +104,7 @@ fn collapse_summary(
             format!(" · @{}", comment.author.username),
             Style::default().fg(theme.muted),
         ));
-        if roles.is_ai(comment) {
+        if reading.is_ai(comment) {
             spans.push(comment_meta::ai_tag());
         }
     }
@@ -116,12 +116,12 @@ pub(in crate::tui) fn comment_box(
     width: u16,
     now: DateTime<Utc>,
     active: bool,
-    roles: Roles<'_>,
+    reading: Reading<'_>,
 ) -> Vec<Line<'static>> {
     let theme = theme::current();
     let frame = if active { theme.accent } else { theme.divider };
     let header = header_line(
-        comment_meta::meta(comment, roles, comment.created, now),
+        comment_meta::meta(comment, reading, now),
         kind_label(comment),
         width,
     );
@@ -132,7 +132,7 @@ pub(in crate::tui) fn comment_box(
             CommentKind::Conversation,
             None,
             width.saturating_sub(2),
-            roles.folds,
+            reading.folds,
         )
         .0,
         width,
@@ -164,7 +164,7 @@ pub(in crate::tui) fn comment_thread_box(
     now: DateTime<Utc>,
     active: bool,
     selected: Option<usize>,
-    roles: Roles<'_>,
+    reading: Reading<'_>,
 ) -> Option<(Vec<Line<'static>>, Option<std::ops::Range<usize>>)> {
     let diff = diff.filter(|d| thread.matches_revision(d.revision.as_ref()));
     let theme = theme::current();
@@ -196,7 +196,7 @@ pub(in crate::tui) fn comment_thread_box(
         format!("@{}", first.author.username),
         Style::default().fg(theme.info).add_modifier(Modifier::BOLD),
     )];
-    if roles.is_ai(first) {
+    if reading.is_ai(first) {
         left.push(comment_meta::ai_tag());
     }
     left.push(Span::styled(phrase, Style::default().fg(theme.muted)));
@@ -231,7 +231,7 @@ pub(in crate::tui) fn comment_thread_box(
     // skips its meta line to avoid repeating it.
     let offset = out.len();
     let (lines, selected_range, _) =
-        conversation(thread, pos, width, now, roles, frame, selected, true);
+        conversation(thread, pos, width, now, reading, frame, selected, true);
     out.extend(lines);
     let selected_range = selected_range.map(|range| {
         if selected == Some(0) {
@@ -249,7 +249,7 @@ fn conversation(
     anchor: Option<(usize, &str)>,
     width: u16,
     now: DateTime<Utc>,
-    roles: Roles<'_>,
+    reading: Reading<'_>,
     frame: Color,
     selected: Option<usize>,
     skip_first_meta: bool,
@@ -274,7 +274,7 @@ fn conversation(
         let meta = if suppress {
             Vec::new()
         } else {
-            comment_meta::meta(comment, roles, comment.created, now)
+            comment_meta::meta(comment, reading, now)
         };
         if !split_suggestions(&comment.content).1.is_empty() {
             let label = if suppress {
@@ -287,7 +287,7 @@ fn conversation(
                 thread.kind(),
                 anchor,
                 width.saturating_sub(2),
-                roles.folds,
+                reading.folds,
             );
             // The frame's top line comes first.
             folds.extend(fold.map(|f| Fold {
@@ -323,7 +323,7 @@ fn conversation(
             thread.kind(),
             anchor,
             width.saturating_sub(2),
-            roles.folds,
+            reading.folds,
         );
         folds.extend(fold.map(|f| Fold {
             row: out.len() + f.row,
