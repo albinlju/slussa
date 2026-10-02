@@ -643,10 +643,11 @@ The rules the code relies on, kept short; the regression tests in
   long messages and close with Esc or Enter, leaving the editor and selection
   alone. The Builds tab owns its scrolling.
 - **Colour.** Graphite is the default; the other themes are chosen with
-  `theme` in the config or `SLUSSA_THEME`, and there is no theme picker. All
-  five are dark and `terminal` follows a light terminal, so there is no
-  automatic light and dark; that is worth taking up again only with a light
-  palette.
+  `theme` in the config or `SLUSSA_THEME`, and there is no theme picker. The
+  four with a palette of their own are dark, and `terminal` takes its
+  foreground and background from the terminal and so follows a light one;
+  there is therefore no automatic light and dark, which is worth taking up
+  again only with a light palette.
   Description takes heading, link, quote and code colours from the theme
   (inline code uses `orange`) and keeps the terminal background. Conversation
   Markdown still starts from the renderer's dark style; compare it visually
