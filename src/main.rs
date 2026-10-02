@@ -79,7 +79,7 @@ fn run_tui(session: Session) -> ExitCode {
         if blank > 0 {
             tracing::warn!("ignoring {blank} blank entries in `ai.markers` in the config");
         }
-        app.state.store.ai_markers = markers;
+        app.state.store.set_ai_markers(markers);
         let mut guard = match TerminalGuard::enter() {
             Ok(guard) => guard,
             Err(err) => {

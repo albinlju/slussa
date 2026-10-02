@@ -119,7 +119,6 @@ fn footer_actions(state: &DetailView<'_>, tab: DetailTab) -> Vec<Hint> {
             }));
         }
         if crate::tui::screens::pr_detail::tabs::overview::offers_filter(
-            &state.store.ai_markers,
             state.data,
             state.detail.overview.timeline.filter,
         ) {

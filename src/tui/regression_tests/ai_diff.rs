@@ -39,7 +39,9 @@ fn the_markers_in_the_config_count_too_and_a_file_without_an_agent_has_no_badge(
     assert!(!none.contains('◆'), "no marker, no agent: {none}");
     assert!(none.contains("• 1"));
 
-    state.store.ai_markers = AiMarkers::from_config(&["> **gator-agent**".into()]).0;
+    state
+        .store
+        .set_ai_markers(AiMarkers::from_config(&["> **gator-agent**".into()]).0);
     let marked = screen(&mut state);
     assert!(marked.contains("◆ 1"), "{marked}");
     assert!(

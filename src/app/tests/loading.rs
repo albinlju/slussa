@@ -184,3 +184,77 @@ fn failed_refresh_marks_cached_data_until_that_resource_recovers() {
     app.apply_result(TaskResult::Read(Read::Diff(PrId(42), Ok(diff))));
     assert!(!app.state.store.refresh_failed(app.state.screen));
 }
+
+fn activity_of(
+    comments: Vec<crate::domain::comment::Comment>,
+) -> crate::domain::activity::Activity {
+    crate::domain::activity::Activity {
+        comments,
+        ..Default::default()
+    }
+}
+
+fn comment_by(
+    account: crate::domain::user::AccountKind,
+    content: &str,
+) -> crate::domain::comment::Comment {
+    use crate::domain::{authorship::Authorship, comment::Comment, user::User};
+    Comment {
+        id: None,
+        author: User {
+            username: "alice".into(),
+        },
+        account,
+        authorship: Authorship::Human,
+        content: content.into(),
+        created: chrono::Utc::now(),
+        reactions: vec![],
+        reply_to: None,
+    }
+}
+
+fn authorship_of_cached(app: &App) -> Vec<crate::domain::authorship::Authorship> {
+    match &app.state.store.cache.details[&PrId(42)].activity {
+        LoadState::Loaded(activity) => activity.comments.iter().map(|c| c.authorship).collect(),
+        _ => Vec::new(),
+    }
+}
+
+#[test]
+fn an_activity_that_arrives_is_judged_once_with_the_session_markers() {
+    use crate::domain::{authorship::AiMarkers, authorship::Authorship, user::AccountKind};
+    let mut app = app();
+    app.state
+        .store
+        .set_ai_markers(AiMarkers::from_config(&["> **gator**".into()]).0);
+    app.apply_result(TaskResult::Read(Read::Activity(
+        PrId(42),
+        Ok(activity_of(vec![
+            comment_by(AccountKind::Person, "A person."),
+            comment_by(AccountKind::Person, "> **gator**\nA finding."),
+            comment_by(AccountKind::Bot, "A bot."),
+        ])),
+    )));
+    assert_eq!(
+        authorship_of_cached(&app),
+        [Authorship::Human, Authorship::Ai, Authorship::Ai]
+    );
+}
+
+#[test]
+fn new_markers_judge_what_was_read_before_them() {
+    use crate::domain::{authorship::AiMarkers, authorship::Authorship, user::AccountKind};
+    let mut app = app();
+    app.apply_result(TaskResult::Read(Read::Activity(
+        PrId(42),
+        Ok(activity_of(vec![comment_by(
+            AccountKind::Person,
+            "> **gator**\nA finding.",
+        )])),
+    )));
+    assert_eq!(authorship_of_cached(&app), [Authorship::Human]);
+    app.state
+        .store
+        .set_ai_markers(AiMarkers::from_config(&["> **gator**".into()]).0);
+    assert_eq!(authorship_of_cached(&app), [Authorship::Ai]);
+}

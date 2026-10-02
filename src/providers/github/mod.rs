@@ -24,6 +24,7 @@ use chrono::{DateTime, Utc};
 use serde::Deserialize;
 use serde::de::DeserializeOwned;
 
+use crate::domain::authorship::Authorship;
 use crate::domain::comment::{Comment, CommentId, Reaction};
 use crate::domain::pr::{MergeStrategy, Mergeability, PrId};
 use crate::domain::review::{ReviewComment, ReviewVerdict};
@@ -320,6 +321,7 @@ pub(super) fn map_gql_comment(c: GqlComment) -> Comment {
             username: c.author.map(|a| a.login).unwrap_or_default(),
         },
         account,
+        authorship: Authorship::Human,
         content: c.body,
         created: c.created_at,
         reactions,

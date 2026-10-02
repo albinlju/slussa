@@ -132,7 +132,6 @@ pub(in crate::tui) fn key_to_action(
         if plain
             && code == KeyCode::Char('f')
             && crate::tui::screens::pr_detail::tabs::overview::offers_filter(
-                &state.store.ai_markers,
                 state.data,
                 state.detail.overview.timeline.filter,
             )

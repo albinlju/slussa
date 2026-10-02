@@ -47,7 +47,7 @@ pub(in crate::tui) fn render_inline_thread(
     // A resolved thread collapses to a one-line summary until expanded (`space`).
     if thread.resolved() && !expanded {
         return InlineThread {
-            lines: vec![collapse_summary(thread, false, active, width, reading)],
+            lines: vec![collapse_summary(thread, false, active, width)],
             folds: Vec::new(),
         };
     }
@@ -60,7 +60,7 @@ pub(in crate::tui) fn render_inline_thread(
 
     let mut out: Vec<Line<'static>> = Vec::new();
     if thread.resolved() {
-        out.push(collapse_summary(thread, true, active, width, reading));
+        out.push(collapse_summary(thread, true, active, width));
     } else if !has_suggestion {
         out.push(status_rule(status_label(thread.resolved()), width, frame));
     }
@@ -80,7 +80,6 @@ fn collapse_summary(
     expanded: bool,
     active: bool,
     width: u16,
-    reading: Reading<'_>,
 ) -> Line<'static> {
     if width == 0 {
         return Line::default();
@@ -104,7 +103,7 @@ fn collapse_summary(
             format!(" · @{}", comment.author.username),
             Style::default().fg(theme.muted),
         ));
-        if reading.is_ai(comment) {
+        if comment.is_ai() {
             spans.push(comment_meta::ai_tag());
         }
     }
@@ -196,7 +195,7 @@ pub(in crate::tui) fn comment_thread_box(
         format!("@{}", first.author.username),
         Style::default().fg(theme.info).add_modifier(Modifier::BOLD),
     )];
-    if reading.is_ai(first) {
+    if first.is_ai() {
         left.push(comment_meta::ai_tag());
     }
     left.push(Span::styled(phrase, Style::default().fg(theme.muted)));

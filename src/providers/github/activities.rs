@@ -93,6 +93,7 @@ mod tests {
                             username: "alice".into(),
                         },
                         account: crate::domain::user::AccountKind::Person,
+                        authorship: crate::domain::authorship::Authorship::Human,
                         content: "Review this".into(),
                         created: chrono::Utc::now(),
                         reactions: vec![],

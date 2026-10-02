@@ -1,4 +1,7 @@
-use super::user::{AccountKind, User};
+use super::{
+    authorship::Authorship,
+    user::{AccountKind, User},
+};
 use chrono::{DateTime, Utc};
 
 /// A comment's id at its provider. A type of its own, so that it cannot be
@@ -21,11 +24,21 @@ pub struct Comment {
     pub author: User,
     /// Whether the account is a bot's; what the provider could not tell is a person's.
     pub account: AccountKind,
+    /// Whether an AI agent wrote it. A provider leaves this `Human`; the store
+    /// judges it when the activity arrives (`AiMarkers::judge`), once, from the
+    /// account and the session's markers.
+    pub authorship: Authorship,
     pub content: String,
     pub created: DateTime<Utc>,
     pub reactions: Vec<Reaction>,
     /// Id to hang a reply under, when the provider threads this comment (None = no threading).
     pub reply_to: Option<CommentId>,
+}
+
+impl Comment {
+    pub fn is_ai(&self) -> bool {
+        self.authorship == Authorship::Ai
+    }
 }
 
 /// Text with something in it besides whitespace: what a comment has to be
@@ -135,6 +148,15 @@ pub struct CommentThread {
     /// Code-review context: where the thread is anchored and its resolution.
     /// `None` for a general discussion thread (no code location, not resolvable).
     pub anchor: Option<ThreadAnchor>,
+}
+
+impl CommentThread {
+    /// A thread is the agent's when the comment that started it is.
+    pub fn authorship(&self) -> Authorship {
+        self.comments
+            .first()
+            .map_or(Authorship::Human, |first| first.authorship)
+    }
 }
 
 /// The review-thread specifics — present only when a thread is anchored to code.

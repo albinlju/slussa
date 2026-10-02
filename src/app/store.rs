@@ -56,10 +56,27 @@ pub struct Store {
     pub current_user: Username,
     pub capabilities: Capabilities,
     /// How comments by an AI agent are recognised; empty unless configured.
-    pub ai_markers: AiMarkers,
+    /// Private: `set_ai_markers` judges what is cached, and `judged` what arrives.
+    ai_markers: AiMarkers,
 }
 
 impl Store {
+    /// Use these markers from now on, and judge the activity already read with them.
+    pub fn set_ai_markers(&mut self, markers: AiMarkers) {
+        self.ai_markers = markers;
+        for data in self.cache.details.values_mut() {
+            if let LoadState::Loaded(activity) = &mut data.activity {
+                self.ai_markers.judge(activity);
+            }
+        }
+    }
+
+    /// An activity that has arrived, with each comment judged once, here.
+    pub fn judged(&self, mut activity: Activity) -> Activity {
+        self.ai_markers.judge(&mut activity);
+        activity
+    }
+
     pub fn new(current_user: Username, capabilities: Capabilities) -> Self {
         Self {
             refresh_failures: HashSet::new(),

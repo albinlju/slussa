@@ -149,7 +149,7 @@ pub(super) fn build_blocks(
                 let run = run.get_or_insert_with(|| HiddenRun::of(*side));
                 match item {
                     TimelineItem::Comment(_) => run.add_conversation_comment(),
-                    TimelineItem::Review(t) => run.add_thread(t, reading),
+                    TimelineItem::Review(t) => run.add_thread(t),
                     TimelineItem::Event(_) => {}
                 }
                 continue;

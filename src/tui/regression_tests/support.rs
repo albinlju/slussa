@@ -11,6 +11,7 @@ pub(super) use crate::{
     },
     domain::{
         activity::Activity,
+        authorship::Authorship,
         ci::CiSummary,
         comment::{Comment, CommentId, CommentThread, ThreadAnchor, ThreadHandle},
         commit::{Commit, CommitOid},
@@ -138,6 +139,7 @@ pub(super) fn comment(id: u64, content: &str) -> Comment {
             username: "alice".into(),
         },
         account: AccountKind::Person,
+        authorship: Authorship::Human,
         content: content.into(),
         created: chrono::Utc::now(),
         reactions: vec![],
@@ -149,6 +151,7 @@ pub(super) fn comment(id: u64, content: &str) -> Comment {
 pub(super) fn bot_comment(id: u64, content: &str) -> Comment {
     Comment {
         account: AccountKind::Bot,
+        authorship: Authorship::Ai,
         ..comment(id, content)
     }
 }
