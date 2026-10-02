@@ -8,7 +8,7 @@ use crate::{
             effect::{Effect, TaskResult},
             refresh,
             state::AppState,
-            store::{self, FetchKey, LoadState},
+            store::{self, FetchKey, LoadState, PrResource},
         },
         ui::{action::Action, key_to_action, render},
     },
@@ -191,7 +191,7 @@ impl App {
             Effect::LoadOlder => self.load_older_prs(),
             Effect::LoadView => self.ensure_view_loaded(),
             Effect::LoadCommitDiff { pr_id, oid } => {
-                self.ensure_loaded(FetchKey::CommitDiff(pr_id, oid));
+                self.ensure_loaded(FetchKey::Pr(PrResource::CommitDiff(oid), pr_id));
             }
             Effect::DismissError { pr_id } => {
                 self.state.store.errors.remove(&pr_id);

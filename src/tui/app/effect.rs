@@ -13,7 +13,7 @@ use crate::{
     tui::app::{
         commands::Command,
         desktop::{LinkDone, LinkError},
-        store::{FetchKey, WriteTicket},
+        store::{FetchKey, PrResource, WriteTicket},
     },
 };
 
@@ -87,13 +87,13 @@ impl Read {
     pub fn key(&self) -> FetchKey {
         match self {
             Self::Prs { group, .. } => FetchKey::Prs(*group),
-            Self::Commits(id, _) => FetchKey::Commits(*id),
-            Self::Diff(id, _) => FetchKey::Diff(*id),
-            Self::Builds(id, _) => FetchKey::Builds(*id),
-            Self::Activity(id, _) => FetchKey::Activity(*id),
-            Self::Mergeability(id, _) => FetchKey::Mergeability(*id),
-            Self::Info(id, _) => FetchKey::Info(*id),
-            Self::CommitDiff(id, oid, _) => FetchKey::CommitDiff(*id, oid.clone()),
+            Self::Commits(id, _) => FetchKey::Pr(PrResource::Commits, *id),
+            Self::Diff(id, _) => FetchKey::Pr(PrResource::Diff, *id),
+            Self::Builds(id, _) => FetchKey::Pr(PrResource::Builds, *id),
+            Self::Activity(id, _) => FetchKey::Pr(PrResource::Activity, *id),
+            Self::Mergeability(id, _) => FetchKey::Pr(PrResource::Mergeability, *id),
+            Self::Info(id, _) => FetchKey::Pr(PrResource::Info, *id),
+            Self::CommitDiff(id, oid, _) => FetchKey::Pr(PrResource::CommitDiff(oid.clone()), *id),
         }
     }
 

@@ -12,7 +12,7 @@ use crate::{
     tui::app::{
         App,
         effect::{Read, TaskResult, WriteError},
-        store::{FetchKey, FetchTicket, OpenChain, WriteTicket},
+        store::{FetchKey, FetchTicket, OpenChain, PrResource, WriteTicket},
     },
 };
 use tokio::task::{self, JoinError};
@@ -141,7 +141,11 @@ impl App {
     }
 
     pub(super) fn spawn_load_commits(&mut self, pr_id: PrId) {
-        let Some(ticket) = self.state.store.begin_fetch(FetchKey::Commits(pr_id)) else {
+        let Some(ticket) = self
+            .state
+            .store
+            .begin_fetch(FetchKey::Pr(PrResource::Commits, pr_id))
+        else {
             return;
         };
         let provider = self.provider.clone();
@@ -153,7 +157,11 @@ impl App {
     }
 
     pub(super) fn spawn_load_diff(&mut self, pr_id: PrId) {
-        let Some(ticket) = self.state.store.begin_fetch(FetchKey::Diff(pr_id)) else {
+        let Some(ticket) = self
+            .state
+            .store
+            .begin_fetch(FetchKey::Pr(PrResource::Diff, pr_id))
+        else {
             return;
         };
         let provider = self.provider.clone();
@@ -165,7 +173,11 @@ impl App {
     }
 
     pub(super) fn spawn_load_builds(&mut self, pr_id: PrId) {
-        let Some(ticket) = self.state.store.begin_fetch(FetchKey::Builds(pr_id)) else {
+        let Some(ticket) = self
+            .state
+            .store
+            .begin_fetch(FetchKey::Pr(PrResource::Builds, pr_id))
+        else {
             return;
         };
         let provider = self.provider.clone();
@@ -177,7 +189,7 @@ impl App {
     }
 
     pub(super) fn spawn_load_commit_diff(&mut self, pr_id: PrId, oid: CommitOid) {
-        let key = FetchKey::CommitDiff(pr_id, oid.clone());
+        let key = FetchKey::Pr(PrResource::CommitDiff(oid.clone()), pr_id);
         let Some(ticket) = self.state.store.begin_fetch(key) else {
             return;
         };
@@ -191,7 +203,11 @@ impl App {
     }
 
     pub(super) fn spawn_load_activity(&mut self, pr_id: PrId) {
-        let Some(ticket) = self.state.store.begin_fetch(FetchKey::Activity(pr_id)) else {
+        let Some(ticket) = self
+            .state
+            .store
+            .begin_fetch(FetchKey::Pr(PrResource::Activity, pr_id))
+        else {
             return;
         };
         let provider = self.provider.clone();
@@ -203,7 +219,11 @@ impl App {
     }
 
     pub(super) fn spawn_load_mergeability(&mut self, pr_id: PrId) {
-        let Some(ticket) = self.state.store.begin_fetch(FetchKey::Mergeability(pr_id)) else {
+        let Some(ticket) = self
+            .state
+            .store
+            .begin_fetch(FetchKey::Pr(PrResource::Mergeability, pr_id))
+        else {
             return;
         };
         let provider = self.provider.clone();
@@ -216,7 +236,11 @@ impl App {
 
     /// The description and labels of one PR, when the provider's list omits them.
     pub(super) fn spawn_load_info(&mut self, pr_id: PrId) {
-        let Some(ticket) = self.state.store.begin_fetch(FetchKey::Info(pr_id)) else {
+        let Some(ticket) = self
+            .state
+            .store
+            .begin_fetch(FetchKey::Pr(PrResource::Info, pr_id))
+        else {
             return;
         };
         let provider = self.provider.clone();
@@ -329,25 +353,25 @@ impl App {
     }
 
     pub(super) fn reload_after_mutation(&mut self, pr_id: PrId) {
-        self.reload_resource(FetchKey::Activity(pr_id));
+        self.reload_resource(FetchKey::Pr(PrResource::Activity, pr_id));
         for group in PrGroup::ALL {
             if group == PrGroup::Open || self.state.store.group_loaded(group) {
                 self.reload_resource(FetchKey::Prs(group));
             }
         }
-        self.reload_resource(FetchKey::Mergeability(pr_id));
+        self.reload_resource(FetchKey::Pr(PrResource::Mergeability, pr_id));
     }
 
     pub(super) fn load_resource(&mut self, key: FetchKey) {
         match key {
             FetchKey::Prs(group) => self.spawn_load_prs(group, None),
-            FetchKey::Commits(id) => self.spawn_load_commits(id),
-            FetchKey::Diff(id) => self.spawn_load_diff(id),
-            FetchKey::Builds(id) => self.spawn_load_builds(id),
-            FetchKey::Activity(id) => self.spawn_load_activity(id),
-            FetchKey::Mergeability(id) => self.spawn_load_mergeability(id),
-            FetchKey::Info(id) => self.spawn_load_info(id),
-            FetchKey::CommitDiff(id, oid) => self.spawn_load_commit_diff(id, oid),
+            FetchKey::Pr(PrResource::Commits, id) => self.spawn_load_commits(id),
+            FetchKey::Pr(PrResource::Diff, id) => self.spawn_load_diff(id),
+            FetchKey::Pr(PrResource::Builds, id) => self.spawn_load_builds(id),
+            FetchKey::Pr(PrResource::Activity, id) => self.spawn_load_activity(id),
+            FetchKey::Pr(PrResource::Mergeability, id) => self.spawn_load_mergeability(id),
+            FetchKey::Pr(PrResource::Info, id) => self.spawn_load_info(id),
+            FetchKey::Pr(PrResource::CommitDiff(oid), id) => self.spawn_load_commit_diff(id, oid),
         }
     }
 
