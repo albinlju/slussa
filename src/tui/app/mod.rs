@@ -18,7 +18,6 @@ mod loads;
 pub mod navigation;
 mod notice;
 pub mod refresh;
-pub mod reviews;
 pub mod state;
 pub mod store;
 mod terminal;

@@ -6,13 +6,12 @@ use crate::{
         comment::{CommentKey, ThreadHandle},
         commit::CommitOid,
         pr::{MergeStrategy, PrGroup, PrId},
-        review::{ReviewComment, ReviewVerdict},
+        review::{CommentAnchor, CommentTarget, PendingComment, ReviewComment, ReviewVerdict},
     },
     providers::FetchError,
     tui::app::{
         App,
         action::{Read, TaskResult, WriteError},
-        reviews::{CommentAnchor, CommentTarget, PendingComment},
         store::{FetchKey, FetchTicket, OpenChain, WriteTicket},
     },
 };

@@ -219,8 +219,8 @@ fn discarding_a_populated_review_requires_explicit_confirmation() {
     detail(&mut app, DetailTab::Overview);
     app.state.store.reviews.insert(
         PrId(42),
-        crate::tui::app::reviews::PendingReview {
-            comments: vec![crate::tui::app::reviews::PendingComment {
+        crate::domain::review::PendingReview {
+            comments: vec![crate::domain::review::PendingComment {
                 anchor: CommentAnchor {
                     revision: None,
                     path: "src/main.rs".into(),

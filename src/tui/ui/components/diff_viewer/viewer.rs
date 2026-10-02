@@ -6,10 +6,10 @@ use crate::{
     domain::{
         comment::{CommentId, CommentKey, CommentThread},
         diff::{Diff, FileDiff},
+        review::{CommentAnchor, PendingComment},
     },
     tui::app::{
         action::{Action, DiffAction, Effect},
-        reviews::{CommentAnchor, PendingComment},
         store::LoadState,
     },
     tui::ui::{

@@ -14,7 +14,7 @@ fn recovery_root(name: &str) -> std::path::PathBuf {
 }
 
 fn attach_recovery(app: &mut App, root: &std::path::Path) {
-    let (storage, snapshot) = crate::tui::app::drafts::reopen(root, "test-repo/reviewer").unwrap();
+    let (storage, snapshot) = crate::local::drafts::reopen(root, "test-repo/reviewer").unwrap();
     app.restore_drafts(storage, snapshot);
 }
 

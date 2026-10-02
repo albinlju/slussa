@@ -1,16 +1,18 @@
 //! Imports and helpers shared by the files in this directory.
 
-pub(super) use crate::tui::app::{
-    App,
-    action::{Action, Command, Effect, ListAction},
-    reviews::CommentTarget,
-    store::{FetchKey, LoadState, OpenChain},
-};
 pub(super) use crate::{
     domain::pr::{PrGroup, PrId},
     providers::Provider,
     test_support::{FakeGh, gh_closed_pr, gh_list_page, gh_pr},
     tui::ui::screens::pr_list::StatusFilter,
+};
+pub(super) use crate::{
+    domain::review::CommentTarget,
+    tui::app::{
+        App,
+        action::{Action, Command, Effect, ListAction},
+        store::{FetchKey, LoadState, OpenChain},
+    },
 };
 pub(super) use serde_json::json;
 pub(super) use std::time::Duration;

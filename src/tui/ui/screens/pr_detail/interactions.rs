@@ -7,11 +7,8 @@ use super::{
     },
 };
 use crate::{
-    domain::pr::PrId,
-    tui::app::{
-        action::{Command, ConfirmAction, Effect, MergeAction, PrAction, ReviewAction},
-        reviews::CommentTarget,
-    },
+    domain::{pr::PrId, review::CommentTarget},
+    tui::app::action::{Command, ConfirmAction, Effect, MergeAction, PrAction, ReviewAction},
     tui::ui::{
         component::Component,
         components::comment_editor::{CommentDraft, CommentEditor},

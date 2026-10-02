@@ -6,11 +6,11 @@ pub(super) use crate::{
     domain::{
         comment::{CommentId, CommentKey, CommentKind, ThreadHandle},
         pr::PrId,
+        review::{CommentAnchor, CommentTarget},
     },
     providers::{FetchError, Provider},
     tui::app::{
         navigation::Screen,
-        reviews::{CommentAnchor, CommentTarget},
         store::{LoadState, WriteTicket},
     },
     tui::ui::{

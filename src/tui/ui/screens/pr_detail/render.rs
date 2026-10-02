@@ -5,11 +5,9 @@ use crate::{
         capabilities::{Capabilities, Feature},
         comment::CommentThread,
         pr::Mergeability,
+        review::{PendingComment, PendingReview},
     },
-    tui::app::{
-        reviews::{PendingComment, PendingReview},
-        store::PrData,
-    },
+    tui::app::store::PrData,
     tui::ui::{
         component::Component,
         components::{comment_editor::EditorView, diff_viewer::DiffContext},

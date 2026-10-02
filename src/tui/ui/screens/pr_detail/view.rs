@@ -5,11 +5,10 @@ use crate::{
         commit::CommitOid,
         diff::FileDiff,
         pr::{Mergeability, PrId, PrStatus, PullRequest},
-        review::ReviewVerdict,
+        review::{CommentTarget, ReviewVerdict},
     },
     tui::app::{
         navigation::Screen,
-        reviews::CommentTarget,
         store::{LoadState, PrData, Store},
     },
     tui::ui::{
@@ -94,7 +93,7 @@ impl<'a> DetailView<'a> {
         }
     }
 
-    pub fn pending_review(&self) -> Option<&'a crate::tui::app::reviews::PendingReview> {
+    pub fn pending_review(&self) -> Option<&'a crate::domain::review::PendingReview> {
         self.store.reviews.get(&self.pr_id)
     }
 

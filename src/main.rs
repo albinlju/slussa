@@ -4,6 +4,7 @@ mod config;
 mod doc_contract;
 mod domain;
 mod git_url;
+mod local;
 mod logging;
 mod private_file;
 mod providers;

@@ -418,7 +418,7 @@ pub enum Command {
     AbandonReview,
     RemovePendingComment(usize),
     SubmitComment {
-        target: crate::tui::app::reviews::CommentTarget,
+        target: crate::domain::review::CommentTarget,
         text: crate::domain::comment::NonBlank,
     },
     SubmitReview {
@@ -437,7 +437,7 @@ pub enum Command {
 
 impl Command {
     pub fn supported_by(&self, caps: &crate::domain::capabilities::Capabilities) -> bool {
-        use crate::{domain::capabilities::Feature, tui::app::reviews::CommentTarget};
+        use crate::domain::{capabilities::Feature, review::CommentTarget};
         match self {
             Self::StartReview | Self::AbandonReview | Self::RemovePendingComment(_) => {
                 caps.reviews()

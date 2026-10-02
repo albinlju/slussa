@@ -409,7 +409,6 @@ import rule is tooling, which the same rule says to do now.
 
 | Move | Trigger |
 |---|---|
-| `local/`, and the draft types to `domain/review.rs` | *Unread / updated*, after `session/` |
 | `ui/action.rs` and `app/effect.rs`, with `Command` to `commands.rs` | The next feature that adds a key, in a PR of its own and not together with `bindings.rs` |
 | `bindings.rs` with three outcomes | The next feature that adds a key to the PR view (the roadmap's *Keybinding table*) |
 | `pr_groups.rs` | `store.rs` passes the size limit, or a feature touches the reading of the list (*Search older PRs*, `Pager<T>`) |

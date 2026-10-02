@@ -46,7 +46,7 @@ pub struct Store {
     pub errors: HashMap<PrId, String>,
     pub fetches: HashSet<FetchKey>,
     pub reload_after_fetch: HashSet<FetchKey>,
-    pub reviews: HashMap<PrId, crate::tui::app::reviews::PendingReview>,
+    pub reviews: HashMap<PrId, crate::domain::review::PendingReview>,
     pub cache: Cache,
     /// What has been read of each group of PRs.
     pub groups: HashMap<PrGroup, GroupState>,

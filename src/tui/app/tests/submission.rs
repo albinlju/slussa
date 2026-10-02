@@ -79,11 +79,8 @@ async fn late_completion_only_clears_the_submitting_pr_editor() {
 #[tokio::test(flavor = "current_thread")]
 async fn failed_review_and_error_stay_with_their_pr_until_success() {
     use crate::{
-        domain::review::ReviewVerdict,
-        tui::app::{
-            reviews::{PendingComment, PendingReview},
-            store::Operation,
-        },
+        domain::review::{PendingComment, PendingReview, ReviewVerdict},
+        tui::app::store::Operation,
     };
     let mut app = app();
     detail(&mut app, DetailTab::Overview);
@@ -153,9 +150,9 @@ async fn escape_during_submission_keeps_request_and_draft_scoped() {
 
 #[tokio::test(flavor = "current_thread")]
 async fn partial_review_removes_confirmed_posts_and_remembers_sent_summary() {
-    use crate::tui::app::{
-        reviews::{PendingComment, PendingReview},
-        store::Operation,
+    use crate::{
+        domain::review::{PendingComment, PendingReview},
+        tui::app::store::Operation,
     };
     let mut app = app();
     detail(&mut app, DetailTab::Overview);

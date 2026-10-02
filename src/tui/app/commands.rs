@@ -1,9 +1,11 @@
 use crate::domain::pr::PrId;
-use crate::tui::app::{
-    App,
-    action::Command,
-    reviews::{CommentTarget, PendingComment},
-    store::{Operation, WriteTicket},
+use crate::{
+    domain::review::{CommentTarget, PendingComment},
+    tui::app::{
+        App,
+        action::Command,
+        store::{Operation, WriteTicket},
+    },
 };
 
 impl App {
