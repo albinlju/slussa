@@ -15,7 +15,7 @@ use crate::{
             component::Component,
             components::search_input::{SearchInput, SearchKind},
             screens::pr_detail::view::ThreadRef,
-            widgets::comment_meta::Reading,
+            widgets::comment::meta::Reading,
         },
     },
 };

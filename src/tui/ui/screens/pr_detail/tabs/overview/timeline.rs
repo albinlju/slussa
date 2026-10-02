@@ -1,5 +1,5 @@
 use super::blocks::{Hidden, TimelineItem, build_blocks, focusable_count, timeline_rail};
-use crate::tui::ui::widgets::{comment_fold::Folds, comment_meta::Reading};
+use crate::tui::ui::widgets::comment::{fold::Folds, meta::Reading};
 use crate::{
     domain::{
         authorship::AuthorFilter,

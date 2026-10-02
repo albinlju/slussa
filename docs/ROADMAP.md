@@ -447,8 +447,8 @@ it ahead of the feature that needs it.
   than `github/pagination.rs` and the right shape for *Search older PRs and show the total*
   under *Features to build*.
 - [ ] **Keep the files under the size rule** (modules stay under about 500
-  lines, `mod.rs` composes; `tests/repo_rules.rs` fails a file over 600). Five
-  `mod.rs` files still implement instead of composing: `tui/ui/`, `tui/ui/widgets/`,
+  lines, `mod.rs` composes; `tests/repo_rules.rs` fails a file over 600). Four
+  `mod.rs` files still implement instead of composing: `tui/ui/`,
   `providers/`, `providers/github/` and `providers/bitbucket_dc/`; the two
   provider ones go with *Provider trait*. Not a refactor-only change.
 - [ ] **A workspace, when something else needs the core.** slussa is one crate

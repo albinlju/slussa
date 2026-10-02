@@ -11,7 +11,11 @@ use crate::{
     tui::ui::{
         components::diff_viewer::{DiffViewer, FocusedNav, PaneNav},
         icons, layout, theme,
-        widgets::{self, comment_fold::Folds, comment_meta::Reading, markdown},
+        widgets::{
+            self,
+            comment::{fold::Folds, meta::Reading},
+            markdown,
+        },
     },
 };
 use chrono::Utc;

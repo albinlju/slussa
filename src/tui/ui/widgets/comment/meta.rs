@@ -2,13 +2,13 @@
 //! (its author, a bot) and when.
 
 use crate::{
-    domain::comment::{Comment, split_suggestions},
-    tui::ui::{format, theme, widgets::comment_fold::Folds},
+    domain::comment::{Comment, Reaction, split_suggestions},
+    tui::ui::{format, theme, widgets::comment::fold::Folds},
 };
 use chrono::{DateTime, Utc};
 use ratatui::{
     style::{Modifier, Style},
-    text::Span,
+    text::{Line, Span},
 };
 
 /// What a comment is read against: the PR's author, and which long comments are
@@ -61,6 +61,41 @@ fn role(comment: &Comment, pr_author: &str) -> Option<&'static str> {
     }
 }
 
+pub(in crate::tui::ui) fn author_line(
+    mut lead: Vec<Span<'static>>,
+    created: DateTime<Utc>,
+    now: DateTime<Utc>,
+) -> Line<'static> {
+    lead.push(Span::styled(
+        format!(" · {}", format::relative_age(created, now)),
+        Style::default().fg(theme::current().muted),
+    ));
+    Line::from(lead)
+}
+
+pub(in crate::tui::ui) fn reactions_line(reactions: &[Reaction]) -> Option<Line<'static>> {
+    if reactions.is_empty() {
+        return None;
+    }
+    let theme = theme::current();
+    let mut spans: Vec<Span<'static>> = Vec::new();
+    for r in reactions {
+        if !spans.is_empty() {
+            spans.push(Span::raw(" "));
+        }
+        let fg = if r.mine {
+            theme.reaction_mine
+        } else {
+            theme.fg
+        };
+        spans.push(Span::styled(
+            format!(" {} {} ", r.emoji, r.count),
+            Style::default().fg(fg).bg(theme.highlight_bg),
+        ));
+    }
+    Some(Line::from(spans))
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -100,5 +135,32 @@ mod tests {
         assert!(!person.contains("[AI]"), "{person}");
         // Both at once: an agent that is also the PR's author.
         assert!(line(&comment("alice", Authorship::Ai)).starts_with("alice [AI] · author · "));
+    }
+
+    fn reaction(emoji: &str, count: u32, mine: bool) -> Reaction {
+        Reaction {
+            emoji: emoji.to_string(),
+            count,
+            mine,
+        }
+    }
+
+    fn line_text(line: &Line<'_>) -> String {
+        line.spans.iter().map(|s| s.content.as_ref()).collect()
+    }
+
+    #[test]
+    fn renders_one_padded_pill_per_reaction() {
+        let line = reactions_line(&[reaction("👍", 2, false), reaction("👀", 3, false)]).unwrap();
+        assert_eq!(line_text(&line), " 👍 2   👀 3 ");
+    }
+
+    #[test]
+    fn own_reaction_gets_the_accent_text() {
+        let theme = theme::current();
+        let line = reactions_line(&[reaction("👍", 4, true), reaction("👀", 3, false)]).unwrap();
+        assert_eq!(line.spans[0].style.bg, Some(theme.highlight_bg));
+        assert_eq!(line.spans[0].style.fg, Some(theme.reaction_mine));
+        assert_eq!(line.spans[2].style.fg, Some(theme.fg));
     }
 }

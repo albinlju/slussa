@@ -7,10 +7,7 @@ use super::{
 };
 use crate::{
     domain::comment::CommentThread,
-    tui::ui::widgets::{
-        comment::{InlineThread, render_inline_thread},
-        comment_meta::Reading,
-    },
+    tui::ui::widgets::comment::{InlineThread, meta::Reading, render_inline_thread},
 };
 use chrono::{DateTime, Utc};
 use ratatui::text::{Line, Span};
