@@ -1,6 +1,8 @@
 mod app;
 mod cli;
 mod config;
+#[cfg(test)]
+mod doc_contract;
 mod domain;
 mod git_url;
 mod logging;

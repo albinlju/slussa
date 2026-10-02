@@ -49,6 +49,7 @@ src/
 ├── logging.rs             Log file in the data directory (`SLUSSA_LOG`)
 ├── git_url.rs             Splits a git remote into host and path; web base URL
 ├── test_support.rs        Test-only: `FakeGh` and `MockHttp`
+├── doc_contract.rs        Test-only: reads KEYS.md and the README for the tests that hold the code to them
 ├── app/
 │   ├── mod.rs             Composes the modules below
 │   ├── event_loop.rs      `App`, the event loop, the task channel and effect dispatch

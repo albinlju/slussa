@@ -126,7 +126,26 @@ impl StatusFilter {
 
 #[cfg(test)]
 mod tests {
-    use super::StatusFilter;
+    use super::{Sort, StatusFilter};
+    use crate::doc_contract;
+
+    #[test]
+    fn the_readme_lists_every_sort_and_marks_the_default() {
+        let listed: Vec<_> = doc_contract::readme_values("sort")
+            .iter()
+            .map(|name| Sort::from_config(Some(name)))
+            .collect();
+        // An unknown name falls back to attention, so a misspelt one shows up
+        // here as attention twice.
+        assert_eq!(
+            listed,
+            [Sort::Attention, Sort::Recent],
+            "the README's `sort` line against Sort"
+        );
+        let default = doc_contract::readme_default("sort");
+        assert_eq!(Sort::from_config(default.as_deref()), Sort::default());
+        assert_eq!(default.as_deref(), Some("attention"));
+    }
 
     #[test]
     fn the_picker_steps_through_every_filter_and_stops_at_the_ends() {

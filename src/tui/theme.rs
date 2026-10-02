@@ -179,16 +179,21 @@ impl Theme {
 /// The theme used when none is configured, or when the configured name is unknown.
 pub const DEFAULT: &Theme = &GRAPHITE;
 
+/// Every theme under its config name, in the order the README lists them.
+const THEMES: [(&str, &Theme); 5] = [
+    ("graphite", &GRAPHITE),
+    ("slate", &SLATE),
+    ("gruvbox", &GRUVBOX),
+    ("catppuccin", &CATPPUCCIN),
+    ("terminal", &TERMINAL),
+];
+
 /// Look a theme up by its config name.
 fn named(name: &str) -> Option<&'static Theme> {
-    match name {
-        "graphite" => Some(&GRAPHITE),
-        "slate" => Some(&SLATE),
-        "gruvbox" => Some(&GRUVBOX),
-        "catppuccin" => Some(&CATPPUCCIN),
-        "terminal" => Some(&TERMINAL),
-        _ => None,
-    }
+    THEMES
+        .iter()
+        .find(|(known, _)| *known == name)
+        .map(|(_, theme)| *theme)
 }
 
 static SELECTED: OnceLock<&'static Theme> = OnceLock::new();
@@ -236,6 +241,18 @@ mod tests {
         ] {
             assert_eq!(named(name), Some(theme), "{name}");
         }
+    }
+
+    #[test]
+    fn the_readme_lists_every_theme_and_marks_the_default() {
+        let names: Vec<_> = THEMES.iter().map(|(name, _)| *name).collect();
+        assert_eq!(
+            crate::doc_contract::readme_values("theme"),
+            names,
+            "the README's `theme` line against THEMES"
+        );
+        let default = crate::doc_contract::readme_default("theme");
+        assert_eq!(default.as_deref().and_then(named), Some(DEFAULT));
     }
 
     #[test]

@@ -424,10 +424,10 @@ tighter than their `App` struct with 20 `pending_*` flags, and it stays.
   than `github/pagination.rs` and the right shape for *Search older PRs and show the total*
   under *Features to build*.
 - [ ] **Keep the files under the size rule** (modules stay under about 500
-  lines, `mod.rs` composes). No file is over now. Five `mod.rs` files still
-  implement instead of composing: `tui/`, `tui/widgets/`, `providers/`,
-  `providers/github/` and `providers/bitbucket_dc/`; the two provider ones go
-  with *Provider trait*. Not a refactor-only change.
+  lines, `mod.rs` composes; `tests/repo_rules.rs` fails a file over 600). Five
+  `mod.rs` files still implement instead of composing: `tui/`, `tui/widgets/`,
+  `providers/`, `providers/github/` and `providers/bitbucket_dc/`; the two
+  provider ones go with *Provider trait*. Not a refactor-only change.
 - [ ] **Cache rendered Markdown.** `markdown::render` runs for the
   description, and `render_no_margin` for every comment in the Overview and in
   the diff, on every frame. Keep the lines per comment and width, and drop

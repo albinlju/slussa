@@ -431,3 +431,8 @@ fn choosing_another_view_asks_the_app_to_read_it_and_choosing_the_same_one_does_
     list.update(ListAction::ApplyFilter, &ctx);
     assert_eq!(list.filter, StatusFilter::Open);
 }
+
+#[test]
+fn the_help_and_keys_md_name_the_same_keys_for_the_list() {
+    crate::doc_contract::assert_keys_match(render::HELP_KEYS, "The list");
+}

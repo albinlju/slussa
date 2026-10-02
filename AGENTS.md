@@ -33,8 +33,10 @@ for AI-generated PRs: triage, check intent, approve or merge.
 - **Modules stay under about 500 lines.** `mod.rs` composes and does not
   implement. Tests live inline, or in exactly one sibling `tests.rs`; suites that drive several modules through the doubles in `src/test_support.rs` are named `*_tests.rs`. A test
   suite that outgrows the limit becomes a directory with a file per concern and
-  a `support.rs` for what they share (`src/app/tests/`). No file exceeds the
-  limit now; when a change would push one over, split it first.
+  a `support.rs` for what they share (`src/app/tests/`). Split a file by
+  concern when it passes the limit, not by trimming it to fit;
+  `tests/repo_rules.rs` is the stop behind the rule and fails a file over 600
+  lines.
 - **Show only what the provider supports.** Hide unsupported actions; keep
   actions blocked by PR state visible with a reason.
 
@@ -64,7 +66,9 @@ library API than `rust-version` allows.
 ## Working here
 
 - Repo docs are in English. Update the README, `docs/KEYS.md` (keys) and the matching item in
-  `docs/ROADMAP.md` when behaviour changes.
+  `docs/ROADMAP.md` when behaviour changes. The help tables, the themes and
+  the sorts each have a test that fails until `docs/KEYS.md` or the README's
+  config example names the same ones (`src/doc_contract.rs`).
 - Add a regression test for observable behaviour, especially when navigation or
   asynchronous state is involved. Tests never call a real provider: use
   `FakeGh` and `MockHttp` from `src/test_support.rs`; a test build has no
