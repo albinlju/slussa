@@ -9,8 +9,7 @@ built is in [ARCHITECTURE.md](ARCHITECTURE.md). History is in git.
 A read-write PR client for GitHub (through `gh`) and Bitbucket Data Center (REST
 and a personal access token). The list opens sorted by what needs you, and the PR
 has its description, conversation, diff, commits and builds, with comment, review,
-merge, decline and reopen. The AI-specific parts below are not built yet; 0.1.0 is
-the base they will sit on.
+merge, decline and reopen. What is left of the AI-specific parts is below.
 
 ## Positioning: where it is going
 
@@ -376,15 +375,12 @@ rank below the decision path.
   commands. *(theme is done: `~/.config/slussa/config.toml` `theme = "…"`,
   overridden by `SLUSSA_THEME`)*
 - [ ] **Empty / loading / error states** per view (use `LoadState` everywhere).
-- [ ] **Release** — *released:* 0.1.0 (2026-10-01), then 0.1.1 and 0.1.2,
-  which are also on crates.io (`cargo install slussa --locked`). The
-  repository is public, the tag-driven workflow publishes four archives with
-  `SHA256SUMS`, and downloads and the crates.io install were checked. Still
-  open: a Homebrew tap, and publishing to crates.io from the release workflow
-  (today `cargo publish` is run by hand from the tag, which needs a token).
-  The macOS binary stays unsigned and unnotarized; the README gives the
-  `xattr` command. "Review requested" has only been seen against scripted `gh`
-  output and needs a second account to check.
+- [ ] **Release gaps.** What is not there yet: a Homebrew tap; publishing to
+  crates.io from the release workflow (today `cargo publish` is run by hand
+  from the tag, which needs a token); signing and notarizing the macOS binary
+  (the README gives the `xattr` command); and a check of "Review requested",
+  which has only been seen against scripted `gh` output and needs a second
+  account.
 
 ### Scope decision: authoring / management
 
