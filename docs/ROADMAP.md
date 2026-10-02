@@ -288,7 +288,7 @@ decides.** No new view: these are non-interactive subcommands that print and exi
   identifiers (`ci_failed`, not "CI failed") and flat usernames; errors go to
   stderr as JSON, never mixed into stdout. The JSON types are separate from the
   domain types, so internal changes do not change the output. A headless command
-  never asks for input: it connects with `preflight::connect` and fails when the
+  never asks for input: it connects with `session::connect` and fails when the
   account is not logged in, instead of going through `cli::connect`, which starts
   the interactive `gh auth login`.
 - [ ] **`slussa blocked <number>`** — why the PR cannot be merged: the provider's

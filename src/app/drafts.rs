@@ -7,12 +7,12 @@
 //! than overwritten.
 use super::{
     App,
-    preflight::Session,
     reviews::{CommentDraft, PendingReview},
 };
 use crate::{
     domain::{pr::PrId, user::Username},
     providers::Provider,
+    session::{self, Session},
 };
 use serde::{Deserialize, Serialize};
 use std::{
@@ -160,7 +160,7 @@ fn scope(provider: &Provider, remote: &str, user: &Username) -> io::Result<Strin
 impl App {
     /// The application with its draft storage open and what it held restored.
     pub fn open(session: Session) -> io::Result<Self> {
-        let remote = super::remote::origin_url().map_err(io::Error::other)?;
+        let remote = session::remote::origin_url().map_err(io::Error::other)?;
         let scope = scope(session.provider(), &remote, session.user())?;
         let root = dirs::data_local_dir()
             .ok_or_else(|| io::Error::other("Cannot locate local data directory"))?

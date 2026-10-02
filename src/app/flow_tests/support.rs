@@ -17,7 +17,7 @@ pub(super) use std::time::Duration;
 
 pub(super) fn app() -> App {
     App::new(
-        crate::app::preflight::Session::for_test(Provider::GitHub, "me"),
+        crate::session::Session::for_test(Provider::GitHub, "me"),
         crate::app::drafts::Drafts::Nowhere,
     )
 }

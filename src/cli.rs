@@ -1,9 +1,12 @@
 use std::io::IsTerminal;
 use std::process::ExitCode;
 
-use crate::app::preflight::{self, PreflightError, Session};
-use crate::app::remote;
 use crate::providers::{bitbucket_dc, github};
+use crate::session::{
+    self, Session,
+    preflight::{self, PreflightError},
+    remote,
+};
 
 pub enum Dispatch {
     Done(ExitCode),
@@ -107,7 +110,7 @@ fn run_auth(args: &[String]) -> ExitCode {
 }
 
 fn connect() -> Result<Session, PreflightError> {
-    match preflight::connect() {
+    match session::connect() {
         Ok(session) => Ok(session),
         Err(PreflightError::GhNotAuthenticated { host }) => {
             eprintln!(
@@ -115,7 +118,7 @@ fn connect() -> Result<Session, PreflightError> {
                  follow the prompts and slussa will continue afterwards.\n"
             );
             match github::auth::launch_login(&host) {
-                Ok(true) => preflight::connect(),
+                Ok(true) => session::connect(),
                 Ok(false) => {
                     eprintln!("slussa: `gh auth login` was cancelled or failed.\n");
                     Err(PreflightError::GhNotAuthenticated { host })
