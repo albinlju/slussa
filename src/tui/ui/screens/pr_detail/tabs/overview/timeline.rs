@@ -5,14 +5,17 @@ use crate::{
         authorship::AuthorFilter,
         comment::{Comment, CommentId, CommentKey, CommentKind, CommentThread},
     },
-    tui::app::{
-        action::{Action, Effect, TimelineAction},
-        store::{LoadState, PrData},
-    },
-    tui::ui::{
-        component::{Component, saturating_u16, scroll, scroll_to_item, step_index},
-        screens::pr_detail::view::{CommentRef, ThreadRef},
-        widgets,
+    tui::{
+        app::{
+            effect::Effect,
+            store::{LoadState, PrData},
+        },
+        ui::{
+            action::{Action, TimelineAction},
+            component::{Component, saturating_u16, scroll, scroll_to_item, step_index},
+            screens::pr_detail::view::{CommentRef, ThreadRef},
+            widgets,
+        },
     },
 };
 use ratatui::{

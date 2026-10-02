@@ -14,7 +14,7 @@
 //! A key ignored by a modal must not fall through to what is behind it. Callers
 //! rely on the explicit modal and focus priority.
 
-use crate::tui::app::action::{Action, Effect};
+use crate::tui::{app::effect::Effect, ui::action::Action};
 use ratatui::{Frame, crossterm::event::KeyEvent, layout::Rect};
 
 /// Interactive UI owner. What it is given is borrowed data, never the mutable

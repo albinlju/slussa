@@ -1,11 +1,13 @@
 use crate::{
     domain::{capabilities::Feature, diff::FileDiff, review::CommentTarget},
-    tui::app::store::{LoadState, PrData},
-    tui::ui::{
-        components::{diff_viewer::DiffFocus, search_input::SearchInput},
-        screens::pr_detail::{DetailView, Surface, tabs::DetailTab},
-        theme,
-        widgets::{self, Hint},
+    tui::{
+        app::store::{LoadState, PrData},
+        ui::{
+            components::{diff_viewer::DiffFocus, search_input::SearchInput},
+            screens::pr_detail::{DetailView, Surface, tabs::DetailTab},
+            theme,
+            widgets::{self, Hint},
+        },
     },
 };
 use ratatui::{

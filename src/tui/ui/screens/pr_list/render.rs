@@ -2,12 +2,14 @@
 use super::{ListContext, ListOverlay, PrListScreen, StatusFilter, columns::ListColumn};
 use crate::{
     domain::{attention::attention, pr::PullRequest, user::Username},
-    tui::app::store::LoadState,
-    tui::ui::{
-        component::{Component, saturating_u16},
-        components::search_input::SearchInput,
-        layout, theme,
-        widgets::{self, table},
+    tui::{
+        app::store::LoadState,
+        ui::{
+            component::{Component, saturating_u16},
+            components::search_input::SearchInput,
+            layout, theme,
+            widgets::{self, table},
+        },
     },
 };
 use ratatui::{

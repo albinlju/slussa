@@ -1,6 +1,7 @@
-use crate::{
-    tui::app::action::{Action, Effect, ErrorAction},
-    tui::ui::{
+use crate::tui::{
+    app::effect::Effect,
+    ui::{
+        action::{Action, ErrorAction},
         component::{Component, saturating_u16},
         theme, widgets,
     },

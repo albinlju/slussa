@@ -1,7 +1,13 @@
 use crate::{
     domain::{commit::Commit, pr::PullRequest},
-    tui::app::action::{Action, Effect, SearchAction},
-    tui::ui::{component::Component, widgets},
+    tui::{
+        app::effect::Effect,
+        ui::{
+            action::{Action, SearchAction},
+            component::Component,
+            widgets,
+        },
+    },
 };
 use ratatui::{
     Frame,

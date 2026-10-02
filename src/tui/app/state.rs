@@ -1,9 +1,9 @@
-use crate::{
-    tui::app::{
+use crate::tui::{
+    app::{
         navigation::Screen,
         store::{PrData, Store},
     },
-    tui::ui::Ui,
+    ui::Ui,
 };
 
 #[derive(Debug)]

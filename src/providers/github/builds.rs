@@ -1,6 +1,8 @@
 use crate::{
-    domain::ci::{Build, BuildState},
-    domain::pr::PrId,
+    domain::{
+        ci::{Build, BuildState},
+        pr::PrId,
+    },
     providers::FetchError,
 };
 use chrono::{DateTime, Utc};

@@ -464,7 +464,7 @@ impl Store {
         }
     }
     pub fn refresh_failed(&self, screen: crate::tui::app::navigation::Screen) -> bool {
-        use crate::{tui::app::navigation::Screen, tui::ui::screens::pr_detail::tabs::DetailTab};
+        use crate::tui::{app::navigation::Screen, ui::screens::pr_detail::tabs::DetailTab};
         // Whether the screen is this PR on one of the tabs that show the data.
         let on = |id: &PrId, shows: fn(DetailTab) -> bool| matches!(screen, Screen::Detail { pr_id, tab } if pr_id == *id && shows(tab));
         self.refresh_failures.iter().any(|key| match key {

@@ -7,17 +7,21 @@ use crate::{
         pr::Mergeability,
         review::{PendingComment, PendingReview},
     },
-    tui::app::store::PrData,
-    tui::ui::{
-        component::Component,
-        components::{comment_editor::EditorView, diff_viewer::DiffContext},
-        layout,
-        screens::pr_detail::{
-            DetailContext, DetailView, Overlay, PrDetailScreen,
-            dialogs::{PrSummary, merge::MergeView},
-            tabs::{DetailTab, commits, description::DescriptionView, overview::OverviewContext},
+    tui::{
+        app::store::PrData,
+        ui::{
+            component::Component,
+            components::{comment_editor::EditorView, diff_viewer::DiffContext},
+            layout,
+            screens::pr_detail::{
+                DetailContext, DetailView, Overlay, PrDetailScreen,
+                dialogs::{PrSummary, merge::MergeView},
+                tabs::{
+                    DetailTab, commits, description::DescriptionView, overview::OverviewContext,
+                },
+            },
+            theme,
         },
-        theme,
     },
 };
 use ratatui::{

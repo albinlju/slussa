@@ -61,9 +61,9 @@ src/
 │   │   ├── state.rs           AppState composition (Store, Ui, Screen)
 │   │   ├── store.rs           Cache, PR operations/errors, in-flight loads, reviews, tickets
 │   │   ├── notice.rs          The one-line message over the footer
-│   │   ├── action.rs          `Action` (input), `Effect` (work), `TaskResult` (what came back)
+│   │   ├── effect.rs          `Effect` (work), `TaskResult` and `Read` (what came back)
 │   │   ├── navigation.rs     Screen identity, open PR and initiate missing loads
-│   │   ├── commands.rs       Execute resolved review/comment/lifecycle commands
+│   │   ├── commands.rs       `Command`, what the provider supports of it, and its execution
 │   │   ├── drafts.rs         Where drafts are kept; `App::open`, restore, save, journal
 │   │   ├── desktop.rs        Browser and clipboard effects
 │   │   ├── fetchers.rs        Run providers off the UI thread
@@ -71,6 +71,7 @@ src/
 │   │   ├── loads.rs           Apply asynchronous results
 │   │   └── refresh.rs         Manual and periodic refresh
 │   └── ui/                The surface: draws and takes keys, never starts I/O
+│       ├── action.rs          `Action` and the small enums a component consumes
 │       ├── mod.rs             UI composition, screen dispatch and input priority
 │       ├── component.rs       Component contract and navigation helpers
 │       ├── theme.rs           The five palettes and theme lookup
@@ -155,7 +156,8 @@ drawing needs. Most components need nothing to handle input (`Input = ()`) and
 a good deal to draw, so the two are separate types and nobody builds a
 placeholder context to call a method that ignores it.
 
-Three message types keep the directions apart (`tui/app/action.rs`):
+Three message types keep the directions apart (`Action` in `tui/ui/action.rs`,
+`Effect` and `TaskResult` in `tui/app/effect.rs`):
 
 - **`Action`** is input: what a key or a paste becomes. It is grouped by the
   component that consumes it (`List`, `Detail`, `Diff`, `Commits`, `Search`),

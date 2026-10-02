@@ -6,18 +6,21 @@ use crate::{
         pr::{PrGroup, PullRequest},
         user::Username,
     },
-    tui::app::{
-        action::{Action, Effect, ListAction},
-        navigation::Screen,
-        store::{LoadState, OpenChain, Store},
-    },
-    tui::ui::{
-        component::{Component, step_index},
-        components::{
-            help_dialog::HelpDialog,
-            search_input::{SearchInput, SearchKind},
+    tui::{
+        app::{
+            effect::Effect,
+            navigation::Screen,
+            store::{LoadState, OpenChain, Store},
         },
-        screens::half_page,
+        ui::{
+            action::{Action, ListAction},
+            component::{Component, step_index},
+            components::{
+                help_dialog::HelpDialog,
+                search_input::{SearchInput, SearchKind},
+            },
+            screens::half_page,
+        },
     },
 };
 use ratatui::{
@@ -120,8 +123,8 @@ impl Component for PrListScreen {
         }
         if key.modifiers.is_empty() {
             let kind = match key.code {
-                KeyCode::Char('o') => Some(crate::tui::app::action::LinkAction::Open),
-                KeyCode::Char('y') => Some(crate::tui::app::action::LinkAction::Copy),
+                KeyCode::Char('o') => Some(crate::tui::app::effect::LinkAction::Open),
+                KeyCode::Char('y') => Some(crate::tui::app::effect::LinkAction::Copy),
                 _ => None,
             };
             if let Some(kind) = kind {
@@ -237,8 +240,8 @@ impl PrListScreen {
         }
     }
 
-    pub fn update_search(&mut self, action: crate::tui::app::action::SearchAction) {
-        use crate::tui::app::action::SearchAction;
+    pub fn update_search(&mut self, action: crate::tui::ui::action::SearchAction) {
+        use crate::tui::ui::action::SearchAction;
         self.search.update(action, &SearchKind::Filter);
         if !matches!(action, SearchAction::Open | SearchAction::Confirm) {
             self.selected = 0;

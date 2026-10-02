@@ -1,6 +1,7 @@
-use crate::{
-    tui::app::action::{Action, Effect, MergeAction},
-    tui::ui::{
+use crate::tui::{
+    app::effect::Effect,
+    ui::{
+        action::{Action, MergeAction},
         component::{Component, step_index},
         screens::pr_detail::dialogs::PrSummary,
         theme,

@@ -1,11 +1,14 @@
 pub use crate::domain::review::CommentDraft;
 use crate::{
     domain::review::CommentTarget,
-    tui::app::action::{Action, EditorAction, Effect},
-    tui::ui::{
-        component::{Component, saturating_u16},
-        components::text_buffer::TextBuffer,
-        theme,
+    tui::{
+        app::effect::Effect,
+        ui::{
+            action::{Action, EditorAction},
+            component::{Component, saturating_u16},
+            components::text_buffer::TextBuffer,
+            theme,
+        },
     },
 };
 use ratatui::{
@@ -361,7 +364,7 @@ fn footer_lines(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::{domain::comment::CommentId, tui::app::action::DetailAction};
+    use crate::{domain::comment::CommentId, tui::ui::action::DetailAction};
     fn editor(text: &str) -> CommentEditor {
         CommentEditor::start(CommentTarget::Pr, text.into())
     }

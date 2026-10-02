@@ -68,7 +68,7 @@ fn filter_and_confirmation_capture_navigation() {
 
 #[test]
 fn link_shortcuts_target_selected_pr_and_never_escape_editor_or_help() {
-    use crate::tui::app::action::LinkAction;
+    use crate::tui::app::effect::LinkAction;
     let mut state = fixture();
     if let LoadState::Loaded(prs) = &mut state.store.cache.prs {
         let mut second = prs[0].clone();

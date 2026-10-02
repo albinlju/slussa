@@ -8,15 +8,15 @@ use crate::{
         diff::{Diff, FileDiff},
         review::{CommentAnchor, PendingComment},
     },
-    tui::app::{
-        action::{Action, DiffAction, Effect},
-        store::LoadState,
-    },
-    tui::ui::{
-        component::Component,
-        components::search_input::{SearchInput, SearchKind},
-        screens::pr_detail::view::ThreadRef,
-        widgets::comment_meta::Reading,
+    tui::{
+        app::{effect::Effect, store::LoadState},
+        ui::{
+            action::{Action, DiffAction},
+            component::Component,
+            components::search_input::{SearchInput, SearchKind},
+            screens::pr_detail::view::ThreadRef,
+            widgets::comment_meta::Reading,
+        },
     },
 };
 use ratatui::{Frame, crossterm::event::KeyEvent, layout::Rect};
@@ -350,10 +350,10 @@ impl DiffViewer {
     }
     pub fn update_search(
         &mut self,
-        action: crate::tui::app::action::SearchAction,
+        action: crate::tui::ui::action::SearchAction,
         files: &[FileDiff],
     ) {
-        use crate::tui::app::action::SearchAction;
+        use crate::tui::ui::action::SearchAction;
         let (search, kind) = match self.focus {
             DiffFocus::Tree => (&mut self.tree_search, SearchKind::Filter),
             DiffFocus::Pane => (&mut self.pane_search, SearchKind::Find),

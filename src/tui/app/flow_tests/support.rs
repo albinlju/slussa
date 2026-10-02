@@ -8,10 +8,14 @@ pub(super) use crate::{
 };
 pub(super) use crate::{
     domain::review::CommentTarget,
-    tui::app::{
-        App,
-        action::{Action, Command, Effect, ListAction},
-        store::{FetchKey, LoadState, OpenChain},
+    tui::{
+        app::{
+            App,
+            commands::Command,
+            effect::Effect,
+            store::{FetchKey, LoadState, OpenChain},
+        },
+        ui::action::{Action, ListAction},
     },
 };
 pub(super) use serde_json::json;

@@ -222,7 +222,10 @@ fn authorship_of_cached(app: &App) -> Vec<crate::domain::authorship::Authorship>
 
 #[test]
 fn an_activity_that_arrives_is_judged_once_with_the_session_markers() {
-    use crate::domain::{authorship::AiMarkers, authorship::Authorship, user::AccountKind};
+    use crate::domain::{
+        authorship::{AiMarkers, Authorship},
+        user::AccountKind,
+    };
     let mut app = app();
     app.state
         .store
@@ -243,7 +246,10 @@ fn an_activity_that_arrives_is_judged_once_with_the_session_markers() {
 
 #[test]
 fn new_markers_judge_what_was_read_before_them() {
-    use crate::domain::{authorship::AiMarkers, authorship::Authorship, user::AccountKind};
+    use crate::domain::{
+        authorship::{AiMarkers, Authorship},
+        user::AccountKind,
+    };
     let mut app = app();
     app.apply_result(TaskResult::Read(Read::Activity(
         PrId(42),

@@ -1,8 +1,10 @@
 use super::super::build_status::{OverallState, build_stats, progress_bar, state_color};
 use crate::{
     domain::ci::{Build, BuildState},
-    tui::app::store::PrData,
-    tui::ui::{format, icons, theme, widgets},
+    tui::{
+        app::store::PrData,
+        ui::{format, icons, theme, widgets},
+    },
 };
 use ratatui::{
     Frame,
@@ -141,7 +143,7 @@ impl crate::tui::ui::component::Component for Builds {
         &self,
         key: crossterm::event::KeyEvent,
         (): &(),
-    ) -> Option<crate::tui::app::action::Action> {
+    ) -> Option<crate::tui::ui::action::Action> {
         use ratatui::crossterm::event::KeyCode;
         let delta = match key.code {
             KeyCode::Char('j') | KeyCode::Down => 1,
@@ -150,11 +152,11 @@ impl crate::tui::ui::component::Component for Builds {
             KeyCode::PageUp => -crate::tui::ui::screens::half_page(self.viewport),
             _ => return None,
         };
-        Some(crate::tui::app::action::Action::Detail(
-            crate::tui::app::action::DetailAction::BuildsScroll(delta),
+        Some(crate::tui::ui::action::Action::Detail(
+            crate::tui::ui::action::DetailAction::BuildsScroll(delta),
         ))
     }
-    fn update(&mut self, delta: Self::Message, (): &()) -> Option<crate::tui::app::action::Effect> {
+    fn update(&mut self, delta: Self::Message, (): &()) -> Option<crate::tui::app::effect::Effect> {
         self.scroll = crate::tui::ui::component::scroll(self.scroll, delta);
         None
     }

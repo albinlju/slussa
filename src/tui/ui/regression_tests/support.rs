@@ -13,27 +13,29 @@ pub(super) use crate::{
         review::CommentTarget,
         user::{AccountKind, User},
     },
-    tui::app::{
-        action::*,
-        navigation::Screen,
-        state::*,
-        store::{LoadState, PrData},
-    },
-    tui::ui::{
-        components::{
-            comment_editor::{CommentDraft, CommentEditor, EditorView},
-            diff_viewer::{DiffFocus, FocusedNav, NavTarget, PaneNav},
-            help_dialog::HelpDialog,
+    tui::{
+        app::{
+            navigation::Screen,
+            state::*,
+            store::{LoadState, PrData},
         },
-        screens::pr_detail::{
-            Overlay,
-            dialogs::{
-                PrSummary,
-                confirm::{ConfirmDialog, ConfirmKind},
-                merge::MergeDialog,
-                review::ReviewDialog,
+        ui::{
+            action::*,
+            components::{
+                comment_editor::{CommentDraft, CommentEditor, EditorView},
+                diff_viewer::{DiffFocus, FocusedNav, NavTarget, PaneNav},
+                help_dialog::HelpDialog,
             },
-            tabs::DetailTab,
+            screens::pr_detail::{
+                Overlay,
+                dialogs::{
+                    PrSummary,
+                    confirm::{ConfirmDialog, ConfirmKind},
+                    merge::MergeDialog,
+                    review::ReviewDialog,
+                },
+                tabs::DetailTab,
+            },
         },
     },
 };

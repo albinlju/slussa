@@ -9,11 +9,14 @@ use crate::{
         capabilities::{Capabilities, Feature},
         pr::PullRequest,
     },
-    tui::app::{
-        action::{Action, Effect, TimelineAction},
-        store::PrData,
+    tui::{
+        app::{effect::Effect, store::PrData},
+        ui::{
+            action::{Action, TimelineAction},
+            component::Component,
+            layout,
+        },
     },
-    tui::ui::{component::Component, layout},
 };
 use ratatui::{
     Frame,

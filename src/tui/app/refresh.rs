@@ -1,7 +1,9 @@
 use crate::{
     domain::pr::{PrGroup, PrId},
-    tui::app::{App, navigation::Screen},
-    tui::ui::screens::pr_detail::tabs::DetailTab,
+    tui::{
+        app::{App, navigation::Screen},
+        ui::screens::pr_detail::tabs::DetailTab,
+    },
 };
 use std::time::{Duration, Instant};
 

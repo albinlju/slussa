@@ -1,7 +1,4 @@
-use crate::{
-    tui::app::action::DiffAction,
-    tui::ui::{components::diff_viewer::DiffFocus, screens::half_page},
-};
+use crate::tui::ui::{action::DiffAction, components::diff_viewer::DiffFocus, screens::half_page};
 use ratatui::crossterm::event::KeyCode;
 
 pub(super) fn key_to_action(code: KeyCode, view: &super::DiffViewer) -> Option<DiffAction> {
