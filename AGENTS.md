@@ -36,12 +36,14 @@ for AI-generated PRs: triage, check intent, approve or merge.
 - **Modules stay under about 500 lines.** `mod.rs` composes and does not
   implement. Tests live inline, or in exactly one sibling `tests.rs`; suites that drive several modules through the doubles in `src/test_support.rs` are named `*_tests.rs`. A test
   suite that outgrows the limit becomes a directory with a file per concern and
-  a `support.rs` for what they share (`src/app/tests/`). Split a file by
+  a `support.rs` for what they share (`src/tui/app/tests/`). Split a file by
   concern when it passes the limit, not by trimming it to fit;
   `tests/repo_rules.rs` is the stop behind the rule and fails a file over 600
   lines. It also holds the layers: `domain` imports only `domain`, `providers`
-  only `domain`, `providers` and `git_url`, `tui` only `app`, `domain` and `tui`
-  (test code and `test_support` excepted).
+  only `domain`, `providers` and `git_url`, `session` only those and `session`,
+  `cli` never `tui`, and `tui/ui` only `tui::app`, `tui::ui` and `domain`, so
+  that the surface cannot reach a provider (test code and `test_support`
+  excepted).
 - **Show only what the provider supports.** Hide unsupported actions; keep
   actions blocked by PR state visible with a reason.
 
@@ -81,10 +83,10 @@ library API than `rust-version` allows.
   `FakeGh` holds a process-wide lock, so never install two in one test without
   dropping the first. Say in the PR when a double stands in for real behaviour
   you could not check.
-- The draft file must stay readable. The types in `src/app/reviews.rs`, with
+- The draft file must stay readable. The types in `src/tui/app/reviews.rs`, with
   `CommentAnchor` and `DiffRevision`, are written to it, and a file that cannot
   be parsed stops slussa from starting. Change how they are spelled on disk
-  only with a new file version; the version 1 fixture in `src/app/drafts.rs`
+  only with a new file version; the version 1 fixture in `src/tui/app/drafts.rs`
   fails otherwise.
 - The log holds states, resource keys, counts and error text, the server's
   included. It never holds the content of a PR (a title, a description, a

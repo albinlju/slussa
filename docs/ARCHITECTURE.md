@@ -44,86 +44,88 @@ keyboard-only use, and prefer an existing interaction over a new visual pattern.
 
 ```text
 src/
-├── main.rs, cli.rs        Startup, logging and CLI dispatch (`auth login`, `-C`)
+├── main.rs                Startup, logging and dispatch to `cli` or `tui`
+├── cli/                   Arguments and the subcommands that print and exit (`auth login`, `-C`)
 ├── config.rs              config.toml: theme, sort and `[ai] markers`
 ├── logging.rs             Log file in the data directory (`SLUSSA_LOG`), for its owner only
 ├── private_file.rs        Files only their owner may read: the drafts and the log
 ├── git_url.rs             Splits a git remote into host and path; web base URL
 ├── test_support.rs        Test-only: `FakeGh` and `MockHttp`
 ├── doc_contract.rs        Test-only: reads KEYS.md and the README for the tests that hold the code to them
-├── app/
-│   ├── mod.rs             Composes the modules below
-│   ├── event_loop.rs      `App`, the event loop, the task channel and effect dispatch
-│   ├── state.rs           AppState composition (Store, Ui, Screen)
-│   ├── store.rs           Cache, PR operations/errors, in-flight loads, reviews, tickets
-│   ├── notice.rs          The one-line message over the footer
-│   ├── action.rs          `Action` (input), `Effect` (work), `TaskResult` (what came back)
-│   ├── navigation.rs     Screen identity, open PR and initiate missing loads
-│   ├── commands.rs       Execute resolved review/comment/lifecycle commands
-│   ├── reviews.rs        Review drafts, comment targets and anchors
-│   ├── drafts.rs         Scoped, atomic local draft recovery
-│   ├── desktop.rs        Browser and clipboard effects
-│   ├── fetchers.rs        Run providers off the UI thread
-│   ├── loads.rs           Apply asynchronous results
-│   └── refresh.rs         Manual and periodic refresh
+├── tui/                   The interactive program
+│   ├── mod.rs             `run`: starts the runtime and the event loop
+│   ├── app/               The engine: does I/O, never draws
+│   │   ├── mod.rs             Composes the modules below
+│   │   ├── event_loop.rs      `App`, the event loop, the task channel and effect dispatch
+│   │   ├── state.rs           AppState composition (Store, Ui, Screen)
+│   │   ├── store.rs           Cache, PR operations/errors, in-flight loads, reviews, tickets
+│   │   ├── notice.rs          The one-line message over the footer
+│   │   ├── action.rs          `Action` (input), `Effect` (work), `TaskResult` (what came back)
+│   │   ├── navigation.rs     Screen identity, open PR and initiate missing loads
+│   │   ├── commands.rs       Execute resolved review/comment/lifecycle commands
+│   │   ├── reviews.rs        Review drafts, comment targets and anchors
+│   │   ├── drafts.rs         Scoped, atomic local draft recovery
+│   │   ├── desktop.rs        Browser and clipboard effects
+│   │   ├── fetchers.rs        Run providers off the UI thread
+│   │   ├── terminal.rs        `TerminalGuard`: the terminal while the TUI runs
+│   │   ├── loads.rs           Apply asynchronous results
+│   │   └── refresh.rs         Manual and periodic refresh
+│   └── ui/                The surface: draws and takes keys, never starts I/O
+│       ├── mod.rs             UI composition, screen dispatch and input priority
+│       ├── component.rs       Component contract and navigation helpers
+│       ├── theme.rs           The five palettes and theme lookup
+│       ├── icons.rs, layout.rs, format.rs   Glyphs, layout helpers and text formatting
+│       ├── components/
+│       │   ├── search_input.rs
+│       │   ├── help_dialog.rs   Scrollable help shared by list and detail
+│       │   ├── comment_editor.rs  The draft being written and its mode
+│       │   ├── text_buffer.rs     Text with a caret; wrapping
+│       │   └── diff_viewer/
+│       │       ├── viewer.rs  DiffViewer state and updates; what the pane drew last
+│       │       ├── keys.rs    Tree/pane input
+│       │       ├── render.rs  Composition; the comment counts per file
+│       │       ├── tree.rs    Tree rendering, the file rows with their counts
+│       │       ├── pane.rs    The code pane: diff lines, search and the cursor
+│       │       ├── threads.rs One inline thread: its lines and the stops in it
+│       │       ├── nav.rs     What the pane cursor can stand on (line, thread,
+│       │       │              fold row, queued comment)
+│       │       └── file_tree.rs  Visible tree projection
+│       ├── screens/
+│       │   ├── pr_list/
+│       │   │   ├── screen.rs  PrListScreen: selection, overlay, filter and search
+│       │   │   └── render.rs, columns.rs, filter.rs   Table, its columns, sort and status filter
+│       │   └── pr_detail/
+│       │       ├── screen.rs  PrDetailScreen: children, the surface shown and the overlay
+│       │       ├── interactions.rs  Dialog/editor workflows and resolved commands
+│       │       ├── keys.rs    Modal, screen and focused-child routing
+│       │       ├── view.rs    Read-only component/store queries
+│       │       ├── render.rs Screen layout and child rendering
+│       │       ├── header.rs
+│       │       ├── footer.rs
+│       │       ├── dialogs/  Confirm, review, merge, error and help
+│       │       │             Dialog components own selection, input and rendering
+│       │       ├── build_status.rs
+│       │       └── tabs/
+│       │           ├── overview/
+│       │           │   ├── timeline.rs  Interactive Timeline component: cursor,
+│       │           │   │                filter, folds and reading through a tall item
+│       │           │   ├── blocks.rs    The blocks of the timeline and the rail
+│       │           │   ├── hidden.rs    The dimmed line for hidden comments
+│       │           │   └── sidebar.rs   Stateless Ratatui Sidebar widget
+│       │           └── ...             Description, CommitList and Builds
+│       └── widgets/
+│           ├── comment.rs    Comments and threads: boxes, inline threads
+│           ├── comment_meta.rs   The author line, `[AI]`, and `Reading`
+│           ├── comment_fold.rs   Folding a long comment and its fold row
+│           ├── comment_frame.rs  Header line, left rail and box around a comment
+│           ├── comment_code.rs   A suggestion box and the diff around an anchor
+│           ├── dialog.rs     Shared dialog geometry and footer
+│           ├── markdown.rs
+│           └── table.rs
 ├── session/               Who and where, shared by the TUI and the subcommands
 │   ├── mod.rs             `Session`, `connect`
 │   ├── preflight.rs       Provider detection and authentication checks
 │   └── remote.rs          Local repository/remote detection
-├── tui/
-│   ├── mod.rs             UI composition, screen dispatch and input priority
-│   ├── component.rs       Component contract and navigation helpers
-│   ├── theme.rs           The five palettes and theme lookup
-│   ├── icons.rs, layout.rs, format.rs   Glyphs, layout helpers and text formatting
-│   ├── components/
-│   │   ├── search_input.rs
-│   │   ├── help_dialog.rs   Scrollable help shared by list and detail
-│   │   ├── comment_editor.rs  The draft being written and its mode
-│   │   ├── text_buffer.rs     Text with a caret; wrapping
-│   │   └── diff_viewer/
-│   │       ├── viewer.rs  DiffViewer state and updates; what the pane drew last
-│   │       ├── keys.rs    Tree/pane input
-│   │       ├── render.rs  Composition; the comment counts per file
-│   │       ├── tree.rs    Tree rendering, the file rows with their counts
-│   │       ├── pane.rs    The code pane: diff lines, search and the cursor
-│   │       ├── threads.rs One inline thread: its lines and the stops in it
-│   │       ├── nav.rs     What the pane cursor can stand on (line, thread,
-│   │       │              fold row, queued comment)
-│   │       └── file_tree.rs  Visible tree projection
-│   ├── screens/
-│   │   ├── pr_list/
-│   │   │   ├── screen.rs  PrListScreen: selection, overlay, filter and search
-│   │   │   └── render.rs, columns.rs, filter.rs   Table, its columns, sort and status filter
-│   │   └── pr_detail/
-│   │       ├── screen.rs  PrDetailScreen: children, the surface shown and the overlay
-│   │       ├── interactions.rs  Dialog/editor workflows and resolved commands
-│   │       ├── keys.rs    Modal, screen and focused-child routing
-│   │       ├── view.rs    Read-only component/store queries
-│   │       ├── render.rs Screen layout and child rendering
-│   │       ├── header.rs
-│   │       ├── footer.rs
-│   │       ├── dialogs/  Confirm, review, merge, error and help
-│   │       │             Dialog components own selection, input and rendering
-│   │       ├── build_status.rs
-│   │       └── tabs/
-│   │           ├── overview/
-│   │           │   ├── mod.rs       Layout and child delegation
-│   │           │   ├── timeline.rs  Interactive Timeline component: cursor,
-│   │           │   │                filter, folds and reading through a tall item
-│   │           │   ├── blocks.rs    The blocks of the timeline and the rail
-│   │           │   ├── hidden.rs    The dimmed line for hidden comments
-│   │           │   └── sidebar.rs   Stateless Ratatui Sidebar widget
-│   │           └── ...             Description, CommitList and Builds
-│   └── widgets/
-│       ├── mod.rs        Shared presentation primitives
-│       ├── comment.rs    Comments and threads: boxes, inline threads
-│       ├── comment_meta.rs   The author line, `[AI]`, and `Reading`
-│       ├── comment_fold.rs   Folding a long comment and its fold row
-│       ├── comment_frame.rs  Header line, left rail and box around a comment
-│       ├── comment_code.rs   A suggestion box and the diff around an anchor
-│       ├── dialog.rs     Shared dialog geometry and footer
-│       ├── markdown.rs
-│       └── table.rs
 ├── domain/               Provider-independent data models, ids and rules;
 │                         `authorship.rs` says who wrote a comment
 └── providers/            Provider requests and payload mapping
@@ -134,7 +136,7 @@ src/
 
 ## Component contract
 
-`Component` (`tui/component.rs`) has two borrowed contexts and a typed message:
+`Component` (`tui/ui/component.rs`) has two borrowed contexts and a typed message:
 
 - `handle_key(&self, key, input) -> Option<Action>` translates input and
   changes nothing.
@@ -149,7 +151,7 @@ drawing needs. Most components need nothing to handle input (`Input = ()`) and
 a good deal to draw, so the two are separate types and nobody builds a
 placeholder context to call a method that ignores it.
 
-Three message types keep the directions apart (`app/action.rs`):
+Three message types keep the directions apart (`tui/app/action.rs`):
 
 - **`Action`** is input: what a key or a paste becomes. It is grouped by the
   component that consumes it (`List`, `Detail`, `Diff`, `Commits`, `Search`),
@@ -214,7 +216,7 @@ data without owning navigation state.
 - **CommentEditor** owns the draft being written: its target, a `TextBuffer`
   and one mode (`Kept` after Esc or a restore, `Typing`, `ConfirmDiscard`).
 
-Review and editor drafts are persisted locally by `app/drafts.rs`, independently
+Review and editor drafts are persisted locally by `tui/app/drafts.rs`, independently
 of the provider APIs.
 Submission retains the draft and queued review comments until success. While a
 mutation is pending, another mutation or editor change for that PR is blocked.
@@ -348,14 +350,14 @@ Provider-side limits and server/version compatibility still require live checks.
 ## Lifecycle: a read
 
 1. A screen opens or a refresh ticks; `App` calls a `spawn_load_*` function in
-   `app/fetchers.rs`.
+   `tui/app/fetchers.rs`.
 2. It asks `Store::begin_fetch(key)` for a `FetchTicket`. That registers the
    resource's `FetchKey` in `Store::fetches`, refuses a resource the provider
    does not have, and gives no ticket if the key is already there. `spawn_read`
    takes the ticket, so a read cannot start unregistered.
 3. `spawn_fetch` runs the provider call on `spawn_blocking`.
 4. The result returns as `TaskResult::Read(read)`. A `Read` names its own
-   resource (`Read::key`), so `app/loads.rs` settles the bookkeeping for every
+   resource (`Read::key`), so `tui/app/loads.rs` settles the bookkeeping for every
    kind the same way and then stores the data with `LoadState::reload`, which
    keeps loaded data if the reload failed. It removes the key, records a
    refresh failure if needed, and starts a follow-up fetch if
@@ -368,7 +370,7 @@ Provider-side limits and server/version compatibility still require live checks.
    or editor into a `Command` with the PR id (`pr_detail/interactions.rs`).
    What a command carries is already checked: a comment's text is a `NonBlank`,
    an edit or a delete a `CommentKey`, a thread to resolve a `ThreadHandle`.
-2. `App::execute` (`app/commands.rs`) rejects commands the provider does not
+2. `App::execute` (`tui/app/commands.rs`) rejects commands the provider does not
    support (`Command::supported_by`).
 3. `App::begin_write(pr_id, operation)` asks `Store::begin_write` for a
    `WriteTicket`, which records the `Operation` and gives none while another
@@ -396,7 +398,7 @@ of a parser's message not the values it quotes. A review that goes out as severa
 requests can end as `ReviewError::Partial`, which says how much arrived, and
 becomes `WriteError::PartialReview` in the app. A worker that panicked is
 `FetchError::WorkerPanicked`, not a lost result. Opening or copying a link
-ends as `LinkDone` or `LinkError` (`app/desktop.rs`), and the notice is worded
+ends as `LinkDone` or `LinkError` (`tui/app/desktop.rs`), and the notice is worded
 where it is shown.
 
 ## Types that carry the rules
@@ -427,12 +429,12 @@ where it is used. Three shapes, in the order to reach for them:
   to remember. `FetchTicket`, `WriteTicket`, `Session`, `DetailContext`,
   `TerminalGuard`.
 
-The types in `app/reviews.rs`, with `CommentAnchor` and `DiffRevision`, are
+The types in `tui/app/reviews.rs`, with `CommentAnchor` and `DiffRevision`, are
 written to the draft file, and a file that cannot be read stops slussa from
 starting. The strong types sit on the UI and provider side of that boundary
 and keep the file's spelling through serde (`#[serde(transparent)]` on the
 ids, `review: bool` for `CommentKind`). The version 1 fixture in
-`app/drafts.rs` pins the format.
+`tui/app/drafts.rs` pins the format.
 
 ## AI authorship, folds and reading
 
@@ -483,9 +485,9 @@ regression test that injects the result.
 
 **A new read resource.** Add a `FetchKey`, a `Read` variant with its `key` and
 `failure` arms, and a `LoadState` field on `PrData`. Extend `has_cached_data`,
-`refreshing` and `refresh_failed` in `app/store.rs`, add a `spawn_load_*`
+`refreshing` and `refresh_failed` in `tui/app/store.rs`, add a `spawn_load_*`
 function, apply the `Read` in `loads.rs`, and choose its cadence in
-`app/refresh.rs`.
+`tui/app/refresh.rs`.
 
 ## Verification and adding behavior
 
@@ -506,12 +508,12 @@ provider/fetcher. For an external effect, return an action and implement the
 application workflow. Add a regression test for observable behavior, especially
 when navigation or asynchronous state is involved.
 
-Import types from their owners: loading models from `app/store`, review work
-from `app/reviews`, tab identities from `pr_detail/tabs`, and editor drafts from
-`app/reviews` (also re-exported by `components/comment_editor`). `app/state` is not a UI type re-export hub. Screens use
+Import types from their owners: loading models from `tui/app/store`, review work
+from `tui/app/reviews`, tab identities from `pr_detail/tabs`, and editor drafts from
+`tui/app/reviews` (also re-exported by `components/comment_editor`). `tui/app/state` is not a UI type re-export hub. Screens use
 `DetailView` for read-only queries. `AppState::detail_view()` is a test helper;
 application effects do not query UI state. `tests/repo_rules.rs` fails a
-`domain`, `providers` or `tui` file that imports from a layer it may not
+`domain`, `providers`, `session`, `cli` or `tui/ui` file that imports from a layer it may not
 (test code and `test_support` excepted).
 
 Run `cargo clippy --all-targets --locked -- -D warnings` alongside the tests.
@@ -563,7 +565,7 @@ keeps the draft and closes the editor. `c` resumes it on any detail tab. Ctrl+X
 opens a discard confirmation. Existing drafts are resumed instead of silently
 replaced when another comment action is selected.
 
-`app/drafts.rs` persists draft targets, their captured diff revisions, review
+`tui/app/drafts.rs` persists draft targets, their captured diff revisions, review
 queues and partial-submission receipts in the platform's local data directory
 under `slussa/drafts/`. Files are versioned and scoped by provider, remote host,
 repository path and authenticated account; no tokens are included. The snapshot
@@ -617,7 +619,7 @@ SHAs or branch names remain separate future work.
 ## UI behaviour rules
 
 The rules the code relies on, kept short; the regression tests in
-`tui/regression_tests/` and `app/tests/` pin them.
+`tui/ui/regression_tests/` and `tui/app/tests/` pin them.
 
 - **Dialogs.** Review, merge, confirmation and filter dialogs share geometry
   and a keyboard footer through `widgets/dialog.rs`; the selected option stays

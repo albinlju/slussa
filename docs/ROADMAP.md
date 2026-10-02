@@ -424,7 +424,7 @@ it ahead of the feature that needs it.
   mode and the alternate screen, clear and redraw, drain stale events, resume
   the reader and restart refreshes. slussa uses crossterm's `EventStream`,
   which has no pause: drop and recreate it around the child, or gate it with an
-  `AtomicBool`. Put it in `app/desktop.rs` as `run_in_terminal(cmd)`.
+  `AtomicBool`. Put it in `tui/app/terminal.rs` as `run_in_terminal(cmd)`.
   *Trigger:* send-to-agent or open-in-editor.
 - [ ] **Error classification for the caller.** Add `FetchError::kind()`
   (`Retryable | NeedsAuth | Gone | Invalid | Unknown`) so the error dialog
@@ -448,7 +448,7 @@ it ahead of the feature that needs it.
   under *Features to build*.
 - [ ] **Keep the files under the size rule** (modules stay under about 500
   lines, `mod.rs` composes; `tests/repo_rules.rs` fails a file over 600). Five
-  `mod.rs` files still implement instead of composing: `tui/`, `tui/widgets/`,
+  `mod.rs` files still implement instead of composing: `tui/ui/`, `tui/ui/widgets/`,
   `providers/`, `providers/github/` and `providers/bitbucket_dc/`; the two
   provider ones go with *Provider trait*. Not a refactor-only change.
 - [ ] **A workspace, when something else needs the core.** slussa is one crate
@@ -499,7 +499,7 @@ it ahead of the feature that needs it.
 
 ### Tests and tooling
 
-- [ ] **Snapshots with realistic content.** `tui/testdata/screens.txt` covers
+- [ ] **Snapshots with realistic content.** `tui/ui/testdata/screens.txt` covers
   100x30 and 40x12 for the list and all five detail tabs, but with placeholder
   data: one PR, no diff, no threads. Add a snapshot with a diff with an inline
   thread, several commits and a failing build at both sizes, and one at 80x24.
