@@ -33,6 +33,15 @@ impl AuthorFilter {
         }
     }
 
+    /// Whose comments this filter leaves out; none for `All`.
+    pub const fn hides(self) -> Option<Authorship> {
+        match self {
+            Self::All => None,
+            Self::Humans => Some(Authorship::Ai),
+            Self::Ai => Some(Authorship::Human),
+        }
+    }
+
     pub const fn shows(self, authorship: Authorship) -> bool {
         match (self, authorship) {
             (Self::All, _) | (Self::Humans, Authorship::Human) | (Self::Ai, Authorship::Ai) => true,
@@ -189,6 +198,9 @@ mod tests {
                 AuthorFilter::All
             ]
         );
+        assert_eq!(AuthorFilter::All.hides(), None);
+        assert_eq!(AuthorFilter::Humans.hides(), Some(Authorship::Ai));
+        assert_eq!(AuthorFilter::Ai.hides(), Some(Authorship::Human));
         assert!(AuthorFilter::All.shows(Authorship::Ai));
         assert!(AuthorFilter::All.shows(Authorship::Human));
         assert!(AuthorFilter::Humans.shows(Authorship::Human));

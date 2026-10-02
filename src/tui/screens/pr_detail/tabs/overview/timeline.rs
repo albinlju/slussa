@@ -139,11 +139,14 @@ fn render_timeline(
     let blocks = build_blocks(
         &comments,
         &threads,
-        &Hidden {
-            comments: &hidden_comments,
-            threads: &hidden_threads,
-            filter: ui.filter,
-        },
+        ui.filter
+            .hides()
+            .map(|side| Hidden {
+                side,
+                comments: &hidden_comments,
+                threads: &hidden_threads,
+            })
+            .as_ref(),
         &activity.events,
         diff,
         area.width.saturating_sub(TIMELINE_RIGHT_PAD + RAIL_WIDTH),
