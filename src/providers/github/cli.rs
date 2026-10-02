@@ -131,8 +131,9 @@ pub(super) fn run_gh_json<T: serde::de::DeserializeOwned>(args: &[&str]) -> Resu
 }
 
 /// An answer that could not be read, for the log: what kind of failure, where
-/// reading stopped and how much there was. Not a sample of it and not the
-/// parser's message, which can quote a value: both are a PR's content.
+/// reading stopped and how much there was. Not a sample of it, which is a PR's
+/// content; the parser's message follows where the read is reported, without
+/// the values it quotes (`FetchError::ParseFailed`).
 fn unread(error: &serde_json::Error, bytes: usize) -> String {
     format!(
         "{:?} at line {} column {} of {bytes} bytes",
