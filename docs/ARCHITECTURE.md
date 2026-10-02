@@ -508,7 +508,8 @@ Import types from their owners: loading models from `app/store`, review work
 from `app/reviews`, tab identities from `pr_detail/tabs`, and editor drafts from
 `app/reviews` (also re-exported by `components/comment_editor`). `app/state` is not a UI type re-export hub. Screens use
 `DetailView` for read-only queries. `AppState::detail_view()` is a test helper;
-application effects do not query UI state.
+application effects do not query UI state. `tests/repo_rules.rs` fails a
+`domain`, `providers` or `tui` file that imports from a layer it may not.
 
 Run `cargo clippy --all-targets --locked -- -D warnings` alongside the tests.
 

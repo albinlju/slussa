@@ -39,7 +39,9 @@ for AI-generated PRs: triage, check intent, approve or merge.
   a `support.rs` for what they share (`src/app/tests/`). Split a file by
   concern when it passes the limit, not by trimming it to fit;
   `tests/repo_rules.rs` is the stop behind the rule and fails a file over 600
-  lines.
+  lines. It also holds the layers: `domain` imports only `domain`, `providers`
+  only `domain`, `providers` and `git_url`, `tui` only `app`, `domain` and `tui`
+  (test code and `test_support` excepted).
 - **Show only what the provider supports.** Hide unsupported actions; keep
   actions blocked by PR state visible with a reason.
 
