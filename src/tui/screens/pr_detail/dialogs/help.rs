@@ -53,13 +53,13 @@ const HELP: &[Entry] = &[
     Key("n/N", "next/prev match", Needs::Nothing),
     Key("[ ]", "prev/next tab/commit", Needs::Nothing),
     Key("esc", "back", Needs::Nothing),
-    Key("a", "submit review (Overview)", Needs::Reviews),
+    Key("a", "submit review", Needs::Reviews),
     Key("v", "start/finish review draft", Needs::Reviews),
     Key("V", "discard review", Needs::Reviews),
-    Key("m", "merge (Overview)", Needs::MergeStrategy),
+    Key("m", "merge", Needs::MergeStrategy),
     Key(
         "x",
-        "close / decline, or reopen a declined PR (Overview)",
+        "close / decline, or reopen a declined PR",
         Needs::CloseOrReopen,
     ),
     Key("c", "comment", Needs::AnyComment),
@@ -246,6 +246,24 @@ mod tests {
             ..Capabilities::default()
         };
         assert_eq!(added(&merging, false, false), ["m"]);
+    }
+
+    #[test]
+    fn the_pr_actions_name_no_single_tab_as_they_work_on_the_description_too() {
+        let caps = Capabilities {
+            merge_strategies: vec![MergeStrategy::Squash],
+            ..with(&[Feature::ReopenPr], true)
+        };
+        for key in ["a", "m", "x"] {
+            let text = entries(&caps, false, false)
+                .into_iter()
+                .find(|(keys, _)| *keys == key)
+                .map(|(_, text)| text);
+            assert!(
+                text.is_some_and(|text| !text.contains("Overview")),
+                "{key}: {text:?}"
+            );
+        }
     }
 
     #[test]
