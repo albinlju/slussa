@@ -76,49 +76,49 @@ fn is_test_file(path: &Path) -> bool {
 }
 
 /// The first segment of every `crate::` path in the non-test part of a file,
-/// grouped imports (`use crate::{app::x, tui::y}`) included.
+/// grouped imports (`use crate::{app::x, tui::y}`) included. A test module is
+/// last in a file, which clippy's `items_after_test_module` holds.
 fn crate_owners(source: &str) -> Vec<String> {
     let code = source
         .split_once("#[cfg(test)]\nmod tests")
         .map_or(source, |(code, _)| code);
+    // Only a whole-line comment is dropped: a `//` inside a string must not hide
+    // the rest of its line. A trailing comment that names a path is reported,
+    // and the report says where.
     let without_comments = code
         .lines()
-        .map(|line| line.split_once("//").map_or(line, |(code, _)| code))
+        .filter(|line| !line.trim_start().starts_with("//"))
         .collect::<Vec<_>>()
         .join("\n");
 
     let is_ident = |c: char| c.is_alphanumeric() || c == '_';
-    let mut owners = Vec::new();
+    let mut owners: Vec<String> = Vec::new();
     for after in without_comments.split("crate::").skip(1) {
         let Some(group) = after.strip_prefix('{') else {
             owners.push(after.chars().take_while(|c| is_ident(*c)).collect());
             continue;
         };
         // One owner per top-level branch of the group, however deep it nests.
-        let (mut depth, mut at_start) = (1_usize, true);
+        let (mut depth, mut reading) = (1_usize, true);
         let mut owner = String::new();
         for c in group.chars() {
             match c {
                 '{' => depth += 1,
-                '}' => {
-                    depth -= 1;
-                    if depth == 0 {
-                        break;
-                    }
-                }
-                ',' if depth == 1 => at_start = true,
-                c if depth == 1 && at_start && is_ident(c) => owner.push(c),
-                c if depth == 1 && at_start && !c.is_whitespace() => at_start = false,
-                _ if depth == 1 && at_start && !owner.is_empty() => at_start = false,
+                '}' => depth -= 1,
+                ',' if depth == 1 => reading = true,
+                c if depth == 1 && reading && is_ident(c) => owner.push(c),
+                _ if depth == 1 && !owner.is_empty() => reading = false,
+                _ if depth == 1 && reading && !c.is_whitespace() => reading = false,
                 _ => {}
             }
-            if !at_start && !owner.is_empty() {
-                owners.push(std::mem::take(&mut owner));
+            if depth == 0 {
+                break;
+            }
+            if !reading || c == ',' || c == '}' {
+                owners.extend((!owner.is_empty()).then(|| std::mem::take(&mut owner)));
             }
         }
-        if !owner.is_empty() {
-            owners.push(owner);
-        }
+        owners.extend((!owner.is_empty()).then_some(owner));
     }
     owners.retain(|owner| !owner.is_empty());
     owners
@@ -128,12 +128,16 @@ fn crate_owners(source: &str) -> Vec<String> {
 fn the_scan_reads_plain_and_grouped_paths() {
     let source = "use crate::domain::pr;\n\
         use crate::{\n    app::{a, b},\n    tui::c,\n    domain,\n};\n\
+        use crate::{domain, git_url::parse};\n\
         // crate::providers in a comment\n\
         fn f() { crate::git_url::parse(); }\n\
+        fn g() { format!(\"https://{}\", crate::app::v()); }\n\
         #[cfg(test)]\nmod tests { use crate::providers::X; }\n";
     assert_eq!(
         crate_owners(source),
-        ["domain", "app", "tui", "domain", "git_url"]
+        [
+            "domain", "app", "tui", "domain", "domain", "git_url", "git_url", "app"
+        ]
     );
 }
 
