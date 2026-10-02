@@ -1,48 +1,7 @@
 //! The Overview's filter between people's comments and an agent's.
 
 use super::support::*;
-use crate::domain::{authorship::AiMarkers, comment::Comment};
-
-fn overview_with(contents: &[&str]) -> AppState {
-    let mut state = fixture();
-    state.screen = Screen::Detail {
-        pr_id: PrId(42),
-        tab: DetailTab::Overview,
-    };
-    let comments = contents
-        .iter()
-        .enumerate()
-        .map(|(i, content)| Comment {
-            id: Some(CommentId(i as u64 + 1)),
-            author: User {
-                username: "alice".into(),
-            },
-            account: crate::domain::user::AccountKind::Person,
-            content: (*content).into(),
-            created: chrono::Utc::now(),
-            reactions: vec![],
-            reply_to: None,
-        })
-        .collect();
-    state
-        .store
-        .cache
-        .details
-        .get_mut(&PrId(42))
-        .unwrap()
-        .activity = LoadState::Loaded(Activity {
-        comments,
-        events: vec![],
-        threads: vec![],
-    });
-    state
-}
-
-fn screen(state: &mut AppState) -> String {
-    let mut terminal = Terminal::new(TestBackend::new(140, 30)).unwrap();
-    terminal.draw(|frame| render(frame, state)).unwrap();
-    rendered_text(&terminal)
-}
+use crate::domain::authorship::AiMarkers;
 
 #[test]
 fn f_cycles_between_all_people_and_the_agent() {
@@ -131,7 +90,7 @@ fn a_bots_account_offers_the_filter_without_any_configuration() {
         .unwrap()
         .activity
     {
-        activity.comments[1].account = crate::domain::user::AccountKind::Bot;
+        activity.comments[1].account = AccountKind::Bot;
     }
     assert!(screen(&mut state).contains("f: comments (all)"));
     local_key(&mut state, KeyCode::Char('f'));

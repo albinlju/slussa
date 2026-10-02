@@ -2,10 +2,6 @@
 //! fold row opens it.
 
 use super::support::*;
-use crate::domain::{
-    comment::{Comment, CommentThread, ThreadAnchor},
-    user::AccountKind,
-};
 
 fn body(lines: usize) -> String {
     (1..=lines)
@@ -14,66 +10,23 @@ fn body(lines: usize) -> String {
         .join("\n\n")
 }
 
-fn comment(id: u64, content: String) -> Comment {
-    Comment {
-        id: Some(CommentId(id)),
-        author: User {
-            username: "alice".into(),
-        },
-        account: AccountKind::Person,
-        content,
-        created: chrono::Utc::now(),
-        reactions: vec![],
-        reply_to: None,
-    }
-}
-
-fn thread(root: u64, content: String) -> CommentThread {
-    thread_resolved(root, content, false)
-}
-
-fn thread_resolved(root: u64, content: String, resolved: bool) -> CommentThread {
-    CommentThread {
-        comments: vec![comment(root, content)],
-        reply_to: Some(CommentId(root)),
-        anchor: Some(ThreadAnchor {
-            revision: None,
-            path: "src/main.rs".into(),
-            line: Some(LineRef::New(1)),
-            resolved,
-            handle: Some(ThreadHandle::NodeId("t".into())),
-        }),
-    }
-}
-
-fn diff_with(content: String) -> AppState {
-    diff_with_thread(thread(1, content))
+fn diff_with(content: &str) -> AppState {
+    diff_with_thread(thread(1, false, vec![comment(1, content)]))
 }
 
 fn diff_with_thread(thread: CommentThread) -> AppState {
-    let mut state = fixture();
-    state.screen = Screen::Detail {
-        pr_id: PrId(42),
-        tab: DetailTab::Diff,
-    };
-    state
-        .store
-        .cache
-        .details
-        .get_mut(&PrId(42))
-        .unwrap()
-        .activity = LoadState::Loaded(Activity {
-        comments: vec![],
-        events: vec![],
-        threads: vec![thread],
-    });
-    state
+    pr_on(
+        DetailTab::Diff,
+        Activity {
+            threads: vec![thread],
+            ..Activity::default()
+        },
+    )
 }
 
+/// The screen tall enough for a whole long comment.
 fn screen(state: &mut AppState) -> String {
-    let mut terminal = Terminal::new(TestBackend::new(140, 80)).unwrap();
-    terminal.draw(|frame| render(frame, state)).unwrap();
-    rendered_text(&terminal)
+    draw(state, 140, 80)
 }
 
 /// From the tree's first folder to the file, into the code pane, and onto the
@@ -96,7 +49,7 @@ fn into_the_code(state: &mut AppState) {
 /// Down to the next stop, until the footer says what `space` does there.
 fn down_until(state: &mut AppState, footer_has: &str) {
     for _ in 0..4 {
-        if footer(&screen(state)).contains(footer_has) {
+        if footer_of(&screen(state)).contains(footer_has) {
             return;
         }
         local_key(state, KeyCode::Char('j'));
@@ -106,7 +59,7 @@ fn down_until(state: &mut AppState, footer_has: &str) {
 
 #[test]
 fn a_long_comment_in_the_diff_has_a_fold_row_the_cursor_can_stop_on() {
-    let mut state = diff_with(body(30));
+    let mut state = diff_with(&body(30));
     into_the_code(&mut state);
     let folded = screen(&mut state);
     assert!(
@@ -128,9 +81,9 @@ fn a_long_comment_in_the_diff_has_a_fold_row_the_cursor_can_stop_on() {
     );
     assert!(open.contains("▲ fold · space"), "{open}");
     assert!(
-        footer(&open).contains("space: fold comment"),
+        footer_of(&open).contains("space: fold comment"),
         "{}",
-        footer(&open)
+        footer_of(&open)
     );
 
     // The cursor is still on that row, so space folds it again.
@@ -141,15 +94,15 @@ fn a_long_comment_in_the_diff_has_a_fold_row_the_cursor_can_stop_on() {
 
 #[test]
 fn a_reply_still_goes_to_the_thread_from_its_fold_row() {
-    let mut state = diff_with(body(30));
+    let mut state = diff_with(&body(30));
     into_the_code(&mut state);
     down_until(&mut state, "space: expand comment");
-    assert!(footer(&screen(&mut state)).contains("r: reply"));
+    assert!(footer_of(&screen(&mut state)).contains("r: reply"));
 }
 
 #[test]
 fn a_short_comment_in_the_diff_is_left_whole() {
-    let mut state = diff_with(body(3));
+    let mut state = diff_with(&body(3));
     into_the_code(&mut state);
     let text = screen(&mut state);
     assert!(
@@ -158,26 +111,16 @@ fn a_short_comment_in_the_diff_is_left_whole() {
     );
 }
 
-fn footer(text: &str) -> String {
-    text.chars()
-        .rev()
-        .take(140)
-        .collect::<Vec<_>>()
-        .into_iter()
-        .rev()
-        .collect()
-}
-
 #[test]
 fn a_resolved_thread_opens_and_closes_with_one_space_and_its_fold_row_is_separate() {
-    let mut state = diff_with_thread(thread_resolved(1, body(30), true));
+    let mut state = diff_with_thread(thread(1, true, vec![comment(1, &body(30))]));
     into_the_code(&mut state);
     let shut = screen(&mut state);
     assert!(!shut.contains("finding line 1"), "{shut}");
     assert!(
-        footer(&shut).contains("space: expand thread"),
+        footer_of(&shut).contains("space: expand thread"),
         "{}",
-        footer(&shut)
+        footer_of(&shut)
     );
 
     // One space opens the thread, and its long comment is still folded.
@@ -188,9 +131,9 @@ fn a_resolved_thread_opens_and_closes_with_one_space_and_its_fold_row_is_separat
         "{folded}"
     );
     assert!(
-        footer(&folded).contains("space: collapse thread"),
+        footer_of(&folded).contains("space: collapse thread"),
         "{}",
-        footer(&folded)
+        footer_of(&folded)
     );
 
     // One space closes it again, whatever the comment inside has done.
@@ -210,7 +153,7 @@ fn a_resolved_thread_opens_and_closes_with_one_space_and_its_fold_row_is_separat
 
 #[test]
 fn a_short_resolved_thread_opens_and_closes_with_one_space_each() {
-    let mut state = diff_with_thread(thread_resolved(1, body(2), true));
+    let mut state = diff_with_thread(thread(1, true, vec![comment(1, &body(2))]));
     into_the_code(&mut state);
     assert!(!screen(&mut state).contains("finding line 1"));
     local_key(&mut state, KeyCode::Char(' '));

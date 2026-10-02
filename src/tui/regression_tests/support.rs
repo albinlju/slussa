@@ -12,11 +12,11 @@ pub(super) use crate::{
     domain::{
         activity::Activity,
         ci::CiSummary,
-        comment::{CommentId, ThreadHandle},
+        comment::{Comment, CommentId, CommentThread, ThreadAnchor, ThreadHandle},
         commit::{Commit, CommitOid},
         diff::*,
         pr::*,
-        user::User,
+        user::{AccountKind, User},
     },
     tui::{
         components::{
@@ -128,4 +128,98 @@ pub(super) fn local_key(state: &mut AppState, code: KeyCode) {
             state.screen = screen;
         }
     }
+}
+
+/// A comment by a person, made now, with no thread of its own.
+pub(super) fn comment(id: u64, content: &str) -> Comment {
+    Comment {
+        id: Some(CommentId(id)),
+        author: User {
+            username: "alice".into(),
+        },
+        account: AccountKind::Person,
+        content: content.into(),
+        created: chrono::Utc::now(),
+        reactions: vec![],
+        reply_to: None,
+    }
+}
+
+/// A comment by a bot account.
+pub(super) fn bot_comment(id: u64, content: &str) -> Comment {
+    Comment {
+        account: AccountKind::Bot,
+        ..comment(id, content)
+    }
+}
+
+/// A review thread on the fixture's file, on line 1, whose root comment is `root`.
+pub(super) fn thread(root: u64, resolved: bool, comments: Vec<Comment>) -> CommentThread {
+    CommentThread {
+        comments,
+        reply_to: Some(CommentId(root)),
+        anchor: Some(ThreadAnchor {
+            revision: None,
+            path: "src/main.rs".into(),
+            line: Some(LineRef::New(1)),
+            resolved,
+            handle: Some(ThreadHandle::NodeId("thread".into())),
+        }),
+    }
+}
+
+/// The fixture's PR #42 open on `tab`, with this activity loaded.
+pub(super) fn pr_on(tab: DetailTab, activity: Activity) -> AppState {
+    let mut state = fixture();
+    state.screen = Screen::Detail {
+        pr_id: PrId(42),
+        tab,
+    };
+    state
+        .store
+        .cache
+        .details
+        .get_mut(&PrId(42))
+        .unwrap()
+        .activity = LoadState::Loaded(activity);
+    state
+}
+
+/// The Overview with these comments by people, in the order given.
+pub(super) fn overview_with(contents: &[&str]) -> AppState {
+    let comments = (1..)
+        .zip(contents)
+        .map(|(id, content)| comment(id, content))
+        .collect();
+    pr_on(
+        DetailTab::Overview,
+        Activity {
+            comments,
+            ..Activity::default()
+        },
+    )
+}
+
+/// The screen drawn at `width` by `height`, as the text of its cells with no line
+/// breaks.
+pub(super) fn draw(state: &mut AppState, width: u16, height: u16) -> String {
+    let mut terminal = Terminal::new(TestBackend::new(width, height)).unwrap();
+    terminal.draw(|frame| render(frame, state)).unwrap();
+    rendered_text(&terminal)
+}
+
+/// The screen at the usual 140 by 30.
+pub(super) fn screen(state: &mut AppState) -> String {
+    draw(state, 140, 30)
+}
+
+/// The last row of a screen drawn 140 wide: the footer.
+pub(super) fn footer_of(text: &str) -> String {
+    text.chars()
+        .rev()
+        .take(140)
+        .collect::<Vec<_>>()
+        .into_iter()
+        .rev()
+        .collect()
 }
