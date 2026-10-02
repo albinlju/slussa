@@ -113,8 +113,7 @@ says so on the row.
   shown when neither source says anything. Path rules cannot see a one-line
   change that sends an email to 60 000 people, so the floor adds to reading
   the PR and does not replace it. **Open:** which convention to read (none has
-  settled: the PR skill the idea comes from was unreleased on 2026-10-01, so
-  nothing in a description is parsed until there is a convention to read); whether
+  settled, so nothing in a description is parsed until there is one to read); whether
   a one-way door is an attention reason of its own or a marker beside the
   existing one; and the row, which needs the description and the changed
   paths, neither of which the list query reads today.
@@ -138,17 +137,13 @@ The AI reviewer's output has to be as easy to read and act on as a human's, and
 easier to tell apart.
 
 An AI reviewer shows up in one of two ways, and slussa will meet both. One
-*comments*, as the "gator" reviewer in
-[NVIDIA/OpenShell](https://github.com/NVIDIA/openshell) does: one batched
-review per head SHA, a first-line marker on every comment, stable finding IDs
-carried across rounds, and a severity split where only evidenced findings
-block. The other *commits*, the model in the talk
-[Fixing the PR Bottleneck](https://www.youtube.com/watch?v=LlgiOCmFG_w): it
-fixes what it finds on the branch and comments only when it is unsure, so its
-review is a set of commits and may leave no thread at all. That reviewers will
-commonly work the second way is an assumption, which is why both are kept. "AI
-actor" is therefore one notion, applied to the PR's author, to comments and to
-commits.
+*comments*: one batched review per head SHA, a first-line marker on every
+comment, stable finding IDs carried across rounds, and a severity split where
+only evidenced findings block. The other *commits*: it fixes what it finds on
+the branch and comments only when it is unsure, so its review is a set of
+commits and may leave no thread at all. That reviewers will commonly work the
+second way is an assumption, which is why both are kept. "AI actor" is
+therefore one notion, applied to the PR's author, to comments and to commits.
 
 - [ ] **AI-authored commits marked** *(refined)* — mark the commits an agent
   made in the Commits tab, by author account or a configurable trailer, so the
@@ -164,12 +159,7 @@ commits.
   current head so a stale review reads as stale rather than wrong. A review
   that committed reads `AI review: 3 commits · a1b2c3d`. Collapses to nothing
   when no AI review exists, which is itself what the reviewer needs to know:
-  no AI review has checked this PR. Where the review exposes them, also the
-  round and "unchanged since last review": a reviewer that has gone to
-  critical findings only after three rounds, or that skipped a rebase with the
-  same patch, has stopped adding to what the human knows. Only a finding with
-  its evidence (behaviour on the base, on the head, the impact and a
-  reproducer) counts as a blocker in the summary; one without is a hypothesis.
+  no AI review has checked this PR.
 - [ ] **Linked issues / cross-references** — "closes #123", shown in the
   header and openable. Moved here from *Handoff*: the linked issue is what was
   asked for, and checking the PR against it is the intent check the
@@ -191,6 +181,35 @@ commits.
 - [ ] **Resolved / unresolved filter** in the Overview.
 - [ ] **Outdated comments** — hide threads whose anchored line is gone from the
   diff; keep them in the Overview timeline.
+
+What a commenting reviewer's review carries, to design the domain model
+against:
+
+- [ ] **One disposition per head SHA.** A review is one batched GitHub review
+  (summary + inline comments) that names the head SHA it reviewed. Show
+  *reviewed SHA vs. current head* on the AI summary line; a review of an older
+  SHA is stale, not wrong.
+- [ ] **Stable finding IDs across rounds.** Findings carry an ID such as
+  `GATOR-<sha8>-<nn>` and are carried, resolved or waived across later
+  commits; a maintainer's "won't fix" reply is a waiver, an author's "fixed"
+  is a claim to verify. The open/fixed/waived state per finding is what a
+  reviewer wants at a glance, and it is derivable from thread resolution +
+  resolver identity + the marker.
+- [ ] **Severity and evidence.** Findings are `Critical | Warning | Suggestion`,
+  and only ones with a full evidence record (base behaviour, head behaviour,
+  observable impact, reproducer, changed location) count as blockers; the rest
+  are hypotheses. Suggestions never block. If slussa's own *run a review*
+  command emits structured output, use this split: it gives the reviewer a
+  defensible "N blockers, M suggestions" header instead of a wall of comments.
+- [ ] **Concern format for the review prompt.** Every concern as "Before this
+  PR, `<persona>` experienced `<old>`. With this PR, `<new>`, so `<impact>`."
+  with file:line only as evidence. A good default prompt for slussa's
+  run-a-review.
+- [ ] **Convergence rules worth copying into the display.** After three
+  finding-bearing rounds a reviewer may report critical findings only, and a
+  rebase with the same patch (same patch-id) is not re-reviewed. Show the round
+  count and "unchanged since last review" so a human knows when the AI has
+  stopped adding value.
 
 ### 3. Act on suggestions, then merge
 
