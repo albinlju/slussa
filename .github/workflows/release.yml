@@ -5,11 +5,13 @@ name: Release
 # builds and uploads the artifacts but publishes nothing; do that after any
 # change to this file.
 #
-# Before tagging: CI is green on main (this workflow does not re-run the tests)
-# and `version` in Cargo.toml, with Cargo.lock, equals the tag without the `v`.
-# The first job fails the run if they disagree. Each archive gets a `.sha256`
-# and the release a combined `SHA256SUMS`. The crate is published by hand with
-# `cargo publish` from the same tag, after this workflow has succeeded.
+# Before tagging: CI has passed on the commit (this workflow does not re-run the
+# tests) and `version` in Cargo.toml, with Cargo.lock, equals the tag without
+# the `v`. The first job fails the run if either does not hold; a dry run only
+# warns about CI, so that it still shows the check working. Each archive gets
+# a `.sha256` and the release a combined `SHA256SUMS`. The crate is published
+# by hand with `cargo publish` from the same tag, after this workflow has
+# succeeded.
 on:
   push:
     tags:
@@ -30,9 +32,12 @@ concurrency:
 
 jobs:
   verify:
-    name: Verify version
+    name: Verify version and CI
     runs-on: ubuntu-latest
     timeout-minutes: 10
+    permissions:
+      contents: read
+      actions: read # to ask whether CI passed on this commit
     outputs:
       version: ${{ steps.version.outputs.version }}
     steps:
@@ -45,6 +50,24 @@ jobs:
             exit 1
           fi
           echo "version=${version}" >> "$GITHUB_OUTPUT"
+      # Nothing here runs the tests, so a tag on a commit CI has not passed
+      # would publish untested binaries. Only a run for a push counts: the
+      # weekly scheduled run of ci.yml is cargo-deny alone.
+      - name: CI passed on this commit
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          passed=$(gh run list --repo "$GITHUB_REPOSITORY" --workflow ci.yml \
+            --commit "$GITHUB_SHA" --event push --status success \
+            --json databaseId --jq 'length')
+          if [[ "$passed" -gt 0 ]]; then
+            echo "ci.yml passed on ${GITHUB_SHA}."
+          elif [[ "$GITHUB_REF_TYPE" == "tag" ]]; then
+            echo "::error::No successful run of ci.yml for a push of ${GITHUB_SHA}. Tag a commit on main that CI has passed; if CI is still running or was cancelled, wait for it or re-run it, then re-run this workflow."
+            exit 1
+          else
+            echo "::warning::Dry run: ci.yml has not passed on a push of ${GITHUB_SHA}, so a tag here would be refused."
+          fi
 
   build:
     name: Build ${{ matrix.target }}
