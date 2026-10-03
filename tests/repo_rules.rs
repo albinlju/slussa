@@ -52,13 +52,16 @@ fn no_source_file_is_over_the_size_rule() -> io::Result<()> {
     Ok(())
 }
 
-/// What each layer may import from the crate, by first path segment. The
-/// layers hold this in non-test code today; this keeps it that way.
+/// What each layer may import from the crate: the first path segment, or for
+/// `tui` the two first (`tui::ui`), since the surface and the engine are one
+/// directory each. The layers hold this in non-test code today; this keeps it
+/// that way.
 const IMPORTS: &[(&str, &[&str])] = &[
     ("domain", &["domain"]),
     ("providers", &["domain", "providers", "git_url"]),
     ("session", &["domain", "providers", "git_url", "session"]),
-    ("tui", &["app", "domain", "tui"]),
+    ("cli", &["cli", "domain", "providers", "git_url", "session"]),
+    ("tui/ui", &["domain", "tui::app", "tui::ui"]),
 ];
 
 /// The doubles are for tests, and tests reach into any layer for them.
@@ -76,8 +79,64 @@ fn is_test_file(path: &Path) -> bool {
         .any(|part| part.as_os_str().to_str().is_some_and(named_for_tests))
 }
 
-/// The first segment of every `crate::` path in the non-test part of a file,
-/// grouped imports (`use crate::{app::x, tui::y}`) included. A test module is
+fn is_ident(c: char) -> bool {
+    c.is_alphanumeric() || c == '_'
+}
+
+fn leading_ident(text: &str) -> &str {
+    let end = text.find(|c| !is_ident(c)).unwrap_or(text.len());
+    text.get(..end).unwrap_or_default()
+}
+
+/// The top-level branches of a group, from just after its `{`, and what is left
+/// after its `}`.
+fn split_branches(text: &str) -> (Vec<&str>, &str) {
+    let (mut depth, mut from) = (1_usize, 0);
+    let mut branches = Vec::new();
+    for (at, c) in text.char_indices() {
+        match c {
+            '{' => depth += 1,
+            '}' => depth -= 1,
+            ',' if depth == 1 => {
+                branches.extend(text.get(from..at));
+                from = at + 1;
+            }
+            _ => {}
+        }
+        if depth == 0 {
+            branches.extend(text.get(from..at));
+            return (branches, text.get(at + 1..).unwrap_or_default());
+        }
+    }
+    (branches, "")
+}
+
+/// The owners named by one path, as written after `crate::`.
+fn owners_of(path: &str, owners: &mut Vec<String>) {
+    let path = path.trim_start();
+    if let Some(group) = path.strip_prefix('{') {
+        for branch in split_branches(group).0 {
+            owners_of(branch, owners);
+        }
+        return;
+    }
+    let first = leading_ident(path);
+    let Some(below) = path
+        .get(first.len()..)
+        .and_then(|rest| rest.strip_prefix("::"))
+        .filter(|_| first == "tui")
+    else {
+        owners.push(first.to_string());
+        return;
+    };
+    // `tui` is two directories, so its owner is the half that is named.
+    let mut halves = Vec::new();
+    owners_of(below, &mut halves);
+    owners.extend(halves.into_iter().map(|half| format!("tui::{half}")));
+}
+
+/// Who each `crate::` path in the non-test part of a file belongs to, grouped
+/// imports (`use crate::{domain::x, tui::ui::y}`) included. A test module is
 /// last in a file, which clippy's `items_after_test_module` holds.
 fn crate_owners(source: &str) -> Vec<String> {
     let code = source
@@ -92,34 +151,9 @@ fn crate_owners(source: &str) -> Vec<String> {
         .collect::<Vec<_>>()
         .join("\n");
 
-    let is_ident = |c: char| c.is_alphanumeric() || c == '_';
-    let mut owners: Vec<String> = Vec::new();
+    let mut owners = Vec::new();
     for after in without_comments.split("crate::").skip(1) {
-        let Some(group) = after.strip_prefix('{') else {
-            owners.push(after.chars().take_while(|c| is_ident(*c)).collect());
-            continue;
-        };
-        // One owner per top-level branch of the group, however deep it nests.
-        let (mut depth, mut reading) = (1_usize, true);
-        let mut owner = String::new();
-        for c in group.chars() {
-            match c {
-                '{' => depth += 1,
-                '}' => depth -= 1,
-                ',' if depth == 1 => reading = true,
-                c if depth == 1 && reading && is_ident(c) => owner.push(c),
-                _ if depth == 1 && !owner.is_empty() => reading = false,
-                _ if depth == 1 && reading && !c.is_whitespace() => reading = false,
-                _ => {}
-            }
-            if depth == 0 {
-                break;
-            }
-            if !reading || c == ',' || c == '}' {
-                owners.extend((!owner.is_empty()).then(|| std::mem::take(&mut owner)));
-            }
-        }
-        owners.extend((!owner.is_empty()).then_some(owner));
+        owners_of(after, &mut owners);
     }
     owners.retain(|owner| !owner.is_empty());
     owners
@@ -128,16 +162,18 @@ fn crate_owners(source: &str) -> Vec<String> {
 #[test]
 fn the_scan_reads_plain_and_grouped_paths() {
     let source = "use crate::domain::pr;\n\
-        use crate::{\n    app::{a, b},\n    tui::c,\n    domain,\n};\n\
+        use crate::{\n    tui::{app::a, ui::b},\n    domain,\n};\n\
         use crate::{domain, git_url::parse};\n\
+        use crate::tui::{app, ui::c};\n\
         // crate::providers in a comment\n\
-        fn f() { crate::git_url::parse(); }\n\
-        fn g() { format!(\"https://{}\", crate::app::v()); }\n\
+        fn f() { crate::git_url::parse(); crate::tui::ui::x(); }\n\
+        fn g() { format!(\"https://{}\", crate::session::v()); }\n\
         #[cfg(test)]\nmod tests { use crate::providers::X; }\n";
     assert_eq!(
         crate_owners(source),
         [
-            "domain", "app", "tui", "domain", "domain", "git_url", "git_url", "app"
+            "domain", "tui::app", "tui::ui", "domain", "domain", "git_url", "tui::app", "tui::ui",
+            "git_url", "tui::ui", "session"
         ]
     );
 }
@@ -146,15 +182,15 @@ fn the_scan_reads_plain_and_grouped_paths() {
 fn each_layer_imports_only_from_the_layers_it_may() -> io::Result<()> {
     let root = Path::new(env!("CARGO_MANIFEST_DIR")).join("src");
     let mut broken = Vec::new();
-    let mut seen_in_tui = Vec::new();
+    let mut seen_in_ui = Vec::new();
     for (layer, allowed) in IMPORTS {
         let mut files = Vec::new();
         rust_files(&root.join(layer), &mut files)?;
         assert!(!files.is_empty(), "found no Rust files in src/{layer}");
         for file in files.iter().filter(|file| !is_test_file(file)) {
             for owner in crate_owners(&fs::read_to_string(file)?) {
-                if *layer == "tui" {
-                    seen_in_tui.push(owner.clone());
+                if *layer == "tui/ui" {
+                    seen_in_ui.push(owner.clone());
                 }
                 if owner != EVERYWHERE && !allowed.contains(&owner.as_str()) {
                     let name = file.strip_prefix(&root).unwrap_or(file);
@@ -164,10 +200,10 @@ fn each_layer_imports_only_from_the_layers_it_may() -> io::Result<()> {
         }
     }
     // The scan must find what is there, or it passes by reading nothing.
-    for expected in ["app", "domain"] {
+    for expected in ["tui::app", "domain"] {
         assert!(
-            seen_in_tui.iter().any(|owner| owner == expected),
-            "the scan found no `crate::{expected}` in src/tui"
+            seen_in_ui.iter().any(|owner| owner == expected),
+            "the scan found no `crate::{expected}` in src/tui/ui"
         );
     }
     assert!(

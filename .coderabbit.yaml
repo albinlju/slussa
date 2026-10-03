@@ -15,7 +15,7 @@ reviews:
   path_filters:
     - "!Cargo.lock"
     - "!docs/media/**"
-    - "!src/tui/testdata/**"
+    - "!src/tui/ui/testdata/**"
   path_instructions:
     - path: "src/**/*.rs"
       instructions: |
@@ -31,7 +31,7 @@ reviews:
           call order that a ticket or a constructor could enforce. Flag a `_ =>`
           arm on one of the project's own enums; it is fine on `KeyCode` and on
           strings from a server.
-        - A change to how the types in `src/app/reviews.rs` are serialized
+        - A change to how the types in `src/tui/app/reviews.rs` are serialized
           needs a new draft file version: an unreadable file stops the app.
         - Two views only (the PR list and the PR). Flag a new screen, dashboard
           or sidebar; new capability is a default, a column, a marker or a key.

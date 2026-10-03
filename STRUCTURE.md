@@ -20,7 +20,6 @@ Said plainly, since most of this note is moves and not fixes:
 |---|---|
 | The import rule in `tests/repo_rules.rs` | An improvement today. The layers are held by a test instead of by review. |
 | The key table with three outcomes | An improvement today. It removes a real source of errors: the help has already drifted from the keys. |
-| `session/`, `cli/`, `local/`, `handoff.rs` | What the agent CLI and the inbox need. No gain before those are built. |
 | Nesting `app` and `ui` under `tui/` | Nothing in behaviour or safety. It is what makes the top level readable, and it is the widest move. |
 | The splits of `action.rs`, `store.rs`, `widgets/mod.rs`, `test_support.rs` | Forced by the size rule anyway. The note says where the cut goes. |
 | The shape of `FetchKey`, the draft types to `domain`, `widgets/comment/` | Small and right. |
@@ -410,8 +409,6 @@ import rule is tooling, which the same rule says to do now.
 
 | Move | Trigger |
 |---|---|
-| `session/` | *Unread / updated* or the first headless command, whichever comes first |
-| `cli/`, nesting `app` and `ui` under `tui/`, and the rule "`cli` never imports `tui`" | The first headless command (`slussa list --json`) |
 | `local/`, and the draft types to `domain/review.rs` | *Unread / updated*, after `session/` |
 | `ui/action.rs` and `app/effect.rs`, with `Command` to `commands.rs` | The next feature that adds a key, in a PR of its own and not together with `bindings.rs` |
 | `bindings.rs` with three outcomes | The next feature that adds a key to the PR view (the roadmap's *Keybinding table*) |
