@@ -401,6 +401,21 @@ it ahead of the feature that needs it.
   on crossterm's `KeyCode` end in a catch-all, and the lint does not tell a
   foreign enum from ours. *Trigger:* the next feature that adds a key to a
   child component.
+- [ ] **Where the next features put their code.** The tree already has the
+  places; this says which. `handoff.rs` at the top level holds the text package
+  for an agent, built once for the TUI's *Send to agent* and `slussa context`;
+  the configured command belongs to `config` and running it to
+  `tui/app/terminal.rs`. A headless subcommand is a file in `cli/` (`list`,
+  `blocked`, `threads`, `context`, and later `draft`, `review import`,
+  `agent-instructions`), with `json.rs` for the output types (`"schema": 1`)
+  and `exit.rs` for the exit codes; `cli` never imports `tui`. New saved state is
+  a file in `local/` (`seen.rs` for *Unread* and *Viewed files*, `proposals.rs`
+  for the agent inbox) and imports `session`, never the reverse. Thread assembly
+  and the risk and findings rules go to `domain/` (`threads`, `risk`,
+  `findings`). `config.rs` becomes `config/` when it gains the agent commands.
+  Each new module gets `wildcard_enum_match_arm`, as `session` and `local` have,
+  and a row in the import rule of `tests/repo_rules.rs`. *Trigger:* the feature
+  that needs each.
 - [ ] **Provider trait instead of enum dispatch.** `providers/mod.rs` matches
   on `Provider` in every method; fine for two providers. Move to a
   `trait ProviderApi` (or keep the enum and implement it via the trait).
@@ -434,7 +449,9 @@ it ahead of the feature that needs it.
   message is right and should be kept. *Trigger:* next change to the error
   dialog or a new provider.
 - [ ] **Conformance test for the provider boundary.** One
-  `tests/provider_conformance.rs` over a fake GitHub and a fake Bitbucket,
+  `src/providers/conformance_tests.rs` (the crate has no `lib.rs` and
+  `test_support` is `#[cfg(test)]`, so an integration test under `tests/` can
+  reach neither the providers nor `FakeGh`) over a fake GitHub and a fake Bitbucket,
   covering list, open, comment, review, merge and the error paths. *Trigger:*
   the provider trait.
 - [ ] **Shape `providers/` as domain + trait + leaves.** `domain/` and the
