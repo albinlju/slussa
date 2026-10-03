@@ -99,7 +99,7 @@ fn commit_row(commit: &Commit, is_last: bool, now: DateTime<Utc>, width: usize) 
     // `[AI]` sits before the headline, which is what a narrow row cuts.
     let mut left = vec![
         Span::styled(graph, Style::default().fg(theme.muted)),
-        Span::styled(commit.oid.short(), Style::default().fg(theme.decorative)),
+        Span::styled(commit.oid.short(), Style::default().fg(theme.muted)),
     ];
     if commit.is_ai() {
         left.push(meta::ai_tag());
