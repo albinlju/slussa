@@ -15,7 +15,7 @@ fn refresh_failure_preserves_visible_data() {
 
 #[tokio::test(flavor = "current_thread")]
 async fn refresh_tracks_each_resource_and_refetches_after_mutation() {
-    use crate::tui::app::store::{FetchKey, Operation};
+    use crate::tui::app::store::{FetchKey, Operation, PrResource};
     let mut app = app();
     detail(&mut app, DetailTab::Overview);
     app.apply(Action::Effect(Effect::Refresh));
@@ -37,7 +37,7 @@ async fn refresh_tracks_each_resource_and_refetches_after_mutation() {
         app.state
             .store
             .reload_after_fetch
-            .contains(&FetchKey::Activity(PrId(42)))
+            .contains(&FetchKey::Pr(PrResource::Activity, PrId(42)))
     );
     app.apply_result(TaskResult::Read(Read::Activity(
         PrId(42),
@@ -47,13 +47,13 @@ async fn refresh_tracks_each_resource_and_refetches_after_mutation() {
         app.state
             .store
             .fetches
-            .contains(&FetchKey::Activity(PrId(42)))
+            .contains(&FetchKey::Pr(PrResource::Activity, PrId(42)))
     );
     assert!(
         !app.state
             .store
             .reload_after_fetch
-            .contains(&FetchKey::Activity(PrId(42)))
+            .contains(&FetchKey::Pr(PrResource::Activity, PrId(42)))
     );
     app.apply_result(TaskResult::Read(Read::Activity(
         PrId(42),
@@ -63,7 +63,7 @@ async fn refresh_tracks_each_resource_and_refetches_after_mutation() {
         !app.state
             .store
             .fetches
-            .contains(&FetchKey::Activity(PrId(42)))
+            .contains(&FetchKey::Pr(PrResource::Activity, PrId(42)))
     );
     app.apply_result(TaskResult::Read(Read::Mergeability(
         PrId(42),

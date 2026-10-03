@@ -3,33 +3,49 @@
 use super::support::*;
 use crate::{
     domain::capabilities::Feature,
-    tui::app::store::{FetchKey, Operation, Store},
+    tui::app::store::{FetchKey, Operation, PrResource, Store},
 };
 
 #[test]
 fn a_read_gets_a_ticket_once_and_only_for_what_the_provider_has() {
     // The default capabilities offer none of the optional resources.
     let mut store = Store::default();
-    assert!(store.begin_fetch(FetchKey::Builds(PrId(1))).is_none());
-    assert!(!store.start_loading(&FetchKey::Builds(PrId(1))));
+    assert!(
+        store
+            .begin_fetch(FetchKey::Pr(PrResource::Builds, PrId(1)))
+            .is_none()
+    );
+    assert!(!store.start_loading(&FetchKey::Pr(PrResource::Builds, PrId(1))));
     assert!(store.fetches.is_empty());
 
-    let ticket = store.begin_fetch(FetchKey::Diff(PrId(1))).unwrap();
-    assert_eq!(ticket.key(), &FetchKey::Diff(PrId(1)));
+    let ticket = store
+        .begin_fetch(FetchKey::Pr(PrResource::Diff, PrId(1)))
+        .unwrap();
+    assert_eq!(ticket.key(), &FetchKey::Pr(PrResource::Diff, PrId(1)));
     assert!(
-        store.begin_fetch(FetchKey::Diff(PrId(1))).is_none(),
+        store
+            .begin_fetch(FetchKey::Pr(PrResource::Diff, PrId(1)))
+            .is_none(),
         "a read of it is already running"
     );
-    assert!(store.begin_fetch(FetchKey::Diff(PrId(2))).is_some());
+    assert!(
+        store
+            .begin_fetch(FetchKey::Pr(PrResource::Diff, PrId(2)))
+            .is_some()
+    );
 
     store.capabilities.features.insert(Feature::Builds);
-    assert!(store.begin_fetch(FetchKey::Builds(PrId(1))).is_some());
+    assert!(
+        store
+            .begin_fetch(FetchKey::Pr(PrResource::Builds, PrId(1)))
+            .is_some()
+    );
 }
 
 #[test]
 fn loading_starts_once_and_leaves_loaded_data_alone() {
     let mut store = Store::default();
-    let key = FetchKey::CommitDiff(PrId(1), "abc".into());
+    let key = FetchKey::Pr(PrResource::CommitDiff("abc".into()), PrId(1));
     assert!(store.start_loading(&key));
     assert!(!store.start_loading(&key), "already loading");
 
@@ -40,7 +56,7 @@ fn loading_starts_once_and_leaves_loaded_data_alone() {
 
     let data = store.cache.details.get_mut(&PrId(1)).unwrap();
     data.commits = LoadState::Loaded(Vec::new());
-    assert!(!store.start_loading(&FetchKey::Commits(PrId(1))));
+    assert!(!store.start_loading(&FetchKey::Pr(PrResource::Commits, PrId(1))));
     assert!(matches!(data_commits(&store), LoadState::Loaded(_)));
 }
 
@@ -98,10 +114,10 @@ fn only_a_write_that_may_have_arrived_is_marked_uncertain() {
 fn a_read_names_the_resource_it_is_of() {
     assert_eq!(
         Read::CommitDiff(PrId(3), "abc".into(), Err(failed("offline"))).key(),
-        FetchKey::CommitDiff(PrId(3), "abc".into())
+        FetchKey::Pr(PrResource::CommitDiff("abc".into()), PrId(3))
     );
     let read = Read::Builds(PrId(3), Ok(Vec::new()));
-    assert_eq!(read.key(), FetchKey::Builds(PrId(3)));
+    assert_eq!(read.key(), FetchKey::Pr(PrResource::Builds, PrId(3)));
     assert!(read.failure().is_none());
     assert!(
         Read::Info(PrId(3), Err(failed("offline")))

@@ -410,8 +410,6 @@ import rule is tooling, which the same rule says to do now.
 | Move | Trigger |
 |---|---|
 | `bindings.rs` with three outcomes | The next feature that adds a key to the PR view (the roadmap's *Keybinding table*) |
-| `pr_groups.rs` | `store.rs` passes the size limit, or a feature touches the reading of the list (*Search older PRs*, `Pager<T>`) |
-| `FetchKey::Pr(resource, PrId)` | The next read resource |
 | `widgets/comment/` and the split of `widgets/mod.rs` | The next AI comment feature (review as a group, finding state) |
 | `handoff.rs`, `app/terminal.rs` | *Send to agent* |
 | `providers/conformance_tests.rs` | The provider trait |

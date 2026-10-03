@@ -1,7 +1,10 @@
 use crate::{
     domain::pr::PrId,
     tui::{
-        app::{App, store::FetchKey},
+        app::{
+            App,
+            store::{FetchKey, PrResource},
+        },
         ui::screens::pr_detail::tabs::DetailTab,
     },
 };
@@ -15,12 +18,12 @@ impl App {
         };
         // Whatever this PR has not had read yet; the rest is shown from cache.
         for key in [
-            FetchKey::Commits(pr_id),
-            FetchKey::Diff(pr_id),
-            FetchKey::Builds(pr_id),
-            FetchKey::Activity(pr_id),
-            FetchKey::Info(pr_id),
-            FetchKey::Mergeability(pr_id),
+            FetchKey::Pr(PrResource::Commits, pr_id),
+            FetchKey::Pr(PrResource::Diff, pr_id),
+            FetchKey::Pr(PrResource::Builds, pr_id),
+            FetchKey::Pr(PrResource::Activity, pr_id),
+            FetchKey::Pr(PrResource::Info, pr_id),
+            FetchKey::Pr(PrResource::Mergeability, pr_id),
         ] {
             self.ensure_loaded(key);
         }

@@ -34,6 +34,7 @@ use crate::{
 use std::collections::{HashMap, HashSet};
 
 pub use super::notice::{Notice, NoticeKind};
+use super::pr_groups::{GroupState, OpenChain};
 
 #[derive(Debug)]
 pub struct Store {
@@ -106,29 +107,6 @@ impl Default for Store {
     fn default() -> Self {
         Self::new("viewer".into(), Capabilities::default())
     }
-}
-
-/// Where the pages of the open group stand. They are read one after another.
-#[derive(Debug, Default)]
-pub enum OpenChain {
-    #[default]
-    Idle,
-    /// The first reading: each page is shown as it arrives.
-    Appending,
-    /// A refresh: the pages are held and swapped in when the last has arrived,
-    /// so the list never shrinks to its first page in the meantime.
-    Collecting(Vec<PullRequest>),
-}
-
-/// What has been read of one group of PRs.
-#[derive(Debug, Default, Clone)]
-pub struct GroupState {
-    pub loaded: bool,
-    /// Where to continue reading older PRs of a closed group; `None` when
-    /// there are none left.
-    pub more: Option<String>,
-    /// Whether an older page was read, which a refresh must then keep.
-    pub older_loaded: bool,
 }
 
 #[derive(Debug, Default)]
@@ -215,6 +193,39 @@ impl PrData {
 }
 
 impl PrData {
+    /// Mark the resource as loading if it has never been read (or failed), and
+    /// say whether to read it now.
+    fn start_loading(&mut self, resource: &PrResource) -> bool {
+        match resource {
+            PrResource::Commits => self.commits.start_loading(),
+            PrResource::Diff => self.diff.start_loading(),
+            PrResource::Builds => self.builds.start_loading(),
+            PrResource::Activity => self.activity.start_loading(),
+            PrResource::Mergeability => self.mergeability.start_loading(),
+            PrResource::Info => self.info.start_loading(),
+            PrResource::CommitDiff(oid) => self
+                .commit_diffs
+                .entry(oid.clone())
+                .or_insert(LoadState::NotRequested)
+                .start_loading(),
+        }
+    }
+
+    fn has_loaded(&self, resource: &PrResource) -> bool {
+        match resource {
+            PrResource::Commits => self.commits.loaded().is_some(),
+            PrResource::Diff => self.diff.loaded().is_some(),
+            PrResource::Builds => self.builds.loaded().is_some(),
+            PrResource::Activity => self.activity.loaded().is_some(),
+            PrResource::Mergeability => self.mergeability.loaded().is_some(),
+            PrResource::Info => self.info.loaded().is_some(),
+            PrResource::CommitDiff(oid) => self
+                .commit_diffs
+                .get(oid)
+                .is_some_and(|state| state.loaded().is_some()),
+        }
+    }
+
     pub fn diff_for(&self, commit: Option<&CommitOid>) -> Option<&LoadState<Diff>> {
         match commit {
             Some(oid) => self.commit_diffs.get(oid),
@@ -304,44 +315,46 @@ impl WriteTicket {
     }
 }
 
+/// One of the things read about a single PR.
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+pub enum PrResource {
+    Commits,
+    Diff,
+    Builds,
+    Activity,
+    Mergeability,
+    Info,
+    CommitDiff(CommitOid),
+}
+
+impl PrResource {
+    /// The provider feature this resource needs, if it is an optional one.
+    const fn feature(&self) -> Option<Feature> {
+        match self {
+            Self::Builds => Some(Feature::Builds),
+            Self::Mergeability => Some(Feature::Mergeability),
+            Self::Info => Some(Feature::PrInfo),
+            Self::Commits | Self::Diff | Self::Activity | Self::CommitDiff(_) => None,
+        }
+    }
+}
+
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub enum FetchKey {
     /// One group of PRs, read first or, for a closed group, one page further.
     Prs(PrGroup),
-    Commits(PrId),
-    Diff(PrId),
-    Builds(PrId),
-    Activity(PrId),
-    Mergeability(PrId),
-    Info(PrId),
-    CommitDiff(PrId, CommitOid),
-}
-
-/// How many open PRs are read without being asked to, and how many each `L`
-/// adds. Three pages on GitHub. A repository with fewer is read in full.
-pub const OPEN_BATCH: usize = 90;
-
-impl FetchKey {
-    /// The provider feature this resource needs, if it is an optional one.
-    const fn feature(&self) -> Option<Feature> {
-        match self {
-            Self::Builds(_) => Some(Feature::Builds),
-            Self::Mergeability(_) => Some(Feature::Mergeability),
-            Self::Info(_) => Some(Feature::PrInfo),
-            Self::Prs(_)
-            | Self::Commits(_)
-            | Self::Diff(_)
-            | Self::Activity(_)
-            | Self::CommitDiff(..) => None,
-        }
-    }
+    Pr(PrResource, PrId),
 }
 
 impl Store {
     /// Whether the provider has this resource at all.
     fn offers(&self, key: &FetchKey) -> bool {
-        key.feature()
-            .is_none_or(|feature| self.capabilities.supports(feature))
+        match key {
+            FetchKey::Prs(_) => true,
+            FetchKey::Pr(resource, _) => resource
+                .feature()
+                .is_none_or(|feature| self.capabilities.supports(feature)),
+        }
     }
 
     /// Register a read. `None` when the provider does not have the resource or
@@ -356,30 +369,14 @@ impl Store {
         if !self.offers(key) {
             return false;
         }
-        let id = match key {
-            FetchKey::Prs(_) => return self.cache.prs.start_loading(),
-            FetchKey::Commits(id)
-            | FetchKey::Diff(id)
-            | FetchKey::Builds(id)
-            | FetchKey::Activity(id)
-            | FetchKey::Mergeability(id)
-            | FetchKey::Info(id)
-            | FetchKey::CommitDiff(id, _) => *id,
-        };
-        let data = self.cache.details.entry(id).or_default();
         match key {
-            FetchKey::Prs(_) => false,
-            FetchKey::Commits(_) => data.commits.start_loading(),
-            FetchKey::Diff(_) => data.diff.start_loading(),
-            FetchKey::Builds(_) => data.builds.start_loading(),
-            FetchKey::Activity(_) => data.activity.start_loading(),
-            FetchKey::Mergeability(_) => data.mergeability.start_loading(),
-            FetchKey::Info(_) => data.info.start_loading(),
-            FetchKey::CommitDiff(_, oid) => data
-                .commit_diffs
-                .entry(oid.clone())
-                .or_insert(LoadState::NotRequested)
-                .start_loading(),
+            FetchKey::Prs(_) => self.cache.prs.start_loading(),
+            FetchKey::Pr(resource, id) => self
+                .cache
+                .details
+                .entry(*id)
+                .or_default()
+                .start_loading(resource),
         }
     }
 
@@ -395,40 +392,11 @@ impl Store {
         }
     }
 
-    /// How many open PRs are read now: the first batch and what `L` added.
-    pub const fn open_limit(&self) -> usize {
-        OPEN_BATCH * (1 + self.open_extra)
-    }
-
-    /// Whether the group has been read. The open group counts as read as soon
-    /// as the list itself has loaded.
-    pub fn group_loaded(&self, group: PrGroup) -> bool {
-        self.groups.get(&group).is_some_and(|state| state.loaded)
-            || (group == PrGroup::Open && matches!(self.cache.prs, LoadState::Loaded(_)))
-    }
-
-    /// Whether older PRs remain to be read in the group.
-    pub fn group_has_more(&self, group: PrGroup) -> bool {
-        self.groups
-            .get(&group)
-            .is_some_and(|state| state.more.is_some())
-    }
-
-    pub fn group_loading(&self, group: PrGroup) -> bool {
-        self.fetches.contains(&FetchKey::Prs(group))
-    }
-
     pub fn refreshing(&self, screen: crate::tui::app::navigation::Screen) -> bool {
         use crate::tui::app::navigation::Screen;
         self.fetches.iter().any(|key| match key {
             FetchKey::Prs(_) => true,
-            FetchKey::Commits(id)
-            | FetchKey::Diff(id)
-            | FetchKey::Builds(id)
-            | FetchKey::Activity(id)
-            | FetchKey::Mergeability(id)
-            | FetchKey::Info(id)
-            | FetchKey::CommitDiff(id, _) => {
+            FetchKey::Pr(_, id) => {
                 matches!(screen, Screen::Detail { pr_id, .. } if pr_id == *id)
             }
         })
@@ -437,30 +405,13 @@ impl Store {
 
 impl Store {
     pub fn has_cached_data(&self, key: &FetchKey) -> bool {
-        let id = match key {
-            FetchKey::Prs(group) => return self.group_loaded(*group),
-            FetchKey::Commits(id)
-            | FetchKey::Diff(id)
-            | FetchKey::Builds(id)
-            | FetchKey::Activity(id)
-            | FetchKey::Mergeability(id)
-            | FetchKey::Info(id)
-            | FetchKey::CommitDiff(id, _) => id,
-        };
-        let Some(data) = self.cache.details.get(id) else {
-            return false;
-        };
         match key {
-            FetchKey::Prs(_) => false,
-            FetchKey::Commits(_) => matches!(data.commits, LoadState::Loaded(_)),
-            FetchKey::Diff(_) => matches!(data.diff, LoadState::Loaded(_)),
-            FetchKey::Builds(_) => matches!(data.builds, LoadState::Loaded(_)),
-            FetchKey::Activity(_) => matches!(data.activity, LoadState::Loaded(_)),
-            FetchKey::Mergeability(_) => matches!(data.mergeability, LoadState::Loaded(_)),
-            FetchKey::Info(_) => matches!(data.info, LoadState::Loaded(_)),
-            FetchKey::CommitDiff(_, oid) => {
-                matches!(data.commit_diffs.get(oid), Some(LoadState::Loaded(_)))
-            }
+            FetchKey::Prs(group) => self.group_loaded(*group),
+            FetchKey::Pr(resource, id) => self
+                .cache
+                .details
+                .get(id)
+                .is_some_and(|data| data.has_loaded(resource)),
         }
     }
     pub fn refresh_failed(&self, screen: crate::tui::app::navigation::Screen) -> bool {
@@ -469,21 +420,21 @@ impl Store {
         let on = |id: &PrId, shows: fn(DetailTab) -> bool| matches!(screen, Screen::Detail { pr_id, tab } if pr_id == *id && shows(tab));
         self.refresh_failures.iter().any(|key| match key {
             FetchKey::Prs(_) => true,
-            FetchKey::Diff(id) => on(id, |tab| tab == DetailTab::Diff),
-            FetchKey::Activity(id) => on(id, |tab| {
+            FetchKey::Pr(PrResource::Diff, id) => on(id, |tab| tab == DetailTab::Diff),
+            FetchKey::Pr(PrResource::Activity, id) => on(id, |tab| {
                 matches!(
                     tab,
                     DetailTab::Overview | DetailTab::Diff | DetailTab::Commits
                 )
             }),
-            FetchKey::Builds(id) => on(id, |tab| {
+            FetchKey::Pr(PrResource::Builds, id) => on(id, |tab| {
                 matches!(tab, DetailTab::Overview | DetailTab::Builds)
             }),
-            FetchKey::Mergeability(id) => on(id, |_| true),
-            FetchKey::Info(id) => on(id, |tab| {
+            FetchKey::Pr(PrResource::Mergeability, id) => on(id, |_| true),
+            FetchKey::Pr(PrResource::Info, id) => on(id, |tab| {
                 matches!(tab, DetailTab::Overview | DetailTab::Description)
             }),
-            FetchKey::Commits(id) | FetchKey::CommitDiff(id, _) => {
+            FetchKey::Pr(PrResource::Commits | PrResource::CommitDiff(_), id) => {
                 on(id, |tab| tab == DetailTab::Commits)
             }
         })

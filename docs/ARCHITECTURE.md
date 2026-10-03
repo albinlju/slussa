@@ -69,6 +69,7 @@ src/
 │   │   ├── fetchers.rs        Run providers off the UI thread
 │   │   ├── terminal.rs        `TerminalGuard`: the terminal while the TUI runs
 │   │   ├── loads.rs           Apply asynchronous results
+│   │   ├── pr_groups.rs       Reading the PR list: groups, pages, the open chain, `L`
 │   │   └── refresh.rs         Manual and periodic refresh
 │   └── ui/                The surface: draws and takes keys, never starts I/O
 │       ├── action.rs          `Action` and the small enums a component consumes
@@ -319,7 +320,7 @@ when the reading ends. `OPEN_BATCH` (90) open PRs are read without being asked
 and `L` reads 90 more. Merged and declined PRs are read only when their view is
 first opened, a batch at a time, and `L` reads the next older batch. GitHub's
 list query leaves out the body and labels; `fetch_info` reads them when a PR
-opens (`Feature::PrInfo`, `FetchKey::Info`). A refresh re-reads the open group
+opens (`Feature::PrInfo`, `PrResource::Info`). A refresh re-reads the open group
 and the groups already opened, and keeps what was loaded.
 
 All fetch entry points register a resource key before spawning work and skip
@@ -489,9 +490,9 @@ gets a `WriteTicket` from `begin_write`, and a `spawn_*` function that takes
 it. The compiler lists the matches that need the new variants. Write a
 regression test that injects the result.
 
-**A new read resource.** Add a `FetchKey`, a `Read` variant with its `key` and
-`failure` arms, and a `LoadState` field on `PrData`. Extend `has_cached_data`,
-`refreshing` and `refresh_failed` in `tui/app/store.rs`, add a `spawn_load_*`
+**A new read resource.** Add a `PrResource` (the key is `FetchKey::Pr(resource, id)`), a `Read` variant with its `key` and
+`failure` arms, and a `LoadState` field on `PrData`. Extend `PrData::start_loading` and `has_loaded`
+and `refresh_failed` in `tui/app/store.rs`, add a `spawn_load_*`
 function, apply the `Read` in `loads.rs`, and choose its cadence in
 `tui/app/refresh.rs`.
 
