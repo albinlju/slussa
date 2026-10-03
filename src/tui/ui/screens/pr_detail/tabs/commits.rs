@@ -4,10 +4,10 @@ use crate::{
         comment::CommentThread,
         commit::{Commit, CommitOid},
         pr::PrId,
+        review::PendingComment,
     },
     tui::app::{
         action::{Action, CommitsAction, Effect},
-        reviews::PendingComment,
         store::{LoadState, PrData},
     },
     tui::ui::{

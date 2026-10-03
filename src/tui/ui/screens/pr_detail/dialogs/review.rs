@@ -174,7 +174,7 @@ const fn key_to_action(code: KeyCode) -> Option<ReviewAction> {
 
 pub struct ReviewContext<'a> {
     pub options: Vec<(crate::domain::review::ReviewVerdict, Option<&'static str>)>,
-    pub pending: Option<&'a crate::tui::app::reviews::PendingReview>,
+    pub pending: Option<&'a crate::domain::review::PendingReview>,
 }
 /// Which side of the dialog is showing. Tab switches.
 #[derive(Debug, Default, Clone, Copy, PartialEq, Eq)]

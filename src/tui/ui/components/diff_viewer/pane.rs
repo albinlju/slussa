@@ -6,8 +6,8 @@ use crate::{
     domain::{
         comment::{CommentId, CommentThread},
         diff::{Diff, DiffLine, FileDiff, LineRef},
+        review::{CommentAnchor, PendingComment},
     },
-    tui::app::reviews::{CommentAnchor, PendingComment},
     tui::ui::{
         components::diff_viewer::{DiffViewer, FocusedNav, PaneNav},
         icons, layout, theme,

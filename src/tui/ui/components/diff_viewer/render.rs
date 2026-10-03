@@ -4,8 +4,9 @@ use crate::{
         authorship::Authorship,
         comment::CommentThread,
         diff::{Diff, DiffLine, FileDiff, LineRef},
+        review::PendingComment,
     },
-    tui::app::{reviews::PendingComment, store::LoadState},
+    tui::app::store::LoadState,
     tui::ui::{layout, widgets, widgets::comment_meta::Reading},
 };
 use ratatui::{

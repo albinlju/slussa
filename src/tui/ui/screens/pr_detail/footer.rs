@@ -1,9 +1,6 @@
 use crate::{
-    domain::{capabilities::Feature, diff::FileDiff},
-    tui::app::{
-        reviews::CommentTarget,
-        store::{LoadState, PrData},
-    },
+    domain::{capabilities::Feature, diff::FileDiff, review::CommentTarget},
+    tui::app::store::{LoadState, PrData},
     tui::ui::{
         components::{diff_viewer::DiffFocus, search_input::SearchInput},
         screens::pr_detail::{DetailView, Surface, tabs::DetailTab},

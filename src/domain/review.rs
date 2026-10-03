@@ -1,4 +1,7 @@
-use super::user::User;
+use super::{
+    comment::{CommentId, CommentKey},
+    user::User,
+};
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum ReviewerState {
@@ -75,4 +78,45 @@ pub struct CommentAnchor {
     pub path: String,
     pub line: usize,
     pub removed: bool,
+}
+
+// Drafts: what is written before anything is sent. A `CommentTarget` says where
+// a comment goes; `Line` carries a `CommentAnchor`, which includes the
+// `DiffRevision` the user was looking at, so a comment is never re-pointed at a
+// newer commit. `PendingReview` collects line comments locally until a verdict
+// submits them together. The local drafts file serializes all of these; their
+// spelling on disk changes only with a new file version.
+
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+pub enum CommentTarget {
+    Line(CommentAnchor),
+    Pr,
+    Reply(CommentId),
+    /// Editing an existing comment.
+    Edit(CommentKey),
+    /// The summary body of a review verdict that carries one (request changes /
+    /// comment).
+    Review {
+        verdict: ReviewVerdict,
+    },
+}
+
+/// A review being assembled before submission. Line comments accumulate here
+/// (only locally — nothing is sent) until a verdict flushes them in one go.
+#[derive(Debug, Default, Clone, serde::Serialize, serde::Deserialize)]
+pub struct PendingReview {
+    pub submitted_summary: Option<String>,
+    pub comments: Vec<PendingComment>,
+}
+
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+pub struct PendingComment {
+    pub anchor: CommentAnchor,
+    pub text: String,
+}
+
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+pub struct CommentDraft {
+    pub target: CommentTarget,
+    pub text: String,
 }

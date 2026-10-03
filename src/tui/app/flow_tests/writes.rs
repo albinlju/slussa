@@ -166,8 +166,8 @@ async fn a_refused_reopen_is_reported_on_its_pr_without_a_refetch() {
 }
 
 /// A line of a diff whose revision was not read when the comment was made.
-fn anchor_without_a_revision() -> crate::tui::app::reviews::CommentAnchor {
-    crate::tui::app::reviews::CommentAnchor {
+fn anchor_without_a_revision() -> crate::domain::review::CommentAnchor {
+    crate::domain::review::CommentAnchor {
         revision: None,
         path: "src/lib.rs".into(),
         line: 3,
@@ -203,7 +203,7 @@ async fn a_line_comment_on_an_unknown_revision_is_refused_before_anything_is_sen
 
 #[tokio::test]
 async fn a_review_with_a_comment_on_an_unknown_revision_is_refused_whole() {
-    use crate::tui::app::reviews::{PendingComment, PendingReview};
+    use crate::domain::review::{PendingComment, PendingReview};
     let gh = FakeGh::new().on("api", "{}").install();
     let mut app = app();
     app.state.store.reviews.insert(

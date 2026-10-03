@@ -130,7 +130,7 @@ fn multiline_editor_scrolls_to_cursor_and_keeps_controls_visible() {
 
 #[test]
 fn dialog_footers_and_review_choices_remain_visible_with_large_queue() {
-    use crate::tui::app::reviews::{CommentAnchor, PendingComment, PendingReview};
+    use crate::domain::review::{CommentAnchor, PendingComment, PendingReview};
     for (width, height) in [(100, 30), (40, 12), (24, 8)] {
         for kind in ["review", "merge", "confirm"] {
             let mut state = fixture();
@@ -229,7 +229,7 @@ fn long_error_scrolls_without_dismissing_or_acting_on_the_pr() {
 
 #[test]
 fn review_preview_shows_full_comments_without_submitting() {
-    use crate::tui::app::reviews::CommentAnchor;
+    use crate::domain::review::CommentAnchor;
     let mut state = fixture();
     state.screen = Screen::Detail {
         pr_id: PrId(42),
@@ -237,9 +237,9 @@ fn review_preview_shows_full_comments_without_submitting() {
     };
     state.store.reviews.insert(
         PrId(42),
-        crate::tui::app::reviews::PendingReview {
+        crate::domain::review::PendingReview {
             comments: (0..4)
-                .map(|index| crate::tui::app::reviews::PendingComment {
+                .map(|index| crate::domain::review::PendingComment {
                     anchor: CommentAnchor {
                         revision: None,
                         path: format!("src/file{index}.rs"),
@@ -278,7 +278,7 @@ fn review_preview_shows_full_comments_without_submitting() {
 
 #[test]
 fn editor_distinguishes_queued_comments_from_direct_publication() {
-    use crate::tui::app::reviews::CommentAnchor;
+    use crate::domain::review::CommentAnchor;
     use crate::tui::ui::components::comment_editor::CommentEditor;
     for (target, expected) in [
         (

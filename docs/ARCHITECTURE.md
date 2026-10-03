@@ -64,8 +64,7 @@ src/
 │   │   ├── action.rs          `Action` (input), `Effect` (work), `TaskResult` (what came back)
 │   │   ├── navigation.rs     Screen identity, open PR and initiate missing loads
 │   │   ├── commands.rs       Execute resolved review/comment/lifecycle commands
-│   │   ├── reviews.rs        Review drafts, comment targets and anchors
-│   │   ├── drafts.rs         Scoped, atomic local draft recovery
+│   │   ├── drafts.rs         Where drafts are kept; `App::open`, restore, save, journal
 │   │   ├── desktop.rs        Browser and clipboard effects
 │   │   ├── fetchers.rs        Run providers off the UI thread
 │   │   ├── terminal.rs        `TerminalGuard`: the terminal while the TUI runs
@@ -123,11 +122,15 @@ src/
 │           ├── dialog.rs     Shared dialog geometry and footer
 │           ├── markdown.rs
 │           └── table.rs
+├── local/                 What slussa keeps on disk, shared by the TUI and the subcommands
+│   ├── scope.rs           Provider, host, repository and account → the file's name
+│   ├── file.rs            One file per scope: lock and atomic write
+│   └── drafts.rs          The drafts file, version 1, and its fixture
 ├── session/               Who and where, shared by the TUI and the subcommands
 │   ├── mod.rs             `Session`, `connect`
 │   ├── preflight.rs       Provider detection and authentication checks
 │   └── remote.rs          Local repository/remote detection
-├── domain/               Provider-independent data models, ids and rules;
+├── domain/               Provider-independent data models, ids and rules (`review.rs` has the draft types);
 │                         `authorship.rs` says who wrote a comment
 └── providers/            Provider requests and payload mapping
     ├── github/           `gh` calls, GraphQL templates, pagination, threads
@@ -217,7 +220,7 @@ data without owning navigation state.
 - **CommentEditor** owns the draft being written: its target, a `TextBuffer`
   and one mode (`Kept` after Esc or a restore, `Typing`, `ConfirmDiscard`).
 
-Review and editor drafts are persisted locally by `tui/app/drafts.rs`, independently
+Review and editor drafts are persisted locally by `local/drafts.rs` (`tui/app/drafts.rs` holds them in the app), independently
 of the provider APIs.
 Submission retains the draft and queued review comments until success. While a
 mutation is pending, another mutation or editor change for that PR is blocked.
@@ -430,12 +433,12 @@ where it is used. Three shapes, in the order to reach for them:
   to remember. `FetchTicket`, `WriteTicket`, `Session`, `DetailContext`,
   `TerminalGuard`.
 
-The types in `tui/app/reviews.rs`, with `CommentAnchor` and `DiffRevision`, are
+The types in `domain/review.rs`, with `CommentAnchor` and `DiffRevision`, are
 written to the draft file, and a file that cannot be read stops slussa from
 starting. The strong types sit on the UI and provider side of that boundary
 and keep the file's spelling through serde (`#[serde(transparent)]` on the
 ids, `review: bool` for `CommentKind`). The version 1 fixture in
-`tui/app/drafts.rs` pins the format.
+`local/drafts.rs` pins the format.
 
 ## AI authorship, folds and reading
 
@@ -510,8 +513,8 @@ application workflow. Add a regression test for observable behavior, especially
 when navigation or asynchronous state is involved.
 
 Import types from their owners: loading models from `tui/app/store`, review work
-from `tui/app/reviews`, tab identities from `pr_detail/tabs`, and editor drafts from
-`tui/app/reviews` (also re-exported by `components/comment_editor`). `tui/app/state` is not a UI type re-export hub. Screens use
+from `domain/review`, tab identities from `pr_detail/tabs`, and editor drafts from
+`domain/review` (also re-exported by `components/comment_editor`). `tui/app/state` is not a UI type re-export hub. Screens use
 `DetailView` for read-only queries. `AppState::detail_view()` is a test helper;
 application effects do not query UI state. `tests/repo_rules.rs` fails a
 `domain`, `providers`, `session`, `cli` or `tui/ui` file that imports from a layer it may not
@@ -566,7 +569,7 @@ keeps the draft and closes the editor. `c` resumes it on any detail tab. Ctrl+X
 opens a discard confirmation. Existing drafts are resumed instead of silently
 replaced when another comment action is selected.
 
-`tui/app/drafts.rs` persists draft targets, their captured diff revisions, review
+`local/drafts.rs` persists draft targets, their captured diff revisions, review
 queues and partial-submission receipts in the platform's local data directory
 under `slussa/drafts/`. Files are versioned and scoped by provider, remote host,
 repository path and authenticated account; no tokens are included. The snapshot

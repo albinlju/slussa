@@ -157,7 +157,7 @@ fn compact_diff_switches_panels_and_keeps_file_selection() {
 
 #[test]
 fn unloaded_diff_cannot_reuse_a_previous_comment_target() {
-    use crate::tui::app::reviews::CommentAnchor;
+    use crate::domain::review::CommentAnchor;
     let mut state = fixture();
     state.screen = Screen::Detail {
         pr_id: PrId(42),

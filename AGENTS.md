@@ -83,10 +83,10 @@ library API than `rust-version` allows.
   `FakeGh` holds a process-wide lock, so never install two in one test without
   dropping the first. Say in the PR when a double stands in for real behaviour
   you could not check.
-- The draft file must stay readable. The types in `src/tui/app/reviews.rs`, with
+- The draft file must stay readable. The types in `src/domain/review.rs`, with
   `CommentAnchor` and `DiffRevision`, are written to it, and a file that cannot
   be parsed stops slussa from starting. Change how they are spelled on disk
-  only with a new file version; the version 1 fixture in `src/tui/app/drafts.rs`
+  only with a new file version; the version 1 fixture in `src/local/drafts.rs`
   fails otherwise.
 - The log holds states, resource keys, counts and error text, the server's
   included. It never holds the content of a PR (a title, a description, a

@@ -1,9 +1,7 @@
-pub use crate::tui::app::reviews::CommentDraft;
+pub use crate::domain::review::CommentDraft;
 use crate::{
-    tui::app::{
-        action::{Action, EditorAction, Effect},
-        reviews::CommentTarget,
-    },
+    domain::review::CommentTarget,
+    tui::app::action::{Action, EditorAction, Effect},
     tui::ui::{
         component::{Component, saturating_u16},
         components::text_buffer::TextBuffer,

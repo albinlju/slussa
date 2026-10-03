@@ -10,12 +10,12 @@ pub(super) use crate::{
         commit::{Commit, CommitOid},
         diff::*,
         pr::*,
+        review::CommentTarget,
         user::{AccountKind, User},
     },
     tui::app::{
         action::*,
         navigation::Screen,
-        reviews::CommentTarget,
         state::*,
         store::{LoadState, PrData},
     },
