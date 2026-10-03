@@ -34,7 +34,7 @@ for AI-generated PRs: triage, check intent, approve or merge.
   `widgets/comment/fold.rs`), so changing one of them wrongly does not compile.
   ARCHITECTURE.md (*Types that carry the rules*) lists what exists.
 - **Modules stay under about 500 lines.** `mod.rs` composes and does not
-  implement. Tests live inline, or in exactly one sibling `tests.rs`; suites that drive several modules through the doubles in `src/test_support.rs` are named `*_tests.rs`. A test
+  implement. Tests live inline, or in exactly one sibling `tests.rs`; suites that drive several modules through the doubles in `src/test_support/` are named `*_tests.rs`. A test
   suite that outgrows the limit becomes a directory with a file per concern and
   a `support.rs` for what they share (`src/tui/app/tests/`). Split a file by
   concern when it passes the limit, not by trimming it to fit;
@@ -78,7 +78,7 @@ library API than `rust-version` allows.
   config example names the same ones (`src/doc_contract.rs`).
 - Add a regression test for observable behaviour, especially when navigation or
   asynchronous state is involved. Tests never call a real provider: use
-  `FakeGh` and `MockHttp` from `src/test_support.rs`; a test build has no
+  `FakeGh` and `MockHttp` from `src/test_support/`; a test build has no
   `gh` at all unless a fake is installed. A test that installs
   `FakeGh` holds a process-wide lock, so never install two in one test without
   dropping the first. Say in the PR when a double stands in for real behaviour

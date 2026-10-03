@@ -54,7 +54,7 @@ Make the change, then open a pull request against `main` from your fork.
    ```
 4. **Add a test for behaviour you can observe**, especially for navigation and
    asynchronous state. Tests never call a real service: use `FakeGh` and
-   `MockHttp` from `src/test_support.rs`.
+   `MockHttp` from `src/test_support/`.
 5. **Update the README, [docs/KEYS.md](docs/KEYS.md) (keys) and the matching item in
    [docs/ROADMAP.md](docs/ROADMAP.md)** when behaviour changes, and
    say in the pull request when a test double stands in for behaviour you could
