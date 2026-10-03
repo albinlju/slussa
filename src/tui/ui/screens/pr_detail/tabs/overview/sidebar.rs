@@ -1,7 +1,9 @@
 use crate::{
     domain::{pr::PullRequest, review::ReviewerState},
-    tui::app::store::{LoadState, PrData},
-    tui::ui::{format, icons, theme, widgets},
+    tui::{
+        app::store::{LoadState, PrData},
+        ui::{format, icons, theme, widgets},
+    },
 };
 use chrono::{DateTime, Utc};
 use ratatui::{

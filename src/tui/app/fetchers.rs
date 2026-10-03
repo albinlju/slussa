@@ -11,7 +11,7 @@ use crate::{
     providers::FetchError,
     tui::app::{
         App,
-        action::{Read, TaskResult, WriteError},
+        effect::{Read, TaskResult, WriteError},
         store::{FetchKey, FetchTicket, OpenChain, WriteTicket},
     },
 };

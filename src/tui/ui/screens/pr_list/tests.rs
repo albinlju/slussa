@@ -6,13 +6,20 @@ use crate::{
         review::{Reviewer, ReviewerState},
         user::{User, Username},
     },
-    tui::app::{
-        action::{Action, Effect, ListAction},
-        navigation::Screen,
-        state::AppState,
-        store::{FetchKey, LoadState, OpenChain},
+    tui::{
+        app::{
+            effect::Effect,
+            navigation::Screen,
+            state::AppState,
+            store::{FetchKey, LoadState, OpenChain},
+        },
+        ui::{
+            action::{Action, ListAction},
+            component::Component,
+            components::help_dialog::HelpDialog,
+            key_to_action, render,
+        },
     },
-    tui::ui::{component::Component, components::help_dialog::HelpDialog, key_to_action, render},
 };
 use chrono::Utc;
 use ratatui::{

@@ -6,8 +6,13 @@ use crate::{
         diff::{Diff, DiffLine, FileDiff, LineRef},
         review::PendingComment,
     },
-    tui::app::store::LoadState,
-    tui::ui::{layout, widgets, widgets::comment_meta::Reading},
+    tui::{
+        app::store::LoadState,
+        ui::{
+            layout,
+            widgets::{self, comment_meta::Reading},
+        },
+    },
 };
 use ratatui::{
     Frame,

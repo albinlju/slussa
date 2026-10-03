@@ -1,9 +1,10 @@
-use crate::{
-    tui::app::action::{
-        Action, CommitsAction, DetailAction, DiffAction, Effect, NavAction, PrAction, SearchAction,
-        TimelineAction,
-    },
-    tui::ui::{
+use crate::tui::{
+    app::effect::Effect,
+    ui::{
+        action::{
+            Action, CommitsAction, DetailAction, DiffAction, NavAction, PrAction, SearchAction,
+            TimelineAction,
+        },
         component::Component,
         components::diff_viewer::DiffFocus,
         screens::pr_detail::{Overlay, Surface, tabs::DetailTab},
@@ -60,8 +61,8 @@ pub(in crate::tui::ui) fn key_to_action(
 
     if plain && state.has_pr_link() {
         let kind = match code {
-            KeyCode::Char('o') => Some(crate::tui::app::action::LinkAction::Open),
-            KeyCode::Char('y') => Some(crate::tui::app::action::LinkAction::Copy),
+            KeyCode::Char('o') => Some(crate::tui::app::effect::LinkAction::Open),
+            KeyCode::Char('y') => Some(crate::tui::app::effect::LinkAction::Copy),
             _ => None,
         };
         if let Some(kind) = kind {

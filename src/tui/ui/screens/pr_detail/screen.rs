@@ -1,23 +1,23 @@
 use super::{DetailContext, dialogs, keys, render, tabs, view};
 use crate::{
     domain::pr::PrId,
-    tui::app::{
-        action::{
-            Action, CommitsAction, DetailAction, DiffAction, EditorAction, Effect, ErrorAction,
-            NavAction, SearchAction,
-        },
-        navigation::Screen,
-    },
-    tui::ui::{
-        component::Component,
-        components::{
-            diff_viewer::DiffViewer,
-            help_dialog::HelpDialog,
-            search_input::{SearchInput, SearchKind},
-        },
-        screens::pr_detail::{
-            dialogs::{confirm::ConfirmDialog, merge::MergeDialog, review::ReviewDialog},
-            tabs::commits::CommitList,
+    tui::{
+        app::{effect::Effect, navigation::Screen},
+        ui::{
+            action::{
+                Action, CommitsAction, DetailAction, DiffAction, EditorAction, ErrorAction,
+                NavAction, SearchAction,
+            },
+            component::Component,
+            components::{
+                diff_viewer::DiffViewer,
+                help_dialog::HelpDialog,
+                search_input::{SearchInput, SearchKind},
+            },
+            screens::pr_detail::{
+                dialogs::{confirm::ConfirmDialog, merge::MergeDialog, review::ReviewDialog},
+                tabs::commits::CommitList,
+            },
         },
     },
 };

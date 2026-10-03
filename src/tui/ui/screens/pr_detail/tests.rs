@@ -4,18 +4,16 @@ use crate::{
         comment::CommentId,
         pr::{PrId, PrStatus},
     },
-    tui::app::{
-        action::{Action, DetailAction, NavAction, PrAction},
-        navigation::Screen,
-        state::AppState,
-        store::LoadState,
-    },
-    tui::ui::{
-        components::diff_viewer::{DiffFocus, FocusedNav, NavTarget},
-        key_to_action,
-        regression_tests::fixture,
-        render,
-        screens::pr_detail::tabs::DetailTab,
+    tui::{
+        app::{navigation::Screen, state::AppState, store::LoadState},
+        ui::{
+            action::{Action, DetailAction, NavAction, PrAction},
+            components::diff_viewer::{DiffFocus, FocusedNav, NavTarget},
+            key_to_action,
+            regression_tests::fixture,
+            render,
+            screens::pr_detail::tabs::DetailTab,
+        },
     },
 };
 use ratatui::{
@@ -191,7 +189,7 @@ fn the_footer_offers_reopen_only_for_a_declined_pr() {
 
 #[test]
 fn a_pr_that_is_not_in_the_list_gives_no_context_and_only_the_way_out() {
-    use crate::{tui::app::action::Effect, tui::ui::screens::pr_detail::DetailContext};
+    use crate::tui::{app::effect::Effect, ui::screens::pr_detail::DetailContext};
     let mut state = overview_of(PrStatus::Open);
     assert!(DetailContext::new(&state.store, PrId(42), DetailTab::Overview).is_some());
 

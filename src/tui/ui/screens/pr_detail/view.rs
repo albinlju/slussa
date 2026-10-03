@@ -7,13 +7,15 @@ use crate::{
         pr::{Mergeability, PrId, PrStatus, PullRequest},
         review::{CommentTarget, ReviewVerdict},
     },
-    tui::app::{
-        navigation::Screen,
-        store::{LoadState, PrData, Store},
-    },
-    tui::ui::{
-        components::diff_viewer::{DiffFocus, DiffViewer},
-        screens::pr_detail::tabs::DetailTab,
+    tui::{
+        app::{
+            navigation::Screen,
+            store::{LoadState, PrData, Store},
+        },
+        ui::{
+            components::diff_viewer::{DiffFocus, DiffViewer},
+            screens::pr_detail::tabs::DetailTab,
+        },
     },
 };
 
@@ -324,10 +326,10 @@ impl DetailView<'_> {
 impl DetailView<'_> {
     /// Whether the provider supports what the action asks for. An action that
     /// needs no capability is always supported.
-    pub fn supports_action(&self, action: crate::tui::app::action::DetailAction) -> bool {
+    pub fn supports_action(&self, action: crate::tui::ui::action::DetailAction) -> bool {
         use crate::{
             domain::capabilities::Feature as F,
-            tui::app::action::{DetailAction as A, MergeAction, NavAction, PrAction, ReviewAction},
+            tui::ui::action::{DetailAction as A, MergeAction, NavAction, PrAction, ReviewAction},
         };
         let caps = &self.store.capabilities;
         match action {

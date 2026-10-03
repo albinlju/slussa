@@ -1,12 +1,12 @@
 use crate::{
     domain::pr::{PrInfo, PullRequest},
-    tui::app::{
-        action::{Action, DescriptionAction, Effect},
-        store::LoadState,
-    },
-    tui::ui::{
-        component::{Component, saturating_u16, scroll},
-        widgets::{self, markdown},
+    tui::{
+        app::{effect::Effect, store::LoadState},
+        ui::{
+            action::{Action, DescriptionAction},
+            component::{Component, saturating_u16, scroll},
+            widgets::{self, markdown},
+        },
     },
 };
 use ratatui::{

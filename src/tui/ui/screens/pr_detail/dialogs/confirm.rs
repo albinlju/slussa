@@ -1,6 +1,11 @@
-use crate::{
-    tui::app::action::{Action, ConfirmAction, Effect},
-    tui::ui::{component::Component, screens::pr_detail::dialogs::PrSummary, theme},
+use crate::tui::{
+    app::effect::Effect,
+    ui::{
+        action::{Action, ConfirmAction},
+        component::Component,
+        screens::pr_detail::dialogs::PrSummary,
+        theme,
+    },
 };
 use ratatui::{
     Frame,

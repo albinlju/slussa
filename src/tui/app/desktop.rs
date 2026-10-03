@@ -1,7 +1,7 @@
 //! Desktop integration uses argument arrays and stdin, never interpolated shell commands.
 use super::{
     App,
-    action::{LinkAction, TaskResult},
+    effect::{LinkAction, TaskResult},
     store::Notice,
 };
 use crate::domain::pr::PrId;

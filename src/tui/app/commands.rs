@@ -1,12 +1,62 @@
-use crate::domain::pr::PrId;
 use crate::{
-    domain::review::{CommentTarget, PendingComment},
+    domain::{
+        capabilities::{Capabilities, Feature},
+        comment::{CommentKey, NonBlank, ThreadHandle},
+        pr::{MergeStrategy, PrId},
+        review::{CommentTarget, PendingComment, ReviewVerdict},
+    },
     tui::app::{
         App,
-        action::Command,
         store::{Operation, WriteTicket},
     },
 };
+
+/// Fully resolved user intent; no dialog or editor state is read by the app.
+#[derive(Debug)]
+pub enum Command {
+    StartReview,
+    AbandonReview,
+    RemovePendingComment(usize),
+    SubmitComment {
+        target: CommentTarget,
+        text: NonBlank,
+    },
+    SubmitReview {
+        verdict: ReviewVerdict,
+        body: String,
+    },
+    Merge(MergeStrategy),
+    Decline,
+    Reopen,
+    DeleteComment(CommentKey),
+    ResolveThread {
+        thread: ThreadHandle,
+        resolved: bool,
+    },
+}
+
+impl Command {
+    pub fn supported_by(&self, caps: &Capabilities) -> bool {
+        match self {
+            Self::StartReview | Self::AbandonReview | Self::RemovePendingComment(_) => {
+                caps.reviews()
+            }
+            Self::SubmitReview { verdict, .. } => caps.can_submit_verdict(*verdict, false),
+            Self::SubmitComment { target, .. } => match target {
+                CommentTarget::Pr => caps.supports(Feature::PrComments),
+                CommentTarget::Line(_) => caps.supports(Feature::InlineComments),
+                CommentTarget::Reply(_) => caps.supports(Feature::Replies),
+                CommentTarget::Edit(_) => caps.supports(Feature::EditComments),
+                CommentTarget::Review { verdict } => caps.can_submit_verdict(*verdict, false),
+            },
+            Self::Merge(strategy) => caps.merge_strategies.contains(strategy),
+            Self::Decline => caps.supports(Feature::ClosePr),
+            Self::Reopen => caps.supports(Feature::ReopenPr),
+            Self::DeleteComment { .. } => caps.supports(Feature::DeleteComments),
+            Self::ResolveThread { .. } => caps.supports(Feature::ResolveThreads),
+        }
+    }
+}
 
 impl App {
     pub(super) fn execute(&mut self, pr_id: PrId, command: Command) {
@@ -93,12 +143,7 @@ impl App {
         self.checkpoint_submission(pr_id).then_some(ticket)
     }
 
-    fn submit_review_verdict(
-        &mut self,
-        pr_id: PrId,
-        verdict: crate::domain::review::ReviewVerdict,
-        body: String,
-    ) {
+    fn submit_review_verdict(&mut self, pr_id: PrId, verdict: ReviewVerdict, body: String) {
         let own_pr = self.state.store.cache.prs.loaded().is_some_and(|prs| {
             prs.iter()
                 .any(|pr| pr.id == pr_id && self.state.store.current_user.is(&pr.author.username))

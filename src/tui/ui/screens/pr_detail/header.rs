@@ -1,7 +1,9 @@
 use crate::{
     domain::pr::{Mergeability, PrStatus, PullRequest},
-    tui::app::store::LoadState,
-    tui::ui::{icons, theme, widgets},
+    tui::{
+        app::store::LoadState,
+        ui::{icons, theme, widgets},
+    },
 };
 use ratatui::{
     Frame,

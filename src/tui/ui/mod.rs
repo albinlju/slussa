@@ -1,11 +1,12 @@
 use crate::{
     domain::pr::PrId,
-    tui::app::{
-        action::{Action, Effect},
-        navigation::Screen,
-        state::AppState,
+    tui::{
+        app::{effect::Effect, navigation::Screen, state::AppState},
+        ui::{
+            action::Action,
+            components::search_input::{SearchInput, SearchKind},
+        },
     },
-    tui::ui::components::search_input::{SearchInput, SearchKind},
 };
 use component::Component;
 use ratatui::{
@@ -14,6 +15,7 @@ use ratatui::{
 };
 use screens::{pr_detail, pr_list};
 
+pub mod action;
 pub mod component;
 pub mod components;
 pub mod format;

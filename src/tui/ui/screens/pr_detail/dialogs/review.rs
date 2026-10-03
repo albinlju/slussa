@@ -1,6 +1,7 @@
-use crate::{
-    tui::app::action::{Action, Effect, ReviewAction},
-    tui::ui::{
+use crate::tui::{
+    app::effect::Effect,
+    ui::{
+        action::{Action, ReviewAction},
         component::{Component, saturating_u16, step_index},
         theme,
     },

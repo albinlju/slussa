@@ -8,10 +8,13 @@ use super::{
 };
 use crate::{
     domain::{pr::PrId, review::CommentTarget},
-    tui::app::action::{Command, ConfirmAction, Effect, MergeAction, PrAction, ReviewAction},
-    tui::ui::{
-        component::Component,
-        components::comment_editor::{CommentDraft, CommentEditor},
+    tui::{
+        app::{commands::Command, effect::Effect},
+        ui::{
+            action::{ConfirmAction, MergeAction, PrAction, ReviewAction},
+            component::Component,
+            components::comment_editor::{CommentDraft, CommentEditor},
+        },
     },
 };
 

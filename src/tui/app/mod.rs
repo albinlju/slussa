@@ -8,10 +8,10 @@
 // compile error wherever it has to be handled. Tests assert by a catch-all.
 #![cfg_attr(not(test), warn(clippy::wildcard_enum_match_arm))]
 
-pub mod action;
-mod commands;
+pub mod commands;
 mod desktop;
 mod drafts;
+pub mod effect;
 mod event_loop;
 pub mod fetchers;
 mod loads;

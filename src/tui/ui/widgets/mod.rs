@@ -8,8 +8,10 @@ pub mod markdown;
 pub mod table;
 use crate::{
     domain::comment::Reaction,
-    tui::app::store::LoadState,
-    tui::ui::{component::saturating_u16, format, layout, theme},
+    tui::{
+        app::store::LoadState,
+        ui::{component::saturating_u16, format, layout, theme},
+    },
 };
 use chrono::{DateTime, Utc};
 use ratatui::{

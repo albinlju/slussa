@@ -132,6 +132,9 @@ fn owners_of(path: &str, owners: &mut Vec<String>) {
         return;
     }
     let first = leading_ident(path);
+    if first.is_empty() {
+        return;
+    }
     let Some(below) = path
         .get(first.len()..)
         .and_then(|rest| rest.strip_prefix("::"))

@@ -1,7 +1,9 @@
 use crate::{
     domain::pr::PrId,
-    tui::app::{App, store::FetchKey},
-    tui::ui::screens::pr_detail::tabs::DetailTab,
+    tui::{
+        app::{App, store::FetchKey},
+        ui::screens::pr_detail::tabs::DetailTab,
+    },
 };
 
 impl App {

@@ -6,17 +6,20 @@ use crate::{
         pr::PrId,
         review::PendingComment,
     },
-    tui::app::{
-        action::{Action, CommitsAction, Effect},
-        store::{LoadState, PrData},
-    },
-    tui::ui::{
-        component::{Component, step_index},
-        components::{
-            diff_viewer::{DiffContext, DiffViewer},
-            search_input::SearchInput,
+    tui::{
+        app::{
+            effect::Effect,
+            store::{LoadState, PrData},
         },
-        format, icons, layout, theme, widgets,
+        ui::{
+            action::{Action, CommitsAction},
+            component::{Component, step_index},
+            components::{
+                diff_viewer::{DiffContext, DiffViewer},
+                search_input::SearchInput,
+            },
+            format, icons, layout, theme, widgets,
+        },
     },
 };
 use chrono::{DateTime, Utc};
@@ -345,8 +348,8 @@ impl CommitList {
             .and_then(|id| filtered.iter().position(|commit| commit.oid == id))
             .unwrap_or_else(|| self.selected.min(filtered.len().saturating_sub(1)));
     }
-    pub fn update_search(&mut self, action: crate::tui::app::action::SearchAction) {
-        use crate::tui::app::action::SearchAction;
+    pub fn update_search(&mut self, action: crate::tui::ui::action::SearchAction) {
+        use crate::tui::ui::action::SearchAction;
         self.search.update(
             action,
             &crate::tui::ui::components::search_input::SearchKind::Filter,

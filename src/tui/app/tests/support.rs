@@ -1,7 +1,10 @@
 //! Imports and helpers shared by the files in this directory.
 
 pub(super) use crate::session::Session;
-pub(super) use crate::tui::app::{App, action::*, drafts::Drafts, event_loop::Next};
+pub(super) use crate::tui::{
+    app::{App, commands::*, drafts::Drafts, effect::*, event_loop::Next},
+    ui::action::*,
+};
 pub(super) use crate::{
     domain::{
         comment::{CommentId, CommentKey, CommentKind, ThreadHandle},
@@ -9,20 +12,22 @@ pub(super) use crate::{
         review::{CommentAnchor, CommentTarget},
     },
     providers::{FetchError, Provider},
-    tui::app::{
-        navigation::Screen,
-        store::{LoadState, WriteTicket},
-    },
-    tui::ui::{
-        self,
-        component::Component,
-        components::diff_viewer::{DiffFocus, FocusedNav, NavTarget},
-        screens::pr_detail::{
-            dialogs::{
-                confirm::{ConfirmDialog, ConfirmKind},
-                review::ReviewDialog,
+    tui::{
+        app::{
+            navigation::Screen,
+            store::{LoadState, WriteTicket},
+        },
+        ui::{
+            self,
+            component::Component,
+            components::diff_viewer::{DiffFocus, FocusedNav, NavTarget},
+            screens::pr_detail::{
+                dialogs::{
+                    confirm::{ConfirmDialog, ConfirmKind},
+                    review::ReviewDialog,
+                },
+                tabs::DetailTab,
             },
-            tabs::DetailTab,
         },
     },
 };

@@ -2,14 +2,16 @@ use crate::{
     domain::pr::PrGroup,
     providers::Provider,
     session::Session,
-    tui::app::{
-        action::{Action, Effect, TaskResult},
-        drafts::Drafts,
-        refresh,
-        state::AppState,
-        store::{self, FetchKey, LoadState},
+    tui::{
+        app::{
+            drafts::Drafts,
+            effect::{Effect, TaskResult},
+            refresh,
+            state::AppState,
+            store::{self, FetchKey, LoadState},
+        },
+        ui::{action::Action, key_to_action, render},
     },
-    tui::ui::{key_to_action, render},
 };
 use ratatui::{
     DefaultTerminal,

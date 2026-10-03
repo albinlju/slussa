@@ -1,13 +1,15 @@
 use crate::{
     domain::pr::{PrBatch, PrGroup, PrId, PullRequest},
     providers::FetchError,
-    tui::app::{
-        App,
-        action::{Read, WriteError},
-        navigation::Screen,
-        store::{LoadState, Notice, OpenChain, Operation, PrData, WriteTicket},
+    tui::{
+        app::{
+            App,
+            effect::{Read, WriteError},
+            navigation::Screen,
+            store::{LoadState, Notice, OpenChain, Operation, PrData, WriteTicket},
+        },
+        ui::screens::pr_list::ListContext,
     },
-    tui::ui::screens::pr_list::ListContext,
 };
 
 impl App {
