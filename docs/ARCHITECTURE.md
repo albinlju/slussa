@@ -659,6 +659,16 @@ The rules the code relies on, kept short; the regression tests in
   verdict summary `submit review`. The draft footer reads `v: finish draft (N)`,
   and Tab in the verdict dialog previews every queued comment. The labels never
   change what is published.
+- **The AI review column** reads `PullRequest::ai_review` (`AiReview`: none, current,
+  stale, changes requested). On GitHub `latestReviews`, which the list query
+  already reads, also gives the type of each reviewer's account and the commit its
+  review was made on, and `github/prs.rs` takes the bot accounts' reviews and
+  compares that commit with the PR's `headRefOid`; the one that needs the reader
+  most counts, and on a PR that is over any review is just current. It costs
+  nothing against the query without it (1 rate-limit point a page, measured on
+  cli/cli, 2026-10-03). A bot is told by the account type, not by `[ai] markers`,
+  which would need the text of every comment. Bitbucket Data Center leaves it
+  `None`, and the column is there only while some row has been reviewed.
 - **Layout.** The list drops secondary columns as the terminal narrows; footer
   hints show whole when they fit, with room for `?: help`. The compact PR header
   uses two rows. A diff under 72 content columns shows Files or Code by focus,

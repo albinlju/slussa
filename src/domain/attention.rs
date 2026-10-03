@@ -98,6 +98,7 @@ mod tests {
             changed_files: 0,
             created: Utc::now(),
             updated: Utc::now(),
+            ai_review: crate::domain::pr::AiReview::None,
         }
     }
 

@@ -93,6 +93,14 @@ changes requested, CI failed, review requested, or approved. Team review request
 on GitHub are not counted yet. Press `s` for plain newest-first order, or set
 `sort = "recent"`.
 
+On GitHub an "AI review" column, also from 90 columns, says whether a bot account
+(CodeRabbit, for one) has reviewed the PR; it is not about who wrote it. `◆` means it reviewed the head the PR has now, `◈` an older
+one (only an open PR gets that), `◇` that no bot has, and `✗` that it asked for changes.
+The column is there while some PR in the list has been reviewed by a bot, and `?` explains
+the diamonds. It says nothing of what the review found or whether it was dealt with. An agent
+that posts under your own account is told apart by the text of its comments, which the list
+does not read, and Bitbucket Data Center has no such column.
+
 Drafts (comment editor text and queued review comments) are saved locally and
 survive a restart. Copying a link falls back to the terminal's clipboard (OSC 52)
 over SSH; inside tmux that needs `set -g set-clipboard on`.
