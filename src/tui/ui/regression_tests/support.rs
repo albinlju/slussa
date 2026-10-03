@@ -65,6 +65,7 @@ pub(crate) fn fixture() -> AppState {
         changed_files: 1,
         created: now,
         updated: now,
+        ai_review: AiReview::None,
     }]);
     state.store.cache.details.insert(
         PrId(42),

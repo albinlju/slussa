@@ -1,7 +1,11 @@
 //! Drawing the list: the table, its footer and what is in front of it.
 use super::{ListContext, ListOverlay, PrListScreen, StatusFilter, columns::ListColumn};
 use crate::{
-    domain::{attention::attention, pr::PullRequest, user::Username},
+    domain::{
+        attention::attention,
+        pr::{AiReview, PullRequest},
+        user::Username,
+    },
     tui::{
         app::store::LoadState,
         ui::{
@@ -21,6 +25,15 @@ use ratatui::{
 };
 
 const GUTTER: u16 = 2;
+
+/// What the AI column's diamonds mean, listed in the help while the column is
+/// there.
+const AI_LEGEND: &[(&str, &str)] = &[
+    ("◆", "AI review: of this version"),
+    ("◈", "AI review: of an older version"),
+    ("◇", "AI review: none"),
+    ("✗", "AI review: asked for changes"),
+];
 pub(super) const HELP_KEYS: &[(&str, &str)] = &[
     ("j/k / ↑↓", "move up/down"),
     ("enter", "open PR"),
@@ -75,10 +88,16 @@ pub(super) fn render(
     let any_reason = filtered
         .as_ref()
         .is_some_and(|prs| prs.iter().any(|pr| attention(pr, ctx.viewer).is_some()));
+    // So does the AI column: only while some PR has been reviewed by an agent, so
+    // a repository without one has no column of hollow diamonds.
+    let any_ai = filtered
+        .as_ref()
+        .is_some_and(|prs| prs.iter().any(|pr| pr.ai_review != AiReview::None));
     let columns: Vec<ListColumn> = ListColumn::visible(width)
         .iter()
         .copied()
         .filter(|&column| column != ListColumn::Attention || any_reason)
+        .filter(|&column| column != ListColumn::Ai || any_ai)
         .collect();
     let definitions: Vec<_> = columns.iter().map(|column| column.spec()).collect();
     let table = table::Table::new(&definitions, width);
@@ -135,6 +154,7 @@ pub(super) fn render(
                 .copied()
                 .filter(|(key, _)| has_link || !matches!(*key, "o" | "y"))
                 .filter(|(key, _)| can_load_older || *key != "L")
+                .chain(AI_LEGEND.iter().copied().filter(|_| any_ai))
                 .collect();
             help.render(frame, area, &entries.as_slice());
         }

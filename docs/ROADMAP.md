@@ -145,14 +145,19 @@ is unsure, so its review is a set of commits and may leave no thread at all.
 "AI actor" is therefore one notion, applied to the PR's author, to comments
 and to commits.
 
-- [ ] **Review summary in the header** *(refined for comments)* — one line:
-  `AI: 1 blocker · 3 suggestions · reviewed a1b2c3d (2 behind)`. Derived from
-  the latest AI review: severity counts where the review exposes them,
-  open/resolved counts otherwise, and the reviewed head SHA against the
-  current head so a stale review reads as stale rather than wrong. A review
-  that committed reads `AI review: 3 commits · a1b2c3d`. Collapses to nothing
-  when no AI review exists, which is itself what the reviewer needs to know:
-  no AI review has checked this PR.
+- [ ] **Say more in the list's AI column.** The list has an `AI review`
+  column on GitHub: whether a bot account has reviewed, and whether that was the head
+  (`◆`, `◈`, `◇`, `✗`). It deliberately says nothing of what was found or
+  handled: "handled" is no field (a fix without a reply or a resolve leaves no
+  trace, and resolved is not fixed), so a count of open threads overstates, and
+  one of answered threads claims too much. Missing: severity (`1 blocker`, where
+  a reviewer exposes it with the evidence a blocker needs; see *What a
+  commenting reviewer's review carries*), agents under a person's account (the
+  list would have to read the first line of each thread's first comment),
+  Bitbucket Data Center (one activity request per PR), a reviewer that is
+  working now (GitHub has no such state; one bot shows it as a running check),
+  and a reason in *Needs you* and the sort, so a PR with a stale or negative AI
+  review rises.
 - [ ] **Linked issues / cross-references** — "closes #123", shown in the
   header and openable. Moved here from *Handoff*: the linked issue is what was
   asked for, and checking the PR against it is the intent check the

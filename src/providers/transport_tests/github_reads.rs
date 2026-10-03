@@ -412,3 +412,69 @@ fn github_commits_carry_their_message_and_a_bot_address_marks_a_bot() {
     assert_eq!(commits[0].account, crate::domain::user::AccountKind::Person);
     assert_eq!(commits[1].account, crate::domain::user::AccountKind::Bot);
 }
+
+fn review_by(typename: &str, state: &str, oid: &str) -> Value {
+    json!({"state": state, "author": {"__typename": typename, "login": "reviewer"}, "commit": {"oid": oid}})
+}
+
+fn read_ai(reviews: &[Value], head: &str, state: &str) -> crate::domain::pr::AiReview {
+    let mut pr = gh_pr(7, "2026-10-01T10:00:00Z");
+    pr["state"] = json!(state);
+    pr["headRefOid"] = json!(head);
+    pr["latestReviews"] = json!({"nodes": reviews, "pageInfo": {"hasNextPage": false}});
+    let (result, _installed) =
+        fetch_prs_with(FakeGh::new().on("states:", &gh_list_page(&[pr], None)));
+    result.unwrap().prs[0].ai_review
+}
+
+#[test]
+fn github_list_tells_a_bots_review_from_a_persons_and_says_how_it_stands() {
+    use crate::domain::pr::AiReview;
+    let bot = |state: &str, oid: &str| review_by("Bot", state, oid);
+    // Nobody but a person has reviewed.
+    assert_eq!(
+        read_ai(&[review_by("User", "APPROVED", "head")], "head", "OPEN"),
+        AiReview::None
+    );
+    assert_eq!(read_ai(&[], "head", "OPEN"), AiReview::None);
+    // A bot reviewed the head, or an older commit, or asked for changes.
+    assert_eq!(
+        read_ai(&[bot("COMMENTED", "head")], "head", "OPEN"),
+        AiReview::Current
+    );
+    assert_eq!(
+        read_ai(&[bot("COMMENTED", "old")], "head", "OPEN"),
+        AiReview::Stale
+    );
+    assert_eq!(
+        read_ai(&[bot("CHANGES_REQUESTED", "head")], "head", "OPEN"),
+        AiReview::ChangesRequested
+    );
+    // With several, the one that needs the reader most counts.
+    assert_eq!(
+        read_ai(
+            &[bot("COMMENTED", "head"), bot("COMMENTED", "old")],
+            "head",
+            "OPEN"
+        ),
+        AiReview::Stale
+    );
+    assert_eq!(
+        read_ai(
+            &[bot("APPROVED", "old"), bot("CHANGES_REQUESTED", "old")],
+            "head",
+            "OPEN"
+        ),
+        AiReview::ChangesRequested
+    );
+}
+
+#[test]
+fn github_list_calls_a_review_of_a_pr_that_is_over_only_a_review() {
+    use crate::domain::pr::AiReview;
+    let old = [review_by("Bot", "CHANGES_REQUESTED", "old")];
+    for state in ["MERGED", "CLOSED"] {
+        assert_eq!(read_ai(&old, "head", state), AiReview::Current, "{state}");
+    }
+    assert_eq!(read_ai(&[], "head", "MERGED"), AiReview::None);
+}

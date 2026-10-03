@@ -131,6 +131,23 @@ impl std::fmt::Display for PrId {
     }
 }
 
+/// Whether an AI agent's bot account has reviewed the PR, and how that review
+/// stands, as the list can tell. When several have, the one that needs the
+/// reader most counts: the order is the order of attention.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, PartialOrd, Ord)]
+pub enum AiReview {
+    /// None has. An agent that posts under a person's account is not told apart
+    /// here, since that takes the text of its comments.
+    #[default]
+    None,
+    /// It reviewed the head the PR has now.
+    Current,
+    /// Its latest review was of an older head.
+    Stale,
+    /// It asked for changes.
+    ChangesRequested,
+}
+
 #[derive(Debug, Clone)]
 pub struct PullRequest {
     pub url: Option<String>,
@@ -150,4 +167,5 @@ pub struct PullRequest {
     pub changed_files: u32,
     pub created: DateTime<Utc>,
     pub updated: DateTime<Utc>,
+    pub ai_review: AiReview,
 }

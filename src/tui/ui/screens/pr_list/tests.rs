@@ -2,7 +2,7 @@ use super::*;
 use crate::{
     domain::{
         ci::CiSummary,
-        pr::{PrGroup, PrId, PrStatus, PullRequest},
+        pr::{AiReview, PrGroup, PrId, PrStatus, PullRequest},
         review::{Reviewer, ReviewerState},
         user::{User, Username},
     },
@@ -59,6 +59,7 @@ fn pr(id: u64, author: &str, ci: CiSummary, reviewers: Vec<Reviewer>) -> PullReq
         changed_files: 1,
         created: Utc::now(),
         updated: Utc::now(),
+        ai_review: AiReview::None,
     }
 }
 
@@ -135,7 +136,10 @@ fn state(viewer: &str) -> AppState {
 }
 
 fn drawn(state: &mut AppState, width: u16) -> String {
-    let height = 12;
+    drawn_high(state, width, 12)
+}
+
+fn drawn_high(state: &mut AppState, width: u16, height: u16) -> String {
     let mut terminal = Terminal::new(TestBackend::new(width, height)).unwrap();
     terminal.draw(|frame| render(frame, state)).unwrap();
     let buffer = terminal.backend().buffer();
@@ -268,6 +272,50 @@ fn the_reason_column_appears_only_with_a_reason_and_room() {
     let narrow = drawn(&mut state("me"), 80);
     assert!(!narrow.contains("Needs you"), "{narrow}");
     assert!(narrow.contains("Change 1"), "the title stays: {narrow}");
+}
+
+fn state_with_ai(reviews: &[AiReview]) -> AppState {
+    let mut state = state("me");
+    if let LoadState::Loaded(prs) = &mut state.store.cache.prs {
+        for (pr, review) in prs.iter_mut().zip(reviews) {
+            pr.ai_review = *review;
+        }
+    }
+    state
+}
+
+#[test]
+fn the_ai_column_is_there_only_while_some_pr_has_been_reviewed_by_an_agent() {
+    let none = drawn(&mut state("me"), 130);
+    assert!(!none.contains("◇") && !none.contains("◆"), "{none}");
+
+    let mut mixed = state_with_ai(&[
+        AiReview::Current,
+        AiReview::Stale,
+        AiReview::ChangesRequested,
+    ]);
+    for width in [100, 130] {
+        let text = drawn(&mut mixed, width);
+        assert!(text.contains("◆") && text.contains("◈"), "{width}: {text}");
+        assert!(
+            text.contains("◇"),
+            "an unreviewed PR is a hollow one: {text}"
+        );
+    }
+    // Too narrow for the column, as for the others.
+    let narrow = drawn(&mut mixed, 80);
+    assert!(!narrow.contains("◆"), "{narrow}");
+}
+
+#[test]
+fn the_help_explains_the_ai_column_only_while_it_is_there() {
+    let help = |mut state: AppState| {
+        state.ui.list.overlay = Some(ListOverlay::Help(HelpDialog::default()));
+        drawn_high(&mut state, 100, 40)
+    };
+    let with = help(state_with_ai(&[AiReview::Current]));
+    assert!(with.contains("AI review: of an older version"), "{with}");
+    assert!(!help(state("me")).contains("AI review:"));
 }
 
 #[test]

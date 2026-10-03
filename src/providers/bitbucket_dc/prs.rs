@@ -141,6 +141,8 @@ fn map_pr(bb: BbPr) -> PullRequest {
         additions: 0,
         deletions: 0,
         changed_files: 0,
+        // Bitbucket Data Center does not say which accounts are bots.
+        ai_review: crate::domain::pr::AiReview::None,
         created: ms_to_utc(bb.created_date),
         updated: ms_to_utc(bb.updated_date),
     }
