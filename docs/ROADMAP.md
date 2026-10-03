@@ -390,18 +390,17 @@ it ahead of the feature that needs it.
 
 ### Code, with the next feature that touches the area
 
-- [ ] **Keybinding table for the PR view.** `pr_detail/keys.rs` is a long
-  function of conditions, each mixing key, tab, modifiers and PR state, and
-  the help is a second table written apart from it (`dialogs/help.rs`, where
-  each entry names what it needs, held to `docs/KEYS.md` by a test). Replace
-  both with a slice of `Binding { key, mods, tabs, gate: fn(&DetailView,
-  pr_id) -> bool, action, help }`; routing and help are then derived from one
-  source, and `supports_action` in `view.rs` becomes the gate. With the keys
-  in a table, `clippy::wildcard_enum_match_arm` can cover `tui` as well:
-  today 27 matches on crossterm's `KeyCode` end in a catch-all, so the lint
-  is on only in `app`, `domain` and `providers`. *Trigger:* the next feature
-  that adds a key to the PR view; the AI-comment work added two (`f` and
-  `space`) without it.
+- [ ] **Keybinding table: the keys the children route.** The keys the PR
+  screen routes itself are rows in `pr_detail/bindings/`: key, where, what the
+  help says and what it does now (hidden, blocked with a reason, or offered),
+  read by routing, the help and the footer's hints alike. What is left is the
+  keys a child component routes (`j`/`k`, `enter`, `/`, `n`/`N` ...), which the
+  help names on its own and `docs/KEYS.md` checks by name, not by where they
+  work; as rows without an action they would let that test compare places too.
+  `clippy::wildcard_enum_match_arm` still cannot cover `tui`: about 27 matches
+  on crossterm's `KeyCode` end in a catch-all, and the lint does not tell a
+  foreign enum from ours. *Trigger:* the next feature that adds a key to a
+  child component.
 - [ ] **Provider trait instead of enum dispatch.** `providers/mod.rs` matches
   on `Provider` in every method; fine for two providers. Move to a
   `trait ProviderApi` (or keep the enum and implement it via the trait).
@@ -479,8 +478,8 @@ it ahead of the feature that needs it.
   derived from the other. *Trigger:* the next change to tab navigation.
 - [ ] **Functions over 100 lines.** `too_many_lines` is allowed crate-wide;
   the long ones are renderers (`pane.rs`, `comment.rs`, `timeline.rs`) and
-  `pr_detail/keys.rs`. *Trigger:* *Render-context structs* and *Keybinding
-  table*, which split them anyway.
+  `pr_detail/keys.rs`. *Trigger:* *Render-context structs*, which splits
+  them anyway.
 - [ ] **Small type changes left out of the 2026-10 type work**, because none
   removes a check today: a `PrInfoSource` in `Capabilities` instead of
   `Feature::PrInfo`, and `sort` and `theme` parsed by serde instead of by

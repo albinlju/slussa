@@ -117,6 +117,36 @@ fn the_pr_level_actions_work_from_the_description_too() {
     ));
 }
 
+/// The footer and the key read the same row, so what the footer dims does
+/// nothing and what it lights works, for every state the PR can be in.
+#[test]
+fn a_hint_dimmed_in_the_footer_does_nothing_and_a_lit_one_works() {
+    for tab in [DetailTab::Overview, DetailTab::Description] {
+        for status in [
+            PrStatus::Open,
+            PrStatus::Draft,
+            PrStatus::Declined,
+            PrStatus::Merged,
+        ] {
+            let mut state = on_tab(overview_of(status.clone()), tab);
+            let footer = footer_of(&mut state);
+            for (typed, label) in [('m', "m: merge"), ('x', "x: decline"), ('x', "x: reopen")] {
+                let dimmed = footer.contains(&format!("{label} ("));
+                let lit = !dimmed && footer.contains(label);
+                let acts = key(&state, typed).is_some();
+                assert!(
+                    !dimmed || !acts,
+                    "{label} is dimmed on {tab:?} for {status:?} and still acts"
+                );
+                assert!(
+                    !lit || acts,
+                    "{label} is lit on {tab:?} for {status:?} and does nothing"
+                );
+            }
+        }
+    }
+}
+
 #[test]
 fn the_pr_level_actions_stay_off_the_builds_tab() {
     let state = on_tab(overview_of(PrStatus::Open), DetailTab::Builds);

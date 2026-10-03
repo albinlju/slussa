@@ -1,31 +1,19 @@
 //! The PR view's help: every key, with what has to hold for it to be offered.
 //! A key the provider does not have is left out, not greyed out (AGENTS.md,
 //! *Show only what the provider supports*).
-use crate::domain::capabilities::{Capabilities, Feature};
-
-/// What has to hold for a key to be in the help.
-#[derive(Clone, Copy)]
-enum Needs {
-    Nothing,
-    /// The PR has a web address.
-    PrLink,
-    /// The provider takes reviews.
-    Reviews,
-    /// The provider has a way to merge.
-    MergeStrategy,
-    CloseOrReopen,
-    /// A comment of some kind can be written: on the PR, on a line or as a reply.
-    AnyComment,
-    /// The PR has an AI agent's comment to filter on.
-    AiFilter,
-    Feature(Feature),
-}
+use crate::{
+    domain::capabilities::{Capabilities, Feature},
+    tui::ui::screens::pr_detail::bindings::{self, Binding, Needs},
+};
 
 /// One line of the help.
 #[derive(Clone, Copy)]
 enum Entry {
     /// Shown as written where its need holds.
     Key(&'static str, &'static str, Needs),
+    /// A key the PR screen routes through a row of `bindings`, which says how
+    /// the help writes it.
+    Bound(&'static Binding),
     /// The tab numbers, one fewer where the provider has no builds.
     Tabs,
     /// `d` deletes a comment of one's own, removes a queued review comment, or
@@ -36,48 +24,32 @@ enum Entry {
 use Entry::Key;
 
 const HELP: &[Entry] = &[
-    Key("o", "open PR in browser", Needs::PrLink),
-    Key("y", "copy PR link", Needs::PrLink),
+    Entry::Bound(&bindings::rows::OPEN_IN_BROWSER),
+    Entry::Bound(&bindings::rows::COPY_LINK),
     Key("j/k", "move up/down", Needs::Nothing),
     Key("^d/^u", "half-page", Needs::Nothing),
     Key("h/l", "previous / next tab", Needs::Nothing),
     Key("H/L", "pan wide Description", Needs::Nothing),
     Entry::Tabs,
     Key("enter", "open / view", Needs::Nothing),
-    Key(
-        "space",
-        "toggle fold: a folder, a resolved thread, a long comment (its fold row)",
-        Needs::Nothing,
-    ),
+    Entry::Bound(&bindings::rows::TOGGLE_FOLD),
     Key("/", "search", Needs::Nothing),
     Key("n/N", "next/prev match", Needs::Nothing),
     Key("[ ]", "prev/next tab/commit", Needs::Nothing),
     Key("esc", "back", Needs::Nothing),
-    Key("a", "submit review", Needs::Reviews),
-    Key("v", "start/finish review draft", Needs::Reviews),
-    Key("V", "discard review", Needs::Reviews),
-    Key("m", "merge", Needs::MergeStrategy),
-    Key(
-        "x",
-        "close / decline, or reopen a declined PR",
-        Needs::CloseOrReopen,
-    ),
-    Key("c", "comment", Needs::AnyComment),
-    Key("r", "reply", Needs::Feature(Feature::Replies)),
+    Entry::Bound(&bindings::rows::SUBMIT_REVIEW),
+    Entry::Bound(&bindings::rows::START_REVIEW),
+    Entry::Bound(&bindings::rows::DISCARD_REVIEW),
+    Entry::Bound(&bindings::rows::MERGE),
+    Entry::Bound(&bindings::rows::REOPEN),
+    Entry::Bound(&bindings::rows::COMMENT),
+    Entry::Bound(&bindings::rows::REPLY),
     Key("^j/^k", "step comment", Needs::Nothing),
-    Key(
-        "f",
-        "show all / people's / AI comments (Overview)",
-        Needs::AiFilter,
-    ),
-    Key("e", "edit own", Needs::Feature(Feature::EditComments)),
+    Entry::Bound(&bindings::rows::FILTER_COMMENTS),
+    Entry::Bound(&bindings::rows::EDIT_COMMENT),
     Entry::Delete,
-    Key(
-        "R",
-        "resolve thread",
-        Needs::Feature(Feature::ResolveThreads),
-    ),
-    Key("F", "refresh", Needs::Nothing),
+    Entry::Bound(&bindings::rows::RESOLVE_THREAD),
+    Entry::Bound(&bindings::rows::REFRESH),
     Key("?", "toggle help", Needs::Nothing),
     Key("q", "quit", Needs::Nothing),
 ];
@@ -115,9 +87,10 @@ impl Entry {
     /// The keys where everything is supported, which is what `docs/KEYS.md`
     /// lists.
     #[cfg(test)]
-    const fn keys(self) -> &'static str {
+    fn keys(self) -> &'static str {
         match self {
             Self::Key(keys, ..) => keys,
+            Self::Bound(binding) => binding.doc.as_ref().map_or("", |doc| doc.keys),
             Self::Tabs => "1-5",
             Self::Delete => "d",
         }
@@ -128,6 +101,10 @@ impl Entry {
         let caps = on.caps;
         match self {
             Self::Key(keys, text, needs) => needs.holds(on).then_some((keys, text)),
+            Self::Bound(binding) => {
+                let doc = binding.doc.as_ref()?;
+                binding.needs.holds(on).then_some((doc.keys, doc.text))
+            }
             Self::Tabs => {
                 let keys = if caps.supports(Feature::Builds) {
                     "1-5"

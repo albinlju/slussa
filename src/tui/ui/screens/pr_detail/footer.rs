@@ -1,5 +1,6 @@
+use super::bindings;
 use crate::{
-    domain::{capabilities::Feature, diff::FileDiff, review::CommentTarget},
+    domain::{diff::FileDiff, review::CommentTarget},
     tui::{
         app::store::{LoadState, PrData},
         ui::{
@@ -33,28 +34,13 @@ pub(super) fn render(frame: &mut Frame<'_>, state: &DetailView<'_>, area: Rect) 
 }
 
 /// Review, merge and decline hints: they act on the whole PR, so they are
-/// shown wherever the keys work (Overview and Description).
+/// shown wherever the keys work (Overview and Description). Each is what its
+/// row in `bindings` says: lit, dimmed with the reason, or left out.
 fn pr_action_hints(state: &DetailView<'_>) -> Vec<Hint> {
-    let mut parts = vec![];
-    if state.store.capabilities.reviews() {
-        parts.push(Hint::on("a: submit review"));
-        parts.push(Hint::on("v: start review"));
-    }
-    if !state.store.capabilities.merge_strategies.is_empty() {
-        parts.push(match state.merge_blocked_reason() {
-            None => Hint::on("m: merge"),
-            Some(reason) => Hint::off(format!("m: merge ({reason})")),
-        });
-    }
-    if state.pr_is_declined() && state.store.capabilities.supports(Feature::ReopenPr) {
-        parts.push(Hint::on("x: reopen"));
-    } else if state.store.capabilities.supports(Feature::ClosePr) {
-        parts.push(match state.decline_blocked_reason() {
-            None => Hint::on("x: decline"),
-            Some(reason) => Hint::off(format!("x: decline ({reason})")),
-        });
-    }
-    parts
+    ['a', 'v', 'm', 'x']
+        .into_iter()
+        .filter_map(|key| bindings::hint(state, key))
+        .collect()
 }
 
 fn footer_actions(state: &DetailView<'_>, tab: DetailTab) -> Vec<Hint> {
@@ -63,17 +49,12 @@ fn footer_actions(state: &DetailView<'_>, tab: DetailTab) -> Vec<Hint> {
     }
     // While a batched review is open, surface its state and finish/discard keys
     // on every tab — line comments queue into it from the Diff too.
-    if state.store.capabilities.reviews()
-        && let Some(review) = state.pending_review()
-    {
-        let mut parts = vec![Hint::on(format!(
-            "v: finish draft ({})",
-            review.comments.len()
-        ))];
+    if state.store.capabilities.reviews() && state.pending_review().is_some() {
+        let mut parts: Vec<Hint> = bindings::hint(state, 'v').into_iter().collect();
         if state.surface().diff_viewer().is_some_and(|viewer| {
             viewer.focused_pending().is_some() && viewer.focus == DiffFocus::Pane
         }) {
-            parts.push(Hint::on("d: remove pending"));
+            parts.extend(bindings::hint(state, 'd'));
         }
         let target = state.comment_target();
         match target {
@@ -84,7 +65,7 @@ fn footer_actions(state: &DetailView<'_>, tab: DetailTab) -> Vec<Hint> {
         if state.reply_target().is_some() && !matches!(target, Some(CommentTarget::Reply(_))) {
             parts.push(Hint::on("r: reply"));
         }
-        parts.push(Hint::on("V: discard"));
+        parts.extend(bindings::hint(state, 'V'));
         return parts;
     }
     // Overview is the conversation tab and home of the PR-level actions: `c`
@@ -92,40 +73,19 @@ fn footer_actions(state: &DetailView<'_>, tab: DetailTab) -> Vec<Hint> {
     // Lifecycle actions stay visible but dimmed-with-reason when unavailable.
     if tab == DetailTab::Overview {
         let mut parts = vec![];
-        if state.comment_target().is_some() {
-            parts.push(Hint::on("c: comment"));
-        }
-        if state.reply_target().is_some() {
-            parts.push(Hint::on("r: reply"));
-        }
+        parts.extend(bindings::hint(state, 'c'));
+        parts.extend(bindings::hint(state, 'r'));
         if state.editable_selected().is_some() {
-            if state.store.capabilities.supports(Feature::EditComments) {
-                parts.push(Hint::on("e: edit"));
-            }
-            if state.store.capabilities.supports(Feature::DeleteComments) {
-                parts.push(Hint::on("d: delete"));
-            }
+            parts.extend(bindings::hint(state, 'e'));
+            parts.extend(bindings::hint(state, 'd'));
         }
-        if state.store.capabilities.supports(Feature::ResolveThreads)
-            && let Some(thread) = state
-                .focused_thread()
-                .filter(|thread| thread.handle.is_some())
+        if state
+            .focused_thread()
+            .is_some_and(|thread| thread.handle.is_some())
         {
-            parts.push(Hint::on(if thread.resolved {
-                "R: reopen thread"
-            } else {
-                "R: resolve thread"
-            }));
+            parts.extend(bindings::hint(state, 'R'));
         }
-        if crate::tui::ui::screens::pr_detail::tabs::overview::offers_filter(
-            state.data,
-            state.detail.overview.timeline.filter,
-        ) {
-            parts.push(Hint::on(format!(
-                "f: comments ({})",
-                state.detail.overview.timeline.filter.label()
-            )));
-        }
+        parts.extend(bindings::hint(state, 'f'));
         parts.extend(pr_action_hints(state));
         return parts;
     }
@@ -179,16 +139,11 @@ fn footer_actions(state: &DetailView<'_>, tab: DetailTab) -> Vec<Hint> {
             Some(_) => hints.push(Hint::on("c: comment")),
             None => {}
         }
-        if state.store.capabilities.supports(Feature::ResolveThreads)
-            && let Some(thread) = state
-                .focused_thread()
-                .filter(|thread| thread.handle.is_some())
+        if state
+            .focused_thread()
+            .is_some_and(|thread| thread.handle.is_some())
         {
-            hints.push(Hint::on(if thread.resolved {
-                "R: reopen thread"
-            } else {
-                "R: resolve thread"
-            }));
+            hints.extend(bindings::hint(state, 'R'));
         }
         hints.push(Hint::on("/: search"));
         hints.push(Hint::on("h/l: tabs"));

@@ -103,12 +103,6 @@ impl<'a> DetailView<'a> {
         self.store.current_user.is(&self.pr.author.username)
     }
 
-    /// Whether the PR is still actionable (open/draft, not already merged or
-    /// declined). Gates both `m` (merge) and `x` (decline).
-    pub const fn pr_is_open(&self) -> bool {
-        matches!(self.pr.status, PrStatus::Open | PrStatus::Draft)
-    }
-
     /// Why merging is unavailable, for the dimmed footer hint — `None` when it's
     /// offered. Unknown/loading mergeability still allows an attempt (server decides).
     pub fn merge_blocked_reason(&self) -> Option<&'static str> {
@@ -140,12 +134,6 @@ impl<'a> DetailView<'a> {
             PrStatus::Merged => Some("merged"),
             PrStatus::Declined => Some("declined"),
         }
-    }
-
-    /// Whether to offer the `m` merge action.
-    pub fn can_merge(&self) -> bool {
-        !self.store.capabilities.merge_strategies.is_empty()
-            && self.merge_blocked_reason().is_none()
     }
 
     /// Why a review verdict can't be submitted on this PR, for dimming it in the
