@@ -118,7 +118,7 @@ src/
 │       └── widgets/
 │           ├── mod.rs        Composition only
 │           ├── comment/      Comments and threads
-│           │   ├── mod.rs        Boxes, inline threads
+│           │   ├── render.rs     Boxes and inline threads
 │           │   ├── meta.rs       The author line, `[AI]`, reactions and `Reading`
 │           │   ├── fold.rs       Folding a long comment and its fold row
 │           │   ├── frame.rs      Header line, left rail and box around a comment
