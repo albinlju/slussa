@@ -1,9 +1,11 @@
-//! Whether a comment was written by an AI agent. Two things say so: the
-//! account, when the provider marks it as a bot's (GitHub does), and a fixed
-//! first line such as `> **gator-agent**`, for an agent that posts with its
-//! owner's token. The second is configured; the first needs nothing.
+//! Whether a comment or a commit was written by an AI agent. Two things say so:
+//! the account, when the provider marks it as a bot's (GitHub does), and a
+//! configured marker, for an agent that works under its owner's account. On a
+//! comment the marker is the first line, such as `> **gator-agent**`; on a
+//! commit it is a line of the message, such as the trailer
+//! `Co-Authored-By: Claude`. The account needs nothing configured.
 
-use super::{activity::Activity, comment::Comment, user::AccountKind};
+use super::{activity::Activity, comment::Comment, commit::Commit, user::AccountKind};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Authorship {
@@ -93,6 +95,31 @@ impl AiMarkers {
         }
     }
 
+    /// Say, for every commit, whether an agent made it.
+    pub fn judge_commits(&self, commits: &mut [Commit]) {
+        for commit in commits {
+            commit.authorship = self.of_commit(commit);
+        }
+    }
+
+    /// A commit is the agent's when its account is a bot's, or any line of its
+    /// message, a trailer in practice, begins with one of the markers, whatever
+    /// the case.
+    fn of_commit(&self, commit: &Commit) -> Authorship {
+        if commit.account == AccountKind::Bot {
+            return Authorship::Ai;
+        }
+        let marked = commit.message.lines().map(str::trim).any(|line| {
+            let line = line.to_lowercase();
+            self.0.iter().any(|m| line.starts_with(&m.0))
+        });
+        if marked {
+            Authorship::Ai
+        } else {
+            Authorship::Human
+        }
+    }
+
     /// A comment is the agent's when its account is a bot's, or its first line
     /// that has text begins with one of the markers, whatever the case.
     fn of(&self, comment: &Comment) -> Authorship {
@@ -115,7 +142,7 @@ impl AiMarkers {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::domain::{comment::CommentThread, user::User};
+    use crate::domain::{comment::CommentThread, commit::CommitOid, user::User};
 
     fn comment(content: &str) -> Comment {
         Comment {
@@ -129,6 +156,20 @@ mod tests {
             created: chrono::Utc::now(),
             reactions: vec![],
             reply_to: None,
+        }
+    }
+
+    fn commit(message: &str, account: AccountKind) -> Commit {
+        Commit {
+            oid: CommitOid("abc1234def".into()),
+            headline: message.lines().next().unwrap_or_default().into(),
+            message: message.into(),
+            author_name: "alice".into(),
+            account,
+            authorship: Authorship::Human,
+            authored_at: chrono::Utc::now(),
+            additions: 0,
+            deletions: 0,
         }
     }
 
@@ -184,6 +225,46 @@ mod tests {
         assert!(activity.has_ai());
         activity.comments.pop();
         assert!(!activity.has_ai());
+    }
+
+    #[test]
+    fn a_commit_is_the_agents_when_a_line_of_its_message_starts_with_a_marker() {
+        let markers = markers(&["Co-Authored-By: Claude"]);
+        let ai = |message: &str| {
+            let mut commits = vec![commit(message, AccountKind::Person)];
+            markers.judge_commits(&mut commits);
+            commits[0].authorship
+        };
+        // A trailer is the last paragraph of the message, in any case.
+        assert_eq!(
+            ai("Fix the lock\n\nBody.\n\nco-authored-by: Claude <noreply@anthropic.com>"),
+            Authorship::Ai
+        );
+        assert_eq!(
+            ai("Fix the lock\n\n  Co-Authored-By: Claude Sonnet"),
+            Authorship::Ai
+        );
+        // A person quoting it mid-line, or another co-author, is not the agent.
+        assert_eq!(
+            ai("Fix it, as Co-Authored-By: Claude said"),
+            Authorship::Human
+        );
+        assert_eq!(
+            ai("Fix\n\nCo-Authored-By: Bob <bob@example.com>"),
+            Authorship::Human
+        );
+        assert_eq!(ai(""), Authorship::Human);
+    }
+
+    #[test]
+    fn a_bots_commit_is_the_agents_without_any_marker() {
+        let mut commits = vec![
+            commit("Bump the lockfile", AccountKind::Bot),
+            commit("Bump the lockfile", AccountKind::Person),
+        ];
+        AiMarkers::default().judge_commits(&mut commits);
+        assert!(commits[0].is_ai());
+        assert!(!commits[1].is_ai());
     }
 
     #[test]

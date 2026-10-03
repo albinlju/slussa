@@ -1,4 +1,4 @@
-use crate::tui::ui::widgets::comment::meta::Reading;
+use crate::tui::ui::widgets::comment::meta::{self, Reading};
 use crate::{
     domain::{
         comment::CommentThread,
@@ -94,14 +94,18 @@ fn commit_row(commit: &Commit, is_last: bool, now: DateTime<Utc>, width: usize) 
             Span::styled(age, Style::default().fg(theme.muted)),
         ]
     };
-    let oid_cell = format!("{}  ", commit.oid.short());
     let headline = commit.headline.clone();
 
-    let left = vec![
+    // `[AI]` sits before the headline, which is what a narrow row cuts.
+    let mut left = vec![
         Span::styled(graph, Style::default().fg(theme.muted)),
-        Span::styled(oid_cell, Style::default().fg(theme.decorative)),
-        Span::raw(headline),
+        Span::styled(commit.oid.short(), Style::default().fg(theme.decorative)),
     ];
+    if commit.is_ai() {
+        left.push(meta::ai_tag());
+    }
+    left.push(Span::raw("  "));
+    left.push(Span::raw(headline));
     widgets::fitted_row(left, right, width)
 }
 
@@ -171,6 +175,9 @@ fn render_commit_banner(
         ),
     ];
     if let Some((idx, commit)) = found {
+        if commit.is_ai() {
+            left.push(meta::ai_tag());
+        }
         left.push(Span::styled(
             format!("  {}/{}  ", idx + 1, total),
             Style::default().fg(theme.muted),
@@ -364,6 +371,7 @@ impl CommitList {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::domain::{authorship::Authorship, user::AccountKind};
 
     #[test]
     fn commit_rows_prioritize_title_in_narrow_views() {
@@ -371,6 +379,9 @@ mod tests {
         let commit = Commit {
             oid: CommitOid("abcdef123456".into()),
             headline: "Fix 非常に長い headline with more details".into(),
+            message: "Fix 非常に長い headline with more details".into(),
+            account: AccountKind::Person,
+            authorship: Authorship::Human,
             author_name: "a-very-long-author-name".into(),
             authored_at: now,
             additions: 1234,
@@ -389,6 +400,32 @@ mod tests {
             if width >= 80 {
                 assert!(line.to_string().contains("+1234 -5678"));
             }
+        }
+    }
+
+    fn commit_by(authorship: Authorship) -> Commit {
+        Commit {
+            oid: CommitOid("abcdef123456".into()),
+            headline: "Fix the lock".into(),
+            message: "Fix the lock".into(),
+            account: AccountKind::Person,
+            authorship,
+            author_name: "alice".into(),
+            authored_at: Utc::now(),
+            additions: 1,
+            deletions: 0,
+        }
+    }
+
+    #[test]
+    fn an_agents_commit_has_ai_before_its_headline_at_every_width() {
+        let now = Utc::now();
+        for width in [30, 60, 100] {
+            let ai = commit_row(&commit_by(Authorship::Ai), true, now, width).to_string();
+            let human = commit_row(&commit_by(Authorship::Human), true, now, width).to_string();
+            assert!(ai.contains("abcdef1 [AI]  Fix"), "{width}: {ai}");
+            assert!(!human.contains("[AI]"), "{width}: {human}");
+            assert!(human.contains("abcdef1  Fix"), "{width}: {human}");
         }
     }
 }
