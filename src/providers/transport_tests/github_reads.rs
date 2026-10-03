@@ -381,3 +381,34 @@ fn github_older_prs_continue_from_the_cursor_and_report_when_they_end() {
         );
     }
 }
+
+#[test]
+fn github_commits_carry_their_message_and_a_bot_address_marks_a_bot() {
+    let node = |oid: &str, name: &str, email: &str, message: &str| {
+        json!({"commit": {
+            "oid": oid,
+            "messageHeadline": message.lines().next().unwrap_or_default(),
+            "message": message,
+            "authoredDate": "2026-10-01T10:00:00Z",
+            "additions": 1,
+            "deletions": 0,
+            "author": {"name": name, "email": email}
+        }})
+    };
+    let answer = json!({"data": {"repository": {"item": {"connection": {
+        "nodes": [
+            node("aaa1111", "Alice", "alice@example.com",
+                 "Fix the lock\n\nCo-Authored-By: Claude <noreply@anthropic.com>"),
+            node("bbb2222", "claude[bot]", "1+claude[bot]@users.noreply.github.com", "Review fixes"),
+        ],
+        "pageInfo": {"hasNextPage": false, "endCursor": null}
+    }}}}})
+    .to_string();
+    let _gh = FakeGh::new().on("commits", &answer).install();
+    let commits = Provider::GitHub.fetch_commits(PrId(5)).unwrap();
+
+    assert_eq!(commits.len(), 2);
+    assert!(commits[0].message.ends_with("<noreply@anthropic.com>"));
+    assert_eq!(commits[0].account, crate::domain::user::AccountKind::Person);
+    assert_eq!(commits[1].account, crate::domain::user::AccountKind::Bot);
+}

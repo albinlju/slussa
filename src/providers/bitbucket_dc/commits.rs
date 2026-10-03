@@ -1,8 +1,12 @@
 use serde::Deserialize;
 
 use super::{Config, ms_to_utc};
-use crate::domain::commit::{Commit, CommitOid};
 use crate::domain::pr::PrId;
+use crate::domain::{
+    authorship::Authorship,
+    commit::{Commit, CommitOid},
+    user::AccountKind,
+};
 use crate::providers::bitbucket_dc::http::get_all;
 use crate::providers::error::FetchError;
 
@@ -37,6 +41,10 @@ fn map_commit(c: BbCommit) -> Commit {
     Commit {
         oid: CommitOid(c.id),
         headline: c.message.lines().next().unwrap_or("").to_string(),
+        message: c.message,
+        // Bitbucket Data Center does not mark bot accounts.
+        account: AccountKind::Person,
+        authorship: Authorship::Human,
         author_name: c.author.display_name.unwrap_or(c.author.name),
         authored_at: ms_to_utc(c.author_timestamp),
         additions: 0,

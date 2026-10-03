@@ -1,3 +1,4 @@
+use super::{authorship::Authorship, user::AccountKind};
 use chrono::{DateTime, Utc};
 
 /// A commit's full object id. A type of its own, so that it cannot be passed
@@ -27,8 +28,21 @@ impl From<&str> for CommitOid {
 pub struct Commit {
     pub oid: CommitOid,
     pub headline: String,
+    /// The whole message, trailers included: an agent that commits under its
+    /// owner's account says so there.
+    pub message: String,
     pub author_name: String,
+    /// Whose account made it, where the provider tells a bot's from a person's.
+    pub account: AccountKind,
+    /// Whether an agent made it. `Human` until the store has judged it.
+    pub authorship: Authorship,
     pub authored_at: DateTime<Utc>,
     pub additions: u32,
     pub deletions: u32,
+}
+
+impl Commit {
+    pub fn is_ai(&self) -> bool {
+        self.authorship == Authorship::Ai
+    }
 }

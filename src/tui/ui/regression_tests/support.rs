@@ -86,6 +86,9 @@ pub(crate) fn fixture() -> AppState {
             commits: LoadState::Loaded(vec![Commit {
                 oid: "abcdef123456".into(),
                 headline: "Extract components".into(),
+                message: "Extract components".into(),
+                account: AccountKind::Person,
+                authorship: Authorship::Human,
                 author_name: "alice".into(),
                 authored_at: now,
                 additions: 1,

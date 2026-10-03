@@ -36,6 +36,7 @@ impl App {
                 result,
             } => self.prs_loaded(group, after.is_some(), result),
             Read::Commits(pr_id, result) => {
+                let result = result.map(|commits| self.state.store.judged_commits(commits));
                 if let Ok(new) = &result {
                     let old = self
                         .state

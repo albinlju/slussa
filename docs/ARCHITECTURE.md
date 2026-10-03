@@ -469,6 +469,17 @@ and `Activity::has_ai`; with no bot and no marker, the filter and its key are
 simply not offered. `Reading` carries the PR's author and the folds to the
 comment widgets.
 
+A commit is judged the same way, once, when it arrives (`Store::judged_commits`;
+`set_ai_markers` judges the cached ones). It is an agent's when its account is a
+bot's, when a line of its message is the trailer Claude Code adds
+(`Co-Authored-By: … <noreply@anthropic.com>`, built in, since it is the one
+convention an agent follows without being set up), or when any trimmed line of
+it starts with a marker. GitHub gives a commit a git actor and
+not an account, so a bot is told by the address `…[bot]@users.noreply.github.com`
+(`github/commits.rs`); Bitbucket Data Center says nothing, so only markers apply.
+`Commit` carries the whole `message` for this, and the Commits tab reads
+`Commit::is_ai`.
+
 A comment over 12 lines is folded to its first 8 and a dimmed row
 (`widgets/comment/fold.rs`). `Folds::Open` is for a view with no key to open
 them. The Overview keeps the opened ones in `Timeline::expanded`; the diff keeps

@@ -145,13 +145,6 @@ is unsure, so its review is a set of commits and may leave no thread at all.
 "AI actor" is therefore one notion, applied to the PR's author, to comments
 and to commits.
 
-- [ ] **AI-authored commits marked** *(refined)* — mark the commits an agent
-  made in the Commits tab, by author account or a configurable trailer, so the
-  commits a reviewing agent added can be told from the implementer's and read
-  as one diff. It is the same notion of an AI actor as for comments (a bot
-  account, or a configured marker). **Open:** `Commit` carries only an author
-  name today, and an implementer and a reviewer that commit under the same
-  account can be told apart only by a trailer or a marker in the message.
 - [ ] **Review summary in the header** *(refined for comments)* — one line:
   `AI: 1 blocker · 3 suggestions · reviewed a1b2c3d (2 behind)`. Derived from
   the latest AI review: severity counts where the review exposes them,

@@ -264,3 +264,63 @@ fn new_markers_judge_what_was_read_before_them() {
         .set_ai_markers(AiMarkers::from_config(&["> **gator**".into()]).0);
     assert_eq!(authorship_of_cached(&app), [Authorship::Ai]);
 }
+
+fn commit_saying(message: &str) -> crate::domain::commit::Commit {
+    crate::domain::commit::Commit {
+        oid: "abc1234def".into(),
+        headline: message.lines().next().unwrap_or_default().into(),
+        message: message.into(),
+        author_name: "alice".into(),
+        account: crate::domain::user::AccountKind::Person,
+        authorship: crate::domain::authorship::Authorship::Human,
+        authored_at: chrono::Utc::now(),
+        additions: 0,
+        deletions: 0,
+    }
+}
+
+fn marked(trailer: &str) -> crate::domain::authorship::AiMarkers {
+    crate::domain::authorship::AiMarkers::from_config(&[trailer.into()]).0
+}
+
+fn cached_commits(app: &App) -> &[crate::domain::commit::Commit] {
+    app.state
+        .store
+        .cache
+        .details
+        .get(&PrId(42))
+        .and_then(|data| data.commits.loaded())
+        .map_or(&[][..], Vec::as_slice)
+}
+
+#[test]
+fn commits_are_judged_when_they_arrive_and_when_the_markers_come_after_them() {
+    let message = "Fix the lock\n\nAssisted-By: gator-agent";
+
+    // Markers first, as the app starts: judged on arrival.
+    let mut app = app();
+    app.state
+        .store
+        .set_ai_markers(marked("Assisted-By: gator-agent"));
+    app.apply_result(TaskResult::Read(Read::Commits(
+        PrId(42),
+        Ok(vec![commit_saying(message), commit_saying("Plain change")]),
+    )));
+    let judged: Vec<bool> = cached_commits(&app)
+        .iter()
+        .map(crate::domain::commit::Commit::is_ai)
+        .collect();
+    assert_eq!(judged, [true, false]);
+
+    // Commits first: setting the markers judges what is cached.
+    let mut app = self::app();
+    app.apply_result(TaskResult::Read(Read::Commits(
+        PrId(42),
+        Ok(vec![commit_saying(message)]),
+    )));
+    assert!(!cached_commits(&app)[0].is_ai());
+    app.state
+        .store
+        .set_ai_markers(marked("Assisted-By: gator-agent"));
+    assert!(cached_commits(&app)[0].is_ai());
+}

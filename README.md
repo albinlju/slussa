@@ -106,9 +106,10 @@ theme = "graphite"   # graphite (default), slate, gruvbox, catppuccin, terminal
 sort = "attention"   # attention (default) or recent
 
 [ai]
-# Optional. For an agent that posts as a person: a comment whose first line
-# starts with one of these is its.
-markers = ["> **gator-agent**"]
+# Optional. For an agent that works as a person: a comment whose first line
+# starts with one of these is its, and so is a commit with a line that does
+# (a trailer such as "Assisted-By: gator-agent").
+markers = ["> **gator-agent**", "Assisted-By: gator-agent"]
 ```
 
 `SLUSSA_THEME` overrides the file.
@@ -120,6 +121,13 @@ people's, or only the agents'; what it hides stays as a dimmed line
 for one), so this needs no setup. `markers` is for an agent that posts
 with your own token, which no account tells apart; it works on both providers.
 Bitbucket Data Center does not mark bot accounts, so there only `markers` applies.
+
+A commit by an agent has `[AI]` after its hash in the Commits tab and above the diff of
+an open commit, so the commits a reviewing agent added can be told from the
+implementer's. Without setup, a commit is an agent's on GitHub when its author address is a GitHub App's
+(`…[bot]@users.noreply.github.com`), and on both providers when it carries the
+`Co-Authored-By: Claude <noreply@anthropic.com>` trailer that Claude Code adds. Another agent
+under your own account is told by a line of the message that starts with one of the `markers`.
 
 A comment longer than 12 lines shows its first 8 and a dimmed `… 34 more lines ·
 space expand`; `space` opens it or folds it again, in the Overview. In the diff,

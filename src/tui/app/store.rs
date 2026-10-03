@@ -62,14 +62,24 @@ pub struct Store {
 }
 
 impl Store {
-    /// Use these markers from now on, and judge the activity already read with them.
+    /// Use these markers from now on, and judge the activity and the commits
+    /// already read with them.
     pub fn set_ai_markers(&mut self, markers: AiMarkers) {
         self.ai_markers = markers;
         for data in self.cache.details.values_mut() {
             if let LoadState::Loaded(activity) = &mut data.activity {
                 self.ai_markers.judge(activity);
             }
+            if let LoadState::Loaded(commits) = &mut data.commits {
+                self.ai_markers.judge_commits(commits);
+            }
         }
+    }
+
+    /// Commits that have arrived, each judged once, here.
+    pub fn judged_commits(&self, mut commits: Vec<Commit>) -> Vec<Commit> {
+        self.ai_markers.judge_commits(&mut commits);
+        commits
     }
 
     /// An activity that has arrived, with each comment judged once, here.

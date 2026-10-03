@@ -286,6 +286,9 @@ fn commit_list_returns_to_the_same_viewport_after_opening_a_commit() {
             .map(|n| Commit {
                 oid: CommitOid(format!("{n:07x}")),
                 headline: format!("Commit number {n}"),
+                message: format!("Commit number {n}"),
+                account: AccountKind::Person,
+                authorship: Authorship::Human,
                 author_name: "alice".into(),
                 authored_at: chrono::Utc::now(),
                 additions: 1,
