@@ -56,6 +56,14 @@ impl AuthorFilter {
     }
 }
 
+/// The trailer Claude Code adds to its commits, `Co-Authored-By: Claude
+/// <noreply@anthropic.com>`, whatever the model is called. It is the one
+/// convention an agent follows without being set up, so it needs no marker.
+/// `line` is lower case.
+fn is_claude_trailer(line: &str) -> bool {
+    line.starts_with("co-authored-by:") && line.contains("<noreply@anthropic.com>")
+}
+
 /// The first line a configured agent starts its comments with. Never blank, so
 /// it cannot match every comment. `parse` is the only way to make one.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -102,16 +110,16 @@ impl AiMarkers {
         }
     }
 
-    /// A commit is the agent's when its account is a bot's, or any line of its
-    /// message, a trailer in practice, begins with one of the markers, whatever
-    /// the case.
+    /// A commit is the agent's when its account is a bot's, when a line of its
+    /// message is the trailer Claude Code adds, or when any line, a trailer in
+    /// practice, begins with one of the markers, whatever the case.
     fn of_commit(&self, commit: &Commit) -> Authorship {
         if commit.account == AccountKind::Bot {
             return Authorship::Ai;
         }
         let marked = commit.message.lines().map(str::trim).any(|line| {
             let line = line.to_lowercase();
-            self.0.iter().any(|m| line.starts_with(&m.0))
+            is_claude_trailer(&line) || self.0.iter().any(|m| line.starts_with(&m.0))
         });
         if marked {
             Authorship::Ai
@@ -254,6 +262,23 @@ mod tests {
             Authorship::Human
         );
         assert_eq!(ai(""), Authorship::Human);
+    }
+
+    #[test]
+    fn claude_codes_trailer_marks_a_commit_without_any_marker() {
+        let none = AiMarkers::default();
+        let ai = |message: &str| {
+            let mut commits = vec![commit(message, AccountKind::Person)];
+            none.judge_commits(&mut commits);
+            commits[0].is_ai()
+        };
+        assert!(ai(
+            "Fix\n\nCo-Authored-By: Claude Sonnet 5.5 <noreply@anthropic.com>"
+        ));
+        assert!(ai("Fix\n\nco-authored-by: Claude <NoReply@Anthropic.com>"));
+        // Another co-author, or the address in prose, is not the agent.
+        assert!(!ai("Fix\n\nCo-Authored-By: Bob <bob@example.com>"));
+        assert!(!ai("Mail noreply@anthropic.com about it"));
     }
 
     #[test]

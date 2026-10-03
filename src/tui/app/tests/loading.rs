@@ -295,13 +295,13 @@ fn cached_commits(app: &App) -> &[crate::domain::commit::Commit] {
 
 #[test]
 fn commits_are_judged_when_they_arrive_and_when_the_markers_come_after_them() {
-    let message = "Fix the lock\n\nCo-Authored-By: Claude <noreply@anthropic.com>";
+    let message = "Fix the lock\n\nAssisted-By: gator-agent";
 
     // Markers first, as the app starts: judged on arrival.
     let mut app = app();
     app.state
         .store
-        .set_ai_markers(marked("Co-Authored-By: Claude"));
+        .set_ai_markers(marked("Assisted-By: gator-agent"));
     app.apply_result(TaskResult::Read(Read::Commits(
         PrId(42),
         Ok(vec![commit_saying(message), commit_saying("Plain change")]),
@@ -321,6 +321,6 @@ fn commits_are_judged_when_they_arrive_and_when_the_markers_come_after_them() {
     assert!(!cached_commits(&app)[0].is_ai());
     app.state
         .store
-        .set_ai_markers(marked("Co-Authored-By: Claude"));
+        .set_ai_markers(marked("Assisted-By: gator-agent"));
     assert!(cached_commits(&app)[0].is_ai());
 }

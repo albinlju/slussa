@@ -471,8 +471,10 @@ comment widgets.
 
 A commit is judged the same way, once, when it arrives (`Store::judged_commits`;
 `set_ai_markers` judges the cached ones). It is an agent's when its account is a
-bot's or any trimmed line of its message starts with a marker, which is where a
-trailer such as `Co-Authored-By: Claude` is. GitHub gives a commit a git actor and
+bot's, when a line of its message is the trailer Claude Code adds
+(`Co-Authored-By: … <noreply@anthropic.com>`, built in, since it is the one
+convention an agent follows without being set up), or when any trimmed line of
+it starts with a marker. GitHub gives a commit a git actor and
 not an account, so a bot is told by the address `…[bot]@users.noreply.github.com`
 (`github/commits.rs`); Bitbucket Data Center says nothing, so only markers apply.
 `Commit` carries the whole `message` for this, and the Commits tab reads

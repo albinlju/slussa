@@ -108,8 +108,8 @@ sort = "attention"   # attention (default) or recent
 [ai]
 # Optional. For an agent that works as a person: a comment whose first line
 # starts with one of these is its, and so is a commit with a line that does
-# (a trailer such as "Co-Authored-By: Claude").
-markers = ["> **gator-agent**", "Co-Authored-By: Claude"]
+# (a trailer such as "Assisted-By: gator-agent").
+markers = ["> **gator-agent**", "Assisted-By: gator-agent"]
 ```
 
 `SLUSSA_THEME` overrides the file.
@@ -124,10 +124,10 @@ Bitbucket Data Center does not mark bot accounts, so there only `markers` applie
 
 A commit by an agent has `[AI]` after its hash in the Commits tab and above the diff of
 an open commit, so the commits a reviewing agent added can be told from the
-implementer's. On GitHub a bot's commit is one whose author address is a GitHub App's
-(`…[bot]@users.noreply.github.com`); a commit under your own account is an agent's when
-a line of its message starts with one of the `markers`, which is where a trailer
-like `Co-Authored-By: Claude` lives.
+implementer's. Without setup, a commit is an agent's on GitHub when its author address is a GitHub App's
+(`…[bot]@users.noreply.github.com`), and on both providers when it carries the
+`Co-Authored-By: Claude <noreply@anthropic.com>` trailer that Claude Code adds. Another agent
+under your own account is told by a line of the message that starts with one of the `markers`.
 
 A comment longer than 12 lines shows its first 8 and a dimmed `… 34 more lines ·
 space expand`; `space` opens it or folds it again, in the Overview. In the diff,
