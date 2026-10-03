@@ -23,7 +23,7 @@ pub(in crate::tui::ui) fn framed_panel(
     let block = Block::default()
         .borders(Borders::ALL)
         .border_type(BorderType::Rounded)
-        .title(format!(" {title} "))
+        .title(format!("{title} "))
         .border_style(Style::default().fg(if focused { theme.accent } else { theme.divider }));
     let inner = block.inner(area);
     frame.render_widget(block, area);

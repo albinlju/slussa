@@ -115,6 +115,13 @@ fn render_content(
             height: area.height,
         },
     };
+    // A framed panel stands one column in, so its title starts under the tab
+    // labels: a letter lines up with a letter, a border never quite does.
+    let framed = Rect {
+        x: area.x.saturating_add(1),
+        width: area.width.saturating_sub(2),
+        ..area
+    };
     match tab {
         DetailTab::Description => ui.description.render(
             frame,
@@ -139,7 +146,7 @@ fn render_content(
             let diff = pr_data.map(|d| &d.diff);
             ui.diff.render(
                 frame,
-                inset,
+                framed,
                 &DiffContext {
                     diff,
                     threads,
@@ -154,7 +161,11 @@ fn render_content(
         DetailTab::Commits => {
             ui.commits.render(
                 frame,
-                inset,
+                if ui.commits.open_commit().is_some() {
+                    framed
+                } else {
+                    inset
+                },
                 &commits::CommitContext {
                     data: pr_data,
                     pending,
