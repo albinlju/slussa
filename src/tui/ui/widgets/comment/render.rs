@@ -1,3 +1,4 @@
+use super::meta;
 use crate::{
     domain::{
         comment::{Comment, CommentKey, CommentKind, CommentThread, split_suggestions},
@@ -7,10 +8,12 @@ use crate::{
         format, theme,
         widgets::{
             self,
-            comment_code::{diff_snippet, suggestion_box},
-            comment_fold::{Fold, Folds},
-            comment_frame::{bracket, framed, header_line, prefix_gutter, status_rule},
-            comment_meta::{self, Reading},
+            comment::{
+                code::{diff_snippet, suggestion_box},
+                fold::{Fold, Folds},
+                frame::{bracket, framed, header_line, prefix_gutter, status_rule},
+                meta::Reading,
+            },
             markdown,
         },
     },
@@ -104,7 +107,7 @@ fn collapse_summary(
             Style::default().fg(theme.muted),
         ));
         if comment.is_ai() {
-            spans.push(comment_meta::ai_tag());
+            spans.push(meta::ai_tag());
         }
     }
     Line::from(widgets::truncate_to_width(spans, width as usize))
@@ -120,7 +123,7 @@ pub(in crate::tui::ui) fn comment_box(
     let theme = theme::current();
     let frame = if active { theme.accent } else { theme.divider };
     let header = header_line(
-        comment_meta::meta(comment, reading, now),
+        meta::meta(comment, reading, now),
         kind_label(comment),
         width,
     );
@@ -196,7 +199,7 @@ pub(in crate::tui::ui) fn comment_thread_box(
         Style::default().fg(theme.info).add_modifier(Modifier::BOLD),
     )];
     if first.is_ai() {
-        left.push(comment_meta::ai_tag());
+        left.push(meta::ai_tag());
     }
     left.push(Span::styled(phrase, Style::default().fg(theme.muted)));
     if let Some(location) = location {
@@ -273,7 +276,7 @@ fn conversation(
         let meta = if suppress {
             Vec::new()
         } else {
-            comment_meta::meta(comment, reading, now)
+            meta::meta(comment, reading, now)
         };
         if !split_suggestions(&comment.content).1.is_empty() {
             let label = if suppress {
@@ -383,7 +386,7 @@ fn comment_body(
         lines.push(Line::raw(""));
         lines.extend(suggestion_box(anchor, suggestion, text_w));
     }
-    if let Some(line) = widgets::reactions_line(&comment.reactions) {
+    if let Some(line) = meta::reactions_line(&comment.reactions) {
         lines.push(Line::raw(""));
         lines.push(line);
     }

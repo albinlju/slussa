@@ -2,7 +2,7 @@
 //! the rail that joins them.
 
 use super::hidden::HiddenRun;
-use crate::tui::ui::widgets::comment_meta::Reading;
+use crate::tui::ui::widgets::comment::meta::Reading;
 use crate::{
     domain::{
         authorship::Authorship,
@@ -297,7 +297,7 @@ fn event_block(event: &TimelineEvent, now: DateTime<Utc>) -> (Color, Vec<Line<'s
             lead.push(Span::raw(" "));
         }
         lead.push(Span::styled(verb, Style::default().fg(color)));
-        widgets::author_line(lead, event.created, now)
+        widgets::comment::meta::author_line(lead, event.created, now)
     };
 
     let (verb, color) = match &event.kind {

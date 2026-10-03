@@ -1,7 +1,7 @@
 //! The code a comment is about: the lines a suggestion would replace and the
 //! diff around a thread's anchor.
 
-use super::comment_frame::framed;
+use super::frame::framed;
 use crate::{
     domain::diff::{Diff, DiffLine, LineRef},
     tui::ui::{theme, widgets},

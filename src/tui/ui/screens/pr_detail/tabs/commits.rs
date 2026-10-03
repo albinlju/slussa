@@ -1,4 +1,4 @@
-use crate::tui::ui::widgets::comment_meta::Reading;
+use crate::tui::ui::widgets::comment::meta::Reading;
 use crate::{
     domain::{
         comment::CommentThread,

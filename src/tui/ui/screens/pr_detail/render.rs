@@ -1,5 +1,5 @@
 use super::{dialogs, footer, header};
-use crate::tui::ui::widgets::{comment_fold::Folds, comment_meta::Reading};
+use crate::tui::ui::widgets::comment::{fold::Folds, meta::Reading};
 use crate::{
     domain::{
         capabilities::{Capabilities, Feature},

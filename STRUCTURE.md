@@ -410,7 +410,6 @@ import rule is tooling, which the same rule says to do now.
 | Move | Trigger |
 |---|---|
 | `bindings.rs` with three outcomes | The next feature that adds a key to the PR view (the roadmap's *Keybinding table*) |
-| `widgets/comment/` and the split of `widgets/mod.rs` | The next AI comment feature (review as a group, finding state) |
 | `handoff.rs`, `app/terminal.rs` | *Send to agent* |
 | `providers/conformance_tests.rs` | The provider trait |
 | `test_support/` | The next provider call that needs a new double |

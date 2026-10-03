@@ -116,11 +116,17 @@ src/
 │       │           │   └── sidebar.rs   Stateless Ratatui Sidebar widget
 │       │           └── ...             Description, CommitList and Builds
 │       └── widgets/
-│           ├── comment.rs    Comments and threads: boxes, inline threads
-│           ├── comment_meta.rs   The author line, `[AI]`, and `Reading`
-│           ├── comment_fold.rs   Folding a long comment and its fold row
-│           ├── comment_frame.rs  Header line, left rail and box around a comment
-│           ├── comment_code.rs   A suggestion box and the diff around an anchor
+│           ├── mod.rs        Composition only
+│           ├── comment/      Comments and threads
+│           │   ├── render.rs     Boxes and inline threads
+│           │   ├── meta.rs       The author line, `[AI]`, reactions and `Reading`
+│           │   ├── fold.rs       Folding a long comment and its fold row
+│           │   ├── frame.rs      Header line, left rail and box around a comment
+│           │   └── code.rs       A suggestion box and the diff around an anchor
+│           ├── text.rs       Width, truncation, justification and wrapping
+│           ├── footer.rs     The hints and the search prompt
+│           ├── panel.rs      Frame, empty state, loading line, scrollbar
+│           ├── diff_row.rs   One numbered row of a diff
 │           ├── dialog.rs     Shared dialog geometry and footer
 │           ├── markdown.rs
 │           └── table.rs
@@ -462,7 +468,7 @@ simply not offered. `Reading` carries the PR's author and the folds to the
 comment widgets.
 
 A comment over 12 lines is folded to its first 8 and a dimmed row
-(`widgets/comment_fold.rs`). `Folds::Open` is for a view with no key to open
+(`widgets/comment/fold.rs`). `Folds::Open` is for a view with no key to open
 them. The Overview keeps the opened ones in `Timeline::expanded`; the diff keeps
 them in `DiffViewer::opened_comments`, where the fold row is a stop of its own
 (`NavTarget::Fold`) so that `j`/`k` reach it and `space` there opens or folds

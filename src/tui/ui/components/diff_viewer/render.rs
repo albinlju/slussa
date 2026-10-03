@@ -10,7 +10,7 @@ use crate::{
         app::store::LoadState,
         ui::{
             layout,
-            widgets::{self, comment_meta::Reading},
+            widgets::{self, comment::meta::Reading},
         },
     },
 };
