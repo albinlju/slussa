@@ -53,7 +53,8 @@ src/
 ├── test_support.rs        Test-only: `FakeGh` and `MockHttp`
 ├── doc_contract.rs        Test-only: reads KEYS.md and the README for the tests that hold the code to them
 ├── tui/                   The interactive program
-│   ├── mod.rs             `run`: starts the runtime and the event loop
+│   ├── mod.rs             Composes `app`, `ui` and `run`
+│   ├── run.rs             `run`: starts the runtime, the application and the terminal
 │   ├── app/               The engine: does I/O, never draws
 │   │   ├── mod.rs             Composes the modules below
 │   │   ├── event_loop.rs      `App`, the event loop, the task channel and effect dispatch
