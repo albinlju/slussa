@@ -249,8 +249,9 @@ fn map_pr(gh: GhPr) -> PullRequest {
 }
 
 /// How the bot accounts' reviews stand: the one that needs the reader most
-/// counts. A review is stale when it was made on a commit that is not the
-/// head. That only matters while the PR can still change: on one that is over,
+/// counts. A review is current only when its commit and the head are both known
+/// and the same; any other is stale, a commit GitHub no longer has (null, after a
+/// force-push) included, since that one was made on something that is not the head. That only matters while the PR can still change: on one that is over,
 /// a bot's review of an older head only says that the author fixed what it
 /// found, so it is simply a review.
 fn ai_review(reviews: &[GhReviewSummary], head: Option<&str>, open: bool) -> AiReview {
@@ -258,17 +259,17 @@ fn ai_review(reviews: &[GhReviewSummary], head: Option<&str>, open: bool) -> AiR
         .iter()
         .filter(|review| review.author.typename == "Bot")
         .map(|review| {
-            let behind = review
+            let on_head = review
                 .commit
                 .as_ref()
                 .zip(head)
-                .is_some_and(|(commit, head)| commit.oid != head);
+                .is_some_and(|(commit, head)| commit.oid == head);
             if review.state == "CHANGES_REQUESTED" {
                 AiReview::ChangesRequested
-            } else if behind {
-                AiReview::Stale
-            } else {
+            } else if on_head {
                 AiReview::Current
+            } else {
+                AiReview::Stale
             }
         })
         .max()

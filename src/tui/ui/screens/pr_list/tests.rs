@@ -309,13 +309,16 @@ fn the_ai_column_is_there_only_while_some_pr_has_been_reviewed_by_an_agent() {
 
 #[test]
 fn the_help_explains_the_ai_column_only_while_it_is_there() {
-    let help = |mut state: AppState| {
+    let help = |mut state: AppState, width: u16| {
         state.ui.list.overlay = Some(ListOverlay::Help(HelpDialog::default()));
-        drawn_high(&mut state, 100, 40)
+        drawn_high(&mut state, width, 40)
     };
-    let with = help(state_with_ai(&[AiReview::Current]));
+    let with = help(state_with_ai(&[AiReview::Current]), 100);
     assert!(with.contains("AI review: of an older version"), "{with}");
-    assert!(!help(state("me")).contains("AI review:"));
+    assert!(!help(state("me"), 100).contains("AI review:"));
+    // Too narrow for the column: nothing to explain.
+    let narrow = help(state_with_ai(&[AiReview::Current]), 80);
+    assert!(!narrow.contains("AI review:"), "{narrow}");
 }
 
 #[test]

@@ -154,7 +154,12 @@ pub(super) fn render(
                 .copied()
                 .filter(|(key, _)| has_link || !matches!(*key, "o" | "y"))
                 .filter(|(key, _)| can_load_older || *key != "L")
-                .chain(AI_LEGEND.iter().copied().filter(|_| any_ai))
+                .chain(
+                    AI_LEGEND
+                        .iter()
+                        .copied()
+                        .filter(|_| columns.contains(&ListColumn::Ai)),
+                )
                 .collect();
             help.render(frame, area, &entries.as_slice());
         }

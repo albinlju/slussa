@@ -478,3 +478,11 @@ fn github_list_calls_a_review_of_a_pr_that_is_over_only_a_review() {
     }
     assert_eq!(read_ai(&[], "head", "MERGED"), AiReview::None);
 }
+
+#[test]
+fn github_list_does_not_call_a_review_current_when_its_commit_is_gone() {
+    use crate::domain::pr::AiReview;
+    // GitHub gives null for a commit it no longer has, after a force-push.
+    let gone = json!({"state": "COMMENTED", "author": {"__typename": "Bot", "login": "bot"}, "commit": null});
+    assert_eq!(read_ai(&[gone], "head", "OPEN"), AiReview::Stale);
+}
