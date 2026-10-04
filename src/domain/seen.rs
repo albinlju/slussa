@@ -13,12 +13,17 @@ use super::pr::{PrId, PullRequest};
 /// not grow with every PR ever looked at.
 const KEEP: Duration = Duration::days(90);
 
+/// How old a look may be before looking again renews its date. A look at an
+/// unchanged PR is then written at most once a day, not at every refresh of the
+/// list while it is on screen.
+const RENEW: Duration = Duration::days(1);
+
 /// What was known of a PR when it was last looked at.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 struct Look {
     /// The PR's `updated` then: later than this, something has happened.
     updated: DateTime<Utc>,
-    /// When it was looked at, to forget old ones.
+    /// When it was last looked at, to forget the ones not opened for a long time.
     at: DateTime<Utc>,
 }
 
@@ -33,14 +38,20 @@ impl Seen {
     }
 
     /// The PR was looked at, and had been updated at `updated`. Returns whether
-    /// that is news: a look never moves backwards, so a PR seen at its latest
-    /// stays so. `now` dates the look.
+    /// the record changed, so that it is written: the state seen moves forward
+    /// and never back, and the date of the look is renewed once it is a day old,
+    /// so that a PR opened now and then is not forgotten as long as it is.
+    /// `now` dates the look.
     pub fn mark(&mut self, pr: PrId, updated: DateTime<Utc>, now: DateTime<Utc>) -> bool {
-        let news = self.0.get(&pr).is_none_or(|look| updated > look.updated);
-        if news {
-            self.0.insert(pr, Look { updated, at: now });
+        let before = self.0.get(&pr).copied();
+        let moved = before.is_none_or(|look| updated > look.updated);
+        let old = before.is_some_and(|look| now - look.at >= RENEW);
+        if !(moved || old) {
+            return false;
         }
-        news
+        let updated = before.map_or(updated, |look| look.updated.max(updated));
+        self.0.insert(pr, Look { updated, at: now });
+        true
     }
 
     /// Whether the PR was opened before and has been updated since.
@@ -130,6 +141,24 @@ mod tests {
             !seen.is_unread(&pr(2, at(9))),
             "another PR was never opened"
         );
+    }
+
+    #[test]
+    fn a_pr_opened_now_and_then_is_not_forgotten_while_it_is_still_opened() {
+        let day = |n: i64| at(24 * n);
+        let mut seen = Seen::default();
+        assert!(seen.mark(PrId(1), at(0), day(0)));
+        // The same state looked at again within a day is no news and no write.
+        assert!(!seen.mark(PrId(1), at(0), day(0) + Duration::hours(2)));
+        // Opened again every month with nothing changed: the date is renewed.
+        for month in 1..=4 {
+            assert!(seen.mark(PrId(1), at(0), day(30 * month)), "month {month}");
+        }
+        seen.forget_old(day(130));
+        assert_eq!(seen.len(), 1, "opened 10 days ago");
+        // Not opened for more than ninety days since: gone.
+        seen.forget_old(day(215));
+        assert_eq!(seen.len(), 0);
     }
 
     #[test]
