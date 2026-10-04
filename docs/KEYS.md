@@ -11,7 +11,7 @@ connected provider does not support, so it can show fewer keys than this page.
 | `enter` | open the PR |
 | `/` | search title and author; `esc` clears the search |
 | `f` | filter by status (open, draft, merged, declined, all) |
-| `s` | sort: needs you first, or newest first |
+| `s` | pick the sort order: needs you first, newest, recently updated or oldest |
 | `L` | load more PRs, while the heading says more are unread; in the merged and declined views, the next older batch |
 | `^d` / `^u` | half a page |
 | `o` / `y` | open the PR in the browser / copy its link |

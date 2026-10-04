@@ -52,15 +52,17 @@ pub enum SearchAction {
 #[derive(Debug, Clone, Copy)]
 pub enum ListAction {
     ToggleHelp,
-    ToggleSort,
     LoadOlder,
     MoveSelection(i16),
     OpenPr(PrId),
     OpenFilterPicker,
-    CloseFilterPicker,
-    FilterPickerNext,
-    FilterPickerPrev,
-    ApplyFilter,
+    OpenSortPicker,
+    /// Leave whichever picker is open without choosing.
+    ClosePicker,
+    PickerNext,
+    PickerPrev,
+    /// Choose what the open picker has highlighted.
+    ApplyPicker,
 }
 
 /// A message for the PR screen, grouped by the part that handles it, so each
