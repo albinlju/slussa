@@ -9,8 +9,9 @@ use ratatui::{
     Frame,
     layout::{Constraint, Direction, Rect},
     style::Style,
+    symbols,
     text::Line,
-    widgets::{Block, BorderType, Borders, Paragraph, Wrap},
+    widgets::{Block, Borders, Paragraph, Wrap},
 };
 
 pub(in crate::tui::ui) fn framed_panel(
@@ -22,8 +23,12 @@ pub(in crate::tui::ui) fn framed_panel(
     let theme = theme::current();
     let block = Block::default()
         .borders(Borders::ALL)
-        .border_type(BorderType::Rounded)
-        .title(format!(" {title} "))
+        .border_set(symbols::border::Set {
+            vertical_left: "╎",
+            vertical_right: "╎",
+            ..symbols::border::PLAIN
+        })
+        .title(format!("{title} "))
         .border_style(Style::default().fg(if focused { theme.accent } else { theme.divider }));
     let inner = block.inner(area);
     frame.render_widget(block, area);

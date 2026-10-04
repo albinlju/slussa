@@ -127,6 +127,12 @@ pub fn render_commit_diff(
         [Constraint::Length(2), Constraint::Min(0)],
     );
 
+    // The banner's text stands where the panels' titles do, one column in.
+    let banner_area = Rect {
+        x: banner_area.x.saturating_add(1),
+        width: banner_area.width.saturating_sub(1),
+        ..banner_area
+    };
     render_commit_banner(frame, pr_data, oid, banner_area);
 
     let diff_state = pr_data.and_then(|d| d.diff_for(Some(oid)));

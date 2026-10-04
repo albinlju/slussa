@@ -349,3 +349,49 @@ fn wide_description_can_pan_to_hidden_content_and_resets_when_resized() {
     assert_eq!(state.ui.detail.description.horizontal, 0);
     assert!(!rendered_text(&wide).contains("H/L: pan"));
 }
+
+#[test]
+fn framed_panel_titles_start_under_the_tab_labels() {
+    // The column each row's text starts in, after the outer frame.
+    fn first_columns(state: &mut AppState, width: u16, height: u16) -> Vec<(String, usize)> {
+        let text = draw(state, width, height);
+        let chars: Vec<char> = text.chars().collect();
+        chars
+            .chunks(width as usize)
+            .map(|row| {
+                let start = row
+                    .iter()
+                    .skip(1)
+                    .position(|c| *c != ' ')
+                    .map_or(0, |at| at + 1);
+                (row.iter().skip(start).collect::<String>(), start)
+            })
+            .collect()
+    }
+    for (width, height) in [(100, 30), (40, 12)] {
+        let mut diff = pr_on(DetailTab::Diff, Activity::default());
+        let mut commit = pr_on(DetailTab::Commits, Activity::default());
+        local_key(&mut commit, KeyCode::Enter);
+        let oid = commit.ui.detail.commits.open_commit().unwrap().clone();
+        let data = commit.store.cache.details.get_mut(&PrId(42)).unwrap();
+        let commit_diff = LoadState::Loaded(data.diff.loaded().unwrap().clone());
+        data.commit_diffs.insert(oid, commit_diff);
+        for state in [&mut diff, &mut commit] {
+            let rows = first_columns(state, width, height);
+            let tabs = rows
+                .iter()
+                .find(
+                    |(row, _)| // A narrow tab bar names only the open tab, by its number.
+                    row.starts_with("Description")
+                        || row.chars().next().is_some_and(|c| c.is_ascii_digit()),
+                )
+                .map(|(_, at)| *at);
+            let title = rows
+                .iter()
+                .find(|(row, _)| row.chars().skip(1).collect::<String>().starts_with("Files"))
+                .map(|(_, at)| *at + 1);
+            assert!(tabs.is_some(), "{width}x{height}: no tab bar");
+            assert_eq!(tabs, title, "{width}x{height}");
+        }
+    }
+}
