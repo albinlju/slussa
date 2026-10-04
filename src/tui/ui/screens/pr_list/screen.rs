@@ -61,6 +61,8 @@ pub struct ListContext<'a> {
     pub viewer: &'a Username,
     /// When each PR was last looked at, to mark the ones changed since.
     pub seen: &'a Seen,
+    /// Which statuses the list shows, so that a column need not repeat it.
+    pub view: StatusFilter,
     /// More PRs exist, in a group this view shows, that have not been loaded.
     pub more: bool,
     /// The open PRs are being read page by page.
@@ -82,6 +84,7 @@ impl<'a> ListContext<'a> {
             refreshing: store.refreshing(screen),
             viewer: &store.current_user,
             seen: &store.seen,
+            view: filter,
             more: groups.iter().any(|&group| store.group_has_more(group)),
             loading_more: groups.contains(&PrGroup::Open) && arriving,
             view_loading: groups.iter().any(|&group| store.group_loading(group)),

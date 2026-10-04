@@ -1,13 +1,12 @@
 //! The columns of the PR list: which fit, how wide they are and what a row
 //! shows in each.
+use super::{ListContext, StatusFilter};
 use crate::{
     domain::{
         attention::{Attention, attention},
         ci::CiSummary,
         pr::{AiReview, PullRequest},
         review::{Reviewer, ReviewerState},
-        seen::Seen,
-        user::Username,
     },
     tui::ui::{
         icons, theme,
@@ -75,18 +74,15 @@ impl ListColumn {
     }
 
     /// What `pr`'s row shows in this column.
-    pub(super) fn cell(self, pr: &PullRequest, viewer: &Username, seen: &Seen) -> Cell {
+    pub(super) fn cell(self, pr: &PullRequest, ctx: &ListContext<'_>) -> Cell {
         let theme = theme::current();
         let muted = Style::default().fg(theme.muted);
         match self {
             Self::Id => vec![
-                unread_mark(seen.is_unread(pr)),
+                unread_mark(ctx.seen.is_unread(pr)),
                 Span::styled(format!("#{}", pr.id), muted),
             ],
-            Self::Status => vec![Span::styled(
-                pr.status.label().to_string(),
-                Style::default().fg(theme.status_color(&pr.status)),
-            )],
+            Self::Status => status_cell(pr, ctx.view),
             Self::Author => vec![Span::styled(
                 pr.author.username.clone(),
                 Style::default().fg(theme.info),
@@ -123,7 +119,7 @@ impl ListColumn {
             }
             Self::Ai => ai_cell(pr.ai_review),
             Self::Age => vec![Span::styled(age_label(pr.created), muted)],
-            Self::Attention => attention_cell(attention(pr, viewer)),
+            Self::Attention => attention_cell(attention(pr, ctx.viewer)),
         }
     }
 }
@@ -155,11 +151,28 @@ fn ai_cell(review: AiReview) -> Cell {
     vec![Span::styled(glyph, Style::default().fg(color))]
 }
 
+/// `conflicts` for an open PR the provider says cannot be merged for one, in any
+/// view. Otherwise the status, but only where the views mix: in the others it is
+/// what the reader picked with `f`, and saying it on every row is noise.
+fn status_cell(pr: &PullRequest, view: StatusFilter) -> Cell {
+    let theme = theme::current();
+    if pr.has_conflicts {
+        return vec![Span::styled("conflicts", Style::default().fg(theme.error))];
+    }
+    if view == StatusFilter::All {
+        return vec![Span::styled(
+            pr.status.label().to_string(),
+            Style::default().fg(theme.status_color(&pr.status)),
+        )];
+    }
+    Vec::new()
+}
+
 fn attention_cell(reason: Option<Attention>) -> Cell {
     let theme = theme::current();
     reason.map_or_else(Vec::new, |reason| {
         let color = match reason {
-            Attention::ChangesRequested | Attention::CiFailed | Attention::Conflicts => theme.error,
+            Attention::ChangesRequested | Attention::CiFailed => theme.error,
             Attention::ReviewRequested => theme.warning,
             Attention::Approved => theme.success,
         };

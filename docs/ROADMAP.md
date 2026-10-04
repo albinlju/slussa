@@ -121,8 +121,9 @@ says so on the row.
   query leaves the labels out, which made a page twice as slow) and `is:agent` (see
   *AI authorship* below).
 - [ ] **Sorting** — recently updated, created, comment count, CI status.
-- [ ] **Behind base in the PR list.** A conflict on one's own PR is a reason in
-  *Needs you* (GitHub only; the list query reads `mergeable` for nothing). Whether
+- [ ] **Behind base in the PR list.** A conflict is shown in the `Status`
+  column for any open PR (GitHub only; the list query reads `mergeable` for
+  nothing). Whether
   the PR is behind its base needs `mergeStateStatus`, which doubled the time of
   the query (measured on cli/cli) and says `BLOCKED` for most PRs where branch
   protection is on, so it is left out.

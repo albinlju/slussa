@@ -90,6 +90,9 @@ pub(super) fn render(
     let any_reason = filtered
         .as_ref()
         .is_some_and(|prs| prs.iter().any(|pr| attention(pr, ctx.viewer).is_some()));
+    let any_conflict = filtered
+        .as_ref()
+        .is_some_and(|prs| prs.iter().any(|pr| pr.has_conflicts));
     // So does the AI column: only while some PR has been reviewed by an agent, so
     // a repository without one has no column of hollow diamonds.
     let any_ai = filtered
@@ -100,8 +103,11 @@ pub(super) fn render(
         .copied()
         .filter(|&column| column != ListColumn::Attention || any_reason)
         .filter(|&column| column != ListColumn::Ai || any_ai)
-        // The status says which view this is, except where the views are mixed.
-        .filter(|&column| column != ListColumn::Status || screen.filter == StatusFilter::All)
+        // The status says which view this is, except where the views are mixed, and
+        // a conflict is worth a column wherever there is one.
+        .filter(|&column| {
+            column != ListColumn::Status || screen.filter == StatusFilter::All || any_conflict
+        })
         .collect();
     let definitions: Vec<_> = columns.iter().map(|column| column.spec()).collect();
     let table = table::Table::new(&definitions, width);
@@ -208,10 +214,7 @@ fn render_table_body(
     let items: Vec<ListItem<'_>> = prs
         .iter()
         .map(|pr| {
-            let cells: Vec<_> = columns
-                .iter()
-                .map(|column| column.cell(pr, ctx.viewer, ctx.seen))
-                .collect();
+            let cells: Vec<_> = columns.iter().map(|column| column.cell(pr, ctx)).collect();
             ListItem::new(table.row(&cells))
         })
         .collect();

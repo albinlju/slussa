@@ -93,10 +93,14 @@ The search takes words, and filters among them: `author:alice`,
 `passing`) and `merge:conflicts` (GitHub), for example `/ author:alice ci:failed retry`. They narrow the list as you type.
 
 A "Needs you" column, shown at 90 columns or wider, says why a PR is on top:
-changes requested, CI failed, conflicts (your PR cannot be merged until you resolve a
-conflict; GitHub only), review requested, or approved. Team review requests
+changes requested, CI failed, review requested, or approved. Team review requests
 on GitHub are not counted yet. Press `s` for plain newest-first order, or set
 `sort = "recent"`.
+
+A PR GitHub says cannot be merged for a conflict has `conflicts` in the `Status` column, whoever
+wrote it. The column stands there when some row has one, and otherwise only in the All view,
+where it says `Open`, `Merged` and so on; in the other views the status is the one you chose
+with `f`. Bitbucket Data Center does not say, so it has no such mark.
 
 On GitHub an "AI review" column, also from 90 columns, says whether a bot account
 (CodeRabbit, for one) has reviewed the PR; it is not about who wrote it. `◆` means it reviewed the head the PR has now, `◈` an older
