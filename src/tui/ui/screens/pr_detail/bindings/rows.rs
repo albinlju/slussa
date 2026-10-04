@@ -2,7 +2,7 @@
 
 use super::{Binding, Doc, Label, Mods, Needs, Offer, Place, offered};
 use crate::{
-    domain::capabilities::Feature,
+    domain::{capabilities::Feature, pr::PrStatus},
     tui::{
         app::effect::{Effect, LinkAction},
         ui::{
@@ -340,10 +340,13 @@ pub(in crate::tui::ui::screens::pr_detail) static RERUN_BUILDS: Binding = Bindin
     needs: Needs::Feature(Feature::RerunBuilds),
     label: Label::Fixed("b: run failed again"),
     offer: |view| {
-        if view.has_failed_build() && view.pr.status.is_open() {
-            offered(view, PrAction::RerunBuilds)
-        } else {
-            Offer::Hidden
+        if !view.has_failed_build() {
+            return Offer::Hidden;
+        }
+        match view.pr.status {
+            PrStatus::Open | PrStatus::Draft => offered(view, PrAction::RerunBuilds),
+            PrStatus::Merged => Offer::Blocked("merged"),
+            PrStatus::Declined => Offer::Blocked("declined"),
         }
     },
 };

@@ -10,11 +10,6 @@ pub enum PrStatus {
 }
 
 impl PrStatus {
-    /// Whether the PR can still change: not merged and not declined.
-    pub const fn is_open(&self) -> bool {
-        matches!(self, Self::Open | Self::Draft)
-    }
-
     pub const fn label(&self) -> &str {
         match self {
             Self::Open => "Open",

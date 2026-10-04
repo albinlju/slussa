@@ -213,3 +213,32 @@ fn github_says_so_when_no_actions_run_failed() {
     let error = Provider::GitHub.rerun_failed_builds(PrId(7)).unwrap_err();
     assert!(error.user_message().contains("No failed"), "{error:?}");
 }
+
+#[test]
+fn github_keeps_going_when_one_run_cannot_be_started_and_says_how_many_did() {
+    let runs = json!([{"workflow_runs": [
+        {"id": 11, "conclusion": "failure"},
+        {"id": 13, "conclusion": "failure"}
+    ]}])
+    .to_string();
+    let installed = FakeGh::new()
+        .on("--jq .head.sha", "abc123\n")
+        .on("actions/runs?head_sha=abc123", &runs)
+        .fail("runs/11/rerun-failed-jobs", 1, "run 11 is too old")
+        .on("runs/13/rerun-failed-jobs", "{}")
+        .install();
+    let error = Provider::GitHub.rerun_failed_builds(PrId(7)).unwrap_err();
+
+    assert!(
+        error.user_message().contains("1 of 2"),
+        "{}",
+        error.user_message()
+    );
+    assert!(error.may_have_reached_server());
+    let reruns = installed
+        .calls()
+        .iter()
+        .filter(|call| call.contains("rerun-failed-jobs"))
+        .count();
+    assert_eq!(reruns, 2, "the second run is tried after the first failed");
+}

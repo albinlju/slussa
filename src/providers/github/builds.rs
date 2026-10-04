@@ -80,15 +80,33 @@ pub fn rerun_failed(pr_number: PrId) -> Result<(), FetchError> {
             "No failed GitHub Actions run to run again.".into(),
         ));
     }
+    // Every run is tried, so that one refusal does not hide the runs that start.
+    let total = failed.len();
+    let mut done = 0;
+    let mut first_error = None;
     for id in failed {
-        super::cli::run_gh(&[
+        let started = super::cli::run_gh(&[
             "api",
             "--method",
             "POST",
             &format!("repos/{{owner}}/{{repo}}/actions/runs/{id}/rerun-failed-jobs"),
-        ])?;
+        ]);
+        match started {
+            Ok(_) => done += 1,
+            Err(error) => {
+                first_error.get_or_insert(error);
+            }
+        }
     }
-    Ok(())
+    match first_error {
+        None => Ok(()),
+        Some(error) if done == 0 => Err(error),
+        Some(error) => Err(FetchError::Partial {
+            done,
+            total,
+            first: error.user_message(),
+        }),
+    }
 }
 
 fn pages<T: serde::de::DeserializeOwned>(path: &str, field: &str) -> Result<Vec<T>, FetchError> {
