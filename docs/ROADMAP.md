@@ -94,11 +94,12 @@ Still one list, still one PR view. The list just knows what needs the user and
 says so on the row.
 
 - [ ] **Attention reasons, the rest.** The list is sorted by what needs you,
-  with a reason column (the README says how). Still open: a reason for new
-  comments and mentions (the list marks a PR that changed since it was opened,
-  with `●` before its number, and the reason column could use that), team review
-  requests (GitHub counts people only), opening the PR on the tab its reason
-  points at, and remembering the `s` choice between runs.
+  with a reason column (the README says how). Still open: a reason for
+  mentions (they need the text of the comments), team review requests (GitHub
+  counts people only), opening the PR on the tab its reason points at, and
+  remembering the `s` choice between runs. A reason for new comments was tried
+  and dropped: the `●` before the number already says that something changed, and
+  the reason said it a second time, at the cost of a column.
 - [ ] **Merge risk** — how dangerous the merge is, beside why the PR needs
   you: can it be reverted (a two-way door) or not (a one-way door: a
   migration, data loss, something sent to users), and how far a mistake
@@ -116,9 +117,11 @@ says so on the row.
   a one-way door is an attention reason of its own or a marker beside the
   existing one; and the row, which needs the description and the changed
   paths, neither of which the list query reads today.
-- [ ] **Structured filters** — `author:`, `label:`, `review:approved`, `is:draft`,
-  `status:`, plus `is:agent` (see *AI authorship* below).
-- [ ] **Sorting** — recently updated, created, comment count, CI status.
+- [ ] **More search filters.** The search takes `author:`, `review:` and `ci:`
+  (the README says how); the status is the `f` picker. Missing: `label:` (the list
+  query leaves the labels out, which made a page twice as slow) and `is:agent` (see
+  *AI authorship* below).
+- [ ] **More sorts.** `s` opens a picker with needs you first, newest, recently updated and oldest. Comment count and CI status are not sorts: the Comments column and the `ci:` filter cover them. Oldest is the oldest of the PRs read, so in a view that says `recent` it is not the oldest there is.
 - [ ] **Mergeability in the PR list** — conflict / behind-base indicators
   (the detail header badge is done; this extends it to rows).
 - [ ] **Labels in the list** — colored and filterable (shown in Overview today).
@@ -157,10 +160,12 @@ and to commits.
   working now (GitHub has no such state; one bot shows it as a running check),
   and a reason in *Needs you* and the sort, so a PR with a stale or negative AI
   review rises.
-- [ ] **Linked issues / cross-references** — "closes #123", shown in the
-  header and openable. Moved here from *Handoff*: the linked issue is what was
-  asked for, and checking the PR against it is the intent check the
-  positioning promises.
+- [ ] **Linked issues / cross-references** — the issues a PR closes are in the
+  Overview's side panel under *Closes* (GitHub; read with the description and
+  labels, so the list query is unchanged). Missing: issues it only mentions,
+  opening one, and Bitbucket Data Center, which has no such field. The linked
+  issue is what was asked for, and checking the PR against it is the intent
+  check the positioning promises.
 - [ ] **Finding state per thread** — an AI thread is *open*, *fixed* (resolved
   after a later commit, or resolved by a maintainer) or *waived* (an explicit
   "won't fix" / "intentional" reply from a maintainer). Show the state on the
@@ -173,9 +178,7 @@ and to commits.
 - [ ] **Review as a group (display)** — render a review's comments + summary +
   state as one grouped timeline entry. Matters more once AI reviews arrive as one
   batch with many comments.
-- [ ] **Jump to next / prev unresolved thread** (`]c` / `[c`) — the core loop for
-  walking through flags.
-- [ ] **Resolved / unresolved filter** in the Overview.
+- [ ] **Resolved / unresolved filter** in the Overview. (`u` / `U` already go between the unresolved threads there; a filter would also hide the rest.)
 - [ ] **Outdated comments** — hide threads whose anchored line is gone from the
   diff; keep them in the Overview timeline.
 
@@ -227,7 +230,7 @@ against:
 - [ ] **Update / sync branch** — merge or rebase base into the PR when behind.
 - [ ] **Repo-allowed merge strategies** — pre-filter the merge picker from repo
   settings instead of letting the server reject.
-- [ ] **Re-run CI checks** — re-trigger a failed (or all) check from Builds.
+- [ ] **Re-run CI checks** — `b` in Builds runs the failed or cancelled GitHub Actions jobs again. Missing: one build at a time, all builds, and checks that are not Actions (external statuses).
 - [ ] **Request / re-request reviewers** — including re-request after a push.
 - [ ] **Delete the source branch after merge** — moved here from *Scope
   decision*: it is part of the merge path, not administration.

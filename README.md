@@ -88,10 +88,14 @@ searches, `f` filters by status, `s` switches the sort and `q` quits. Actions th
 connected provider does not support are hidden; actions blocked by the PR's
 state (for example merging with conflicts) stay visible and say why.
 
+The search takes words, and filters among them: `author:alice`,
+`review:approved` (or `changes`, `requested`, `none`) and `ci:failed` (or `pending`,
+`passing`), for example `/ author:alice ci:failed retry`. They narrow the list as you type.
+
 A "Needs you" column, shown at 90 columns or wider, says why a PR is on top:
 changes requested, CI failed, review requested, or approved. Team review requests
-on GitHub are not counted yet. Press `s` for plain newest-first order, or set
-`sort = "recent"`.
+on GitHub are not counted yet. Press `s` to pick another order (newest, recently
+updated, oldest), or set `sort` in the config.
 
 On GitHub an "AI review" column, also from 90 columns, says whether a bot account
 (CodeRabbit, for one) has reviewed the PR; it is not about who wrote it. `◆` means it reviewed the head the PR has now, `◈` an older
@@ -115,7 +119,7 @@ over SSH; inside tmux that needs `set -g set-clipboard on`.
 
 ```toml
 theme = "graphite"   # graphite (default), slate, gruvbox, catppuccin, terminal
-sort = "attention"   # attention (default) or recent
+sort = "attention"   # attention (default), recent, updated or oldest
 
 [ai]
 # Optional. For an agent that works as a person: a comment whose first line

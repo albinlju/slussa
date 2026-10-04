@@ -308,3 +308,28 @@ fn the_commit_list_footer_offers_only_keys_that_work_there() {
         "{d:?}"
     );
 }
+
+#[test]
+fn the_builds_footer_offers_run_again_for_a_failed_build_and_says_why_not_on_a_closed_pr() {
+    use crate::domain::ci::{Build, BuildState};
+    let failing = |status| {
+        let mut state = on_tab(overview_of(status), DetailTab::Builds);
+        if let Some(data) = state.store.cache.details.get_mut(&PrId(42)) {
+            data.builds = LoadState::Loaded(vec![Build {
+                name: "ci".into(),
+                state: BuildState::Failed,
+                duration_ms: None,
+            }]);
+        }
+        state
+    };
+    let open = footer_of(&mut failing(PrStatus::Open));
+    assert!(open.contains("b: run failed again"), "{open}");
+    assert!(!open.contains("run failed again ("), "{open}");
+
+    let merged = footer_of(&mut failing(PrStatus::Merged));
+    assert!(merged.contains("b: run failed again (merged)"), "{merged}");
+
+    let passing = footer_of(&mut on_tab(overview_of(PrStatus::Open), DetailTab::Builds));
+    assert!(!passing.contains("run failed again"), "{passing}");
+}

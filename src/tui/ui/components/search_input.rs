@@ -1,5 +1,5 @@
 use crate::{
-    domain::{commit::Commit, pr::PullRequest},
+    domain::{commit::Commit, query::PrQuery},
     tui::{
         app::effect::Effect,
         ui::{
@@ -27,10 +27,9 @@ impl SearchInput {
         self.query.is_empty() || haystack.to_lowercase().contains(&self.query.to_lowercase())
     }
 
-    pub fn matches_pr(&self, pr: &PullRequest) -> bool {
-        self.matches(&pr.title)
-            || self.matches(&pr.author.username)
-            || self.matches(&format!("#{}", pr.id))
+    /// What the field says of PRs: words, and filters like `author:` and `ci:`.
+    pub fn pr_query(&self) -> PrQuery {
+        PrQuery::parse(&self.query)
     }
 
     fn matches_commit(&self, c: &Commit) -> bool {

@@ -52,15 +52,17 @@ pub enum SearchAction {
 #[derive(Debug, Clone, Copy)]
 pub enum ListAction {
     ToggleHelp,
-    ToggleSort,
     LoadOlder,
     MoveSelection(i16),
     OpenPr(PrId),
     OpenFilterPicker,
-    CloseFilterPicker,
-    FilterPickerNext,
-    FilterPickerPrev,
-    ApplyFilter,
+    OpenSortPicker,
+    /// Leave whichever picker is open without choosing.
+    ClosePicker,
+    PickerNext,
+    PickerPrev,
+    /// Choose what the open picker has highlighted.
+    ApplyPicker,
 }
 
 /// A message for the PR screen, grouped by the part that handles it, so each
@@ -149,6 +151,9 @@ pub enum TimelineAction {
     CycleFilter,
     /// Open or fold the long comment the cursor is on.
     ToggleFold,
+    /// Go to the next (1) or previous (-1) review thread that is not resolved,
+    /// round from the last to the first.
+    NextUnresolved(i16),
 }
 
 #[derive(Debug, Clone, Copy)]
@@ -233,6 +238,7 @@ pub enum PrAction {
     EditComment,
     DeleteComment,
     ResolveThread,
+    RerunBuilds,
 }
 
 #[derive(Debug, Clone, Copy)]

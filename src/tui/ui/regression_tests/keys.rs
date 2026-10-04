@@ -49,7 +49,7 @@ fn filter_and_confirmation_capture_navigation() {
     });
     assert!(matches!(
         key(&state, KeyCode::Char('j')),
-        Action::List(ListAction::FilterPickerNext)
+        Action::List(ListAction::PickerNext)
     ));
     state.screen = Screen::Detail {
         pr_id: PrId(42),

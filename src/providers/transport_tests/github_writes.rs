@@ -193,3 +193,68 @@ fn github_auto_merge_asks_gh_for_the_chosen_strategy_and_off_disables_it() {
         vec!["pr merge 7 --auto --squash", "pr merge 7 --disable-auto"]
     );
 }
+
+#[test]
+fn github_runs_the_failed_jobs_of_each_failed_run_again_and_nothing_else() {
+    let runs = json!([{"workflow_runs": [
+        {"id": 11, "conclusion": "failure"},
+        {"id": 12, "conclusion": "success"},
+        {"id": 13, "conclusion": "timed_out"},
+        {"id": 15, "conclusion": "cancelled"},
+        {"id": 14, "conclusion": null}
+    ]}])
+    .to_string();
+    let installed = FakeGh::new()
+        .on("--jq .head.sha", "abc123\n")
+        .on("actions/runs?head_sha=abc123", &runs)
+        .on("rerun-failed-jobs", "{}")
+        .install();
+    Provider::GitHub.rerun_failed_builds(PrId(7)).unwrap();
+
+    let calls = installed.calls();
+    let reruns: Vec<_> = calls.iter().filter(|call| call.contains("rerun")).collect();
+    assert_eq!(reruns.len(), 3, "{calls:?}");
+    assert!(reruns[0].contains("runs/11/rerun-failed-jobs"), "{calls:?}");
+    assert!(reruns[1].contains("runs/13/rerun-failed-jobs"), "{calls:?}");
+    assert!(reruns[2].contains("runs/15/rerun-failed-jobs"), "{calls:?}");
+}
+
+#[test]
+fn github_says_so_when_no_actions_run_failed() {
+    let runs = json!([{"workflow_runs": [{"id": 12, "conclusion": "success"}]}]).to_string();
+    let _gh = FakeGh::new()
+        .on("--jq .head.sha", "abc123\n")
+        .on("actions/runs?head_sha=abc123", &runs)
+        .install();
+    let error = Provider::GitHub.rerun_failed_builds(PrId(7)).unwrap_err();
+    assert!(error.user_message().contains("No failed"), "{error:?}");
+}
+
+#[test]
+fn github_keeps_going_when_one_run_cannot_be_started_and_says_how_many_did() {
+    let runs = json!([{"workflow_runs": [
+        {"id": 11, "conclusion": "failure"},
+        {"id": 13, "conclusion": "failure"}
+    ]}])
+    .to_string();
+    let installed = FakeGh::new()
+        .on("--jq .head.sha", "abc123\n")
+        .on("actions/runs?head_sha=abc123", &runs)
+        .fail("runs/11/rerun-failed-jobs", 1, "run 11 is too old")
+        .on("runs/13/rerun-failed-jobs", "{}")
+        .install();
+    let error = Provider::GitHub.rerun_failed_builds(PrId(7)).unwrap_err();
+
+    assert!(
+        error.user_message().contains("1 of 2"),
+        "{}",
+        error.user_message()
+    );
+    assert!(error.may_have_reached_server());
+    let reruns = installed
+        .calls()
+        .iter()
+        .filter(|call| call.contains("rerun-failed-jobs"))
+        .count();
+    assert_eq!(reruns, 2, "the second run is tried after the first failed");
+}
