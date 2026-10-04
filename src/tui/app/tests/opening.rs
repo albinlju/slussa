@@ -2,7 +2,10 @@
 //! opened, whether or not the list holds it.
 
 use super::support::*;
-use crate::domain::pr::{PrBatch, PrGroup, PullRequest};
+use crate::{
+    domain::pr::{PrBatch, PrGroup, PullRequest},
+    tui::ui::screens::pr_detail::DetailContext,
+};
 
 /// A PR the fixture's list does not hold.
 fn elsewhere(app: &App, id: u64) -> PullRequest {
@@ -88,6 +91,10 @@ async fn a_pr_read_before_the_list_waits_for_it() {
     assert!(
         app.state.store.requested.is_some(),
         "the list is not read yet"
+    );
+    assert!(
+        DetailContext::new(&app.state.store, PrId(99), DetailTab::Overview).is_some(),
+        "the PR is shown as soon as it is read, before the list"
     );
 
     // The list arrives, without the PR; now the PR is in it.
