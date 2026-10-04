@@ -226,10 +226,11 @@ impl PrListScreen {
         let LoadState::Loaded(prs) = ctx.prs else {
             return Vec::new();
         };
+        let query = self.search.pr_query();
         let mut rows: Vec<&PullRequest> = prs
             .iter()
             .filter(|p| self.filter.matches(&p.status))
-            .filter(|p| self.search.matches_pr(p))
+            .filter(|p| query.matches(p))
             .collect();
         if self.sort == Sort::Attention && !ctx.arriving {
             rows.sort_by_key(|pr| {

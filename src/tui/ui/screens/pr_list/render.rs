@@ -25,6 +25,9 @@ use ratatui::{
 
 const GUTTER: u16 = 2;
 
+/// What the search field understands, besides words, shown while it is empty.
+const SEARCH_HINT: &str = "author:  review:  ci:";
+
 /// What the AI column's diamonds mean, listed in the help while the column is
 /// there.
 const AI_LEGEND: &[(&str, &str)] = &[
@@ -234,7 +237,7 @@ fn render_footer(
         "enter: open  /: search  f: filter"
     };
     let line = if search.open {
-        widgets::search_prompt(&search.query, match_count, area.width)
+        widgets::search_prompt_with_hint(&search.query, match_count, area.width, SEARCH_HINT)
     } else {
         widgets::footer(area.width, &widgets::hints_on(hints), refreshing)
     };
