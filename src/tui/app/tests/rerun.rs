@@ -46,3 +46,15 @@ async fn b_does_nothing_without_a_failed_build_or_off_the_builds_tab() {
     press(&mut app, KeyCode::Char('b'));
     assert!(app.state.store.operations.is_empty());
 }
+
+#[tokio::test]
+async fn b_also_runs_a_cancelled_build_again() {
+    let mut app = app();
+    detail(&mut app, DetailTab::Builds);
+    builds(&mut app, &[BuildState::Successful, BuildState::Cancelled]);
+    press(&mut app, KeyCode::Char('b'));
+    assert_eq!(
+        app.state.store.operations.get(&PrId(42)),
+        Some(&Operation::RerunBuilds)
+    );
+}

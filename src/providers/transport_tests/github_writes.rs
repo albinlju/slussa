@@ -186,6 +186,7 @@ fn github_runs_the_failed_jobs_of_each_failed_run_again_and_nothing_else() {
         {"id": 11, "conclusion": "failure"},
         {"id": 12, "conclusion": "success"},
         {"id": 13, "conclusion": "timed_out"},
+        {"id": 15, "conclusion": "cancelled"},
         {"id": 14, "conclusion": null}
     ]}])
     .to_string();
@@ -198,9 +199,10 @@ fn github_runs_the_failed_jobs_of_each_failed_run_again_and_nothing_else() {
 
     let calls = installed.calls();
     let reruns: Vec<_> = calls.iter().filter(|call| call.contains("rerun")).collect();
-    assert_eq!(reruns.len(), 2, "{calls:?}");
+    assert_eq!(reruns.len(), 3, "{calls:?}");
     assert!(reruns[0].contains("runs/11/rerun-failed-jobs"), "{calls:?}");
     assert!(reruns[1].contains("runs/13/rerun-failed-jobs"), "{calls:?}");
+    assert!(reruns[2].contains("runs/15/rerun-failed-jobs"), "{calls:?}");
 }
 
 #[test]

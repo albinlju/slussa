@@ -123,11 +123,16 @@ impl<'a> DetailView<'a> {
         .then_some("conflicts")
     }
 
-    /// Whether a build of the PR has failed, so there is something to run again.
+    /// Whether a build of the PR has failed or was cancelled, so there is
+    /// something to run again.
     pub fn has_failed_build(&self) -> bool {
         self.data
             .and_then(|data| data.builds.loaded())
-            .is_some_and(|builds| builds.iter().any(|build| build.state == BuildState::Failed))
+            .is_some_and(|builds| {
+                builds
+                    .iter()
+                    .any(|build| matches!(build.state, BuildState::Failed | BuildState::Cancelled))
+            })
     }
 
     /// Whether the PR was closed without merging, so `x` reopens it.

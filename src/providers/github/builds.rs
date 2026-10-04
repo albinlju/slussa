@@ -134,7 +134,8 @@ fn state(value: &str) -> BuildState {
             BuildState::Failed
         }
         "pending" | "queued" | "in_progress" | "waiting" | "requested" => BuildState::InProgress,
-        "cancelled" | "stale" => BuildState::Cancelled,
+        "cancelled" => BuildState::Cancelled,
+        // A check GitHub gave up on after a long time: not a build to run again.
         _ => BuildState::Unknown,
     }
 }
@@ -148,5 +149,11 @@ mod tests {
         assert_eq!(state("pending"), BuildState::InProgress);
         assert_eq!(state("timed_out"), BuildState::Failed);
         assert_eq!(state("success"), BuildState::Successful);
+    }
+
+    #[test]
+    fn a_cancelled_run_is_cancelled_and_a_stale_check_is_not() {
+        assert_eq!(state("cancelled"), BuildState::Cancelled);
+        assert_eq!(state("stale"), BuildState::Unknown);
     }
 }
