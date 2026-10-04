@@ -227,7 +227,7 @@ against:
 - [ ] **Update / sync branch** — merge or rebase base into the PR when behind.
 - [ ] **Repo-allowed merge strategies** — pre-filter the merge picker from repo
   settings instead of letting the server reject.
-- [ ] **Re-run CI checks** — re-trigger a failed (or all) check from Builds.
+- [ ] **Re-run CI checks** — `b` in Builds runs the failed GitHub Actions jobs again. Missing: one build at a time, all builds, and checks that are not Actions (external statuses).
 - [ ] **Request / re-request reviewers** — including re-request after a push.
 - [ ] **Delete the source branch after merge** — moved here from *Scope
   decision*: it is part of the merge path, not administration.

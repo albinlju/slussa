@@ -102,6 +102,9 @@ impl App {
                 {
                     pr.status = status;
                 }
+                if operation == Operation::RerunBuilds {
+                    self.reload_builds(pr_id);
+                }
                 if operation == Operation::Review {
                     self.state.store.reviews.remove(&pr_id);
                 }

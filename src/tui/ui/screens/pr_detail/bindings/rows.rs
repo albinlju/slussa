@@ -328,6 +328,26 @@ pub(in crate::tui::ui::screens::pr_detail) static REMOVE_PENDING: Binding = Bind
     },
 };
 
+/// `b` on the Builds tab runs the failed builds again, when there are some.
+pub(in crate::tui::ui::screens::pr_detail) static RERUN_BUILDS: Binding = Binding {
+    key: 'b',
+    mods: Mods::Plain,
+    place: Place::Builds,
+    doc: Some(Doc {
+        keys: "b",
+        text: "run failed builds again (Builds)",
+    }),
+    needs: Needs::Feature(Feature::RerunBuilds),
+    label: Label::Fixed("b: run failed again"),
+    offer: |view| {
+        if view.has_failed_build() && view.pr.status.is_open() {
+            offered(view, PrAction::RerunBuilds)
+        } else {
+            Offer::Hidden
+        }
+    },
+};
+
 /// The order is the order the keys are tried in.
 pub(in crate::tui::ui::screens::pr_detail) static BINDINGS: &[&Binding] = &[
     &OPEN_IN_BROWSER,
@@ -348,4 +368,5 @@ pub(in crate::tui::ui::screens::pr_detail) static BINDINGS: &[&Binding] = &[
     &EDIT_COMMENT,
     &DELETE_COMMENT,
     &REMOVE_PENDING,
+    &RERUN_BUILDS,
 ];

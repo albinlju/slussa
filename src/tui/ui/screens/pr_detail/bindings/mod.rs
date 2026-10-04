@@ -78,6 +78,7 @@ enum Place {
     ReadsPr,
     ReadsPrOrDiff,
     Overview,
+    Builds,
 }
 
 impl Place {
@@ -90,6 +91,7 @@ impl Place {
                 DetailTab::Overview | DetailTab::Description | DetailTab::Diff
             ),
             Self::Overview => matches!(tab, DetailTab::Overview),
+            Self::Builds => matches!(tab, DetailTab::Builds),
         }
     }
 }

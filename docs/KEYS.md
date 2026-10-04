@@ -36,6 +36,7 @@ connected provider does not support, so it can show fewer keys than this page.
 | `v` | start or finish a batched review; `V` discards it |
 | `m` | merge; the dialog lists what blocks it |
 | `x` | close or decline the PR, or reopen a declined one |
+| `b` | in the Builds tab, run the failed builds again; offered when one has failed (GitHub Actions) |
 | `c` | comment |
 | `r` | reply |
 | `e` / `d` | edit / delete your own comment (`d` also removes a queued review comment) |

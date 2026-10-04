@@ -254,6 +254,7 @@ pub enum Operation {
     Moderation,
     Review,
     Merge,
+    RerunBuilds,
     Decline,
     Reopen,
 }
@@ -263,6 +264,7 @@ impl Operation {
     pub const fn done_label(self) -> &'static str {
         match self {
             Self::Merge => "merged",
+            Self::RerunBuilds => "failed builds run again",
             Self::Decline => "closed / declined",
             Self::Reopen => "reopened",
             Self::Review => "review submitted",
@@ -277,7 +279,7 @@ impl Operation {
             Self::Merge => Some(PrStatus::Merged),
             Self::Decline => Some(PrStatus::Declined),
             Self::Reopen => Some(PrStatus::Open),
-            Self::Comment | Self::Moderation | Self::Review => None,
+            Self::Comment | Self::Moderation | Self::Review | Self::RerunBuilds => None,
         }
     }
 
@@ -285,7 +287,9 @@ impl Operation {
     pub const fn sends_editor_text(self) -> bool {
         match self {
             Self::Comment | Self::Review => true,
-            Self::Moderation | Self::Merge | Self::Decline | Self::Reopen => false,
+            Self::Moderation | Self::Merge | Self::RerunBuilds | Self::Decline | Self::Reopen => {
+                false
+            }
         }
     }
 }

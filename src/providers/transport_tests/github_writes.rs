@@ -179,3 +179,37 @@ fn github_resolves_a_thread_by_its_node_id_and_refuses_another_providers_handle(
     assert!(matches!(refused, Err(FetchError::InvalidInput(_))));
     assert_eq!(installed.calls().len(), 1, "nothing was sent for it");
 }
+
+#[test]
+fn github_runs_the_failed_jobs_of_each_failed_run_again_and_nothing_else() {
+    let runs = json!([{"workflow_runs": [
+        {"id": 11, "conclusion": "failure"},
+        {"id": 12, "conclusion": "success"},
+        {"id": 13, "conclusion": "timed_out"},
+        {"id": 14, "conclusion": null}
+    ]}])
+    .to_string();
+    let installed = FakeGh::new()
+        .on("--jq .head.sha", "abc123\n")
+        .on("actions/runs?head_sha=abc123", &runs)
+        .on("rerun-failed-jobs", "{}")
+        .install();
+    Provider::GitHub.rerun_failed_builds(PrId(7)).unwrap();
+
+    let calls = installed.calls();
+    let reruns: Vec<_> = calls.iter().filter(|call| call.contains("rerun")).collect();
+    assert_eq!(reruns.len(), 2, "{calls:?}");
+    assert!(reruns[0].contains("runs/11/rerun-failed-jobs"), "{calls:?}");
+    assert!(reruns[1].contains("runs/13/rerun-failed-jobs"), "{calls:?}");
+}
+
+#[test]
+fn github_says_so_when_no_actions_run_failed() {
+    let runs = json!([{"workflow_runs": [{"id": 12, "conclusion": "success"}]}]).to_string();
+    let _gh = FakeGh::new()
+        .on("--jq .head.sha", "abc123\n")
+        .on("actions/runs?head_sha=abc123", &runs)
+        .install();
+    let error = Provider::GitHub.rerun_failed_builds(PrId(7)).unwrap_err();
+    assert!(error.user_message().contains("No failed"), "{error:?}");
+}
