@@ -126,6 +126,16 @@ impl Provider {
         }
     }
 
+    /// Run again the builds of the PR that failed.
+    pub fn rerun_failed_builds(&self, pr_id: PrId) -> Result<(), FetchError> {
+        match self {
+            Self::GitHub => github::rerun_failed(pr_id),
+            Self::BitbucketDc(_) => Err(FetchError::Unsupported(
+                "Bitbucket builds cannot be run again from here.".into(),
+            )),
+        }
+    }
+
     /// Decline (Bitbucket) / close (GitHub) the PR without merging.
     pub fn decline(&self, pr_id: PrId) -> Result<(), FetchError> {
         match self {
@@ -160,7 +170,10 @@ impl Provider {
         .collect();
         match self {
             Self::GitHub => Capabilities {
-                features: features.into_iter().chain([Feature::PrInfo]).collect(),
+                features: features
+                    .into_iter()
+                    .chain([Feature::PrInfo, Feature::RerunBuilds])
+                    .collect(),
                 review: Some(ReviewCaps {
                     verdicts: vec![
                         ReviewVerdict::Approve,

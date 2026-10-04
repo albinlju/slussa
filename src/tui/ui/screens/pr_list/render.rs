@@ -1,5 +1,5 @@
 //! Drawing the list: the table, its footer and what is in front of it.
-use super::{ListContext, ListOverlay, PrListScreen, StatusFilter, columns::ListColumn};
+use super::{ListContext, ListOverlay, PrListScreen, Sort, StatusFilter, columns::ListColumn};
 use crate::{
     domain::{
         attention::attention,
@@ -25,6 +25,9 @@ use ratatui::{
 
 const GUTTER: u16 = 2;
 
+/// What the search field understands, besides words, shown while it is empty.
+const SEARCH_HINT: &str = "author:  review:  ci:";
+
 /// What the AI column's diamonds mean, listed in the help while the column is
 /// there.
 const AI_LEGEND: &[(&str, &str)] = &[
@@ -41,7 +44,7 @@ pub(super) const HELP_KEYS: &[(&str, &str)] = &[
     ("/", "search title / author"),
     ("esc", "clear search"),
     ("f", "filter status"),
-    ("s", "sort: needs you first / newest first"),
+    ("s", "sort: pick the order"),
     ("L", "load more PRs"),
     ("^d/^u", "half-page"),
     ("F", "refresh"),
@@ -163,7 +166,14 @@ pub(super) fn render(
             help.render(frame, area, &entries.as_slice());
         }
         Some(ListOverlay::FilterPicker { highlighted }) => {
-            render_filter_picker(frame, *highlighted, area);
+            let rows = StatusFilter::CYCLE.map(StatusFilter::label);
+            let at = StatusFilter::CYCLE.iter().position(|f| f == highlighted);
+            render_picker(frame, "Filter", &rows, at.unwrap_or(0), area);
+        }
+        Some(ListOverlay::SortPicker { highlighted }) => {
+            let rows = Sort::CYCLE.map(Sort::label);
+            let at = Sort::CYCLE.iter().position(|s| s == highlighted);
+            render_picker(frame, "Sort", &rows, at.unwrap_or(0), area);
         }
         None => {}
     }
@@ -229,33 +239,40 @@ fn render_footer(
     area: Rect,
 ) {
     let hints = if load_older {
-        "enter: open  /: search  f: filter  L: more"
+        "enter: open  /: search  f: filter  s: sort  L: more"
     } else {
-        "enter: open  /: search  f: filter"
+        "enter: open  /: search  f: filter  s: sort"
     };
     let line = if search.open {
-        widgets::search_prompt(&search.query, match_count, area.width)
+        widgets::search_prompt_with_hint(&search.query, match_count, area.width, SEARCH_HINT)
     } else {
         widgets::footer(area.width, &widgets::hints_on(hints), refreshing)
     };
     frame.render_widget(Paragraph::new(line), area);
 }
 
-fn render_filter_picker(frame: &mut Frame<'_>, highlighted: StatusFilter, area: Rect) {
+/// A picker: `rows` in a dialog, with the one at `highlighted` marked.
+fn render_picker(
+    frame: &mut Frame<'_>,
+    title: &str,
+    rows: &[&str],
+    highlighted: usize,
+    area: Rect,
+) {
     let theme = theme::current();
     let list_area = widgets::dialog::frame(
         frame,
         area,
-        "Filter",
-        (44, saturating_u16(StatusFilter::CYCLE.len())),
+        title,
+        (44, saturating_u16(rows.len())),
         &[("j/k", "move"), ("Enter", "select"), ("Esc", "cancel")],
     );
-    let items: Vec<ListItem<'_>> = StatusFilter::CYCLE
+    let items: Vec<ListItem<'_>> = rows
         .iter()
-        .map(|f| ListItem::new(Line::raw(f.label())))
+        .map(|row| ListItem::new(Line::raw(*row)))
         .collect();
     let mut list_state = ListState::default();
-    list_state.select(StatusFilter::CYCLE.iter().position(|f| *f == highlighted));
+    list_state.select(Some(highlighted));
     let list = List::new(items)
         .highlight_style(
             Style::default()

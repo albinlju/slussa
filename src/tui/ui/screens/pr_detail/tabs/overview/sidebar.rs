@@ -51,6 +51,13 @@ impl Widget for Sidebar<'_> {
             lines.push(Line::default());
         }
 
+        let issues = issues(pr_data);
+        if !issues.is_empty() {
+            section_heading(&mut lines, "Closes");
+            lines.extend(issues);
+            lines.push(Line::default());
+        }
+
         section_heading(&mut lines, "Details");
         lines.extend(details(pr, now, inner.width as usize));
 
@@ -130,6 +137,27 @@ fn labels(pr: &PullRequest, pr_data: Option<&PrData>) -> Vec<Line<'static>> {
     labels
         .iter()
         .map(|label| Line::from(Span::styled(label.clone(), accent)))
+        .collect()
+}
+
+/// The issues the PR closes, once its info is read.
+fn issues(pr_data: Option<&PrData>) -> Vec<Line<'static>> {
+    let theme = theme::current();
+    let Some(LoadState::Loaded(info)) = pr_data.map(|data| &data.info) else {
+        return Vec::new();
+    };
+    info.issues
+        .iter()
+        .map(|issue| {
+            Line::from(vec![
+                Span::styled(
+                    format!("#{}", issue.number),
+                    Style::default().fg(theme.info),
+                ),
+                Span::raw(" "),
+                Span::styled(issue.title.clone(), Style::default().fg(theme.fg)),
+            ])
+        })
         .collect()
 }
 

@@ -281,6 +281,7 @@ impl PrDetailScreen {
                 self.ask(ConfirmDialog::new(ConfirmKind::DeleteComment(key)).with_preview(preview));
                 return None;
             }
+            PrAction::RerunBuilds => Command::RerunFailedBuilds,
             PrAction::ResolveThread => {
                 let thread = self.view(ctx).focused_thread()?;
                 Command::ResolveThread {

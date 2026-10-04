@@ -326,6 +326,7 @@ fn wide_description_can_pan_to_hidden_content_and_resets_when_resized() {
         data.info = LoadState::Loaded(PrInfo {
             description: Some(format!("```\n{}END_OF_CODE\n```", "x".repeat(100))),
             labels: vec![],
+            issues: vec![],
         });
     }
     let mut terminal = Terminal::new(TestBackend::new(40, 16)).unwrap();
@@ -394,4 +395,35 @@ fn framed_panel_titles_start_under_the_tab_labels() {
             assert_eq!(tabs, title, "{width}x{height}");
         }
     }
+}
+
+#[test]
+fn the_sidebar_names_the_issues_a_pr_closes_and_only_then() {
+    let mut state = fixture();
+    state.screen = Screen::Detail {
+        pr_id: PrId(42),
+        tab: DetailTab::Overview,
+    };
+    let draw = |state: &mut AppState| {
+        let mut terminal = Terminal::new(TestBackend::new(150, 50)).unwrap();
+        terminal.draw(|frame| render(frame, state)).unwrap();
+        rendered_text(&terminal)
+    };
+    assert!(!draw(&mut state).contains("Closes"));
+
+    if let Some(data) = state.store.cache.details.get_mut(&PrId(42)) {
+        data.info = LoadState::Loaded(PrInfo {
+            description: None,
+            labels: vec![],
+            issues: vec![LinkedIssue {
+                number: 12,
+                title: "Crash on start".into(),
+            }],
+        });
+    }
+    let text = draw(&mut state);
+    assert!(
+        text.contains("Closes") && text.contains("#12 Crash on start"),
+        "{text}"
+    );
 }

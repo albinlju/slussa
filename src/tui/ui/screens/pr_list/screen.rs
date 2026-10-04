@@ -40,6 +40,10 @@ pub enum ListOverlay {
     FilterPicker {
         highlighted: StatusFilter,
     },
+    /// The sort picker, on the sort Enter would apply.
+    SortPicker {
+        highlighted: Sort,
+    },
 }
 
 #[derive(Debug, Default)]
@@ -101,22 +105,8 @@ impl Component for PrListScreen {
 
     fn handle_key(&self, key: KeyEvent, ctx: &ListContext<'_>) -> Option<Action> {
         match &self.overlay {
-            Some(ListOverlay::FilterPicker { .. }) => {
-                return match key.code {
-                    KeyCode::Char('q') => Some(Action::Effect(Effect::Quit)),
-                    KeyCode::Esc | KeyCode::Char('f') => {
-                        Some(Action::List(ListAction::CloseFilterPicker))
-                    }
-                    KeyCode::Down | KeyCode::Char('j') => {
-                        Some(Action::List(ListAction::FilterPickerNext))
-                    }
-                    KeyCode::Up | KeyCode::Char('k') => {
-                        Some(Action::List(ListAction::FilterPickerPrev))
-                    }
-                    KeyCode::Enter => Some(Action::List(ListAction::ApplyFilter)),
-                    _ => None,
-                };
-            }
+            Some(ListOverlay::FilterPicker { .. }) => return picker_key(key, 'f'),
+            Some(ListOverlay::SortPicker { .. }) => return picker_key(key, 's'),
             Some(ListOverlay::Help(help)) => {
                 return match key.code {
                     KeyCode::Esc | KeyCode::Char('?') => Some(Action::List(ListAction::ToggleHelp)),
@@ -146,7 +136,7 @@ impl Component for PrListScreen {
             KeyCode::Char('?') => Some(Action::List(ListAction::ToggleHelp)),
             KeyCode::Char('F') => Some(Action::Effect(Effect::Refresh)),
             KeyCode::Char('f') => Some(Action::List(ListAction::OpenFilterPicker)),
-            KeyCode::Char('s') => Some(Action::List(ListAction::ToggleSort)),
+            KeyCode::Char('s') => Some(Action::List(ListAction::OpenSortPicker)),
             KeyCode::Char('L') if Self::can_load_older(ctx) => {
                 Some(Action::List(ListAction::LoadOlder))
             }
@@ -171,14 +161,6 @@ impl Component for PrListScreen {
                     Some(ListOverlay::Help(HelpDialog::default()))
                 };
             }
-            ListAction::ToggleSort => {
-                // Follow the highlighted PR to its new place.
-                let current = self.filtered_prs(ctx).get(self.selected).map(|pr| pr.id);
-                self.sort = self.sort.toggled();
-                let index =
-                    current.and_then(|id| self.filtered_prs(ctx).iter().position(|pr| pr.id == id));
-                self.selected = index.unwrap_or(0);
-            }
             ListAction::MoveSelection(delta) => {
                 self.selected = step_index(self.selected, delta, self.filtered_prs(ctx).len());
             }
@@ -189,15 +171,23 @@ impl Component for PrListScreen {
                     highlighted: self.filter,
                 });
             }
-            ListAction::CloseFilterPicker => {
-                if matches!(self.overlay, Some(ListOverlay::FilterPicker { .. })) {
+            ListAction::OpenSortPicker => {
+                self.overlay = Some(ListOverlay::SortPicker {
+                    highlighted: self.sort,
+                });
+            }
+            ListAction::ClosePicker => {
+                if matches!(
+                    self.overlay,
+                    Some(ListOverlay::FilterPicker { .. } | ListOverlay::SortPicker { .. })
+                ) {
                     self.overlay = None;
                 }
             }
-            ListAction::FilterPickerNext => self.step_filter_picker(StatusFilter::next),
-            ListAction::FilterPickerPrev => self.step_filter_picker(StatusFilter::previous),
-            ListAction::ApplyFilter => {
-                if let Some(ListOverlay::FilterPicker { highlighted }) = self.overlay {
+            ListAction::PickerNext => self.step_picker(StatusFilter::next, Sort::next),
+            ListAction::PickerPrev => self.step_picker(StatusFilter::previous, Sort::previous),
+            ListAction::ApplyPicker => match self.overlay {
+                Some(ListOverlay::FilterPicker { highlighted }) => {
                     self.overlay = None;
                     if highlighted != self.filter {
                         self.filter = highlighted;
@@ -206,7 +196,17 @@ impl Component for PrListScreen {
                         return Some(Effect::LoadView);
                     }
                 }
-            }
+                Some(ListOverlay::SortPicker { highlighted }) => {
+                    self.overlay = None;
+                    // Follow the highlighted PR to its new place.
+                    let current = self.filtered_prs(ctx).get(self.selected).map(|pr| pr.id);
+                    self.sort = highlighted;
+                    let index = current
+                        .and_then(|id| self.filtered_prs(ctx).iter().position(|pr| pr.id == id));
+                    self.selected = index.unwrap_or(0);
+                }
+                Some(ListOverlay::Help(_)) | None => {}
+            },
         }
         None
     }
@@ -226,22 +226,37 @@ impl PrListScreen {
         let LoadState::Loaded(prs) = ctx.prs else {
             return Vec::new();
         };
+        let query = self.search.pr_query();
         let mut rows: Vec<&PullRequest> = prs
             .iter()
             .filter(|p| self.filter.matches(&p.status))
-            .filter(|p| self.search.matches_pr(p))
+            .filter(|p| query.matches(p))
             .collect();
-        if self.sort == Sort::Attention && !ctx.arriving {
-            rows.sort_by_key(|pr| {
-                attention(pr, ctx.viewer).map_or(usize::MAX, |reason| reason as usize)
-            });
+        // While the open pages are still coming in the rows stay in the order they
+        // arrive, so that nothing moves under the reader.
+        if !ctx.arriving {
+            match self.sort {
+                Sort::Attention => rows.sort_by_key(|pr| {
+                    attention(pr, ctx.viewer).map_or(usize::MAX, |reason| reason as usize)
+                }),
+                Sort::Recent => {}
+                Sort::Updated => rows.sort_by_key(|pr| std::cmp::Reverse(pr.updated)),
+                Sort::Oldest => rows.sort_by_key(|pr| pr.created),
+            }
         }
         rows
     }
 
-    fn step_filter_picker(&mut self, step: impl FnOnce(StatusFilter) -> StatusFilter) {
-        if let Some(ListOverlay::FilterPicker { highlighted }) = &mut self.overlay {
-            *highlighted = step(*highlighted);
+    /// Move the open picker's highlight one row, by the step of what it picks.
+    fn step_picker(
+        &mut self,
+        filter: impl FnOnce(StatusFilter) -> StatusFilter,
+        sort: impl FnOnce(Sort) -> Sort,
+    ) {
+        match &mut self.overlay {
+            Some(ListOverlay::FilterPicker { highlighted }) => *highlighted = filter(*highlighted),
+            Some(ListOverlay::SortPicker { highlighted }) => *highlighted = sort(*highlighted),
+            Some(ListOverlay::Help(_)) | None => {}
         }
     }
 
@@ -252,5 +267,18 @@ impl PrListScreen {
             self.selected = 0;
             self.list_state = ListState::default();
         }
+    }
+}
+
+/// The keys of a picker: move, choose, or leave with Esc or the key that opened it.
+const fn picker_key(key: KeyEvent, opener: char) -> Option<Action> {
+    match key.code {
+        KeyCode::Char('q') => Some(Action::Effect(Effect::Quit)),
+        KeyCode::Esc => Some(Action::List(ListAction::ClosePicker)),
+        KeyCode::Char(c) if c == opener => Some(Action::List(ListAction::ClosePicker)),
+        KeyCode::Down | KeyCode::Char('j') => Some(Action::List(ListAction::PickerNext)),
+        KeyCode::Up | KeyCode::Char('k') => Some(Action::List(ListAction::PickerPrev)),
+        KeyCode::Enter => Some(Action::List(ListAction::ApplyPicker)),
+        _ => None,
     }
 }

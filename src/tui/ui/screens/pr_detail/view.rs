@@ -1,6 +1,7 @@
 use super::{PrDetailScreen, Surface};
 use crate::{
     domain::{
+        ci::BuildState,
         comment::{Comment, CommentId, CommentKey, CommentKind, ThreadHandle},
         commit::CommitOid,
         diff::FileDiff,
@@ -126,6 +127,18 @@ impl<'a> DetailView<'a> {
                 Some(LoadState::Loaded(Mergeability::Conflicts(_)))
             ))
         .then_some("conflicts")
+    }
+
+    /// Whether a build of the PR has failed or was cancelled, so there is
+    /// something to run again.
+    pub fn has_failed_build(&self) -> bool {
+        self.data
+            .and_then(|data| data.builds.loaded())
+            .is_some_and(|builds| {
+                builds
+                    .iter()
+                    .any(|build| matches!(build.state, BuildState::Failed | BuildState::Cancelled))
+            })
     }
 
     /// Whether the PR was closed without merging, so `x` reopens it.
@@ -343,6 +356,7 @@ impl DetailView<'_> {
                 PrAction::EditComment => caps.supports(F::EditComments),
                 PrAction::DeleteComment => caps.supports(F::DeleteComments),
                 PrAction::ResolveThread => caps.supports(F::ResolveThreads),
+                PrAction::RerunBuilds => caps.supports(F::RerunBuilds),
             },
             A::Review(ReviewAction::Select) => caps.reviews(),
             A::Merge(MergeAction::Select) => !caps.merge_strategies.is_empty(),

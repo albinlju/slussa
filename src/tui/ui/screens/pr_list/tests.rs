@@ -239,23 +239,30 @@ fn toggling_the_sort_follows_the_highlighted_pr() {
     };
     assert_eq!(ids(&list, &prs, "me")[list.selected], 4);
 
-    list.update(ListAction::ToggleSort, &ctx);
+    list.update(ListAction::OpenSortPicker, &ctx);
+    list.update(ListAction::PickerNext, &ctx);
+    list.update(ListAction::ApplyPicker, &ctx);
     assert_eq!(list.sort, Sort::Recent);
     assert_eq!(list.selected, 1, "PR 4 is second when newest first");
 
-    list.update(ListAction::ToggleSort, &ctx);
+    list.update(ListAction::OpenSortPicker, &ctx);
+    list.update(ListAction::PickerPrev, &ctx);
+    list.update(ListAction::ApplyPicker, &ctx);
     assert_eq!(list.sort, Sort::Attention);
     assert_eq!(list.selected, 2);
 }
 
 #[test]
-fn s_toggles_the_sort_and_help_lists_it() {
+fn s_opens_the_sort_picker_and_help_lists_it() {
     let state = state("me");
     let action = key_to_action(
         &state,
         KeyEvent::new(KeyCode::Char('s'), KeyModifiers::NONE),
     );
-    assert!(matches!(action, Some(Action::List(ListAction::ToggleSort))));
+    assert!(matches!(
+        action,
+        Some(Action::List(ListAction::OpenSortPicker))
+    ));
     assert!(render::HELP_KEYS.iter().any(|(key, _)| *key == "s"));
 }
 
@@ -466,32 +473,32 @@ fn choosing_another_view_asks_the_app_to_read_it_and_choosing_the_same_one_does_
         }),
         ..PrListScreen::default()
     };
-    let action = list.update(ListAction::ApplyFilter, &ctx);
+    let action = list.update(ListAction::ApplyPicker, &ctx);
     assert!(matches!(action, Some(Effect::LoadView)));
     assert_eq!(list.filter, StatusFilter::Merged);
     assert!(list.overlay.is_none(), "applying closes the picker");
 
     // The picker opens on the filter in use; applying that reads nothing.
     list.update(ListAction::OpenFilterPicker, &ctx);
-    let again = list.update(ListAction::ApplyFilter, &ctx);
+    let again = list.update(ListAction::ApplyPicker, &ctx);
     assert!(again.is_none(), "an unchanged filter needs nothing read");
 
     // With no picker open there is nothing to apply.
-    assert!(list.update(ListAction::ApplyFilter, &ctx).is_none());
+    assert!(list.update(ListAction::ApplyPicker, &ctx).is_none());
     assert_eq!(list.filter, StatusFilter::Merged);
 
     // The picker stops at its ends instead of running past them.
     list.update(ListAction::OpenFilterPicker, &ctx);
     for _ in 0..9 {
-        list.update(ListAction::FilterPickerNext, &ctx);
+        list.update(ListAction::PickerNext, &ctx);
     }
-    list.update(ListAction::ApplyFilter, &ctx);
+    list.update(ListAction::ApplyPicker, &ctx);
     assert_eq!(list.filter, StatusFilter::All);
     list.update(ListAction::OpenFilterPicker, &ctx);
     for _ in 0..9 {
-        list.update(ListAction::FilterPickerPrev, &ctx);
+        list.update(ListAction::PickerPrev, &ctx);
     }
-    list.update(ListAction::ApplyFilter, &ctx);
+    list.update(ListAction::ApplyPicker, &ctx);
     assert_eq!(list.filter, StatusFilter::Open);
 }
 

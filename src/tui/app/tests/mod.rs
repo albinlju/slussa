@@ -4,6 +4,7 @@ mod loading;
 mod navigation;
 mod opening;
 mod recovery;
+mod rerun;
 mod review;
 mod seen;
 mod submission;
