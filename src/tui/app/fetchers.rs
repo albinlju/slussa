@@ -85,6 +85,19 @@ impl App {
         );
     }
 
+    /// Read one PR by its number, for the reader to open: it may not be in the list.
+    pub(super) fn spawn_load_pr(&mut self, pr_id: PrId) {
+        let Some(ticket) = self.state.store.begin_fetch(FetchKey::One(pr_id)) else {
+            return;
+        };
+        let provider = self.provider.clone();
+        self.spawn_read(
+            ticket,
+            move || provider.fetch_pr(pr_id),
+            move |result| Read::Pr(pr_id, result),
+        );
+    }
+
     pub(super) fn spawn_load_commits(&mut self, pr_id: PrId) {
         let Some(ticket) = self
             .state
@@ -321,6 +334,7 @@ impl App {
     pub(super) fn load_resource(&mut self, key: FetchKey) {
         match key {
             FetchKey::Prs(group) => self.spawn_load_prs(group, None),
+            FetchKey::One(id) => self.spawn_load_pr(id),
             FetchKey::Pr(PrResource::Commits, id) => self.spawn_load_commits(id),
             FetchKey::Pr(PrResource::Diff, id) => self.spawn_load_diff(id),
             FetchKey::Pr(PrResource::Builds, id) => self.spawn_load_builds(id),

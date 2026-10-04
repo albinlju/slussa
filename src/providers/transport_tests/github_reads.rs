@@ -488,6 +488,31 @@ fn github_list_does_not_call_a_review_current_when_its_commit_is_gone() {
 }
 
 #[test]
+fn github_reads_one_pr_by_its_number_as_the_list_holds_it() {
+    let answer =
+        json!({"data": {"repository": {"pullRequest": gh_pr(44, "2026-10-01T10:00:00Z")}}})
+            .to_string();
+    let gh = FakeGh::new().on("statusCheckRollup", &answer).install();
+    let pr = Provider::GitHub.fetch_pr(PrId(44)).unwrap();
+
+    assert_eq!((pr.id, pr.title.as_str()), (PrId(44), "PR number 44"));
+    assert_eq!(gh.calls().len(), 1);
+    assert!(gh.calls()[0].contains("pr=44"), "{:?}", gh.calls());
+}
+
+#[test]
+fn github_reports_a_pr_that_does_not_exist_as_an_error() {
+    let _gh = FakeGh::new()
+        .fail(
+            "statusCheckRollup",
+            1,
+            "GraphQL: Could not resolve to a PullRequest",
+        )
+        .install();
+    assert!(Provider::GitHub.fetch_pr(PrId(9999)).is_err());
+}
+
+#[test]
 fn github_info_reads_the_issues_the_pr_closes() {
     let answer = json!({"data": {"repository": {"pullRequest": {
         "id": "PR_1",
@@ -538,4 +563,12 @@ fn github_info_reads_on_when_the_closing_issues_are_truncated() {
     let numbers: Vec<_> = info.issues.iter().map(|issue| issue.number).collect();
     assert_eq!(numbers, [1, 2]);
     assert_eq!(gh.calls().len(), 2);
+}
+
+#[test]
+fn github_a_pr_answered_with_null_is_said_not_to_exist() {
+    let answer = json!({"data": {"repository": {"pullRequest": null}}}).to_string();
+    let _gh = FakeGh::new().on("statusCheckRollup", &answer).install();
+    let error = Provider::GitHub.fetch_pr(PrId(9999)).unwrap_err();
+    assert!(error.user_message().contains("no PR #9999"), "{error:?}");
 }

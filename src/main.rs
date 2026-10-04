@@ -22,6 +22,6 @@ fn main() -> ExitCode {
 
     match cli::dispatch(std::env::args().collect()) {
         cli::Dispatch::Done(code) => code,
-        cli::Dispatch::RunTui(session) => tui::run(session),
+        cli::Dispatch::RunTui { session, open } => tui::run(session, open),
     }
 }

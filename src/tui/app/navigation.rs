@@ -1,15 +1,72 @@
 use crate::{
-    domain::pr::PrId,
+    domain::pr::{PrGroup, PrId, PullRequest},
+    providers::FetchError,
     tui::{
         app::{
             App,
-            store::{FetchKey, PrResource},
+            store::{FetchKey, LoadState, Notice, PrResource},
         },
         ui::screens::pr_detail::tabs::DetailTab,
     },
 };
 
 impl App {
+    /// Start on the PR the reader named, if one: the PR screen at once, with its
+    /// parts and the PR itself read together, rather than the list first.
+    pub(super) fn start_opening(&mut self) {
+        if let Some(pr_id) = self.start_on.take() {
+            self.open_pr(pr_id);
+            self.spawn_load_pr(pr_id);
+        }
+    }
+
+    /// The PR the reader named has been read, or could not be.
+    pub(super) fn requested_pr_read(
+        &mut self,
+        pr_id: PrId,
+        result: Result<PullRequest, FetchError>,
+    ) {
+        match result {
+            Ok(pr) => {
+                self.state.store.requested = Some(pr);
+                self.place_requested_pr();
+            }
+            Err(error) => {
+                self.state.store.notice = Some(Notice::error(format!(
+                    "Couldn't open PR #{pr_id}: {}",
+                    error.user_message()
+                )));
+                // There is no PR to show, so back to the list.
+                if matches!(self.state.screen, Screen::Detail { pr_id: shown, .. } if shown == pr_id)
+                {
+                    self.state.screen = Screen::List;
+                }
+            }
+        }
+    }
+
+    /// Put the PR the reader named in the list, once the list is read: a PR on
+    /// screen has to be in it. Until then the screen says it is loading. A reader
+    /// who has gone back to the list meanwhile is not taken to the PR.
+    pub(super) fn place_requested_pr(&mut self) {
+        let store = &mut self.state.store;
+        let LoadState::Loaded(prs) = &mut store.cache.prs else {
+            return;
+        };
+        let Some(pr) = store.requested.take() else {
+            return;
+        };
+        // The one just read is at least as new as one the list holds, and is the
+        // one the screen may already be showing.
+        if let Some(known) = prs.iter_mut().find(|known| known.id == pr.id) {
+            *known = pr;
+        } else {
+            prs.push(pr);
+            prs.sort_by_key(|pr| PrGroup::of(&pr.status));
+        }
+        self.mark_viewed_seen();
+    }
+
     pub(super) fn open_pr(&mut self, pr_id: PrId) {
         self.state.ui.open_pr(pr_id);
         self.state.screen = Screen::Detail {

@@ -1,14 +1,18 @@
 use std::io::IsTerminal;
 use std::process::ExitCode;
 
-use crate::providers::github;
 use crate::session::{self, Session, preflight::PreflightError};
+use crate::{domain::pr::PrId, providers::github};
 
 mod auth;
 
 pub enum Dispatch {
     Done(ExitCode),
-    RunTui(Session),
+    /// Start the TUI, on this PR if the reader named one.
+    RunTui {
+        session: Session,
+        open: Option<PrId>,
+    },
 }
 
 pub fn dispatch(mut args: Vec<String>) -> Dispatch {
@@ -25,6 +29,7 @@ pub fn dispatch(mut args: Vec<String>) -> Dispatch {
         tracing::info!("changed working directory to {dir}");
     }
 
+    let mut open = None;
     match args.get(1).map(String::as_str) {
         Some("auth") => return Dispatch::Done(auth::run(args.get(2..).unwrap_or_default())),
         Some("--help" | "-h") => {
@@ -36,8 +41,15 @@ pub fn dispatch(mut args: Vec<String>) -> Dispatch {
             return Dispatch::Done(ExitCode::SUCCESS);
         }
         Some(other) => {
-            eprintln!("slussa: unknown command `{other}`. Try `slussa --help`.");
-            return Dispatch::Done(ExitCode::from(2));
+            let Some(pr) = PrId::parse(other) else {
+                eprintln!("slussa: unknown command `{other}`. Try `slussa --help`.");
+                return Dispatch::Done(ExitCode::from(2));
+            };
+            if let Some(extra) = args.get(2) {
+                eprintln!("slussa: unexpected argument `{extra}` after the PR number.");
+                return Dispatch::Done(ExitCode::from(2));
+            }
+            open = Some(pr);
         }
         None => {}
     }
@@ -56,7 +68,7 @@ pub fn dispatch(mut args: Vec<String>) -> Dispatch {
     match connect() {
         Ok(session) => {
             tracing::info!("preflight passed, starting tui");
-            Dispatch::RunTui(session)
+            Dispatch::RunTui { session, open }
         }
         Err(err) => {
             tracing::error!("preflight failed: {err}");
@@ -71,6 +83,7 @@ fn print_help() {
         "slussa — terminal UI for GitHub and Bitbucket Data Center pull requests\n\n\
          Usage:\n  \
          slussa                       Open the PR browser for the current repo.\n  \
+         slussa <number>              Open the PR browser on that PR (or #<number>).\n  \
          slussa -C <dir> [...]        Run as if started in <dir> (matches git/cargo -C).\n  \
          slussa auth login            Store a Bitbucket Data Center PAT for the current repo's host.\n  \
          slussa --version             Show the version.\n  \

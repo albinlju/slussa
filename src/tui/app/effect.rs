@@ -7,7 +7,7 @@ use crate::{
         ci::Build,
         commit::{Commit, CommitOid},
         diff::Diff,
-        pr::{Mergeability, PrBatch, PrGroup, PrId, PrInfo},
+        pr::{Mergeability, PrBatch, PrGroup, PrId, PrInfo, PullRequest},
     },
     providers::{FetchError, ReviewError},
     tui::app::{
@@ -73,6 +73,8 @@ pub enum Read {
         after: Option<String>,
         result: Result<PrBatch, FetchError>,
     },
+    /// One PR the reader asked for by its number, which the list may not hold.
+    Pr(PrId, Result<PullRequest, FetchError>),
     Commits(PrId, Result<Vec<Commit>, FetchError>),
     Diff(PrId, Result<Diff, FetchError>),
     Builds(PrId, Result<Vec<Build>, FetchError>),
@@ -87,6 +89,7 @@ impl Read {
     pub fn key(&self) -> FetchKey {
         match self {
             Self::Prs { group, .. } => FetchKey::Prs(*group),
+            Self::Pr(id, _) => FetchKey::One(*id),
             Self::Commits(id, _) => FetchKey::Pr(PrResource::Commits, *id),
             Self::Diff(id, _) => FetchKey::Pr(PrResource::Diff, *id),
             Self::Builds(id, _) => FetchKey::Pr(PrResource::Builds, *id),
@@ -101,6 +104,7 @@ impl Read {
     pub fn failure(&self) -> Option<&FetchError> {
         match self {
             Self::Prs { result, .. } => result.as_ref().err(),
+            Self::Pr(_, result) => result.as_ref().err(),
             Self::Commits(_, result) => result.as_ref().err(),
             Self::Diff(_, result) | Self::CommitDiff(_, _, result) => result.as_ref().err(),
             Self::Builds(_, result) => result.as_ref().err(),

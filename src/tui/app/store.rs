@@ -51,6 +51,9 @@ pub struct Store {
     pub reviews: HashMap<PrId, crate::domain::review::PendingReview>,
     /// When each PR was last looked at, to mark the ones changed since.
     pub seen: Seen,
+    /// The PR the reader named on the command line, read and waiting for the
+    /// list to be read before it is opened.
+    pub requested: Option<PullRequest>,
     pub cache: Cache,
     /// What has been read of each group of PRs.
     pub groups: HashMap<PrGroup, GroupState>,
@@ -104,6 +107,7 @@ impl Store {
             reload_after_fetch: HashSet::new(),
             reviews: HashMap::new(),
             seen: Seen::new(),
+            requested: None,
             cache: Cache::default(),
             groups: HashMap::new(),
             open_chain: OpenChain::default(),
@@ -361,6 +365,8 @@ impl PrResource {
 pub enum FetchKey {
     /// One group of PRs, read first or, for a closed group, one page further.
     Prs(PrGroup),
+    /// One PR by its number, asked for by the reader.
+    One(PrId),
     Pr(PrResource, PrId),
 }
 
@@ -378,7 +384,7 @@ impl Store {
     /// Whether the provider has this resource at all.
     fn offers(&self, key: &FetchKey) -> bool {
         match key {
-            FetchKey::Prs(_) => true,
+            FetchKey::Prs(_) | FetchKey::One(_) => true,
             FetchKey::Pr(resource, _) => resource
                 .feature()
                 .is_none_or(|feature| self.capabilities.supports(feature)),
@@ -399,6 +405,8 @@ impl Store {
         }
         match key {
             FetchKey::Prs(_) => self.cache.prs.start_loading(),
+            // Asked for once, by number; there is no state to mark.
+            FetchKey::One(_) => false,
             FetchKey::Pr(resource, id) => self
                 .cache
                 .details
@@ -424,6 +432,7 @@ impl Store {
         use crate::tui::app::navigation::Screen;
         self.fetches.iter().any(|key| match key {
             FetchKey::Prs(_) => true,
+            FetchKey::One(_) => false,
             FetchKey::Pr(_, id) => {
                 matches!(screen, Screen::Detail { pr_id, .. } if pr_id == *id)
             }
@@ -435,6 +444,11 @@ impl Store {
     pub fn has_cached_data(&self, key: &FetchKey) -> bool {
         match key {
             FetchKey::Prs(group) => self.group_loaded(*group),
+            FetchKey::One(id) => self
+                .cache
+                .prs
+                .loaded()
+                .is_some_and(|prs| prs.iter().any(|pr| pr.id == *id)),
             FetchKey::Pr(resource, id) => self
                 .cache
                 .details
@@ -448,6 +462,7 @@ impl Store {
         let on = |id: &PrId, shows: fn(DetailTab) -> bool| matches!(screen, Screen::Detail { pr_id, tab } if pr_id == *id && shows(tab));
         self.refresh_failures.iter().any(|key| match key {
             FetchKey::Prs(_) => true,
+            FetchKey::One(_) => false,
             FetchKey::Pr(PrResource::Diff, id) => on(id, |tab| tab == DetailTab::Diff),
             FetchKey::Pr(PrResource::Activity, id) => on(id, |tab| {
                 matches!(

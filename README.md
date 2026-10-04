@@ -73,6 +73,7 @@ the host.
 ```sh
 cd path/to/a/repo
 slussa                  # open the PR browser for this repo
+slussa 44               # open it on PR #44 (also `slussa '#44'`), even one the list does not hold
 slussa -C path/to/repo  # same, as if started in that directory
 slussa auth login       # Bitbucket Data Center: store a personal access token
 slussa --version

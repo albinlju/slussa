@@ -7,7 +7,7 @@ use crate::domain::{
     review::{Reviewer, ReviewerState},
     user::User,
 };
-use crate::providers::bitbucket_dc::http::{get_all, get_page_from};
+use crate::providers::bitbucket_dc::http::{get_all, get_json, get_page_from};
 use crate::providers::error::FetchError;
 
 #[derive(Debug, Deserialize)]
@@ -70,6 +70,16 @@ struct BbReviewer {
     user: BbUser,
     #[serde(default)]
     status: String,
+}
+
+/// One PR as the list shows it, asked for by its number.
+pub fn fetch_pr(config: &Config, pr_id: PrId) -> Result<PullRequest, FetchError> {
+    let path = format!(
+        "/rest/api/1.0/projects/{}/repos/{}/pull-requests/{pr_id}",
+        config.repo.project_key, config.repo.repo_slug
+    );
+    let found: BbPr = get_json(&config.repo.base_url, &path, &config.pat)?;
+    Ok(map_pr(found))
 }
 
 /// How many merged or declined PRs one page holds, newest first.

@@ -1,5 +1,5 @@
 use crate::{
-    domain::pr::PrGroup,
+    domain::pr::{PrGroup, PrId},
     providers::Provider,
     session::Session,
     tui::{
@@ -36,6 +36,8 @@ pub struct App {
     /// Where what was looked at is kept, and whether it changed since it was written.
     pub(super) seen_file: SeenFile,
     pub(super) seen_dirty: bool,
+    /// A PR to open as soon as it is read, named when slussa was started.
+    pub(super) start_on: Option<PrId>,
     pub state: AppState,
     pub(crate) provider: Provider,
     pub(super) results_tx: UnboundedSender<TaskResult>,
@@ -61,12 +63,19 @@ impl App {
             drafts_dirty: false,
             seen_file: SeenFile::Unavailable,
             seen_dirty: false,
+            start_on: None,
             state: AppState::new(store::Store::new(user, provider.capabilities())),
             provider,
             results_tx,
             results_rx,
             full_refreshed: Instant::now(),
         }
+    }
+
+    /// Open this PR as soon as it is read, instead of showing the list.
+    pub const fn opening(mut self, pr_id: Option<PrId>) -> Self {
+        self.start_on = pr_id;
+        self
     }
 
     pub async fn run(mut self, terminal: &mut DefaultTerminal) -> std::io::Result<()> {
@@ -82,6 +91,7 @@ impl App {
     async fn event_loop(&mut self, terminal: &mut DefaultTerminal) -> std::io::Result<()> {
         self.state.store.cache.prs = LoadState::Loading;
         self.spawn_load_prs(PrGroup::Open, None);
+        self.start_opening();
 
         let mut events = EventStream::new();
         let start = time::Instant::now() + refresh::BUILDS_INTERVAL;
