@@ -388,7 +388,7 @@ fn framed_panel_titles_start_under_the_tab_labels() {
                 .map(|(_, at)| *at);
             let title = rows
                 .iter()
-                .find(|(row, _)| row.starts_with("╭Files"))
+                .find(|(row, _)| row.chars().skip(1).collect::<String>().starts_with("Files"))
                 .map(|(_, at)| *at + 1);
             assert!(tabs.is_some(), "{width}x{height}: no tab bar");
             assert_eq!(tabs, title, "{width}x{height}");
