@@ -486,3 +486,28 @@ fn github_list_does_not_call_a_review_current_when_its_commit_is_gone() {
     let gone = json!({"state": "COMMENTED", "author": {"__typename": "Bot", "login": "bot"}, "commit": null});
     assert_eq!(read_ai(&[gone], "head", "OPEN"), AiReview::Stale);
 }
+
+#[test]
+fn github_info_reads_the_issues_the_pr_closes() {
+    let answer = json!({"data": {"repository": {"pullRequest": {
+        "id": "PR_1",
+        "body": "Fixes it.",
+        "labels": {"nodes": [], "pageInfo": {"hasNextPage": false}},
+        "closingIssuesReferences": {"nodes": [
+            {"number": 12, "title": "Crash on start"},
+            {"number": 31, "title": "Slow list"}
+        ]}
+    }}}})
+    .to_string();
+    let _gh = FakeGh::new()
+        .on("pullRequest(number: $pr)", &answer)
+        .install();
+    let info = Provider::GitHub.fetch_info(PrId(7)).unwrap();
+
+    let issues: Vec<_> = info
+        .issues
+        .iter()
+        .map(|issue| (issue.number, issue.title.as_str()))
+        .collect();
+    assert_eq!(issues, [(12, "Crash on start"), (31, "Slow list")]);
+}

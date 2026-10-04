@@ -2,7 +2,9 @@ use chrono::{DateTime, Utc};
 use serde::Deserialize;
 
 use crate::domain::ci::CiSummary;
-use crate::domain::pr::{AiReview, PrBatch, PrGroup, PrId, PrInfo, PrStatus, PullRequest};
+use crate::domain::pr::{
+    AiReview, LinkedIssue, PrBatch, PrGroup, PrId, PrInfo, PrStatus, PullRequest,
+};
 use crate::domain::review::{Reviewer, ReviewerState};
 use crate::domain::user::User;
 use crate::providers::error::FetchError;
@@ -181,14 +183,28 @@ fn complete(mut prs: Vec<GhPr>) -> Result<Vec<PullRequest>, FetchError> {
     Ok(prs.into_iter().map(map_pr).collect())
 }
 
-/// The description and labels of one PR.
+/// The description, labels and closing issues of one PR.
 pub fn fetch_info(pr: PrId) -> Result<PrInfo, FetchError> {
     #[derive(Deserialize)]
+    #[serde(rename_all = "camelCase")]
     struct Fields {
         id: String,
         #[serde(default)]
         body: Option<String>,
         labels: Connection<GhLabel>,
+        #[serde(default)]
+        closing_issues_references: Issues,
+    }
+    #[derive(Deserialize, Default)]
+    struct Issues {
+        #[serde(default)]
+        nodes: Vec<GhIssue>,
+    }
+    #[derive(Deserialize)]
+    struct GhIssue {
+        number: u64,
+        #[serde(default)]
+        title: String,
     }
     let fields: Fields = super::run_pr_graphql(super::graphql::INFO, pr)?;
     let labels = if fields.labels.page_info.has_next_page {
@@ -199,6 +215,15 @@ pub fn fetch_info(pr: PrId) -> Result<PrInfo, FetchError> {
     Ok(PrInfo {
         description: fields.body,
         labels: labels.into_iter().map(|label| label.name).collect(),
+        issues: fields
+            .closing_issues_references
+            .nodes
+            .into_iter()
+            .map(|issue| LinkedIssue {
+                number: issue.number,
+                title: issue.title,
+            })
+            .collect(),
     })
 }
 
