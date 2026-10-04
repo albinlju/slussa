@@ -18,6 +18,8 @@ connected provider does not support, so it can show fewer keys than this page.
 | `F` | refresh |
 | `q` | quit |
 
+The search also takes filters, written `key:value` among the words and combined with them: `author:name`, `review:approved` (also `changes`, `requested`, `none`) and `ci:failed` (also `pending`, `passing`), and `merge:conflicts` for the PRs that cannot be merged for a conflict (GitHub only). A value can be shortened as long as it is the only one that begins so (`ci:f`), and a filter whose value is not complete yet leaves the list as it is. A word with any other key before its colon is searched for as text.
+
 ## A PR
 
 | Key | What it does |

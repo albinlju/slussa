@@ -7,6 +7,7 @@ mod dialogs;
 mod keys;
 mod layout;
 mod list_columns;
+mod list_filters;
 mod long_comments;
 mod long_comments_diff;
 mod reading_flow;
