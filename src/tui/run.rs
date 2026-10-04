@@ -6,9 +6,13 @@ use super::{
     app::{App, TerminalGuard},
     ui,
 };
-use crate::{config, domain, session::Session};
+use crate::{
+    config,
+    domain::{self, pr::PrId},
+    session::Session,
+};
 
-pub fn run(session: Session) -> ExitCode {
+pub fn run(session: Session, open: Option<PrId>) -> ExitCode {
     let rt = match tokio::runtime::Builder::new_multi_thread()
         .enable_all()
         .build()
@@ -25,7 +29,7 @@ pub fn run(session: Session) -> ExitCode {
 
     let result = rt.block_on(async move {
         let mut app = match App::open(session) {
-            Ok(app) => app,
+            Ok(app) => app.opening(open),
             Err(err) => {
                 eprintln!("slussa: {err}");
                 return ExitCode::from(1);

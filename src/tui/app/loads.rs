@@ -35,6 +35,7 @@ impl App {
                 after,
                 result,
             } => self.prs_loaded(group, after.is_some(), result),
+            Read::Pr(pr_id, result) => self.requested_pr_read(pr_id, result),
             Read::Commits(pr_id, result) => {
                 let result = result.map(|commits| self.state.store.judged_commits(commits));
                 if let Ok(new) = &result {

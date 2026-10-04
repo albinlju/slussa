@@ -126,7 +126,7 @@ says so on the row.
 - [ ] **Search older PRs and show the total.** Merged and declined PRs are read a
   batch at a time and `L` reads older ones. Missing: searching older PRs at the
   provider, and showing how many exist in total.
-- [ ] **Jump to PR by number** (`#123`).
+- [ ] **Jump to PR by number** (`#123`) inside the TUI. `slussa 44` already reads one PR by its number and opens it; this would take the number in the list.
 - [ ] **Status bar** — provider, repo, match count, loading spinner. Only if it
   fits in the existing footer line; a second persistent bar is not wanted.
 
@@ -277,9 +277,10 @@ why a merge is blocked, the same on both providers. The rule that keeps this in
 step with the positioning: **agents may read and propose; only the human
 decides.** No new view: these are non-interactive subcommands that print and exit.
 
-- [ ] **`slussa <number>` (or a PR URL)** starts the TUI on that PR. The natural
-  landing point when an agent says "PR 123 is ready for you"; it complements
-  *Jump to PR by number* inside the TUI.
+- [ ] **`slussa <PR URL>`.** `slussa 44` starts the TUI on that PR of the
+  repository you are in. A URL could name another repository, and the check that
+  it is this one is provider specific (`owner/repo` on GitHub, `projects/…/repos/…`
+  on Bitbucket), so it is left out.
 - [ ] **`slussa list --json`** — open PRs in the TUI's order with the "Needs you"
   reason (reuses `domain::attention`). Output has `"schema": 1`, snake_case
   identifiers (`ci_failed`, not "CI failed") and flat usernames; errors go to

@@ -32,7 +32,7 @@ use crate::domain::{
     comment::{CommentId, CommentKey, ThreadHandle},
     commit::{Commit, CommitOid},
     diff::Diff,
-    pr::{MergeStrategy, Mergeability, PrBatch, PrGroup, PrId, PrInfo},
+    pr::{MergeStrategy, Mergeability, PrBatch, PrGroup, PrId, PrInfo, PullRequest},
     review::{ReviewComment, ReviewVerdict},
     user::Username,
 };
@@ -51,6 +51,14 @@ impl Provider {
         match self {
             Self::GitHub => github::fetch_prs(group, after),
             Self::BitbucketDc(c) => bitbucket_dc::fetch_prs(c, group, after),
+        }
+    }
+
+    /// One PR by its number, as the list holds it.
+    pub fn fetch_pr(&self, pr_id: PrId) -> Result<PullRequest, FetchError> {
+        match self {
+            Self::GitHub => github::fetch_pr(pr_id),
+            Self::BitbucketDc(c) => bitbucket_dc::fetch_pr(c, pr_id),
         }
     }
 
