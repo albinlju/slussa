@@ -3,6 +3,7 @@
 mod loading;
 mod navigation;
 mod recovery;
+mod rerun;
 mod review;
 mod seen;
 mod submission;

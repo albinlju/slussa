@@ -50,6 +50,8 @@ fn render_timeline(
     let Some(activity) =
         widgets::loaded_or_placeholder(frame, pr_data.map(|d| &d.activity), "activity", area)
     else {
+        // Nothing is drawn, so there is nowhere for `u` to go.
+        ui.unresolved.clear();
         return;
     };
 
@@ -82,6 +84,7 @@ fn render_timeline(
     let waiting_for_context = threads.iter().any(|thread| thread.anchor.is_some())
         && pr_data.is_some_and(|data| matches!(data.diff, LoadState::Loading));
     if waiting_for_context {
+        ui.unresolved.clear();
         frame.render_widget(
             Paragraph::new(widgets::loading("Loading code context…")),
             area,
@@ -157,6 +160,14 @@ fn render_timeline(
     );
 
     let (content, navs) = timeline_rail(blocks);
+
+    ui.unresolved = navs
+        .iter()
+        .filter(|nav| nav.focusable)
+        .enumerate()
+        .filter(|(_, nav)| nav.resolve.as_ref().is_some_and(|thread| !thread.resolved))
+        .map(|(place, _)| place)
+        .collect();
 
     // The cursor walks only the focusable items; resolve it to the matching nav
     // for highlight-scroll, reply target, and the per-comment sub-cursor.
@@ -243,9 +254,32 @@ pub struct Timeline {
     pub expanded: HashSet<CommentKey>,
     /// What the next draw does about the scroll position.
     reveal: Reveal,
+    /// The items, by their place among the focusable ones, that are review threads
+    /// not resolved: what `u` goes between.
+    pub unresolved: Vec<usize>,
     /// The rows the focused item takes, so that `j` and `k` can read on through it.
     focused_rows: Option<std::ops::Range<usize>>,
     selected_row: Option<usize>,
+}
+
+/// Where `u` (delta 1) or `U` (-1) goes from `cursor`, among the unresolved
+/// threads in order: the next one after it, or the first when there is none, and
+/// the other way for `U`. None when there is no unresolved thread.
+fn unresolved_from(unresolved: &[usize], cursor: usize, delta: i16) -> Option<usize> {
+    if delta > 0 {
+        unresolved
+            .iter()
+            .copied()
+            .find(|&place| place > cursor)
+            .or_else(|| unresolved.first().copied())
+    } else {
+        unresolved
+            .iter()
+            .rev()
+            .copied()
+            .find(|&place| place < cursor)
+            .or_else(|| unresolved.last().copied())
+    }
 }
 
 impl Timeline {
@@ -281,6 +315,8 @@ impl Component for Timeline {
         let action = match key.code {
             KeyCode::Char('j') if control => TimelineAction::SubMove(1),
             KeyCode::Char('k') if control => TimelineAction::SubMove(-1),
+            KeyCode::Char('u') if !control => TimelineAction::NextUnresolved(1),
+            KeyCode::Char('U') if !control => TimelineAction::NextUnresolved(-1),
             KeyCode::Char('j') | KeyCode::Down => TimelineAction::Move(1),
             KeyCode::Char('k') | KeyCode::Up => TimelineAction::Move(-1),
             KeyCode::PageDown => {
@@ -340,6 +376,17 @@ impl Component for Timeline {
                 // Keep the comment the reader is on in view as it grows or shrinks.
                 self.reveal = Reveal::Selection;
             }
+            TimelineAction::NextUnresolved(delta) => {
+                if let Some(target) = unresolved_from(&self.unresolved, self.cursor, delta)
+                    && target != self.cursor
+                {
+                    self.selected = None;
+                    self.selected_row = None;
+                    self.cursor = target;
+                    self.sub = 0;
+                    self.reveal = Reveal::Selection;
+                }
+            }
             TimelineAction::SubMove(delta) => {
                 let next = step_index(self.sub, delta, self.block_len);
                 if next != self.sub {
@@ -358,5 +405,48 @@ impl Component for Timeline {
     }
     fn render(&mut self, frame: &mut Frame<'_>, area: Rect, ctx: &TimelineContext<'_>) {
         render_timeline(frame, ctx.data, self, ctx.pr_author, area, ctx.scrollbar);
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn u_goes_to_the_next_unresolved_thread_and_round_from_the_last() {
+        let places = [1, 4, 6];
+        assert_eq!(unresolved_from(&places, 0, 1), Some(1));
+        assert_eq!(
+            unresolved_from(&places, 1, 1),
+            Some(4),
+            "past the one it is on"
+        );
+        assert_eq!(unresolved_from(&places, 2, 1), Some(4), "from between two");
+        assert_eq!(
+            unresolved_from(&places, 6, 1),
+            Some(1),
+            "round to the first"
+        );
+    }
+
+    #[test]
+    fn capital_u_goes_the_other_way_and_round_from_the_first() {
+        let places = [1, 4, 6];
+        assert_eq!(unresolved_from(&places, 6, -1), Some(4));
+        assert_eq!(unresolved_from(&places, 5, -1), Some(4));
+        assert_eq!(
+            unresolved_from(&places, 1, -1),
+            Some(6),
+            "round to the last"
+        );
+        assert_eq!(unresolved_from(&places, 0, -1), Some(6));
+    }
+
+    #[test]
+    fn with_nothing_unresolved_there_is_nowhere_to_go() {
+        assert_eq!(unresolved_from(&[], 3, 1), None);
+        assert_eq!(unresolved_from(&[], 3, -1), None);
+        // Alone, it stays where it is: the target is the cursor.
+        assert_eq!(unresolved_from(&[2], 2, 1), Some(2));
     }
 }

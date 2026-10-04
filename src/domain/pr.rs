@@ -26,6 +26,14 @@ impl PrStatus {
 pub struct PrInfo {
     pub description: Option<String>,
     pub labels: Vec<String>,
+    /// The issues the PR closes when it is merged.
+    pub issues: Vec<LinkedIssue>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct LinkedIssue {
+    pub number: u64,
+    pub title: String,
 }
 
 /// A slice of a repository's PRs that can be read on its own. `Open` holds open

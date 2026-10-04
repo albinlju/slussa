@@ -174,7 +174,10 @@ mod tests {
 
     #[test]
     fn the_readme_values_come_without_their_default_mark() {
-        assert_eq!(readme_values("sort"), ["attention", "recent"]);
+        assert_eq!(
+            readme_values("sort"),
+            ["attention", "recent", "updated", "oldest"]
+        );
         assert_eq!(readme_default("sort"), "attention");
     }
 

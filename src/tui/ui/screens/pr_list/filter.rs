@@ -1,22 +1,49 @@
 //! Which PRs the list shows and in what order.
 use crate::domain::pr::{PrGroup, PrStatus};
 
-/// How the list is ordered. Both keep the provider's order (newest first)
-/// within a group.
+/// How the list is ordered. All but the first keep the provider's order
+/// (newest first) for rows that tie.
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
 pub enum Sort {
     /// PRs that need the viewer first, most urgent first, then the rest.
     #[default]
     Attention,
-    /// The provider's order only.
+    /// The newest PR first: the provider's order only.
     Recent,
+    /// The PR with the latest activity first.
+    Updated,
+    /// The oldest PR first, to find what has been left.
+    Oldest,
 }
 
 impl Sort {
-    pub const fn toggled(self) -> Self {
+    /// Every sort, in the order the picker lists them.
+    pub const CYCLE: [Self; 4] = [Self::Attention, Self::Recent, Self::Updated, Self::Oldest];
+
+    pub const fn label(self) -> &'static str {
+        match self {
+            Self::Attention => "Needs you first",
+            Self::Recent => "Newest",
+            Self::Updated => "Recently updated",
+            Self::Oldest => "Oldest",
+        }
+    }
+
+    /// The sort below this one in the picker; the last stays where it is.
+    pub const fn next(self) -> Self {
         match self {
             Self::Attention => Self::Recent,
-            Self::Recent => Self::Attention,
+            Self::Recent => Self::Updated,
+            Self::Updated | Self::Oldest => Self::Oldest,
+        }
+    }
+
+    /// The sort above this one in the picker; the first stays where it is.
+    pub const fn previous(self) -> Self {
+        match self {
+            Self::Attention | Self::Recent => Self::Attention,
+            Self::Updated => Self::Recent,
+            Self::Oldest => Self::Updated,
         }
     }
 
@@ -25,6 +52,8 @@ impl Sort {
         match name {
             None | Some("attention") => Self::Attention,
             Some("recent") => Self::Recent,
+            Some("updated") => Self::Updated,
+            Some("oldest") => Self::Oldest,
             Some(other) => {
                 tracing::warn!("unknown sort {other:?}, using attention");
                 Self::Attention
@@ -137,14 +166,30 @@ mod tests {
             .collect();
         // An unknown name falls back to attention, so a misspelt one shows up
         // here as attention twice.
-        assert_eq!(
-            listed,
-            [Sort::Attention, Sort::Recent],
-            "the README's `sort` line against Sort"
-        );
+        assert_eq!(listed, Sort::CYCLE, "the README's `sort` line against Sort");
         let default = doc_contract::readme_default("sort");
         assert_eq!(Sort::from_config(Some(&default)), Sort::default());
         assert_eq!(default, "attention");
+    }
+
+    #[test]
+    fn the_sort_picker_steps_through_every_sort_and_stops_at_the_ends() {
+        let mut down = vec![Sort::Attention];
+        while let Some(&last) = down.last()
+            && last.next() != last
+        {
+            down.push(last.next());
+        }
+        assert_eq!(down, Sort::CYCLE);
+
+        let mut up = vec![Sort::Oldest];
+        while let Some(&last) = up.last()
+            && last.previous() != last
+        {
+            up.push(last.previous());
+        }
+        up.reverse();
+        assert_eq!(up, Sort::CYCLE);
     }
 
     #[test]

@@ -11,7 +11,7 @@ connected provider does not support, so it can show fewer keys than this page.
 | `enter` | open the PR |
 | `/` | search title and author; `esc` clears the search |
 | `f` | filter by status (open, draft, merged, declined, all) |
-| `s` | sort: needs you first, or newest first |
+| `s` | pick the sort order: needs you first, newest, recently updated or oldest |
 | `L` | load more PRs, while the heading says more are unread; in the merged and declined views, the next older batch |
 | `^d` / `^u` | half a page |
 | `o` / `y` | open the PR in the browser / copy its link |
@@ -38,12 +38,14 @@ The search also takes filters, written `key:value` among the words and combined 
 | `v` | start or finish a batched review; `V` discards it |
 | `m` | merge; the dialog lists what blocks it |
 | `x` | close or decline the PR, or reopen a declined one |
+| `b` | in the Builds tab, run the failed builds again; offered when one has failed or was cancelled, and dimmed with the reason on a merged or declined PR (GitHub Actions) |
 | `c` | comment |
 | `r` | reply |
 | `e` / `d` | edit / delete your own comment (`d` also removes a queued review comment) |
 | `R` | resolve or unresolve the thread |
 | `f` | in the Overview, show all comments, only people's or only an AI agent's; offered when the PR has a comment by a bot account (GitHub) or one that starts with an `[ai] markers` line; what the filter hides stays as a dimmed line |
 | `^j` / `^k` | step between comments in a thread |
+| `u` / `U` | in the Overview, go to the next / previous review thread that is not resolved, round from the last to the first; the footer says how many there are (`u: unresolved (3)`) |
 | `o` / `y` | open the PR in the browser / copy its link |
 | `F` | refresh |
 | `q` | quit |
