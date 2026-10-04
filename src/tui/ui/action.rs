@@ -149,6 +149,9 @@ pub enum TimelineAction {
     CycleFilter,
     /// Open or fold the long comment the cursor is on.
     ToggleFold,
+    /// Go to the next (1) or previous (-1) review thread that is not resolved,
+    /// round from the last to the first.
+    NextUnresolved(i16),
 }
 
 #[derive(Debug, Clone, Copy)]

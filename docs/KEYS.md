@@ -42,6 +42,7 @@ connected provider does not support, so it can show fewer keys than this page.
 | `R` | resolve or unresolve the thread |
 | `f` | in the Overview, show all comments, only people's or only an AI agent's; offered when the PR has a comment by a bot account (GitHub) or one that starts with an `[ai] markers` line; what the filter hides stays as a dimmed line |
 | `^j` / `^k` | step between comments in a thread |
+| `u` / `U` | in the Overview, go to the next / previous review thread that is not resolved, round from the last to the first; the footer says how many there are (`u: unresolved (3)`) |
 | `o` / `y` | open the PR in the browser / copy its link |
 | `F` | refresh |
 | `q` | quit |

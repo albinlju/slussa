@@ -11,5 +11,6 @@ mod long_comments_diff;
 mod reading_flow;
 mod support;
 mod unread;
+mod unresolved;
 
 pub(crate) use support::fixture;
