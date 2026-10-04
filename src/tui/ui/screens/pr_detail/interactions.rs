@@ -2,7 +2,7 @@ use super::{
     DetailContext, DetailView, Overlay, PrDetailScreen,
     dialogs::{
         confirm::{ConfirmDialog, ConfirmKind},
-        merge::MergeDialog,
+        merge::{AutoMergeOffer, MergeDialog},
         review::{ReviewContext, ReviewDialog},
     },
 };
@@ -189,11 +189,37 @@ impl PrDetailScreen {
                 self.close(|overlay| matches!(overlay, Overlay::Merge(_)));
                 None
             }
+            MergeAction::Auto => {
+                match AutoMergeOffer::of(&ctx.store.capabilities, ctx.mergeability()) {
+                    AutoMergeOffer::Unavailable => {}
+                    AutoMergeOffer::Available => {
+                        if let Some(Overlay::Merge(dialog)) = &mut self.overlay {
+                            dialog.when_ready = !dialog.when_ready;
+                        }
+                    }
+                    AutoMergeOffer::On(_) => {
+                        self.overlay = None;
+                        return Some(Self::command(pr_id, Command::CancelAutoMerge));
+                    }
+                }
+                None
+            }
             MergeAction::Select => {
-                let strategy = self.merge_picker()?.selected(strategies);
+                let dialog = self.merge_picker()?;
+                let strategy = dialog.selected(strategies);
+                let when_ready = dialog.when_ready
+                    && AutoMergeOffer::of(&ctx.store.capabilities, ctx.mergeability())
+                        == AutoMergeOffer::Available;
                 self.overlay = None;
                 let strategy = strategy?;
-                Some(Self::command(pr_id, Command::Merge(strategy)))
+                Some(Self::command(
+                    pr_id,
+                    if when_ready {
+                        Command::AutoMerge(strategy)
+                    } else {
+                        Command::Merge(strategy)
+                    },
+                ))
             }
         }
     }

@@ -118,6 +118,20 @@ impl Provider {
         }
     }
 
+    /// Merge by itself with `strategy` once the PR is ready, or stop doing so.
+    pub fn set_auto_merge(
+        &self,
+        pr_id: PrId,
+        strategy: Option<MergeStrategy>,
+    ) -> Result<(), FetchError> {
+        match self {
+            Self::GitHub => github::set_auto_merge(pr_id, strategy),
+            Self::BitbucketDc(_) => Err(FetchError::Unsupported(
+                "Bitbucket does not merge a PR by itself when it is ready.".into(),
+            )),
+        }
+    }
+
     /// Decline (Bitbucket) / close (GitHub) the PR without merging.
     pub fn decline(&self, pr_id: PrId) -> Result<(), FetchError> {
         match self {
@@ -152,7 +166,10 @@ impl Provider {
         .collect();
         match self {
             Self::GitHub => Capabilities {
-                features: features.into_iter().chain([Feature::PrInfo]).collect(),
+                features: features
+                    .into_iter()
+                    .chain([Feature::PrInfo, Feature::AutoMerge])
+                    .collect(),
                 review: Some(ReviewCaps {
                     verdicts: vec![
                         ReviewVerdict::Approve,

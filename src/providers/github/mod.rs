@@ -46,13 +46,35 @@ pub fn fetch_mergeability(pr_number: PrId) -> Result<Mergeability, FetchError> {
         merge_state_status: String,
         #[serde(default)]
         review_decision: Option<String>,
+        #[serde(default)]
+        auto_merge_request: Option<AutoMergeRequest>,
+    }
+    #[derive(Deserialize)]
+    #[serde(rename_all = "camelCase")]
+    struct AutoMergeRequest {
+        merge_method: String,
     }
     let pr: MergeFields = run_pr_graphql(graphql::MERGEABILITY, pr_number)?;
-    Ok(merge_status(
+    let status = merge_status(
         &pr.mergeable,
         &pr.merge_state_status,
         pr.review_decision.as_deref(),
-    ))
+    );
+    let strategy = pr
+        .auto_merge_request
+        .and_then(|request| match request.merge_method.as_str() {
+            "MERGE" => Some(MergeStrategy::Merge),
+            "SQUASH" => Some(MergeStrategy::Squash),
+            "REBASE" => Some(MergeStrategy::Rebase),
+            _ => None,
+        });
+    Ok(match (strategy, status) {
+        // A conflict stops it whatever was asked for.
+        (Some(strategy), Mergeability::Blocked(waiting)) => {
+            Mergeability::AutoMerge { strategy, waiting }
+        }
+        (_, status) => status,
+    })
 }
 
 /// Read GitHub's merge fields. GitHub computes them asynchronously, so a fresh
@@ -94,6 +116,26 @@ pub fn merge(pr_number: PrId, strategy: MergeStrategy) -> Result<(), FetchError>
         "-f",
         &format!("merge_method={method}"),
     ])?;
+    Ok(())
+}
+
+/// Merge the PR by itself with `strategy` once its checks and reviews allow it,
+/// or stop it from doing so (`None`). GitHub refuses when the repository does
+/// not allow auto-merge; that message reaches the user as it is.
+pub fn set_auto_merge(pr_number: PrId, strategy: Option<MergeStrategy>) -> Result<(), FetchError> {
+    let pr = pr_number.to_string();
+    let flag = match strategy {
+        Some(MergeStrategy::Merge) => "--merge",
+        Some(MergeStrategy::Squash) => "--squash",
+        Some(MergeStrategy::Rebase) => "--rebase",
+        None => "--disable-auto",
+    };
+    let args: &[&str] = if strategy.is_some() {
+        &["pr", "merge", &pr, "--auto", flag]
+    } else {
+        &["pr", "merge", &pr, flag]
+    };
+    cli::run_gh(args)?;
     Ok(())
 }
 

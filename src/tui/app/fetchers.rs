@@ -202,6 +202,12 @@ impl App {
         self.spawn_write(ticket, move || provider.merge(pr_id, strategy));
     }
 
+    pub(super) fn spawn_auto_merge(&self, ticket: WriteTicket, strategy: Option<MergeStrategy>) {
+        let provider = self.provider.clone();
+        let pr_id = ticket.pr_id();
+        self.spawn_write(ticket, move || provider.set_auto_merge(pr_id, strategy));
+    }
+
     pub(super) fn spawn_decline(&self, ticket: WriteTicket) {
         let provider = self.provider.clone();
         let pr_id = ticket.pr_id();

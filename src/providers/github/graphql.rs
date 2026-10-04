@@ -62,7 +62,7 @@ query($owner: String!, $name: String!) {
 pub(super) const MERGEABILITY: &str = r"
 query($owner: String!, $name: String!, $pr: Int!) {
   repository(owner: $owner, name: $name) {
-    pullRequest(number: $pr) { mergeable mergeStateStatus reviewDecision }
+    pullRequest(number: $pr) { mergeable mergeStateStatus reviewDecision autoMergeRequest { mergeMethod } }
   }
 }";
 
@@ -153,7 +153,7 @@ mod tests {
         );
         assert_eq!(
             compact(MERGEABILITY),
-            "query($owner: String!, $name: String!, $pr: Int!) { repository(owner: $owner, name: $name) { pullRequest(number: $pr) { mergeable mergeStateStatus reviewDecision } } }"
+            "query($owner: String!, $name: String!, $pr: Int!) { repository(owner: $owner, name: $name) { pullRequest(number: $pr) { mergeable mergeStateStatus reviewDecision autoMergeRequest { mergeMethod } } } }"
         );
     }
 }

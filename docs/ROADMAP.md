@@ -231,8 +231,6 @@ against:
 - [ ] **Request / re-request reviewers** — including re-request after a push.
 - [ ] **Delete the source branch after merge** — moved here from *Scope
   decision*: it is part of the merge path, not administration.
-- [ ] **Enable auto-merge** (GitHub) — same reasoning: "merge when green" is a
-  decision, not admin.
 - [ ] **React to a comment** — add / remove your own emoji reaction.
 
 ### 4. Handoff to the coding agent

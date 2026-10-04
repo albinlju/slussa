@@ -179,3 +179,17 @@ fn github_resolves_a_thread_by_its_node_id_and_refuses_another_providers_handle(
     assert!(matches!(refused, Err(FetchError::InvalidInput(_))));
     assert_eq!(installed.calls().len(), 1, "nothing was sent for it");
 }
+
+#[test]
+fn github_auto_merge_asks_gh_for_the_chosen_strategy_and_off_disables_it() {
+    let installed = FakeGh::new().on("pr", "").install();
+    Provider::GitHub
+        .set_auto_merge(PrId(7), Some(MergeStrategy::Squash))
+        .unwrap();
+    Provider::GitHub.set_auto_merge(PrId(7), None).unwrap();
+
+    assert_eq!(
+        installed.calls(),
+        vec!["pr merge 7 --auto --squash", "pr merge 7 --disable-auto"]
+    );
+}

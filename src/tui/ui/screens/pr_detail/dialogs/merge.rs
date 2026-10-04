@@ -1,10 +1,16 @@
-use crate::tui::{
-    app::effect::Effect,
-    ui::{
-        action::{Action, MergeAction},
-        component::{Component, step_index},
-        screens::pr_detail::dialogs::PrSummary,
-        theme,
+use crate::{
+    domain::{
+        capabilities::{Capabilities, Feature},
+        pr::{MergeStrategy, Mergeability},
+    },
+    tui::{
+        app::effect::Effect,
+        ui::{
+            action::{Action, MergeAction},
+            component::{Component, step_index},
+            screens::pr_detail::dialogs::PrSummary,
+            theme,
+        },
     },
 };
 use ratatui::{
@@ -15,9 +21,31 @@ use ratatui::{
     text::{Line, Span},
 };
 
+/// What the PR allows besides merging now: merging by itself once it is ready.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum AutoMergeOffer {
+    Unavailable,
+    Available,
+    On(MergeStrategy),
+}
+
+impl AutoMergeOffer {
+    pub fn of(caps: &Capabilities, mergeability: Option<&Mergeability>) -> Self {
+        if !caps.supports(Feature::AutoMerge) {
+            return Self::Unavailable;
+        }
+        match mergeability {
+            Some(Mergeability::AutoMerge { strategy, .. }) => Self::On(*strategy),
+            Some(Mergeability::Blocked(_) | Mergeability::Unknown) => Self::Available,
+            Some(Mergeability::Mergeable | Mergeability::Conflicts(_)) | None => Self::Unavailable,
+        }
+    }
+}
+
 /// What the merge dialog shows besides its own selection.
 pub struct MergeView<'a> {
-    pub strategies: &'a [crate::domain::pr::MergeStrategy],
+    pub auto: AutoMergeOffer,
+    pub strategies: &'a [MergeStrategy],
     pub pr: PrSummary<'a>,
     /// Why the provider says this PR cannot be merged yet; empty when nothing
     /// is known to stand in the way.
@@ -32,8 +60,14 @@ fn render(frame: &mut Frame<'_>, view: &MergeView<'_>, dialog: &MergeDialog, are
         .add_modifier(Modifier::BOLD);
     let normal = Style::default().fg(theme.muted);
 
+    let when_ready = dialog.when_ready && view.auto == AutoMergeOffer::Available;
+    let title = if when_ready {
+        "Merge this PR when it is ready"
+    } else {
+        "Merge this PR"
+    };
     let mut lines = vec![
-        Line::from(Span::styled("Merge this PR", Style::default().fg(theme.fg))),
+        Line::from(Span::styled(title, Style::default().fg(theme.fg))),
         Line::styled(view.pr.label.clone(), normal),
         Line::from(vec![
             Span::styled("Into: ", normal),
@@ -53,6 +87,12 @@ fn render(frame: &mut Frame<'_>, view: &MergeView<'_>, dialog: &MergeDialog, are
         ]),
         Line::default(),
     ];
+    if let AutoMergeOffer::On(strategy) = view.auto {
+        lines.push(Line::styled(
+            format!("Merges by itself when ready: {}", strategy.label()),
+            Style::default().fg(theme.info),
+        ));
+    }
     if !view.blockers.is_empty() {
         lines.push(Line::default());
         lines.push(Line::styled(
@@ -83,13 +123,39 @@ fn render(frame: &mut Frame<'_>, view: &MergeView<'_>, dialog: &MergeDialog, are
     }
 
     let selected_line = lines.len() - strategies.len() + dialog.cursor;
+    let mut hints = vec![
+        ("j/k", "move"),
+        (
+            "Enter",
+            if when_ready {
+                "merge when ready"
+            } else {
+                "merge"
+            },
+        ),
+    ];
+    match view.auto {
+        AutoMergeOffer::Unavailable => {}
+        AutoMergeOffer::Available => {
+            hints.push((
+                "a",
+                if when_ready {
+                    "merge now"
+                } else {
+                    "when ready"
+                },
+            ));
+        }
+        AutoMergeOffer::On(_) => hints.push(("a", "turn off auto-merge")),
+    }
+    hints.push(("Esc", "cancel"));
     crate::tui::ui::widgets::dialog::choices_with_hints(
         frame,
         area,
         "Merge",
         lines,
         selected_line,
-        &[("j/k", "move"), ("Enter", "merge"), ("Esc", "cancel")],
+        &hints,
     );
 }
 
@@ -97,6 +163,7 @@ const fn key_to_action(code: KeyCode) -> Option<MergeAction> {
     match code {
         KeyCode::Left | KeyCode::Up | KeyCode::Char('h' | 'k') => Some(MergeAction::Move(-1)),
         KeyCode::Right | KeyCode::Down | KeyCode::Char('j' | 'l') => Some(MergeAction::Move(1)),
+        KeyCode::Char('a') => Some(MergeAction::Auto),
         KeyCode::Enter => Some(MergeAction::Select),
         KeyCode::Esc => Some(MergeAction::Close),
         _ => None,
@@ -106,19 +173,18 @@ const fn key_to_action(code: KeyCode) -> Option<MergeAction> {
 #[derive(Debug, Default)]
 pub struct MergeDialog {
     cursor: usize,
+    /// Enter merges by itself once the PR is ready, not now.
+    pub when_ready: bool,
 }
 impl MergeDialog {
-    pub fn selected(
-        &self,
-        strategies: &[crate::domain::pr::MergeStrategy],
-    ) -> Option<crate::domain::pr::MergeStrategy> {
+    pub fn selected(&self, strategies: &[MergeStrategy]) -> Option<MergeStrategy> {
         strategies.get(self.cursor).copied()
     }
 }
 
 impl Component for MergeDialog {
     /// The strategies on offer.
-    type Input<'a> = &'a [crate::domain::pr::MergeStrategy];
+    type Input<'a> = &'a [MergeStrategy];
     type View<'a> = MergeView<'a>;
     type Message = MergeAction;
     fn handle_key(&self, key: KeyEvent, _: &Self::Input<'_>) -> Option<Action> {
@@ -128,7 +194,7 @@ impl Component for MergeDialog {
         match action {
             MergeAction::Move(delta) => self.cursor = step_index(self.cursor, delta, ctx.len()),
             // Closing and merging are the screen's: it holds the dialog.
-            MergeAction::Select | MergeAction::Close => {}
+            MergeAction::Select | MergeAction::Close | MergeAction::Auto => {}
         }
         None
     }
@@ -140,11 +206,15 @@ impl Component for MergeDialog {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::domain::pr::MergeStrategy;
     use ratatui::{Terminal, backend::TestBackend};
 
     fn drawn(blockers: &[String]) -> String {
+        drawn_with(blockers, AutoMergeOffer::Unavailable, false)
+    }
+
+    fn drawn_with(blockers: &[String], auto: AutoMergeOffer, when_ready: bool) -> String {
         let view = MergeView {
+            auto,
             strategies: &[MergeStrategy::Merge, MergeStrategy::Squash],
             pr: PrSummary {
                 label: "PR #7 · Fix it".into(),
@@ -155,7 +225,13 @@ mod tests {
         };
         let mut terminal = Terminal::new(TestBackend::new(90, 28)).unwrap();
         terminal
-            .draw(|frame| MergeDialog::default().render(frame, frame.area(), &view))
+            .draw(|frame| {
+                MergeDialog {
+                    when_ready,
+                    ..MergeDialog::default()
+                }
+                .render(frame, frame.area(), &view);
+            })
             .unwrap();
         let buffer = terminal.backend().buffer();
         (0..28)
@@ -194,5 +270,59 @@ mod tests {
         assert!(text.contains("Into: main"), "{text}");
         assert!(text.contains("From: feature"), "{text}");
         assert!(text.contains("Merge commit"), "{text}");
+    }
+
+    #[test]
+    fn when_ready_is_offered_only_where_the_pr_waits_and_the_provider_can() {
+        let caps = |on: bool| Capabilities {
+            features: on.then_some(Feature::AutoMerge).into_iter().collect(),
+            ..Capabilities::default()
+        };
+        let waiting = Mergeability::Blocked(vec!["checks".into()]);
+        assert_eq!(
+            AutoMergeOffer::of(&caps(true), Some(&waiting)),
+            AutoMergeOffer::Available
+        );
+        assert_eq!(
+            AutoMergeOffer::of(&caps(false), Some(&waiting)),
+            AutoMergeOffer::Unavailable
+        );
+        for settled in [Mergeability::Mergeable, Mergeability::Conflicts(vec![])] {
+            assert_eq!(
+                AutoMergeOffer::of(&caps(true), Some(&settled)),
+                AutoMergeOffer::Unavailable
+            );
+        }
+        let on = Mergeability::AutoMerge {
+            strategy: MergeStrategy::Squash,
+            waiting: vec![],
+        };
+        assert_eq!(
+            AutoMergeOffer::of(&caps(true), Some(&on)),
+            AutoMergeOffer::On(MergeStrategy::Squash)
+        );
+    }
+
+    #[test]
+    fn the_dialog_says_what_a_is_for_in_each_state() {
+        let blocked = ["Required checks have not passed.".to_owned()];
+        let available = drawn_with(&blocked, AutoMergeOffer::Available, false);
+        assert!(available.contains("a when ready"), "{available}");
+
+        let armed = drawn_with(&blocked, AutoMergeOffer::Available, true);
+        assert!(armed.contains("Merge this PR when it is ready"), "{armed}");
+        assert!(armed.contains("Enter merge when ready"), "{armed}");
+
+        let on = drawn_with(&blocked, AutoMergeOffer::On(MergeStrategy::Squash), false);
+        assert!(
+            on.contains("Merges by itself when ready: Squash and merge"),
+            "{on}"
+        );
+        assert!(on.contains("a turn off auto-merge"), "{on}");
+
+        assert!(
+            !drawn(&blocked).contains("a: "),
+            "no a where it does nothing"
+        );
     }
 }

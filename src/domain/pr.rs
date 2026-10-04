@@ -84,6 +84,12 @@ pub enum Mergeability {
     /// A provider rule stops the merge for a reason other than a conflict:
     /// missing approvals, required checks, a draft, a branch behind its base.
     Blocked(Vec<String>),
+    /// The provider merges it by itself with `strategy` once nothing stands in
+    /// the way; `waiting` is what still does.
+    AutoMerge {
+        strategy: MergeStrategy,
+        waiting: Vec<String>,
+    },
     Unknown,
 }
 
@@ -92,7 +98,11 @@ impl Mergeability {
     /// the way.
     pub fn blockers(&self) -> &[String] {
         match self {
-            Self::Conflicts(reasons) | Self::Blocked(reasons) => reasons,
+            Self::Conflicts(reasons)
+            | Self::Blocked(reasons)
+            | Self::AutoMerge {
+                waiting: reasons, ..
+            } => reasons,
             Self::Mergeable | Self::Unknown => &[],
         }
     }

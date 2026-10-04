@@ -34,7 +34,7 @@ connected provider does not support, so it can show fewer keys than this page.
 | `H` / `L` | pan a wide Description |
 | `a` | submit a review verdict |
 | `v` | start or finish a batched review; `V` discards it |
-| `m` | merge; the dialog lists what blocks it |
+| `m` | merge; the dialog lists what blocks it. On GitHub, while the PR waits on checks or reviews, `a` in the dialog makes `enter` merge it by itself when ready, and turns that off again |
 | `x` | close or decline the PR, or reopen a declined one |
 | `c` | comment |
 | `r` | reply |

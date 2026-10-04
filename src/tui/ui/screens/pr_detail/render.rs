@@ -15,7 +15,10 @@ use crate::{
             layout,
             screens::pr_detail::{
                 DetailContext, DetailView, Overlay, PrDetailScreen,
-                dialogs::{PrSummary, merge::MergeView},
+                dialogs::{
+                    PrSummary,
+                    merge::{AutoMergeOffer, MergeView},
+                },
                 tabs::{
                     DetailTab, commits, description::DescriptionView, overview::OverviewContext,
                 },
@@ -284,6 +287,7 @@ pub(super) fn render(
                 frame,
                 area,
                 &MergeView {
+                    auto: AutoMergeOffer::of(&ctx.store.capabilities, ctx.mergeability()),
                     strategies: &ctx.store.capabilities.merge_strategies,
                     pr: PrSummary::of(pr),
                     blockers,
