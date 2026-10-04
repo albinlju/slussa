@@ -2,7 +2,7 @@ use chrono::{DateTime, Utc};
 use serde::Deserialize;
 
 use crate::domain::ci::CiSummary;
-use crate::domain::pr::{PrBatch, PrGroup, PrId, PrInfo, PrStatus, PullRequest};
+use crate::domain::pr::{AiReview, PrBatch, PrGroup, PrId, PrInfo, PrStatus, PullRequest};
 use crate::domain::review::{Reviewer, ReviewerState};
 use crate::domain::user::User;
 use crate::providers::error::FetchError;
@@ -13,6 +13,9 @@ use super::pagination::Connection;
 struct GhAuthor {
     #[serde(default)]
     login: String,
+    /// `Bot` for a GitHub App's account. Asked for only where it is used.
+    #[serde(rename = "__typename", default)]
+    typename: String,
 }
 
 #[derive(Debug, Default, Deserialize)]
@@ -51,6 +54,13 @@ struct GhReviewSummary {
     state: String,
     #[serde(default)]
     author: GhAuthor,
+    /// The commit the review was made on.
+    #[serde(default)]
+    commit: Option<Oid>,
+}
+#[derive(Debug, Deserialize)]
+struct Oid {
+    oid: String,
 }
 
 /// Outstanding review requests. A request for a team has no `login` and is
@@ -96,6 +106,8 @@ struct GhPr {
     /// list shows how many conversations a PR has, not how many posts.
     #[serde(default)]
     review_threads: Count,
+    #[serde(default)]
+    head_ref_oid: Option<String>,
     latest_reviews: Connection<GhReviewSummary>,
     #[serde(default)]
     review_requests: ReviewRequests,
@@ -114,8 +126,9 @@ const PR_FIELDS: &str = r"
     state isDraft headRefName baseRefName createdAt updatedAt
     additions deletions changedFiles
     comments { totalCount }
+    headRefOid
     reviewThreads { totalCount }
-    latestReviews(first: 100) { nodes { state author { login } } pageInfo { hasNextPage } }
+    latestReviews(first: 100) { nodes { state author { __typename login } commit { oid } } pageInfo { hasNextPage } }
     reviewRequests(first: 100) { nodes { requestedReviewer { ... on User { login } } } }
     commits(last: 1) { nodes { commit { statusCheckRollup { state } } } }
 ";
@@ -159,7 +172,7 @@ fn complete(mut prs: Vec<GhPr>) -> Result<Vec<PullRequest>, FetchError> {
                 &pr.id,
                 "PullRequest",
                 "latestReviews",
-                "state author { login }",
+                "state author { __typename login } commit { oid }",
             )?;
         }
     }
@@ -197,6 +210,11 @@ fn map_pr(gh: GhPr) -> PullRequest {
             .filter_map(|node| node.commit.status_check_rollup)
             .map(|rollup| rollup.state),
     );
+    let ai_review = ai_review(
+        &gh.latest_reviews.nodes,
+        gh.head_ref_oid.as_deref(),
+        gh.state == "OPEN",
+    );
     let reviewers = with_requests(map_reviewers(gh.latest_reviews.nodes), gh.review_requests);
     let comment_count = gh.comments.total_count + gh.review_threads.total_count;
 
@@ -226,6 +244,42 @@ fn map_pr(gh: GhPr) -> PullRequest {
         changed_files: gh.changed_files,
         created: gh.created_at,
         updated: gh.updated_at,
+        ai_review,
+    }
+}
+
+/// How the bot accounts' reviews stand: the one that needs the reader most
+/// counts. A review is current only when its commit and the head are both known
+/// and the same; any other is stale, a commit GitHub no longer has (null, after a
+/// force-push) included, since that one was made on something that is not the head. That only matters while the PR can still change: on one that is over,
+/// a bot's review of an older head only says that the author fixed what it
+/// found, so it is simply a review.
+fn ai_review(reviews: &[GhReviewSummary], head: Option<&str>, open: bool) -> AiReview {
+    let worst = reviews
+        .iter()
+        .filter(|review| review.author.typename == "Bot")
+        .map(|review| {
+            let on_head = review
+                .commit
+                .as_ref()
+                .zip(head)
+                .is_some_and(|(commit, head)| commit.oid == head);
+            if review.state == "CHANGES_REQUESTED" {
+                AiReview::ChangesRequested
+            } else if on_head {
+                AiReview::Current
+            } else {
+                AiReview::Stale
+            }
+        })
+        .max()
+        .unwrap_or_default();
+    match (worst, open) {
+        (AiReview::None, _) => AiReview::None,
+        (worst, true) => worst,
+        (AiReview::Current | AiReview::Stale | AiReview::ChangesRequested, false) => {
+            AiReview::Current
+        }
     }
 }
 

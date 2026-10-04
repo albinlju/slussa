@@ -4,7 +4,7 @@ use crate::{
     domain::{
         attention::{Attention, attention},
         ci::CiSummary,
-        pr::PullRequest,
+        pr::{AiReview, PullRequest},
         review::{Reviewer, ReviewerState},
         user::Username,
     },
@@ -29,6 +29,9 @@ pub(super) enum ListColumn {
     Diff,
     Comments,
     Reviews,
+    /// Whether an agent's bot account has reviewed the PR. Shown only while some
+    /// row has been.
+    Ai,
     Age,
     /// Why the PR needs the viewer. Shown only while some row has a reason.
     Attention,
@@ -39,13 +42,15 @@ impl ListColumn {
     /// The title is given its space first; secondary details remain in the PR
     /// view.
     pub(super) const fn visible(width: u16) -> &'static [Self] {
-        use ListColumn::{Age, Attention, Author, Ci, Comments, Diff, Id, Reviews, Status, Title};
+        use ListColumn::{
+            Age, Ai, Attention, Author, Ci, Comments, Diff, Id, Reviews, Status, Title,
+        };
         match width {
             0..=59 => &[Id, Title],
             60..=89 => &[Id, Title, Author, Ci],
-            90..=119 => &[Id, Title, Attention, Author, Ci, Reviews, Age],
+            90..=119 => &[Id, Title, Attention, Author, Ci, Reviews, Ai, Age],
             _ => &[
-                Id, Title, Attention, Author, Status, Ci, Diff, Comments, Reviews, Age,
+                Id, Title, Attention, Author, Status, Ci, Diff, Comments, Reviews, Ai, Age,
             ],
         }
     }
@@ -60,6 +65,7 @@ impl ListColumn {
             Self::Diff => ("Diff", Width::Fixed(12)),
             Self::Comments => ("Comments", Width::Fixed(10)),
             Self::Reviews => ("Reviews", Width::Fixed(9)),
+            Self::Ai => ("AI review", Width::Fixed(11)),
             Self::Age => ("Age", Width::Fixed(8)),
             Self::Attention => ("Needs you", Width::Fixed(19)),
         };
@@ -110,10 +116,25 @@ impl ListColumn {
                 let (text, color) = review_summary(&pr.reviewers);
                 vec![Span::styled(text, Style::default().fg(color))]
             }
+            Self::Ai => ai_cell(pr.ai_review),
             Self::Age => vec![Span::styled(age_label(pr.created), muted)],
             Self::Attention => attention_cell(attention(pr, viewer)),
         }
     }
+}
+
+/// Whether an agent reviewed the PR, in the diamonds that mean an agent
+/// elsewhere in the list: `◆` it reviewed the head the PR has now, `◈` an older
+/// one, `◇` no agent has, and `✗` it asked for changes.
+fn ai_cell(review: AiReview) -> Cell {
+    let theme = theme::current();
+    let (glyph, color) = match review {
+        AiReview::None => (icons::AI_NONE, theme.muted),
+        AiReview::Current => (icons::AI, theme.success),
+        AiReview::Stale => (icons::AI_STALE, theme.warning),
+        AiReview::ChangesRequested => (icons::TIMES_CIRCLE, theme.error),
+    };
+    vec![Span::styled(glyph, Style::default().fg(color))]
 }
 
 fn attention_cell(reason: Option<Attention>) -> Cell {
@@ -157,4 +178,28 @@ fn review_summary(reviewers: &[Reviewer]) -> (String, Color) {
         theme.warning
     };
     (format!("{approved}/{total}"), color)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn the_cell_is_one_diamond_and_the_four_differ() {
+        let glyphs: Vec<String> = [
+            AiReview::None,
+            AiReview::Current,
+            AiReview::Stale,
+            AiReview::ChangesRequested,
+        ]
+        .into_iter()
+        .map(|review| {
+            ai_cell(review)
+                .iter()
+                .map(|span| span.content.as_ref())
+                .collect()
+        })
+        .collect();
+        assert_eq!(glyphs, ["◇", "◆", "◈", "✗"]);
+    }
 }
