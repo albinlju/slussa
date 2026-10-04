@@ -38,6 +38,7 @@ The search also takes filters, written `key:value` among the words and combined 
 | `v` | start or finish a batched review; `V` discards it |
 | `m` | merge; the dialog lists what blocks it |
 | `x` | close or decline the PR, or reopen a declined one |
+| `b` | in the Builds tab, run the failed builds again; offered when one has failed or was cancelled, and dimmed with the reason on a merged or declined PR (GitHub Actions) |
 | `c` | comment |
 | `r` | reply |
 | `e` / `d` | edit / delete your own comment (`d` also removes a queued review comment) |

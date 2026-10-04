@@ -26,6 +26,7 @@ pub enum Command {
         body: String,
     },
     Merge(MergeStrategy),
+    RerunFailedBuilds,
     Decline,
     Reopen,
     DeleteComment(CommentKey),
@@ -50,6 +51,7 @@ impl Command {
                 CommentTarget::Review { verdict } => caps.can_submit_verdict(*verdict, false),
             },
             Self::Merge(strategy) => caps.merge_strategies.contains(strategy),
+            Self::RerunFailedBuilds => caps.supports(Feature::RerunBuilds),
             Self::Decline => caps.supports(Feature::ClosePr),
             Self::Reopen => caps.supports(Feature::ReopenPr),
             Self::DeleteComment { .. } => caps.supports(Feature::DeleteComments),
@@ -109,6 +111,11 @@ impl App {
             Command::Merge(strategy) => {
                 if let Some(ticket) = self.begin_write(pr_id, Operation::Merge) {
                     self.spawn_merge(ticket, strategy);
+                }
+            }
+            Command::RerunFailedBuilds => {
+                if let Some(ticket) = self.begin_write(pr_id, Operation::RerunBuilds) {
+                    self.spawn_rerun_builds(ticket);
                 }
             }
             Command::Decline => {

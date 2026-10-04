@@ -165,7 +165,11 @@ fn footer_actions(state: &DetailView<'_>, tab: DetailTab) -> Vec<Hint> {
             hints
         }
         DetailTab::Commits => widgets::hints_on("enter: open  /: search"),
-        DetailTab::Builds => widgets::hints_on("j/k: scroll  h/l: tabs"),
+        DetailTab::Builds => {
+            let mut hints = widgets::hints_on("j/k: scroll  h/l: tabs");
+            hints.extend(bindings::hint(state, 'b'));
+            hints
+        }
         // Both returned above with hints of their own.
         DetailTab::Overview | DetailTab::Diff => Vec::new(),
     }

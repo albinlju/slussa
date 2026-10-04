@@ -45,6 +45,14 @@ pub enum FetchError {
     ParseFailed(#[source] Source),
     #[error("worker thread panicked: {0}")]
     WorkerPanicked(String),
+    /// One action made of several requests, some of which arrived.
+    #[error("{done} of {total} requests went through: {first}")]
+    Partial {
+        done: usize,
+        total: usize,
+        /// What the first request that failed was told.
+        first: String,
+    },
 }
 
 /// Why a review sent as a batch failed.
@@ -166,6 +174,9 @@ impl FetchError {
             }
             Self::ParseFailed(_) => "Couldn't read the server response.".to_owned(),
             Self::WorkerPanicked(reason) => format!("worker thread panicked: {reason}"),
+            Self::Partial { done, total, first } => {
+                format!("{done} of {total} were started again; the rest failed: {first}")
+            }
         }
     }
 
@@ -189,7 +200,8 @@ impl FetchError {
             | Self::GhFailed { .. }
             | Self::Network(_)
             | Self::ParseFailed(_)
-            | Self::WorkerPanicked(_) => true,
+            | Self::WorkerPanicked(_)
+            | Self::Partial { .. } => true,
         }
     }
 }
