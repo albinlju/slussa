@@ -1,5 +1,8 @@
 use crate::{
-    domain::{commit::Commit, pr::PullRequest},
+    domain::{
+        commit::Commit,
+        pr::{PrId, PullRequest},
+    },
     tui::{
         app::effect::Effect,
         ui::{
@@ -25,6 +28,13 @@ pub struct SearchInput {
 impl SearchInput {
     pub fn matches(&self, haystack: &str) -> bool {
         self.query.is_empty() || haystack.to_lowercase().contains(&self.query.to_lowercase())
+    }
+
+    /// The PR the field names, when it holds `#` and a number: `#44`.
+    pub fn pr_number(&self) -> Option<PrId> {
+        self.query
+            .starts_with('#')
+            .then(|| PrId::parse(&self.query))?
     }
 
     pub fn matches_pr(&self, pr: &PullRequest) -> bool {

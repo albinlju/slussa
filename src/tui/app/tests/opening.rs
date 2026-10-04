@@ -120,3 +120,58 @@ async fn a_pr_that_cannot_be_read_is_said_so_and_the_list_is_shown() {
         app.state.store.notice
     );
 }
+
+/// Type `#` and a number in the list's search, and press Enter.
+fn jump_to(app: &mut App, number: &str) {
+    press(app, KeyCode::Char('/'));
+    for ch in format!("#{number}").chars() {
+        press(app, KeyCode::Char(ch));
+    }
+    press(app, KeyCode::Enter);
+}
+
+#[tokio::test]
+async fn a_number_in_the_search_opens_a_pr_the_list_does_not_hold() {
+    let mut app = app();
+    app.state.screen = Screen::List;
+    jump_to(&mut app, "99");
+    assert_eq!(
+        on_screen(&app),
+        Some(PrId(99)),
+        "it is read, so it is on screen"
+    );
+    let pr = elsewhere(&app, 99);
+    app.apply_result(TaskResult::Read(Read::Pr(PrId(99), Ok(pr))));
+    assert!(ids(&app).contains(&99));
+}
+
+#[tokio::test]
+async fn a_number_in_the_search_opens_that_pr_and_not_the_selected_row() {
+    let mut app = app();
+    app.state.screen = Screen::List;
+    let target = {
+        let LoadState::Loaded(prs) = &app.state.store.cache.prs else {
+            panic!("the fixture's list is loaded");
+        };
+        prs.last().map(|pr| pr.id.0).unwrap_or_default()
+    };
+    jump_to(&mut app, &target.to_string());
+    assert_eq!(on_screen(&app), Some(PrId(target)));
+}
+
+#[test]
+fn only_a_number_after_a_hash_names_a_pr() {
+    use crate::tui::ui::components::search_input::SearchInput;
+    let named = |query: &str| {
+        SearchInput {
+            open: true,
+            query: query.into(),
+        }
+        .pr_number()
+    };
+    assert_eq!(named("#44"), Some(PrId(44)));
+    assert_eq!(named("44"), None);
+    assert_eq!(named("#"), None);
+    assert_eq!(named("#4x"), None);
+    assert_eq!(named("#0"), None);
+}

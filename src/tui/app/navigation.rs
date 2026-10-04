@@ -15,7 +15,21 @@ impl App {
     /// parts and the PR itself read together, rather than the list first.
     pub(super) fn start_opening(&mut self) {
         if let Some(pr_id) = self.start_on.take() {
-            self.open_pr(pr_id);
+            self.open_named_pr(pr_id);
+        }
+    }
+
+    /// Open a PR that may not be in the list: the PR itself is read too, then.
+    pub(super) fn open_named_pr(&mut self, pr_id: PrId) {
+        let listed = self
+            .state
+            .store
+            .cache
+            .prs
+            .loaded()
+            .is_some_and(|prs| prs.iter().any(|pr| pr.id == pr_id));
+        self.open_pr(pr_id);
+        if !listed {
             self.spawn_load_pr(pr_id);
         }
     }

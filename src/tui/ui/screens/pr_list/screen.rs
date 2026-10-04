@@ -154,10 +154,16 @@ impl Component for PrListScreen {
             KeyCode::Up | KeyCode::Char('k') => Some(Action::List(ListAction::MoveSelection(-1))),
             KeyCode::PageDown => Some(Action::List(ListAction::MoveSelection(half))),
             KeyCode::PageUp => Some(Action::List(ListAction::MoveSelection(-half))),
-            KeyCode::Enter => self
-                .filtered_prs(ctx)
-                .get(self.selected)
-                .map(|p| Action::List(ListAction::OpenPr(p.id))),
+            KeyCode::Enter => {
+                let rows = self.filtered_prs(ctx);
+                // `#44` in the search names a PR: that one when it is in the
+                // list, and when nothing else matches, one the list does not hold.
+                self.search
+                    .pr_number()
+                    .filter(|id| rows.is_empty() || rows.iter().any(|pr| pr.id == *id))
+                    .or_else(|| rows.get(self.selected).map(|pr| pr.id))
+                    .map(|id| Action::List(ListAction::OpenPr(id)))
+            }
             _ => None,
         }
     }
