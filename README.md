@@ -94,8 +94,8 @@ The search takes words, and filters among them: `author:alice`,
 
 A "Needs you" column, shown at 90 columns or wider, says why a PR is on top:
 changes requested, CI failed, review requested, or approved. Team review requests
-on GitHub are not counted yet. Press `s` for plain newest-first order, or set
-`sort = "recent"`.
+on GitHub are not counted yet. Press `s` to pick another order (newest, recently
+updated, oldest), or set `sort` in the config.
 
 On GitHub an "AI review" column, also from 90 columns, says whether a bot account
 (CodeRabbit, for one) has reviewed the PR; it is not about who wrote it. `◆` means it reviewed the head the PR has now, `◈` an older
@@ -119,7 +119,7 @@ over SSH; inside tmux that needs `set -g set-clipboard on`.
 
 ```toml
 theme = "graphite"   # graphite (default), slate, gruvbox, catppuccin, terminal
-sort = "attention"   # attention (default) or recent
+sort = "attention"   # attention (default), recent, updated or oldest
 
 [ai]
 # Optional. For an agent that works as a person: a comment whose first line
