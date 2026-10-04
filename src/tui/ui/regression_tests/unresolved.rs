@@ -93,3 +93,19 @@ fn the_footer_says_how_many_are_left_when_there_is_room_for_it() {
     let text = draw(&mut state, 200, 30);
     assert!(text.contains("u: unresolved (2)"), "{text}");
 }
+
+#[test]
+fn when_the_timeline_is_not_drawn_the_places_u_would_go_to_are_forgotten() {
+    let mut state = overview();
+    draw(&mut state, 140, 30);
+    assert_eq!(state.ui.detail.overview.timeline.unresolved.len(), 2);
+
+    // The activity is read again: the timeline shows a placeholder meanwhile.
+    if let Some(data) = state.store.cache.details.get_mut(&PrId(42)) {
+        data.activity = LoadState::Loading;
+    }
+    draw(&mut state, 140, 30);
+    assert!(state.ui.detail.overview.timeline.unresolved.is_empty());
+    let text = draw(&mut state, 140, 30);
+    assert!(!text.contains("unresolved ("), "{text}");
+}

@@ -50,6 +50,8 @@ fn render_timeline(
     let Some(activity) =
         widgets::loaded_or_placeholder(frame, pr_data.map(|d| &d.activity), "activity", area)
     else {
+        // Nothing is drawn, so there is nowhere for `u` to go.
+        ui.unresolved.clear();
         return;
     };
 
@@ -82,6 +84,7 @@ fn render_timeline(
     let waiting_for_context = threads.iter().any(|thread| thread.anchor.is_some())
         && pr_data.is_some_and(|data| matches!(data.diff, LoadState::Loading));
     if waiting_for_context {
+        ui.unresolved.clear();
         frame.render_widget(
             Paragraph::new(widgets::loading("Loading code context…")),
             area,
