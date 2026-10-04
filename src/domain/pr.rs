@@ -148,6 +148,35 @@ pub enum AiReview {
     ChangesRequested,
 }
 
+#[cfg(test)]
+impl PullRequest {
+    /// An open PR by `alice`, with nothing in it, last updated at `updated`.
+    pub fn for_test(id: u64, updated: DateTime<Utc>) -> Self {
+        Self {
+            url: None,
+            id: PrId(id),
+            title: String::new(),
+            description: None,
+            author: User {
+                username: "alice".into(),
+            },
+            ci: CiSummary::Unknown,
+            status: PrStatus::Open,
+            reviewers: vec![],
+            labels: vec![],
+            comment_count: 0,
+            source_branch: String::new(),
+            target_branch: String::new(),
+            additions: 0,
+            deletions: 0,
+            changed_files: 0,
+            created: updated,
+            updated,
+            ai_review: AiReview::None,
+        }
+    }
+}
+
 #[derive(Debug, Clone)]
 pub struct PullRequest {
     pub url: Option<String>,
