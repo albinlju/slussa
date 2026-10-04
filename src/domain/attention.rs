@@ -19,6 +19,9 @@ pub enum Attention {
     ChangesRequested,
     /// Your PR: the checks failed.
     CiFailed,
+    /// Your PR: it has a conflict with the branch it targets, so it cannot be
+    /// merged until you resolve it.
+    Conflicts,
     /// Someone else's PR: you were asked to review it and have not.
     ReviewRequested,
     /// Your PR: every reviewer approved, so the decision is yours.
@@ -30,6 +33,7 @@ impl Attention {
         match self {
             Self::ChangesRequested => "changes requested",
             Self::CiFailed => "CI failed",
+            Self::Conflicts => "conflicts",
             Self::ReviewRequested => "review requested",
             Self::Approved => "approved",
         }
@@ -49,6 +53,8 @@ pub fn attention(pr: &PullRequest, viewer: &Username) -> Option<Attention> {
             Some(Attention::ChangesRequested)
         } else if pr.ci == CiSummary::Failed {
             Some(Attention::CiFailed)
+        } else if pr.has_conflicts {
+            Some(Attention::Conflicts)
         } else if pr.reviewers.is_empty() || !states().all(|s| *s == ReviewerState::Approved) {
             None
         } else {
@@ -99,6 +105,7 @@ mod tests {
             created: Utc::now(),
             updated: Utc::now(),
             ai_review: crate::domain::pr::AiReview::None,
+            has_conflicts: false,
         }
     }
 
@@ -220,5 +227,54 @@ mod tests {
                 "approved"
             ]
         );
+    }
+
+    fn conflicting(mut pr: PullRequest) -> PullRequest {
+        pr.has_conflicts = true;
+        pr
+    }
+
+    #[test]
+    fn a_conflict_is_a_reason_on_ones_own_pr_only() {
+        let mine = conflicting(pr("me", CiSummary::Success, Vec::new()));
+        assert_eq!(attention(&mine, &"me".into()), Some(Attention::Conflicts));
+        assert_eq!(Attention::Conflicts.label(), "conflicts");
+        // Someone else's conflict is theirs to resolve.
+        let theirs = conflicting(pr("alice", CiSummary::Success, Vec::new()));
+        assert_eq!(attention(&theirs, &"me".into()), None);
+    }
+
+    #[test]
+    fn a_conflict_comes_after_changes_requested_and_failing_checks_and_before_approved() {
+        let changes = conflicting(pr(
+            "me",
+            CiSummary::Failed,
+            vec![reviewer("bob", ReviewerState::ChangesRequested)],
+        ));
+        assert_eq!(
+            attention(&changes, &"me".into()),
+            Some(Attention::ChangesRequested)
+        );
+        let failing = conflicting(pr("me", CiSummary::Failed, Vec::new()));
+        assert_eq!(attention(&failing, &"me".into()), Some(Attention::CiFailed));
+        // Approved by everyone, and it cannot be merged: the conflict is the reason.
+        let approved = conflicting(pr(
+            "me",
+            CiSummary::Success,
+            vec![reviewer("bob", ReviewerState::Approved)],
+        ));
+        assert_eq!(
+            attention(&approved, &"me".into()),
+            Some(Attention::Conflicts)
+        );
+        assert!(Attention::CiFailed < Attention::Conflicts);
+        assert!(Attention::Conflicts < Attention::ReviewRequested);
+    }
+
+    #[test]
+    fn a_pr_that_is_over_has_no_conflict_to_resolve() {
+        let mut done = conflicting(pr("me", CiSummary::Success, Vec::new()));
+        done.status = PrStatus::Merged;
+        assert_eq!(attention(&done, &"me".into()), None);
     }
 }

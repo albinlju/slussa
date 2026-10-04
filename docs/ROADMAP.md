@@ -119,8 +119,11 @@ says so on the row.
 - [ ] **Structured filters** — `author:`, `label:`, `review:approved`, `is:draft`,
   `status:`, plus `is:agent` (see *AI authorship* below).
 - [ ] **Sorting** — recently updated, created, comment count, CI status.
-- [ ] **Mergeability in the PR list** — conflict / behind-base indicators
-  (the detail header badge is done; this extends it to rows).
+- [ ] **Behind base in the PR list.** A conflict on one's own PR is a reason in
+  *Needs you* (GitHub only; the list query reads `mergeable` for nothing). Whether
+  the PR is behind its base needs `mergeStateStatus`, which doubled the time of
+  the query (measured on cli/cli) and says `BLOCKED` for most PRs where branch
+  protection is on, so it is left out.
 - [ ] **Labels in the list** — colored and filterable (shown in Overview today).
 - [ ] **Compact diff stats** (files / +/−) on list rows.
 - [ ] **Search older PRs and show the total.** Merged and declined PRs are read a

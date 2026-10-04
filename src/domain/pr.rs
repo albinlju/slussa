@@ -168,4 +168,8 @@ pub struct PullRequest {
     pub created: DateTime<Utc>,
     pub updated: DateTime<Utc>,
     pub ai_review: AiReview,
+    /// The provider says the PR cannot be merged as it is, for a conflict with
+    /// the branch it targets. Only an open PR has one; a provider that does not
+    /// say, or has not worked it out, leaves it false.
+    pub has_conflicts: bool,
 }

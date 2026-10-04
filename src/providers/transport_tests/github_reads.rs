@@ -486,3 +486,26 @@ fn github_list_does_not_call_a_review_current_when_its_commit_is_gone() {
     let gone = json!({"state": "COMMENTED", "author": {"__typename": "Bot", "login": "bot"}, "commit": null});
     assert_eq!(read_ai(&[gone], "head", "OPEN"), AiReview::Stale);
 }
+
+fn read_conflicts(mergeable: Option<&str>, state: &str) -> bool {
+    let mut pr = gh_pr(7, "2026-10-01T10:00:00Z");
+    pr["state"] = json!(state);
+    if let Some(mergeable) = mergeable {
+        pr["mergeable"] = json!(mergeable);
+    }
+    let (result, _installed) =
+        fetch_prs_with(FakeGh::new().on("states:", &gh_list_page(&[pr], None)));
+    result.unwrap().prs[0].has_conflicts
+}
+
+#[test]
+fn github_list_says_a_pr_has_conflicts_only_when_it_is_open_and_github_says_so() {
+    assert!(read_conflicts(Some("CONFLICTING"), "OPEN"));
+    // Not worked out yet, mergeable, or not said at all: no claim.
+    assert!(!read_conflicts(Some("UNKNOWN"), "OPEN"));
+    assert!(!read_conflicts(Some("MERGEABLE"), "OPEN"));
+    assert!(!read_conflicts(None, "OPEN"));
+    // A PR that is over has nothing to resolve.
+    assert!(!read_conflicts(Some("CONFLICTING"), "MERGED"));
+    assert!(!read_conflicts(Some("CONFLICTING"), "CLOSED"));
+}

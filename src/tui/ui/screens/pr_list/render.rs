@@ -97,6 +97,8 @@ pub(super) fn render(
         .copied()
         .filter(|&column| column != ListColumn::Attention || any_reason)
         .filter(|&column| column != ListColumn::Ai || any_ai)
+        // The status says which view this is, except where the views are mixed.
+        .filter(|&column| column != ListColumn::Status || screen.filter == StatusFilter::All)
         .collect();
     let definitions: Vec<_> = columns.iter().map(|column| column.spec()).collect();
     let table = table::Table::new(&definitions, width);

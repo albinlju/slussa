@@ -108,6 +108,7 @@ mod tests {
             created: at(0),
             updated,
             ai_review: crate::domain::pr::AiReview::None,
+            has_conflicts: false,
         }
     }
 

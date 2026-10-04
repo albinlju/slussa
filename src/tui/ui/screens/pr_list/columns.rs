@@ -159,7 +159,7 @@ fn attention_cell(reason: Option<Attention>) -> Cell {
     let theme = theme::current();
     reason.map_or_else(Vec::new, |reason| {
         let color = match reason {
-            Attention::ChangesRequested | Attention::CiFailed => theme.error,
+            Attention::ChangesRequested | Attention::CiFailed | Attention::Conflicts => theme.error,
             Attention::ReviewRequested => theme.warning,
             Attention::Approved => theme.success,
         };
