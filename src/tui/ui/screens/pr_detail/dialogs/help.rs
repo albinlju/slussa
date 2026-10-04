@@ -45,6 +45,11 @@ const HELP: &[Entry] = &[
     Entry::Bound(&bindings::rows::COMMENT),
     Entry::Bound(&bindings::rows::REPLY),
     Key("^j/^k", "step comment", Needs::Nothing),
+    Key(
+        "u/U",
+        "next / prev unresolved thread (Overview)",
+        Needs::Feature(Feature::ResolveThreads),
+    ),
     Entry::Bound(&bindings::rows::FILTER_COMMENTS),
     Entry::Bound(&bindings::rows::EDIT_COMMENT),
     Entry::Delete,
@@ -216,7 +221,7 @@ mod tests {
         );
         assert_eq!(
             added(&with(&[Feature::ResolveThreads], false), false, false),
-            ["R"]
+            ["u/U", "R"]
         );
         let merging = Capabilities {
             merge_strategies: vec![MergeStrategy::Squash],

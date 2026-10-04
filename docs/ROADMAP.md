@@ -94,11 +94,12 @@ Still one list, still one PR view. The list just knows what needs the user and
 says so on the row.
 
 - [ ] **Attention reasons, the rest.** The list is sorted by what needs you,
-  with a reason column (the README says how). Still open: a reason for new
-  comments and mentions (the list marks a PR that changed since it was opened,
-  with `●` before its number, and the reason column could use that), team review
-  requests (GitHub counts people only), opening the PR on the tab its reason
-  points at, and remembering the `s` choice between runs.
+  with a reason column (the README says how). Still open: a reason for
+  mentions (they need the text of the comments), team review requests (GitHub
+  counts people only), opening the PR on the tab its reason points at, and
+  remembering the `s` choice between runs. A reason for new comments was tried
+  and dropped: the `●` before the number already says that something changed, and
+  the reason said it a second time, at the cost of a column.
 - [ ] **Merge risk** — how dangerous the merge is, beside why the PR needs
   you: can it be reverted (a two-way door) or not (a one-way door: a
   migration, data loss, something sent to users), and how far a mistake
@@ -175,9 +176,7 @@ and to commits.
 - [ ] **Review as a group (display)** — render a review's comments + summary +
   state as one grouped timeline entry. Matters more once AI reviews arrive as one
   batch with many comments.
-- [ ] **Jump to next / prev unresolved thread** (`]c` / `[c`) — the core loop for
-  walking through flags.
-- [ ] **Resolved / unresolved filter** in the Overview.
+- [ ] **Resolved / unresolved filter** in the Overview. (`u` / `U` already go between the unresolved threads there; a filter would also hide the rest.)
 - [ ] **Outdated comments** — hide threads whose anchored line is gone from the
   diff; keep them in the Overview timeline.
 
