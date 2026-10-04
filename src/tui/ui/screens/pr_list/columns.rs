@@ -40,15 +40,18 @@ pub(super) enum ListColumn {
 impl ListColumn {
     /// The columns a list this wide has room for, in the order they are shown.
     /// The title is given its space first; secondary details remain in the PR
-    /// view.
-    pub(super) const fn visible(width: u16) -> &'static [Self] {
+    /// view. Where a PR has a conflict the status takes the place of the least
+    /// important column that is there, so that the conflict is seen.
+    pub(super) const fn visible(width: u16, conflicts: bool) -> &'static [Self] {
         use ListColumn::{
             Age, Ai, Attention, Author, Ci, Comments, Diff, Id, Reviews, Status, Title,
         };
-        match width {
-            0..=59 => &[Id, Title],
-            60..=89 => &[Id, Title, Author, Ci],
-            90..=119 => &[Id, Title, Attention, Author, Ci, Reviews, Ai, Age],
+        match (width, conflicts) {
+            (0..=59, _) => &[Id, Title],
+            (60..=89, false) => &[Id, Title, Author, Ci],
+            (60..=89, true) => &[Id, Title, Status, Ci],
+            (90..=119, false) => &[Id, Title, Attention, Author, Ci, Reviews, Ai, Age],
+            (90..=119, true) => &[Id, Title, Attention, Author, Status, Ci, Reviews, Ai],
             _ => &[
                 Id, Title, Attention, Author, Status, Ci, Diff, Comments, Reviews, Ai, Age,
             ],

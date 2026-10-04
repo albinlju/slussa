@@ -73,3 +73,18 @@ fn in_the_mixed_view_a_conflict_stands_where_the_status_would() {
         "{plain}"
     );
 }
+
+#[test]
+fn a_conflict_is_seen_in_a_narrow_list_too_in_place_of_what_matters_least() {
+    for width in [100, 70] {
+        let quiet = draw(&mut list(StatusFilter::Open, false), width, 12);
+        assert!(!quiet.contains("Status"), "{width}: {quiet}");
+
+        let conflicting = draw(&mut list(StatusFilter::Open, true), width, 12);
+        assert!(
+            conflicting.contains("Status") && conflicting.contains("conflicts"),
+            "{width}: {conflicting}"
+        );
+        assert!(conflicting.contains("Title"), "{width}: {conflicting}");
+    }
+}

@@ -98,7 +98,7 @@ pub(super) fn render(
     let any_ai = filtered
         .as_ref()
         .is_some_and(|prs| prs.iter().any(|pr| pr.ai_review != AiReview::None));
-    let columns: Vec<ListColumn> = ListColumn::visible(width)
+    let columns: Vec<ListColumn> = ListColumn::visible(width, any_conflict)
         .iter()
         .copied()
         .filter(|&column| column != ListColumn::Attention || any_reason)
