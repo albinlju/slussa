@@ -96,3 +96,51 @@ fn without_a_file_the_marks_last_the_run() {
     refresh_with_update(&mut app, 42, Duration::hours(1));
     assert!(unread(&app, 42), "kept in memory all the same");
 }
+
+/// The list read again, with the PR having `extra` more comments and updated.
+fn refresh_with_comments(app: &mut App, id: u64, extra: u32) {
+    let mut prs = list(app);
+    for pr in prs.iter_mut().filter(|pr| pr.id == PrId(id)) {
+        pr.comment_count += extra;
+        pr.updated += Duration::hours(1);
+    }
+    app.apply_result(TaskResult::Read(Read::Prs {
+        group: PrGroup::Open,
+        after: None,
+        result: Ok(PrBatch { prs, more: None }),
+    }));
+}
+
+fn reason(app: &App, id: u64) -> Option<crate::domain::attention::Attention> {
+    list(app)
+        .iter()
+        .find(|pr| pr.id == PrId(id))
+        .and_then(|pr| {
+            crate::domain::attention::attention(
+                pr,
+                &app.state.store.current_user,
+                &app.state.store.seen,
+            )
+        })
+}
+
+#[test]
+fn new_comments_after_the_reader_left_are_a_reason_until_the_pr_is_opened_again() {
+    use crate::domain::attention::Attention;
+    let mut app = app();
+    // The fixture's PR is by someone else and asks nothing of the reviewer.
+    refresh_with_comments(&mut app, 42, 3);
+    assert_eq!(reason(&app, 42), None, "never opened");
+
+    detail(&mut app, DetailTab::Overview);
+    // Comments arriving while the PR is on screen are seen as they arrive.
+    refresh_with_comments(&mut app, 42, 1);
+    assert_eq!(reason(&app, 42), None);
+
+    app.apply(Action::from(NavAction::Back));
+    refresh_with_comments(&mut app, 42, 2);
+    assert_eq!(reason(&app, 42), Some(Attention::NewComments));
+
+    detail(&mut app, DetailTab::Overview);
+    assert_eq!(reason(&app, 42), None, "opening it takes them in");
+}

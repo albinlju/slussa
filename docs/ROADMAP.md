@@ -94,10 +94,9 @@ Still one list, still one PR view. The list just knows what needs the user and
 says so on the row.
 
 - [ ] **Attention reasons, the rest.** The list is sorted by what needs you,
-  with a reason column (the README says how). Still open: a reason for new
-  comments and mentions (the list marks a PR that changed since it was opened,
-  with `●` before its number, and the reason column could use that), team review
-  requests (GitHub counts people only), opening the PR on the tab its reason
+  with a reason column (the README says how). Still open: a reason for
+  mentions (new comments are one, from the count kept when a PR was last looked
+  at), team review requests (GitHub counts people only), opening the PR on the tab its reason
   points at, and remembering the `s` choice between runs.
 - [ ] **Merge risk** — how dangerous the merge is, beside why the PR needs
   you: can it be reverted (a two-way door) or not (a one-way door: a

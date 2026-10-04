@@ -89,8 +89,9 @@ connected provider does not support are hidden; actions blocked by the PR's
 state (for example merging with conflicts) stay visible and say why.
 
 A "Needs you" column, shown at 90 columns or wider, says why a PR is on top:
-changes requested, CI failed, review requested, or approved. Team review requests
-on GitHub are not counted yet. Press `s` for plain newest-first order, or set
+changes requested, CI failed, review requested, or approved, and last of all
+`new comments`: an open PR you have opened before that has more comments than when you
+last looked. Team review requests on GitHub are not counted yet. Press `s` for plain newest-first order, or set
 `sort = "recent"`.
 
 On GitHub an "AI review" column, also from 90 columns, says whether a bot account

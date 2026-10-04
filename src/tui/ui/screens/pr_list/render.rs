@@ -84,9 +84,10 @@ pub(super) fn render(
     );
     let width = inner.width.saturating_sub(GUTTER);
     // The attention column takes its space only while some row has a reason.
-    let any_reason = filtered
-        .as_ref()
-        .is_some_and(|prs| prs.iter().any(|pr| attention(pr, ctx.viewer).is_some()));
+    let any_reason = filtered.as_ref().is_some_and(|prs| {
+        prs.iter()
+            .any(|pr| attention(pr, ctx.viewer, ctx.seen).is_some())
+    });
     // So does the AI column: only while some PR has been reviewed by an agent, so
     // a repository without one has no column of hollow diamonds.
     let any_ai = filtered

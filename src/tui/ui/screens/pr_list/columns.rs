@@ -123,7 +123,7 @@ impl ListColumn {
             }
             Self::Ai => ai_cell(pr.ai_review),
             Self::Age => vec![Span::styled(age_label(pr.created), muted)],
-            Self::Attention => attention_cell(attention(pr, viewer)),
+            Self::Attention => attention_cell(attention(pr, viewer, seen)),
         }
     }
 }
@@ -162,6 +162,7 @@ fn attention_cell(reason: Option<Attention>) -> Cell {
             Attention::ChangesRequested | Attention::CiFailed => theme.error,
             Attention::ReviewRequested => theme.warning,
             Attention::Approved => theme.success,
+            Attention::NewComments => theme.info,
         };
         vec![Span::styled(reason.label(), Style::default().fg(color))]
     })

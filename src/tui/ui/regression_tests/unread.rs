@@ -10,11 +10,9 @@ fn list_with(seen_at: Option<Duration>) -> AppState {
         let LoadState::Loaded(prs) = &state.store.cache.prs else {
             panic!("the fixture's list is loaded");
         };
-        let updated = prs[0].updated;
-        state
-            .store
-            .seen
-            .mark(prs[0].id, updated + offset, updated + offset);
+        let mut looked_at = prs[0].clone();
+        looked_at.updated += offset;
+        state.store.seen.look(&looked_at, looked_at.updated);
     }
     state
 }
@@ -63,4 +61,22 @@ fn the_numbers_stay_where_they_are_when_the_dot_comes_and_goes() {
     let heading = rows(&without).into_iter().find(|row| row.contains("Title"));
     let heading_hash = heading.and_then(|row| row.find('#').map(|b| row[..b].chars().count()));
     assert_eq!(heading_hash, column(&without, "#42"));
+}
+
+#[test]
+fn new_comments_since_the_pr_was_opened_are_named_in_the_needs_you_column() {
+    // Looked at an hour ago, when it had its comments; since then it has two more.
+    let mut state = list_with(Some(-Duration::hours(1)));
+    if let LoadState::Loaded(prs) = &mut state.store.cache.prs {
+        prs[0].comment_count += 2;
+    }
+    let text = draw(&mut state, WIDTH, 12);
+    assert!(
+        text.contains("Needs you") && text.contains("new comments"),
+        "{text}"
+    );
+
+    // The same list with no new comments has no such column.
+    let quiet = draw(&mut list_with(Some(-Duration::hours(1))), WIDTH, 12);
+    assert!(!quiet.contains("new comments"), "{quiet}");
 }

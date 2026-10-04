@@ -663,7 +663,10 @@ The rules the code relies on, kept short; the regression tests in
   change what is published.
 - **Unread.** `Seen` (`domain/seen.rs`) maps a PR number to what the list knew of
   it when the reader last looked: its `updated` and the time. A PR is unread when it
-  has an entry and is updated after it, so a PR never opened is never unread and
+  has an entry and is updated after it, and it has new comments when it has more
+  than the count kept at the look (`Attention::NewComments`, the least urgent
+  reason; a look made before the count was kept says nothing). A PR never opened is
+  never unread and
   nothing is marked on the first run. A PR is marked seen when it is opened and
   whenever the list is read while it is on screen, at its newest, so what the
   reader does to it themself does not light it up. `local/seen.rs` keeps it in a

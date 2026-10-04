@@ -233,7 +233,7 @@ impl PrListScreen {
             .collect();
         if self.sort == Sort::Attention && !ctx.arriving {
             rows.sort_by_key(|pr| {
-                attention(pr, ctx.viewer).map_or(usize::MAX, |reason| reason as usize)
+                attention(pr, ctx.viewer, ctx.seen).map_or(usize::MAX, |reason| reason as usize)
             });
         }
         rows

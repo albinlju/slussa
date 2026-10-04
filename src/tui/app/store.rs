@@ -361,16 +361,6 @@ pub enum FetchKey {
 }
 
 impl Store {
-    /// When the PR was last updated, as the list read it.
-    pub fn pr_updated(&self, pr_id: PrId) -> Option<chrono::DateTime<chrono::Utc>> {
-        self.cache
-            .prs
-            .loaded()?
-            .iter()
-            .find(|pr| pr.id == pr_id)
-            .map(|pr| pr.updated)
-    }
-
     /// Whether the provider has this resource at all.
     fn offers(&self, key: &FetchKey) -> bool {
         match key {

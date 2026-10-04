@@ -61,7 +61,7 @@ impl SeenStorage {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::domain::pr::PrId;
+    use crate::domain::pr::PullRequest;
     use crate::test_support::TempDir;
     use chrono::{DateTime, Utc};
     use std::fs;
@@ -77,7 +77,7 @@ mod tests {
         let (mut storage, none) = SeenStorage::open(root, "repo/a".into()).unwrap();
         assert!(none.is_empty());
         let mut seen = Seen::default();
-        seen.mark(PrId(7), at(1_000), at(2_000));
+        seen.look(&PullRequest::for_test(7, at(1_000)), at(2_000));
         storage.save(&seen).unwrap();
         drop(storage);
 
@@ -95,11 +95,20 @@ mod tests {
         r#""7":{"updated":"2026-10-04T08:00:00Z","at":"2026-10-04T09:00:00Z"}}}"#,
     );
 
+    /// The same, from a look that kept the number of comments. A file written
+    /// before it was kept (above) is still read, and written back without one.
+    const VERSION_1_WITH_COUNT: &str = concat!(
+        r#"{"version":1,"scope":"repo/account","seen":{"#,
+        r#""7":{"updated":"2026-10-04T08:00:00Z","at":"2026-10-04T09:00:00Z","comments":3}}}"#,
+    );
+
     #[test]
     fn version_1_is_read_and_written_back_unchanged() {
-        let envelope: Envelope = serde_json::from_str(VERSION_1).unwrap();
-        assert_eq!(envelope.seen.len(), 1);
-        assert_eq!(serde_json::to_string(&envelope).unwrap(), VERSION_1);
+        for text in [VERSION_1, VERSION_1_WITH_COUNT] {
+            let envelope: Envelope = serde_json::from_str(text).unwrap();
+            assert_eq!(envelope.seen.len(), 1);
+            assert_eq!(serde_json::to_string(&envelope).unwrap(), text);
+        }
     }
 
     #[test]

@@ -42,10 +42,16 @@ impl App {
     }
 
     fn mark_seen(&mut self, pr_id: PrId) {
-        let Some(updated) = self.state.store.pr_updated(pr_id) else {
+        let store = &mut self.state.store;
+        let Some(pr) = store
+            .cache
+            .prs
+            .loaded()
+            .and_then(|prs| prs.iter().find(|pr| pr.id == pr_id))
+        else {
             return;
         };
-        if self.state.store.seen.mark(pr_id, updated, Utc::now()) {
+        if store.seen.look(pr, Utc::now()) {
             self.seen_dirty = true;
         }
     }
