@@ -56,7 +56,11 @@ impl App {
         let Some(pr) = store.requested.take() else {
             return;
         };
-        if !prs.iter().any(|known| known.id == pr.id) {
+        // The one just read is at least as new as one the list holds, and is the
+        // one the screen may already be showing.
+        if let Some(known) = prs.iter_mut().find(|known| known.id == pr.id) {
+            *known = pr;
+        } else {
             prs.push(pr);
             prs.sort_by_key(|pr| PrGroup::of(&pr.status));
         }

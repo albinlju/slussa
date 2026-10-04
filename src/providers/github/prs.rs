@@ -199,7 +199,8 @@ pub fn fetch_pr(pr: PrId) -> Result<PullRequest, FetchError> {
            }}
          }}"
     );
-    let mut found: GhPr = super::run_pr_graphql(&query, pr)?;
+    let mut found: GhPr = super::run_pr_graphql::<Option<GhPr>>(&query, pr)?
+        .ok_or_else(|| FetchError::InvalidInput(format!("There is no PR #{pr}.")))?;
     read_all_reviews(&mut found)?;
     Ok(map_pr(found))
 }

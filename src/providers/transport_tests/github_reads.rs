@@ -564,3 +564,11 @@ fn github_info_reads_on_when_the_closing_issues_are_truncated() {
     assert_eq!(numbers, [1, 2]);
     assert_eq!(gh.calls().len(), 2);
 }
+
+#[test]
+fn github_a_pr_answered_with_null_is_said_not_to_exist() {
+    let answer = json!({"data": {"repository": {"pullRequest": null}}}).to_string();
+    let _gh = FakeGh::new().on("statusCheckRollup", &answer).install();
+    let error = Provider::GitHub.fetch_pr(PrId(9999)).unwrap_err();
+    assert!(error.user_message().contains("no PR #9999"), "{error:?}");
+}

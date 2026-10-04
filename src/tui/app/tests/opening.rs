@@ -64,7 +64,7 @@ async fn a_pr_the_list_does_not_hold_is_added_to_it() {
 }
 
 #[tokio::test]
-async fn a_pr_the_list_holds_is_not_added_twice() {
+async fn a_pr_the_list_holds_is_replaced_by_the_one_just_read_and_not_added_twice() {
     let mut app = app();
     let pr = {
         let LoadState::Loaded(prs) = &app.state.store.cache.prs else {
@@ -74,9 +74,18 @@ async fn a_pr_the_list_holds_is_not_added_twice() {
     };
     started_on(&mut app, pr.id.0);
     let before = ids(&app);
-    app.apply_result(TaskResult::Read(Read::Pr(pr.id, Ok(pr.clone()))));
+    let mut newer = pr.clone();
+    newer.title = "Retitled since the list was read".into();
+    app.apply_result(TaskResult::Read(Read::Pr(pr.id, Ok(newer))));
     assert_eq!(on_screen(&app), Some(pr.id));
-    assert_eq!(ids(&app), before);
+    assert_eq!(ids(&app), before, "in the same place, and once");
+    let LoadState::Loaded(prs) = &app.state.store.cache.prs else {
+        panic!("the list is loaded");
+    };
+    assert!(
+        prs.iter()
+            .any(|known| known.id == pr.id && known.title.starts_with("Retitled"))
+    );
 }
 
 #[tokio::test]
