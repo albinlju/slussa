@@ -19,6 +19,7 @@ pub mod navigation;
 mod notice;
 pub mod pr_groups;
 pub mod refresh;
+mod seen;
 pub mod state;
 pub mod store;
 mod terminal;

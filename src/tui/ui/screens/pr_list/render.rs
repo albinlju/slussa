@@ -4,7 +4,6 @@ use crate::{
     domain::{
         attention::attention,
         pr::{AiReview, PullRequest},
-        user::Username,
     },
     tui::{
         app::store::LoadState,
@@ -125,7 +124,7 @@ pub(super) fn render(
                 &mut screen.list_state,
                 rows_area,
                 &columns,
-                ctx.viewer,
+                ctx,
             );
         }
     } else {
@@ -198,7 +197,7 @@ fn render_table_body(
     list_state: &mut ListState,
     area: Rect,
     columns: &[ListColumn],
-    viewer: &Username,
+    ctx: &ListContext<'_>,
 ) {
     let theme = theme::current();
     let items: Vec<ListItem<'_>> = prs
@@ -206,7 +205,7 @@ fn render_table_body(
         .map(|pr| {
             let cells: Vec<_> = columns
                 .iter()
-                .map(|column| column.cell(pr, viewer))
+                .map(|column| column.cell(pr, ctx.viewer, ctx.seen))
                 .collect();
             ListItem::new(table.row(&cells))
         })

@@ -4,6 +4,7 @@ use crate::{
     domain::{
         attention::attention,
         pr::{PrGroup, PullRequest},
+        seen::Seen,
         user::Username,
     },
     tui::{
@@ -58,6 +59,8 @@ pub struct ListContext<'a> {
     pub refreshing: bool,
     /// Who is looking, for the attention column and order.
     pub viewer: &'a Username,
+    /// When each PR was last looked at, to mark the ones changed since.
+    pub seen: &'a Seen,
     /// More PRs exist, in a group this view shows, that have not been loaded.
     pub more: bool,
     /// The open PRs are being read page by page.
@@ -78,6 +81,7 @@ impl<'a> ListContext<'a> {
             prs: &store.cache.prs,
             refreshing: store.refreshing(screen),
             viewer: &store.current_user,
+            seen: &store.seen,
             more: groups.iter().any(|&group| store.group_has_more(group)),
             loading_more: groups.contains(&PrGroup::Open) && arriving,
             view_loading: groups.iter().any(|&group| store.group_loading(group)),

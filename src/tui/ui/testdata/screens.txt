@@ -1,7 +1,7 @@
 100x30 List
 ┌ Open (1) ────────────────────────────────────────────────────────────────────────────────────────┐
-│  #      Title                                             Author            CI  Reviews  Age     │
-│▶ #42    Component migration                               alice             ✓   —        today   │
+│    #      Title                                           Author            CI  Reviews  Age     │
+│▶   #42    Component migration                             alice             ✓   —        today   │
 │                                                                                                  │
 │                                                                                                  │
 │                                                                                                  │
@@ -186,8 +186,8 @@
   j/k: scroll  h/l: tabs                                                                    ?: help
 40x12 List
 ┌ Open (1) ────────────────────────────┐
-│  #      Title                        │
-│▶ #42    Component migration          │
+│    #      Title                      │
+│▶   #42    Component migration        │
 │                                      │
 │                                      │
 │                                      │

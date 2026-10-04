@@ -29,9 +29,10 @@ impl App {
         let root = dirs::data_local_dir()
             .ok_or_else(|| io::Error::other("Cannot locate local data directory"))?
             .join("slussa/drafts");
-        let (storage, snapshot) = DraftStorage::open(&root, scope)?;
+        let (storage, snapshot) = DraftStorage::open(&root, scope.clone())?;
         let mut app = Self::new(session, Drafts::Disk(storage));
         app.restore(snapshot);
+        app.open_seen(scope);
         Ok(app)
     }
 
