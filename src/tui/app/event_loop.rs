@@ -7,6 +7,7 @@ use crate::{
             drafts::Drafts,
             effect::{Effect, TaskResult},
             refresh,
+            seen::SeenFile,
             state::AppState,
             store::{self, FetchKey, LoadState, PrResource},
         },
@@ -32,6 +33,9 @@ pub struct App {
     pub(super) drafts: Drafts,
     /// Text was typed since the draft file was last written.
     pub(super) drafts_dirty: bool,
+    /// Where what was looked at is kept, and whether it changed since it was written.
+    pub(super) seen_file: SeenFile,
+    pub(super) seen_dirty: bool,
     pub state: AppState,
     pub(crate) provider: Provider,
     pub(super) results_tx: UnboundedSender<TaskResult>,
@@ -55,6 +59,8 @@ impl App {
         Self {
             drafts,
             drafts_dirty: false,
+            seen_file: SeenFile::Unavailable,
+            seen_dirty: false,
             state: AppState::new(store::Store::new(user, provider.capabilities())),
             provider,
             results_tx,
@@ -69,6 +75,7 @@ impl App {
         if self.drafts_dirty {
             self.save_drafts();
         }
+        self.save_seen();
         result
     }
 
@@ -155,6 +162,7 @@ impl App {
         } else if next == Next::Continue {
             self.save_drafts();
         }
+        self.save_seen();
         next
     }
 
@@ -172,6 +180,7 @@ impl App {
             }
         }
         self.save_drafts();
+        self.save_seen();
     }
 
     fn run_effect(&mut self, effect: Effect) -> Next {

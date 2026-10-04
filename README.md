@@ -102,7 +102,11 @@ that posts under your own account is told apart by the text of its comments, whi
 does not read, and Bitbucket Data Center has no such column.
 
 Drafts (comment editor text and queued review comments) are saved locally and
-survive a restart. Copying a link falls back to the terminal's clipboard (OSC 52)
+survive a restart. A `●` before a PR's number in the list means it has changed since you
+last opened it, and opening it clears the mark. A PR you have never opened is not marked,
+and what you do to a PR yourself while it is open does not mark it. slussa remembers this in
+a file of PR numbers and times, one per repository and account, and nothing else about the PR.
+Copying a link falls back to the terminal's clipboard (OSC 52)
 over SSH; inside tmux that needs `set -g set-clipboard on`.
 
 ## Configure

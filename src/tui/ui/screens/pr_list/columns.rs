@@ -6,6 +6,7 @@ use crate::{
         ci::CiSummary,
         pr::{AiReview, PullRequest},
         review::{Reviewer, ReviewerState},
+        seen::Seen,
         user::Username,
     },
     tui::ui::{
@@ -57,7 +58,8 @@ impl ListColumn {
 
     pub(super) const fn spec(self) -> Column {
         let (title, width) = match self {
-            Self::Id => ("#", Width::Fixed(7)),
+            // The number stands after the room for the unread mark.
+            Self::Id => ("  #", Width::Fixed(9)),
             Self::Status => ("Status", Width::Fixed(10)),
             Self::Author => ("Author", Width::Fixed(18)),
             Self::Title => ("Title", Width::Flex(1)),
@@ -73,11 +75,14 @@ impl ListColumn {
     }
 
     /// What `pr`'s row shows in this column.
-    pub(super) fn cell(self, pr: &PullRequest, viewer: &Username) -> Cell {
+    pub(super) fn cell(self, pr: &PullRequest, viewer: &Username, seen: &Seen) -> Cell {
         let theme = theme::current();
         let muted = Style::default().fg(theme.muted);
         match self {
-            Self::Id => vec![Span::styled(format!("#{}", pr.id), muted)],
+            Self::Id => vec![
+                unread_mark(seen.is_unread(pr)),
+                Span::styled(format!("#{}", pr.id), muted),
+            ],
             Self::Status => vec![Span::styled(
                 pr.status.label().to_string(),
                 Style::default().fg(theme.status_color(&pr.status)),
@@ -120,6 +125,19 @@ impl ListColumn {
             Self::Age => vec![Span::styled(age_label(pr.created), muted)],
             Self::Attention => attention_cell(attention(pr, viewer)),
         }
+    }
+}
+
+/// `● ` before the number of a PR that has changed since it was last opened, and
+/// the room for it otherwise, so that the numbers do not move when it comes and goes.
+fn unread_mark(unread: bool) -> Span<'static> {
+    if unread {
+        Span::styled(
+            format!("{} ", icons::CIRCLE),
+            Style::default().fg(theme::current().accent),
+        )
+    } else {
+        Span::raw("  ")
     }
 }
 

@@ -65,6 +65,7 @@ src/
 │   │   ├── navigation.rs     Screen identity, open PR and initiate missing loads
 │   │   ├── commands.rs       `Command`, what the provider supports of it, and its execution
 │   │   ├── drafts.rs         Where drafts are kept; `App::open`, restore, save, journal
+│   │   ├── seen.rs           Marks the PR on screen as seen; writes the file of looks
 │   │   ├── desktop.rs        Browser and clipboard effects
 │   │   ├── fetchers.rs        Run providers off the UI thread
 │   │   ├── terminal.rs        `TerminalGuard`: the terminal while the TUI runs
@@ -135,7 +136,8 @@ src/
 ├── local/                 What slussa keeps on disk, shared by the TUI and the subcommands
 │   ├── scope.rs           Provider, host, repository and account → the file's name
 │   ├── file.rs            One file per scope: lock and atomic write
-│   └── drafts.rs          The drafts file, version 1, and its fixture
+│   ├── drafts.rs          The drafts file, version 1, and its fixture
+│   └── seen.rs            When each PR was last looked at (numbers and times only)
 ├── session/               Who and where, shared by the TUI and the subcommands
 │   ├── mod.rs             `Session`, `connect`
 │   ├── preflight.rs       Provider detection and authentication checks
@@ -659,6 +661,16 @@ The rules the code relies on, kept short; the regression tests in
   verdict summary `submit review`. The draft footer reads `v: finish draft (N)`,
   and Tab in the verdict dialog previews every queued comment. The labels never
   change what is published.
+- **Unread.** `Seen` (`domain/seen.rs`) maps a PR number to what the list knew of
+  it when the reader last looked: its `updated` and the time. A PR is unread when it
+  has an entry and is updated after it, so a PR never opened is never unread and
+  nothing is marked on the first run. A PR is marked seen when it is opened and
+  whenever the list is read while it is on screen, at its newest, so what the
+  reader does to it themself does not light it up. `local/seen.rs` keeps it in a
+  file of its own per scope, holding no content, and entries unopened for 90 days
+  are forgotten. It is a convenience: if another slussa has the file or it cannot
+  be read, the marks last the run. The list draws `●` before the number (`#`
+  keeps room for it, so the numbers do not move).
 - **The AI review column** reads `PullRequest::ai_review` (`AiReview`: none, current,
   stale, changes requested). On GitHub `latestReviews`, which the list query
   already reads, also gives the type of each reviewer's account and the commit its

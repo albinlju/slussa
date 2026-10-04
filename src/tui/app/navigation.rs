@@ -16,6 +16,7 @@ impl App {
             pr_id,
             tab: self.state.ui.detail.active_tab,
         };
+        self.mark_viewed_seen();
         // Whatever this PR has not had read yet; the rest is shown from cache.
         for key in [
             FetchKey::Pr(PrResource::Commits, pr_id),

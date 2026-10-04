@@ -4,6 +4,7 @@ use crate::{
         ci::CiSummary,
         pr::{AiReview, PrGroup, PrId, PrStatus, PullRequest},
         review::{Reviewer, ReviewerState},
+        seen::Seen,
         user::{User, Username},
     },
     tui::{
@@ -91,6 +92,8 @@ fn set_more(state: &mut AppState, group: PrGroup, more: bool) {
     state.store.groups.entry(group).or_default().more = more.then(|| "x".to_owned());
 }
 
+static NOTHING_SEEN: Seen = Seen::new();
+
 /// What the list is drawn from: `prs` as `viewer` sees them, with nothing
 /// loading unless `arriving` says the open pages are still coming in.
 fn context<'a>(
@@ -102,6 +105,7 @@ fn context<'a>(
         prs,
         refreshing: false,
         viewer,
+        seen: &NOTHING_SEEN,
         more: false,
         loading_more: arriving,
         view_loading: false,

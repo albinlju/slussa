@@ -95,11 +95,10 @@ says so on the row.
 
 - [ ] **Attention reasons, the rest.** The list is sorted by what needs you,
   with a reason column (the README says how). Still open: a reason for new
-  comments and mentions (it needs the local *Unread* state below), team review
+  comments and mentions (the list marks a PR that changed since it was opened,
+  with `●` before its number, and the reason column could use that), team review
   requests (GitHub counts people only), opening the PR on the tab its reason
   points at, and remembering the `s` choice between runs.
-- [ ] **Unread / updated** *(refined)* — remember per PR when it was last opened
-  and flag rows with activity since then. Local state, scoped like drafts.
 - [ ] **Merge risk** — how dangerous the merge is, beside why the PR needs
   you: can it be reverted (a two-way door) or not (a one-way door: a
   migration, data loss, something sent to users), and how far a mistake
@@ -407,7 +406,7 @@ it ahead of the feature that needs it.
   `blocked`, `threads`, `context`, and later `draft`, `review import`,
   `agent-instructions`), with `json.rs` for the output types (`"schema": 1`)
   and `exit.rs` for the exit codes; `cli` never imports `tui`. New saved state is
-  a file in `local/` (`seen.rs` for *Unread* and *Viewed files*, `proposals.rs`
+  a file in `local/` (`seen.rs`, which exists for *Unread* and where *Viewed files* would go, `proposals.rs`
   for the agent inbox) and imports `session`, never the reverse. Thread assembly
   and the risk and findings rules go to `domain/` (`threads`, `risk`,
   `findings`). `config.rs` becomes `config/` when it gains the agent commands.

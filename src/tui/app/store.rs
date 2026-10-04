@@ -27,6 +27,7 @@ use crate::{
         commit::{Commit, CommitOid},
         diff::Diff,
         pr::{Mergeability, PrGroup, PrId, PrInfo, PrStatus, PullRequest},
+        seen::Seen,
         user::Username,
     },
     providers::FetchError,
@@ -48,6 +49,8 @@ pub struct Store {
     pub fetches: HashSet<FetchKey>,
     pub reload_after_fetch: HashSet<FetchKey>,
     pub reviews: HashMap<PrId, crate::domain::review::PendingReview>,
+    /// When each PR was last looked at, to mark the ones changed since.
+    pub seen: Seen,
     pub cache: Cache,
     /// What has been read of each group of PRs.
     pub groups: HashMap<PrGroup, GroupState>,
@@ -100,6 +103,7 @@ impl Store {
             fetches: HashSet::new(),
             reload_after_fetch: HashSet::new(),
             reviews: HashMap::new(),
+            seen: Seen::new(),
             cache: Cache::default(),
             groups: HashMap::new(),
             open_chain: OpenChain::default(),
@@ -357,6 +361,16 @@ pub enum FetchKey {
 }
 
 impl Store {
+    /// When the PR was last updated, as the list read it.
+    pub fn pr_updated(&self, pr_id: PrId) -> Option<chrono::DateTime<chrono::Utc>> {
+        self.cache
+            .prs
+            .loaded()?
+            .iter()
+            .find(|pr| pr.id == pr_id)
+            .map(|pr| pr.updated)
+    }
+
     /// Whether the provider has this resource at all.
     fn offers(&self, key: &FetchKey) -> bool {
         match key {

@@ -176,6 +176,8 @@ impl App {
                     .min(filtered.len().saturating_sub(1))
             });
         self.state.ui.list.selected = selected;
+        // A PR on screen while the list moves on has been seen at its newest.
+        self.mark_viewed_seen();
     }
 
     /// The list's rows as it shows them now.
