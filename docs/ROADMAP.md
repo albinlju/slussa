@@ -160,10 +160,12 @@ and to commits.
   working now (GitHub has no such state; one bot shows it as a running check),
   and a reason in *Needs you* and the sort, so a PR with a stale or negative AI
   review rises.
-- [ ] **Linked issues / cross-references** — "closes #123", shown in the
-  header and openable. Moved here from *Handoff*: the linked issue is what was
-  asked for, and checking the PR against it is the intent check the
-  positioning promises.
+- [ ] **Linked issues / cross-references** — the issues a PR closes are in the
+  Overview's side panel under *Closes* (GitHub; read with the description and
+  labels, so the list query is unchanged). Missing: issues it only mentions,
+  opening one, and Bitbucket Data Center, which has no such field. The linked
+  issue is what was asked for, and checking the PR against it is the intent
+  check the positioning promises.
 - [ ] **Finding state per thread** — an AI thread is *open*, *fixed* (resolved
   after a later commit, or resolved by a maintainer) or *waived* (an explicit
   "won't fix" / "intentional" reply from a maintainer). Show the state on the
