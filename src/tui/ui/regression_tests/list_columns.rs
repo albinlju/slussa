@@ -34,6 +34,22 @@ fn the_status_column_is_there_where_the_views_mix_and_where_a_pr_has_a_conflict(
 }
 
 #[test]
+fn where_the_column_is_there_for_a_conflict_the_other_rows_say_what_they_are() {
+    let mut state = list(StatusFilter::Open, true);
+    if let LoadState::Loaded(prs) = &mut state.store.cache.prs {
+        let mut other = prs[0].clone();
+        other.id = PrId(7);
+        other.has_conflicts = false;
+        prs.push(other);
+    }
+    let text = draw(&mut state, 130, 12);
+    assert!(
+        text.contains("conflicts") && text.contains("Open"),
+        "{text}"
+    );
+}
+
+#[test]
 fn a_conflict_is_named_for_every_reader_and_not_among_the_reasons() {
     for viewer in ["alice", "someone-else"] {
         let mut state = list(StatusFilter::Open, true);

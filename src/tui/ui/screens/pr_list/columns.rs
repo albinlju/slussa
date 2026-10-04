@@ -1,6 +1,6 @@
 //! The columns of the PR list: which fit, how wide they are and what a row
 //! shows in each.
-use super::{ListContext, StatusFilter};
+use super::ListContext;
 use crate::{
     domain::{
         attention::{Attention, attention},
@@ -82,7 +82,7 @@ impl ListColumn {
                 unread_mark(ctx.seen.is_unread(pr)),
                 Span::styled(format!("#{}", pr.id), muted),
             ],
-            Self::Status => status_cell(pr, ctx.view),
+            Self::Status => status_cell(pr),
             Self::Author => vec![Span::styled(
                 pr.author.username.clone(),
                 Style::default().fg(theme.info),
@@ -151,21 +151,19 @@ fn ai_cell(review: AiReview) -> Cell {
     vec![Span::styled(glyph, Style::default().fg(color))]
 }
 
-/// `conflicts` for an open PR the provider says cannot be merged for one, in any
-/// view. Otherwise the status, but only where the views mix: in the others it is
-/// what the reader picked with `f`, and saying it on every row is noise.
-fn status_cell(pr: &PullRequest, view: StatusFilter) -> Cell {
+/// `conflicts` for an open PR the provider says cannot be merged for one, in
+/// place of its status, and the status otherwise. The column is only drawn where
+/// the views mix or some row has a conflict, so a row says what it is whenever
+/// the column is there.
+fn status_cell(pr: &PullRequest) -> Cell {
     let theme = theme::current();
     if pr.has_conflicts {
         return vec![Span::styled("conflicts", Style::default().fg(theme.error))];
     }
-    if view == StatusFilter::All {
-        return vec![Span::styled(
-            pr.status.label().to_string(),
-            Style::default().fg(theme.status_color(&pr.status)),
-        )];
-    }
-    Vec::new()
+    vec![Span::styled(
+        pr.status.label().to_string(),
+        Style::default().fg(theme.status_color(&pr.status)),
+    )]
 }
 
 fn attention_cell(reason: Option<Attention>) -> Cell {

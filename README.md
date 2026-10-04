@@ -97,10 +97,10 @@ changes requested, CI failed, review requested, or approved. Team review request
 on GitHub are not counted yet. Press `s` for plain newest-first order, or set
 `sort = "recent"`.
 
-A PR GitHub says cannot be merged for a conflict has `conflicts` in the `Status` column, whoever
-wrote it. The column stands there when some row has one, and otherwise only in the All view,
-where it says `Open`, `Merged` and so on; in the other views the status is the one you chose
-with `f`. Bitbucket Data Center does not say, so it has no such mark.
+A PR GitHub says cannot be merged for a conflict has `conflicts` in the `Status` column in place of its
+status, whoever wrote it. The column stands there when some row has one, and otherwise only in
+the All view, where it says `Open`, `Merged` and so on; in the other views the status is the one
+you chose with `f`. Bitbucket Data Center does not say, so it has no such mark.
 
 On GitHub an "AI review" column, also from 90 columns, says whether a bot account
 (CodeRabbit, for one) has reviewed the PR; it is not about who wrote it. `◆` means it reviewed the head the PR has now, `◈` an older

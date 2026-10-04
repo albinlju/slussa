@@ -107,7 +107,6 @@ fn context<'a>(
         refreshing: false,
         viewer,
         seen: &NOTHING_SEEN,
-        view: StatusFilter::Open,
         more: false,
         loading_more: arriving,
         view_loading: false,
