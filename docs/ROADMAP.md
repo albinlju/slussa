@@ -116,8 +116,10 @@ says so on the row.
   a one-way door is an attention reason of its own or a marker beside the
   existing one; and the row, which needs the description and the changed
   paths, neither of which the list query reads today.
-- [ ] **Structured filters** — `author:`, `label:`, `review:approved`, `is:draft`,
-  `status:`, plus `is:agent` (see *AI authorship* below).
+- [ ] **More search filters.** The search takes `author:`, `review:` and `ci:`
+  (the README says how); the status is the `f` picker. Missing: `label:` (the list
+  query leaves the labels out, which made a page twice as slow) and `is:agent` (see
+  *AI authorship* below).
 - [ ] **More sorts.** `s` opens a picker with needs you first, newest, recently updated and oldest. Comment count and CI status are not sorts: the Comments column and the `ci:` filter cover them. Oldest is the oldest of the PRs read, so in a view that says `recent` it is not the oldest there is.
 - [ ] **Mergeability in the PR list** — conflict / behind-base indicators
   (the detail header badge is done; this extends it to rows).

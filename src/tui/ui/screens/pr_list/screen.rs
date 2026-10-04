@@ -226,10 +226,11 @@ impl PrListScreen {
         let LoadState::Loaded(prs) = ctx.prs else {
             return Vec::new();
         };
+        let query = self.search.pr_query();
         let mut rows: Vec<&PullRequest> = prs
             .iter()
             .filter(|p| self.filter.matches(&p.status))
-            .filter(|p| self.search.matches_pr(p))
+            .filter(|p| query.matches(p))
             .collect();
         // While the open pages are still coming in the rows stay in the order they
         // arrive, so that nothing moves under the reader.
