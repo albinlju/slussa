@@ -178,6 +178,8 @@ impl App {
         self.state.ui.list.selected = selected;
         // A PR on screen while the list moves on has been seen at its newest.
         self.mark_viewed_seen();
+        // And one the reader named on the command line waited for the list.
+        self.place_requested_pr();
     }
 
     /// The list's rows as it shows them now.

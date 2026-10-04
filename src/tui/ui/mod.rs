@@ -35,6 +35,9 @@ pub fn render(frame: &mut Frame<'_>, state: &mut AppState) {
         Screen::Detail { pr_id, tab } => {
             if let Some(ctx) = pr_detail::DetailContext::new(&state.store, pr_id, tab) {
                 state.ui.detail.render(frame, frame.area(), &ctx);
+            } else {
+                // Named by its number and not read yet.
+                pr_detail::render_opening(frame, pr_id);
             }
         }
     }

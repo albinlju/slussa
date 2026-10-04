@@ -169,18 +169,40 @@ fn one_page(args: &str, after: Option<&str>) -> Result<(Vec<GhPr>, Option<String
 /// first and map to the domain.
 fn complete(mut prs: Vec<GhPr>) -> Result<Vec<PullRequest>, FetchError> {
     for pr in &mut prs {
-        if pr.latest_reviews.page_info.has_next_page {
-            pr.latest_reviews.nodes = super::pagination::node_nodes(
-                &pr.id,
-                "PullRequest",
-                "latestReviews",
-                "state author { __typename login } commit { oid }",
-            )?;
-        }
+        read_all_reviews(pr)?;
     }
     // Match the list's existing newest-first presentation.
     prs.sort_by_key(|pr| std::cmp::Reverse(pr.created_at));
     Ok(prs.into_iter().map(map_pr).collect())
+}
+
+/// Read on in the reviews when the list query's 100 were not all of them.
+fn read_all_reviews(pr: &mut GhPr) -> Result<(), FetchError> {
+    if pr.latest_reviews.page_info.has_next_page {
+        pr.latest_reviews.nodes = super::pagination::node_nodes(
+            &pr.id,
+            "PullRequest",
+            "latestReviews",
+            "state author { __typename login } commit { oid }",
+        )?;
+    }
+    Ok(())
+}
+
+/// One PR as the list shows it, asked for by its number: for a PR the reader
+/// names that the list has not read, such as an old one.
+pub fn fetch_pr(pr: PrId) -> Result<PullRequest, FetchError> {
+    let query = format!(
+        "query($owner: String!, $name: String!, $pr: Int!) {{
+           repository(owner: $owner, name: $name) {{
+             pullRequest(number: $pr) {{ {PR_FIELDS} }}
+           }}
+         }}"
+    );
+    let mut found: GhPr = super::run_pr_graphql::<Option<GhPr>>(&query, pr)?
+        .ok_or_else(|| FetchError::InvalidInput(format!("There is no PR #{pr}.")))?;
+    read_all_reviews(&mut found)?;
+    Ok(map_pr(found))
 }
 
 /// The description, labels and closing issues of one PR.

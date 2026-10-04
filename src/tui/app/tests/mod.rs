@@ -3,6 +3,7 @@
 mod auto_merge;
 mod loading;
 mod navigation;
+mod opening;
 mod recovery;
 mod rerun;
 mod review;

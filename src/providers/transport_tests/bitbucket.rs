@@ -453,3 +453,20 @@ fn bitbucket_verdict_alone_that_is_refused_is_a_plain_failure() {
         "{error:?}"
     );
 }
+
+#[test]
+fn bitbucket_reads_one_pr_by_its_number() {
+    let server = MockHttp::start(vec![Route::get(
+        &format!("{PR_BASE}/44"),
+        200,
+        &bb_pr(44).to_string(),
+    )]);
+    let pr = bitbucket(&server).fetch_pr(PrId(44)).unwrap();
+    assert_eq!((pr.id, pr.title.as_str()), (PrId(44), "Change 44"));
+}
+
+#[test]
+fn bitbucket_reports_a_missing_pr_as_an_error() {
+    let server = MockHttp::start(vec![Route::get(&format!("{PR_BASE}/9999"), 404, "{}")]);
+    assert!(bitbucket(&server).fetch_pr(PrId(9999)).is_err());
+}

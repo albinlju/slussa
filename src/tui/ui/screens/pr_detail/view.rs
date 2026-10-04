@@ -39,10 +39,16 @@ impl<'a> DetailContext<'a> {
         self.data.and_then(|data| data.mergeability.loaded())
     }
 
-    /// `None` when the PR is not in the list. The list keeps the PR that is
+    /// `None` when the PR is neither in the list nor the one the reader named
+    /// and that was read before the list was. The list keeps the PR that is
     /// open (`App::adopt_group`), so that means there is nothing to show.
     pub fn new(store: &'a Store, pr_id: PrId, tab: DetailTab) -> Option<Self> {
-        let pr = store.cache.prs.loaded()?.iter().find(|pr| pr.id == pr_id)?;
+        let pr = store
+            .cache
+            .prs
+            .loaded()
+            .and_then(|prs| prs.iter().find(|pr| pr.id == pr_id))
+            .or_else(|| store.requested.as_ref().filter(|pr| pr.id == pr_id))?;
         Some(Self {
             store,
             pr_id,

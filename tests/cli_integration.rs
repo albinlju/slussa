@@ -216,3 +216,50 @@ fn without_a_terminal_it_exits_2_before_any_preflight() {
     );
     assert!(!output.combined.contains('\u{1b}'), "no escape bytes");
 }
+
+#[test]
+fn help_lists_the_command_that_opens_a_pr_by_its_number() {
+    let output = Sandbox::new().run(&["--help"]);
+    assert!(
+        output.combined.contains("slussa <number>"),
+        "{}",
+        output.combined
+    );
+}
+
+#[test]
+fn a_pr_number_needs_a_terminal_like_the_list_does_and_is_taken_with_or_without_a_hash() {
+    let sandbox = Sandbox::new();
+    for argument in ["44", "#44"] {
+        let output = sandbox.run_in_work(&[argument]);
+        assert_eq!(output.code, 2, "{argument}: {}", output.combined);
+        assert!(
+            output.combined.contains("needs a terminal"),
+            "{argument}: {}",
+            output.combined
+        );
+        assert!(
+            !output.combined.contains("unknown command"),
+            "{argument}: {}",
+            output.combined
+        );
+    }
+}
+
+#[test]
+fn a_pr_number_with_something_after_it_is_refused() {
+    let output = Sandbox::new().run_in_work(&["44", "extra"]);
+    assert_eq!(output.code, 2, "{}", output.combined);
+    assert!(
+        output.combined.contains("unexpected argument `extra`"),
+        "{}",
+        output.combined
+    );
+}
+
+#[test]
+fn a_word_that_is_not_a_number_is_still_an_unknown_command() {
+    let output = Sandbox::new().run(&["4x4"]);
+    assert_eq!(output.code, 2);
+    assert!(output.combined.contains("unknown command `4x4`"));
+}

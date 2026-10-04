@@ -143,6 +143,18 @@ impl MergeStrategy {
 #[serde(transparent)]
 pub struct PrId(pub u64);
 
+impl PrId {
+    /// A PR number as a person writes it, `44` or `#44`: digits and nothing
+    /// else, and not zero.
+    pub fn parse(text: &str) -> Option<Self> {
+        let digits = text.strip_prefix('#').unwrap_or(text);
+        if digits.is_empty() || !digits.bytes().all(|b| b.is_ascii_digit()) {
+            return None;
+        }
+        digits.parse().ok().filter(|&number| number != 0).map(Self)
+    }
+}
+
 impl std::fmt::Display for PrId {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         self.0.fmt(f)
@@ -215,4 +227,27 @@ pub struct PullRequest {
     pub created: DateTime<Utc>,
     pub updated: DateTime<Utc>,
     pub ai_review: AiReview,
+}
+
+#[cfg(test)]
+mod tests {
+    use super::PrId;
+
+    #[test]
+    fn a_pr_number_is_digits_with_or_without_a_hash() {
+        assert_eq!(PrId::parse("44"), Some(PrId(44)));
+        assert_eq!(PrId::parse("#44"), Some(PrId(44)));
+        assert_eq!(PrId::parse("007"), Some(PrId(7)));
+    }
+
+    #[test]
+    fn anything_else_is_not_a_pr_number() {
+        for text in [
+            "", "#", "0", "#0", "-4", "4x", "x4", "4 4", " 4", "4.0", "##4", "+4", "auth",
+        ] {
+            assert_eq!(PrId::parse(text), None, "{text:?}");
+        }
+        // Too large for a number: not one.
+        assert_eq!(PrId::parse("99999999999999999999999"), None);
+    }
 }
