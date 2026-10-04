@@ -215,6 +215,12 @@ impl App {
         self.spawn_write(ticket, move || provider.merge(pr_id, strategy));
     }
 
+    pub(super) fn spawn_rerun_builds(&self, ticket: WriteTicket) {
+        let provider = self.provider.clone();
+        let pr_id = ticket.pr_id();
+        self.spawn_write(ticket, move || provider.rerun_failed_builds(pr_id));
+    }
+
     pub(super) fn spawn_decline(&self, ticket: WriteTicket) {
         let provider = self.provider.clone();
         let pr_id = ticket.pr_id();
@@ -302,6 +308,11 @@ fn postable(anchor: CommentAnchor, body: String, hint: &str) -> Result<ReviewCom
 
 impl App {
     /// A mutation must be followed by a fetch started after its acknowledgement.
+    /// Read the PR's builds again: they were just started over.
+    pub(super) fn reload_builds(&mut self, pr_id: PrId) {
+        self.reload_resource(FetchKey::Pr(PrResource::Builds, pr_id));
+    }
+
     fn reload_resource(&mut self, key: FetchKey) {
         if self.state.store.fetches.contains(&key) {
             self.state.store.reload_after_fetch.insert(key);

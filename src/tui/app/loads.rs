@@ -103,6 +103,9 @@ impl App {
                 {
                     pr.status = status;
                 }
+                if operation == Operation::RerunBuilds {
+                    self.reload_builds(pr_id);
+                }
                 if operation == Operation::Review {
                     self.state.store.reviews.remove(&pr_id);
                 }
@@ -113,6 +116,10 @@ impl App {
                 // nothing; any other failure leaves the outcome open.
                 if error.may_have_reached_server() {
                     self.state.store.uncertain_submissions.insert(pr_id);
+                    // Some of the runs may have started.
+                    if operation == Operation::RerunBuilds {
+                        self.reload_builds(pr_id);
+                    }
                 }
                 self.state.store.errors.insert(pr_id, error.user_message());
                 if let WriteError::PartialReview {

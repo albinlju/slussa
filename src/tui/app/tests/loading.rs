@@ -140,6 +140,7 @@ fn read_only_capabilities_block_shortcuts_commands_and_optional_loads() {
             text: "comment".into(),
         },
         Command::Merge(MergeStrategy::Merge),
+        Command::RerunFailedBuilds,
         Command::Decline,
         Command::DeleteComment(CommentKey {
             id: CommentId(1),

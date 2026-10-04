@@ -213,7 +213,11 @@ impl Ui {
                 let help = match screen {
                     Screen::List => match &mut self.list.overlay {
                         Some(pr_list::ListOverlay::Help(help)) => Some(help),
-                        Some(pr_list::ListOverlay::FilterPicker { .. }) | None => None,
+                        Some(
+                            pr_list::ListOverlay::FilterPicker { .. }
+                            | pr_list::ListOverlay::SortPicker { .. },
+                        )
+                        | None => None,
                     },
                     Screen::Detail { .. } => match &mut self.detail.overlay {
                         Some(pr_detail::Overlay::Help(help)) => Some(help),
@@ -239,7 +243,10 @@ impl Ui {
                     Screen::List => {
                         let picking = matches!(
                             self.list.overlay,
-                            Some(pr_list::ListOverlay::FilterPicker { .. })
+                            Some(
+                                pr_list::ListOverlay::FilterPicker { .. }
+                                    | pr_list::ListOverlay::SortPicker { .. }
+                            )
                         );
                         if !picking {
                             self.list.update_search(action);

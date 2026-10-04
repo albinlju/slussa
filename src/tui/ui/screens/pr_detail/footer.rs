@@ -87,6 +87,11 @@ fn footer_actions(state: &DetailView<'_>, tab: DetailTab) -> Vec<Hint> {
         }
         parts.extend(bindings::hint(state, 'f'));
         parts.extend(pr_action_hints(state));
+        // Last, so that it is the first to go where the line is short.
+        let unresolved = state.detail.overview.timeline.unresolved.len();
+        if unresolved > 0 {
+            parts.push(Hint::on(format!("u: unresolved ({unresolved})")));
+        }
         return parts;
     }
     if let Some(view) = state.surface().diff_viewer() {
@@ -160,7 +165,11 @@ fn footer_actions(state: &DetailView<'_>, tab: DetailTab) -> Vec<Hint> {
             hints
         }
         DetailTab::Commits => widgets::hints_on("enter: open  /: search"),
-        DetailTab::Builds => widgets::hints_on("j/k: scroll  h/l: tabs"),
+        DetailTab::Builds => {
+            let mut hints = widgets::hints_on("j/k: scroll  h/l: tabs");
+            hints.extend(bindings::hint(state, 'b'));
+            hints
+        }
         // Both returned above with hints of their own.
         DetailTab::Overview | DetailTab::Diff => Vec::new(),
     }

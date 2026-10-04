@@ -105,6 +105,7 @@ pub(crate) fn fixture() -> AppState {
             info: LoadState::Loaded(PrInfo {
                 description: Some("Review **this change**.".into()),
                 labels: vec!["rust".into()],
+                issues: vec![],
             }),
             ..PrData::default()
         },

@@ -85,6 +85,28 @@ pub(in crate::tui::ui) fn search_input_spans(query: &str) -> Vec<Span<'static>> 
     ]
 }
 
+/// The prompt, with `hint` where the count goes while nothing is typed: what the
+/// field understands, shown once and gone as soon as the reader types.
+pub(in crate::tui::ui) fn search_prompt_with_hint(
+    query: &str,
+    count: usize,
+    width: u16,
+    hint: &str,
+) -> Line<'static> {
+    if !query.is_empty() {
+        return search_prompt(query, count, width);
+    }
+    let right = vec![Span::styled(
+        format!("{hint}  "),
+        Style::default().fg(theme::current().muted),
+    )];
+    Line::from(justify_between(
+        search_input_spans(query),
+        right,
+        width as usize,
+    ))
+}
+
 pub(in crate::tui::ui) fn search_prompt(query: &str, count: usize, width: u16) -> Line<'static> {
     let theme = theme::current();
     let right = vec![Span::styled(

@@ -1,6 +1,7 @@
 use super::{PrDetailScreen, Surface};
 use crate::{
     domain::{
+        ci::BuildState,
         comment::{Comment, CommentId, CommentKey, CommentKind, ThreadHandle},
         commit::CommitOid,
         diff::FileDiff,
@@ -33,10 +34,16 @@ pub struct DetailContext<'a> {
 }
 
 impl<'a> DetailContext<'a> {
-    /// `None` when the PR is not in the list. The list keeps the PR that is
+    /// `None` when the PR is neither in the list nor the one the reader named
+    /// and that was read before the list was. The list keeps the PR that is
     /// open (`App::adopt_group`), so that means there is nothing to show.
     pub fn new(store: &'a Store, pr_id: PrId, tab: DetailTab) -> Option<Self> {
-        let pr = store.cache.prs.loaded()?.iter().find(|pr| pr.id == pr_id)?;
+        let pr = store
+            .cache
+            .prs
+            .loaded()
+            .and_then(|prs| prs.iter().find(|pr| pr.id == pr_id))
+            .or_else(|| store.requested.as_ref().filter(|pr| pr.id == pr_id))?;
         Some(Self {
             store,
             pr_id,
@@ -120,6 +127,18 @@ impl<'a> DetailView<'a> {
                 Some(LoadState::Loaded(Mergeability::Conflicts(_)))
             ))
         .then_some("conflicts")
+    }
+
+    /// Whether a build of the PR has failed or was cancelled, so there is
+    /// something to run again.
+    pub fn has_failed_build(&self) -> bool {
+        self.data
+            .and_then(|data| data.builds.loaded())
+            .is_some_and(|builds| {
+                builds
+                    .iter()
+                    .any(|build| matches!(build.state, BuildState::Failed | BuildState::Cancelled))
+            })
     }
 
     /// Whether the PR was closed without merging, so `x` reopens it.
@@ -337,6 +356,7 @@ impl DetailView<'_> {
                 PrAction::EditComment => caps.supports(F::EditComments),
                 PrAction::DeleteComment => caps.supports(F::DeleteComments),
                 PrAction::ResolveThread => caps.supports(F::ResolveThreads),
+                PrAction::RerunBuilds => caps.supports(F::RerunBuilds),
             },
             A::Review(ReviewAction::Select) => caps.reviews(),
             A::Merge(MergeAction::Select) => !caps.merge_strategies.is_empty(),

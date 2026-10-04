@@ -2,7 +2,9 @@ use chrono::{DateTime, Utc};
 use serde::Deserialize;
 
 use crate::domain::ci::CiSummary;
-use crate::domain::pr::{AiReview, PrBatch, PrGroup, PrId, PrInfo, PrStatus, PullRequest};
+use crate::domain::pr::{
+    AiReview, LinkedIssue, PrBatch, PrGroup, PrId, PrInfo, PrStatus, PullRequest,
+};
 use crate::domain::review::{Reviewer, ReviewerState};
 use crate::domain::user::User;
 use crate::providers::error::FetchError;
@@ -197,19 +199,29 @@ pub fn fetch_pr(pr: PrId) -> Result<PullRequest, FetchError> {
            }}
          }}"
     );
-    let mut found: GhPr = super::run_pr_graphql(&query, pr)?;
+    let mut found: GhPr = super::run_pr_graphql::<Option<GhPr>>(&query, pr)?
+        .ok_or_else(|| FetchError::InvalidInput(format!("There is no PR #{pr}.")))?;
     read_all_reviews(&mut found)?;
     Ok(map_pr(found))
 }
 
-/// The description and labels of one PR.
+/// The description, labels and closing issues of one PR.
 pub fn fetch_info(pr: PrId) -> Result<PrInfo, FetchError> {
     #[derive(Deserialize)]
+    #[serde(rename_all = "camelCase")]
     struct Fields {
         id: String,
         #[serde(default)]
         body: Option<String>,
         labels: Connection<GhLabel>,
+        #[serde(default)]
+        closing_issues_references: Option<Connection<GhIssue>>,
+    }
+    #[derive(Deserialize)]
+    struct GhIssue {
+        number: u64,
+        #[serde(default)]
+        title: String,
     }
     let fields: Fields = super::run_pr_graphql(super::graphql::INFO, pr)?;
     let labels = if fields.labels.page_info.has_next_page {
@@ -217,9 +229,26 @@ pub fn fetch_info(pr: PrId) -> Result<PrInfo, FetchError> {
     } else {
         fields.labels.nodes
     };
+    let issues = match fields.closing_issues_references {
+        Some(issues) if issues.page_info.has_next_page => super::pagination::node_nodes(
+            &fields.id,
+            "PullRequest",
+            "closingIssuesReferences",
+            "number title",
+        )?,
+        Some(issues) => issues.nodes,
+        None => Vec::new(),
+    };
     Ok(PrInfo {
         description: fields.body,
         labels: labels.into_iter().map(|label| label.name).collect(),
+        issues: issues
+            .into_iter()
+            .map(|issue| LinkedIssue {
+                number: issue.number,
+                title: issue.title,
+            })
+            .collect(),
     })
 }
 
