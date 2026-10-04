@@ -496,7 +496,7 @@ fn github_info_reads_the_issues_the_pr_closes() {
         "closingIssuesReferences": {"nodes": [
             {"number": 12, "title": "Crash on start"},
             {"number": 31, "title": "Slow list"}
-        ]}
+        ], "pageInfo": {"hasNextPage": false}}
     }}}})
     .to_string();
     let _gh = FakeGh::new()
@@ -510,4 +510,32 @@ fn github_info_reads_the_issues_the_pr_closes() {
         .map(|issue| (issue.number, issue.title.as_str()))
         .collect();
     assert_eq!(issues, [(12, "Crash on start"), (31, "Slow list")]);
+}
+
+#[test]
+fn github_info_reads_on_when_the_closing_issues_are_truncated() {
+    let first_page = json!({"data": {"repository": {"pullRequest": {
+        "id": "PR_1",
+        "body": "Fixes many.",
+        "labels": {"nodes": [], "pageInfo": {"hasNextPage": false}},
+        "closingIssuesReferences": {
+            "nodes": [{"number": 1, "title": "One"}],
+            "pageInfo": {"hasNextPage": true}
+        }
+    }}}})
+    .to_string();
+    let all = json!({"data": {"item": {"connection": {
+        "nodes": [{"number": 1, "title": "One"}, {"number": 2, "title": "Two"}],
+        "pageInfo": {"hasNextPage": false, "endCursor": null}
+    }}}})
+    .to_string();
+    let gh = FakeGh::new()
+        .on("node(id: \"PR_1\")", &all)
+        .on("pullRequest(number: $pr)", &first_page)
+        .install();
+    let info = Provider::GitHub.fetch_info(PrId(1)).unwrap();
+
+    let numbers: Vec<_> = info.issues.iter().map(|issue| issue.number).collect();
+    assert_eq!(numbers, [1, 2]);
+    assert_eq!(gh.calls().len(), 2);
 }

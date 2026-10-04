@@ -193,12 +193,7 @@ pub fn fetch_info(pr: PrId) -> Result<PrInfo, FetchError> {
         body: Option<String>,
         labels: Connection<GhLabel>,
         #[serde(default)]
-        closing_issues_references: Issues,
-    }
-    #[derive(Deserialize, Default)]
-    struct Issues {
-        #[serde(default)]
-        nodes: Vec<GhIssue>,
+        closing_issues_references: Option<Connection<GhIssue>>,
     }
     #[derive(Deserialize)]
     struct GhIssue {
@@ -212,12 +207,20 @@ pub fn fetch_info(pr: PrId) -> Result<PrInfo, FetchError> {
     } else {
         fields.labels.nodes
     };
+    let issues = match fields.closing_issues_references {
+        Some(issues) if issues.page_info.has_next_page => super::pagination::node_nodes(
+            &fields.id,
+            "PullRequest",
+            "closingIssuesReferences",
+            "number title",
+        )?,
+        Some(issues) => issues.nodes,
+        None => Vec::new(),
+    };
     Ok(PrInfo {
         description: fields.body,
         labels: labels.into_iter().map(|label| label.name).collect(),
-        issues: fields
-            .closing_issues_references
-            .nodes
+        issues: issues
             .into_iter()
             .map(|issue| LinkedIssue {
                 number: issue.number,

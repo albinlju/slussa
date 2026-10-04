@@ -73,7 +73,7 @@ query($owner: String!, $name: String!, $pr: Int!) {
     pullRequest(number: $pr) {
       id body
       labels(first: 100) { nodes { name } pageInfo { hasNextPage } }
-      closingIssuesReferences(first: 10) { nodes { number title } }
+      closingIssuesReferences(first: 10) { nodes { number title } pageInfo { hasNextPage } }
     }
   }
 }";
