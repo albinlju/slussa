@@ -77,6 +77,17 @@ pub fn frame(
     )
 }
 
+/// `lines` without the empty ones, and where the `selected` one is then.
+fn without_blank_lines(lines: Vec<Line<'static>>, selected: usize) -> (Vec<Line<'static>>, usize) {
+    let blank_before = lines
+        .iter()
+        .take(selected)
+        .filter(|line| line.width() == 0)
+        .count();
+    let kept = lines.into_iter().filter(|line| line.width() > 0).collect();
+    (kept, selected.saturating_sub(blank_before))
+}
+
 pub fn choices(
     frame: &mut Frame<'_>,
     area: Rect,
@@ -147,6 +158,13 @@ pub fn choices_with_room(
         (width, saturating_u16(lines.len())),
         hints,
     );
+    // Blank lines are air: where the dialog does not fit, they go before a
+    // choice does.
+    let (lines, selected) = if lines.len() > body.height as usize {
+        without_blank_lines(lines, selected)
+    } else {
+        (lines, selected)
+    };
     let scroll = selected
         .saturating_add(1)
         .saturating_sub(body.height as usize);

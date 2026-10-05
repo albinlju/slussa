@@ -432,7 +432,13 @@ mod tests {
             .lines()
             .find(|line| line.contains("╭ Merge"))
             .expect("the dialog's top edge");
-        let edge: String = top.chars().skip_while(|c| *c != '╭').collect();
+        // From the left corner to the right one: not the spaces after it.
+        let edge: String = top
+            .chars()
+            .skip_while(|c| *c != '╭')
+            .take_while(|c| *c != '╮')
+            .chain(['╮'])
+            .collect();
         assert!(
             edge.chars().count() >= 60,
             "{} wide: {text}",
@@ -451,5 +457,31 @@ mod tests {
             "an empty line follows the label: {text}"
         );
         assert!(lines[label + 2].contains("Into: main"), "{text}");
+    }
+
+    #[test]
+    fn a_short_terminal_drops_the_blank_lines_before_it_hides_a_strategy() {
+        let view = MergeView {
+            auto: AutoMergeOffer::Unavailable,
+            strategies: &[MergeStrategy::Merge, MergeStrategy::Squash],
+            pr: PrSummary {
+                label: "PR #7 · Fix it".into(),
+                target_branch: "main",
+                source_branch: "feature",
+            },
+            blockers: &[],
+            branch: None,
+        };
+        let mut terminal = Terminal::new(TestBackend::new(90, 11)).unwrap();
+        terminal
+            .draw(|frame| MergeDialog::default().render(frame, frame.area(), &view))
+            .unwrap();
+        let buffer = terminal.backend().buffer();
+        let text = (0..11)
+            .map(|y| (0..90).map(|x| buffer[(x, y)].symbol()).collect::<String>())
+            .collect::<Vec<_>>()
+            .join("\n");
+        assert!(text.contains("Merge commit"), "{text}");
+        assert!(text.contains("Squash and merge"), "{text}");
     }
 }
