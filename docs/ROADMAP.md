@@ -239,7 +239,12 @@ against:
   marks it (GitHub; only a branch of the same repository, never the target;
   not offered with *merge when ready*, where the repository's own setting
   decides). A branch that cannot be deleted leaves the merge done and says so.
-  Missing: Bitbucket Data Center, and a remembered choice.
+  Missing: Bitbucket Data Center, a remembered choice, and a delete that is
+  bound to the merged head. Today the delete goes by name, as GitHub's own
+  button and `gh pr merge --delete-branch` do, so a push between the merge
+  and the delete is lost with the branch (it can be recreated from its SHA).
+  Closing that takes the head SHA on the PR, `sha` on the merge and a
+  conditional delete (GraphQL `updateRefs` with `beforeOid`, not yet tried).
 - [ ] **React to a comment** — add / remove your own emoji reaction.
 
 ### 4. Handoff to the coding agent
