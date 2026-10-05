@@ -69,20 +69,9 @@ impl DraftStorage {
 }
 
 #[cfg(test)]
-/// Reopen a scope after dropping its storage. A child process started by a
-/// concurrent test can briefly hold a copy of the lock file descriptor
-/// between fork and exec, so a release is not always visible at once.
+/// Reopen a scope after dropping its storage.
 pub fn reopen(root: &Path, scope: &str) -> io::Result<(DraftStorage, Snapshot)> {
-    let mut attempt = 0;
-    loop {
-        match DraftStorage::open(root, scope.into()) {
-            Err(error) if attempt < 100 && error.to_string().contains("already in use") => {
-                attempt += 1;
-                std::thread::sleep(std::time::Duration::from_millis(10));
-            }
-            result => return result,
-        }
-    }
+    super::file::reopen_when_released(|| DraftStorage::open(root, scope.into()))
 }
 
 #[cfg(test)]
