@@ -1,3 +1,4 @@
+use super::GhRepo;
 use crate::providers::error::FetchError;
 use std::{
     io::{Read, Write},
@@ -17,14 +18,29 @@ fn gh_command() -> Command {
     Command::new("gh")
 }
 
-pub(super) fn run_gh(args: &[&str]) -> Result<Vec<u8>, FetchError> {
-    run_gh_stdin(args, &[])
+/// A `gh` call that acts on `repo`: `GH_REPO` is what both the `{owner}` and
+/// `{repo}` placeholders of `gh api` and `gh pr <number>` follow, so the call
+/// cannot land in a repository `gh` would have chosen by its own rules.
+pub(super) fn run_gh(repo: &GhRepo, args: &[&str]) -> Result<Vec<u8>, FetchError> {
+    run_gh_stdin(repo, args, &[])
 }
 
-pub(super) fn run_gh_stdin(args: &[&str], stdin: &[u8]) -> Result<Vec<u8>, FetchError> {
+pub(super) fn run_gh_stdin(
+    repo: &GhRepo,
+    args: &[&str],
+    stdin: &[u8],
+) -> Result<Vec<u8>, FetchError> {
     let mut command = gh_command();
+    command.env("GH_REPO", repo.to_string());
     command.args(args);
     run_command(&mut command, stdin, REQUEST_TIMEOUT)
+}
+
+/// A `gh` call before the repository is known: asking which one `gh` means.
+pub(super) fn run_gh_unpinned(args: &[&str]) -> Result<Vec<u8>, FetchError> {
+    let mut command = gh_command();
+    command.args(args);
+    run_command(&mut command, &[], REQUEST_TIMEOUT)
 }
 
 fn run_command(
@@ -118,8 +134,11 @@ fn receive<T>(
         .map_err(|e| FetchError::Network(e.into()))
 }
 
-pub(super) fn run_gh_json<T: serde::de::DeserializeOwned>(args: &[&str]) -> Result<T, FetchError> {
-    let stdout = run_gh(args)?;
+pub(super) fn run_gh_json<T: serde::de::DeserializeOwned>(
+    repo: &GhRepo,
+    args: &[&str],
+) -> Result<T, FetchError> {
+    let stdout = run_gh(repo, args)?;
     serde_json::from_slice(&stdout).map_err(|e| {
         tracing::warn!("gh json parse failed: {}", unread(&e, stdout.len()));
         FetchError::ParseFailed(e.into())

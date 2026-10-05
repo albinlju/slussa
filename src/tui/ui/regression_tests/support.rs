@@ -112,7 +112,7 @@ pub(crate) fn fixture() -> AppState {
             ..PrData::default()
         },
     );
-    state.store.capabilities = crate::providers::Provider::GitHub.capabilities();
+    state.store.capabilities = crate::providers::Provider::github_for_test().capabilities();
     state.store.capabilities.merge_strategies = vec![MergeStrategy::Merge, MergeStrategy::Squash];
     state
 }

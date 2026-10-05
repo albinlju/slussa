@@ -1,3 +1,4 @@
+use super::GhRepo;
 use chrono::{DateTime, Utc};
 use serde::Deserialize;
 
@@ -40,18 +41,25 @@ struct GhPrTimeline {
     reviews: Vec<GhReview>,
 }
 
-pub fn fetch_events(pr_number: PrId) -> Result<Vec<TimelineEvent>, FetchError> {
+pub fn fetch_events(repo: &GhRepo, pr_number: PrId) -> Result<Vec<TimelineEvent>, FetchError> {
     let pr_arg = pr_number.to_string();
-    let mut pr: GhPrTimeline = run_gh_json(&[
-        "pr",
-        "view",
-        &pr_arg,
-        "--json",
-        "author,createdAt,mergedAt,closedAt,state",
-    ])?;
+    let mut pr: GhPrTimeline = run_gh_json(
+        repo,
+        &[
+            "pr",
+            "view",
+            &pr_arg,
+            "--json",
+            "author,createdAt,mergedAt,closedAt,state",
+        ],
+    )?;
 
-    pr.reviews =
-        super::pagination::pr_nodes(pr_number, "reviews", "author { login } state submittedAt")?;
+    pr.reviews = super::pagination::pr_nodes(
+        repo,
+        pr_number,
+        "reviews",
+        "author { login } state submittedAt",
+    )?;
 
     let mut out: Vec<TimelineEvent> = Vec::new();
 

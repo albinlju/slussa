@@ -10,6 +10,7 @@ mod graphql;
 mod merge;
 mod pagination;
 mod prs;
+mod repo;
 mod review_threads;
 mod reviewers;
 
@@ -22,6 +23,7 @@ pub use commits::fetch_commits;
 pub use diff::{fetch_commit_diff, fetch_diff};
 pub use merge::{merge, set_auto_merge};
 pub use prs::{fetch_info, fetch_pr, fetch_prs};
+pub use repo::GhRepo;
 pub use reviewers::rerequest;
 
 use chrono::{DateTime, Utc};
@@ -35,13 +37,13 @@ use crate::domain::review::{ReviewComment, ReviewVerdict, ReviewedHead};
 use crate::domain::user::{AccountKind, User, Username};
 use crate::providers::error::FetchError;
 
-pub fn current_user() -> Result<Username, FetchError> {
-    let out = cli::run_gh(&["api", "user", "--jq", ".login"])?;
+pub fn current_user(repo: &GhRepo) -> Result<Username, FetchError> {
+    let out = cli::run_gh(repo, &["api", "user", "--jq", ".login"])?;
     Username::parse(&String::from_utf8_lossy(&out))
         .ok_or_else(|| FetchError::ParseFailed("gh named no login".into()))
 }
 
-pub fn fetch_mergeability(pr_number: PrId) -> Result<Mergeability, FetchError> {
+pub fn fetch_mergeability(repo: &GhRepo, pr_number: PrId) -> Result<Mergeability, FetchError> {
     #[derive(Deserialize)]
     #[serde(rename_all = "camelCase")]
     struct MergeFields {
@@ -58,7 +60,7 @@ pub fn fetch_mergeability(pr_number: PrId) -> Result<Mergeability, FetchError> {
     struct AutoMergeRequest {
         merge_method: String,
     }
-    let pr: MergeFields = run_pr_graphql(graphql::MERGEABILITY, pr_number)?;
+    let pr: MergeFields = run_pr_graphql(repo, graphql::MERGEABILITY, pr_number)?;
     let status = merge_status(
         &pr.mergeable,
         &pr.merge_state_status,
@@ -109,28 +111,34 @@ fn merge_status(mergeable: &str, state: &str, review_decision: Option<&str>) -> 
 
 /// Reopen a closed PR. GitHub refuses when the head branch is gone or the PR
 /// was merged; that message reaches the user as it is.
-pub fn reopen(pr_number: PrId) -> Result<(), FetchError> {
-    cli::run_gh(&[
-        "api",
-        "--method",
-        "PATCH",
-        &format!("repos/{{owner}}/{{repo}}/pulls/{pr_number}"),
-        "-f",
-        "state=open",
-    ])?;
+pub fn reopen(repo: &GhRepo, pr_number: PrId) -> Result<(), FetchError> {
+    cli::run_gh(
+        repo,
+        &[
+            "api",
+            "--method",
+            "PATCH",
+            &format!("repos/{{owner}}/{{repo}}/pulls/{pr_number}"),
+            "-f",
+            "state=open",
+        ],
+    )?;
     Ok(())
 }
 
-pub fn decline(pr_number: PrId) -> Result<(), FetchError> {
+pub fn decline(repo: &GhRepo, pr_number: PrId) -> Result<(), FetchError> {
     // GitHub has no "decline" — closing the PR is the equivalent.
-    cli::run_gh(&[
-        "api",
-        "--method",
-        "PATCH",
-        &format!("repos/{{owner}}/{{repo}}/pulls/{pr_number}"),
-        "-f",
-        "state=closed",
-    ])?;
+    cli::run_gh(
+        repo,
+        &[
+            "api",
+            "--method",
+            "PATCH",
+            &format!("repos/{{owner}}/{{repo}}/pulls/{pr_number}"),
+            "-f",
+            "state=closed",
+        ],
+    )?;
     Ok(())
 }
 
@@ -146,6 +154,7 @@ const fn review_event(verdict: ReviewVerdict) -> Option<&'static str> {
 }
 
 pub fn submit_review(
+    repo: &GhRepo,
     pr_number: PrId,
     verdict: ReviewVerdict,
     body: &str,
@@ -160,7 +169,7 @@ pub fn submit_review(
     let event_arg = format!("event={event}");
     let body_arg = format!("body={body}");
     let commit_arg = format!("commit_id={}", head.as_str());
-    comments::ensure_head(pr_number, head)?;
+    comments::ensure_head(repo, pr_number, head)?;
     let mut args: Vec<&str> = vec![
         "api",
         "--method",
@@ -175,7 +184,7 @@ pub fn submit_review(
         args.push("-f");
         args.push(&body_arg);
     }
-    cli::run_gh(&args)?;
+    cli::run_gh(repo, &args)?;
     Ok(())
 }
 
@@ -183,6 +192,7 @@ pub fn submit_review(
 /// reviews endpoint takes a `comments` array, fed as JSON on stdin since `-f`
 /// flags can't express it.
 pub fn submit_full_review(
+    repo: &GhRepo,
     pr_number: PrId,
     verdict: ReviewVerdict,
     body: &str,
@@ -190,7 +200,7 @@ pub fn submit_full_review(
     head: &ReviewedHead,
 ) -> Result<(), FetchError> {
     let Some(first) = comments.first() else {
-        return submit_review(pr_number, verdict, body, head);
+        return submit_review(repo, pr_number, verdict, body, head);
     };
     let Some(event) = review_event(verdict) else {
         return Err(FetchError::Unsupported(
@@ -198,10 +208,11 @@ pub fn submit_full_review(
         ));
     };
     let payload = review_payload(event, body, &first.revision, comments)?;
-    comments::ensure_head(pr_number, head)?;
+    comments::ensure_head(repo, pr_number, head)?;
     let endpoint = format!("repos/{{owner}}/{{repo}}/pulls/{pr_number}/reviews");
     let input = serde_json::to_vec(&payload).map_err(|e| FetchError::ParseFailed(e.into()))?;
     cli::run_gh_stdin(
+        repo,
         &["api", "--method", "POST", &endpoint, "--input", "-"],
         &input,
     )?;
@@ -239,21 +250,25 @@ fn review_payload(
 }
 
 pub(super) fn run_pr_graphql<P: DeserializeOwned>(
+    pinned: &GhRepo,
     query: &str,
     pr_number: PrId,
 ) -> Result<P, FetchError> {
-    let resp: GqlResponse<P> = cli::run_gh_json(&[
-        "api",
-        "graphql",
-        "-F",
-        "owner={owner}",
-        "-F",
-        "name={repo}",
-        "-F",
-        &format!("pr={pr_number}"),
-        "-f",
-        &format!("query={}", graphql::compact(query)),
-    ])?;
+    let resp: GqlResponse<P> = cli::run_gh_json(
+        pinned,
+        &[
+            "api",
+            "graphql",
+            "-F",
+            "owner={owner}",
+            "-F",
+            "name={repo}",
+            "-F",
+            &format!("pr={pr_number}"),
+            "-f",
+            &format!("query={}", graphql::compact(query)),
+        ],
+    )?;
     Ok(resp.data.repository.pull_request)
 }
 

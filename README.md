@@ -38,7 +38,12 @@ added for it. Bitbucket Cloud is a different product that this does not affect;
 it and GitLab are on the roadmap, not supported.
 
 The provider is detected from the `origin` remote of the repository you run
-slussa in.
+slussa in. On GitHub the repository it acts on is the one `gh` places the
+directory in (`gh repo set-default`, or `GH_REPO`), asked once when slussa
+starts and used for every call after it, so that a diff that is read and a merge
+that is sent go to the same repository. In a fork where `gh` points at the
+upstream that is the upstream, and the drafts you saved under the fork move to
+it the first time. Where `gh` cannot place the directory, `origin` is used.
 
 ## Install
 

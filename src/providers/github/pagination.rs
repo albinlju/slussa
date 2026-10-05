@@ -1,3 +1,4 @@
+use super::GhRepo;
 use super::{cli, graphql};
 use crate::domain::pr::PrId;
 use crate::providers::FetchError;
@@ -5,12 +6,14 @@ use serde::{Deserialize, de::DeserializeOwned};
 use serde_json::Value;
 
 pub(super) fn pr_nodes<T: DeserializeOwned>(
+    repo: &GhRepo,
     pr: PrId,
     field: &str,
     selection: &str,
 ) -> Result<Vec<T>, FetchError> {
     let pr = pr.to_string();
     nodes(
+        repo,
         |cursor| {
             graphql::fill(
                 graphql::PR_CONNECTION,
@@ -27,15 +30,17 @@ pub(super) fn pr_nodes<T: DeserializeOwned>(
 }
 
 pub(super) fn node_nodes<T: DeserializeOwned>(
+    repo: &GhRepo,
     id: &str,
     kind: &str,
     field: &str,
     selection: &str,
 ) -> Result<Vec<T>, FetchError> {
-    node_nodes_after(id, kind, field, selection, None)
+    node_nodes_after(repo, id, kind, field, selection, None)
 }
 
 pub(super) fn node_nodes_after<T: DeserializeOwned>(
+    repo: &GhRepo,
     id: &str,
     kind: &str,
     field: &str,
@@ -44,6 +49,7 @@ pub(super) fn node_nodes_after<T: DeserializeOwned>(
 ) -> Result<Vec<T>, FetchError> {
     let id = Value::String(id.to_owned()).to_string();
     nodes_after(
+        repo,
         |cursor| {
             graphql::fill(
                 graphql::NODE_CONNECTION,
@@ -67,6 +73,7 @@ const REPO_CONNECTION_PATH: &[&str] = &["data", "repository", "connection"];
 /// after `after`, and the cursor to continue from (`None` at the end). It never
 /// follows the cursor itself: the caller decides whether to read more.
 pub(super) fn repo_page<T: DeserializeOwned>(
+    repo: &GhRepo,
     field: &str,
     args: &str,
     selection: &str,
@@ -75,6 +82,7 @@ pub(super) fn repo_page<T: DeserializeOwned>(
 ) -> Result<(Vec<T>, Option<String>), FetchError> {
     let first = first.to_string();
     let (items, info) = fetch_page(
+        repo,
         &|cursor: &str| repo_query(field, args, selection, &first, cursor),
         REPO_CONNECTION_PATH,
         after,
@@ -114,22 +122,25 @@ pub(super) struct Connection<T> {
 }
 
 fn nodes<T: DeserializeOwned>(
+    repo: &GhRepo,
     query: impl Fn(&str) -> String,
     path: &[&str],
 ) -> Result<Vec<T>, FetchError> {
-    nodes_after(query, path, None)
+    nodes_after(repo, query, path, None)
 }
 
 fn nodes_after<T: DeserializeOwned>(
+    repo: &GhRepo,
     query: impl Fn(&str) -> String,
     path: &[&str],
     cursor: Option<&str>,
 ) -> Result<Vec<T>, FetchError> {
-    collect_from(cursor, |cursor| fetch_page(&query, path, cursor))
+    collect_from(cursor, |cursor| fetch_page(repo, &query, path, cursor))
 }
 
 /// One request: the page that starts after `cursor`, and its paging info.
 fn fetch_page<T: DeserializeOwned>(
+    pinned: &GhRepo,
     query: &impl Fn(&str) -> String,
     path: &[&str],
     cursor: Option<&str>,
@@ -142,7 +153,7 @@ fn fetch_page<T: DeserializeOwned>(
         args.extend(["-F", "owner={owner}", "-F", "name={repo}"]);
     }
     args.extend(["-f", &query_arg]);
-    let mut value: Value = cli::run_gh_json(&args)?;
+    let mut value: Value = cli::run_gh_json(pinned, &args)?;
     if let Some(errors) = value.get("errors") {
         return Err(FetchError::GraphQl(graphql_messages(errors)));
     }

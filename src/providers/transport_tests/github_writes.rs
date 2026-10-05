@@ -6,7 +6,7 @@ use crate::domain::pr::{AutoMerge, DeletableBranch, PullRequest, SourceRepo};
 #[test]
 fn github_merge_sends_the_chosen_strategy() {
     let installed = FakeGh::new().on("api", "{}").install();
-    Provider::GitHub
+    Provider::github_for_test()
         .merge(PrId(7), MergeStrategy::Squash, None, &read_head())
         .unwrap();
 
@@ -31,7 +31,7 @@ fn branch(name: &str) -> DeletableBranch {
 #[test]
 fn github_merge_then_deletes_the_branch_with_its_name_escaped() {
     let installed = FakeGh::new().on("api", "{}").install();
-    Provider::GitHub
+    Provider::github_for_test()
         .merge(
             PrId(7),
             MergeStrategy::Squash,
@@ -55,7 +55,7 @@ fn github_a_branch_that_cannot_be_deleted_leaves_the_merge_done() {
         .fail("git/refs", 1, "Resource not accessible by integration")
         .on("api", "{}")
         .install();
-    let error = Provider::GitHub
+    let error = Provider::github_for_test()
         .merge(
             PrId(7),
             MergeStrategy::Merge,
@@ -78,7 +78,7 @@ fn github_a_branch_that_is_already_gone_is_deleted_as_far_as_the_merge_goes() {
         .fail("git/refs", 1, "gh: Reference does not exist (HTTP 422)")
         .on("api", "{}")
         .install();
-    Provider::GitHub
+    Provider::github_for_test()
         .merge(
             PrId(7),
             MergeStrategy::Merge,
@@ -94,7 +94,7 @@ fn github_a_merge_that_fails_does_not_delete_the_branch() {
     let installed = FakeGh::new()
         .fail("pulls/7/merge", 1, "Not mergeable")
         .install();
-    let error = Provider::GitHub
+    let error = Provider::github_for_test()
         .merge(
             PrId(7),
             MergeStrategy::Merge,
@@ -135,7 +135,9 @@ fn github_asks_each_one_who_asked_for_changes_to_review_again_in_one_call() {
         state: ReviewerState::ChangesRequested,
     };
     let who = Rerequest::of(&[asked("alice"), asked("erin")]).expect("two to ask");
-    Provider::GitHub.rerequest_review(PrId(7), &who).unwrap();
+    Provider::github_for_test()
+        .rerequest_review(PrId(7), &who)
+        .unwrap();
 
     assert_eq!(
         installed.calls(),
@@ -148,7 +150,7 @@ fn github_asks_each_one_who_asked_for_changes_to_review_again_in_one_call() {
 #[test]
 fn github_decline_closes_the_pull_request() {
     let installed = FakeGh::new().on("api", "{}").install();
-    Provider::GitHub.decline(PrId(7)).unwrap();
+    Provider::github_for_test().decline(PrId(7)).unwrap();
 
     assert_eq!(
         installed.calls(),
@@ -160,7 +162,9 @@ fn github_decline_closes_the_pull_request() {
 fn github_pr_comment_passes_the_body_as_a_literal_argument() {
     let installed = FakeGh::new().on("api", "{}").install();
     let body = "thanks $(whoami) `id` \"quoted\" & more";
-    Provider::GitHub.post_pr_comment(PrId(7), body).unwrap();
+    Provider::github_for_test()
+        .post_pr_comment(PrId(7), body)
+        .unwrap();
 
     assert_eq!(
         installed.calls(),
@@ -180,7 +184,7 @@ fn github_batched_review_is_one_call_with_the_comments_on_stdin() {
         review_comment("abc", 3, false),
         review_comment("abc", 9, true),
     ];
-    Provider::GitHub
+    Provider::github_for_test()
         .submit_full_review(
             PrId(7),
             ReviewVerdict::RequestChanges,
@@ -220,7 +224,7 @@ fn github_batched_review_refuses_unsafe_batches_without_calling_gh() {
         review_comment("abc", 1, false),
         review_comment("def", 2, false),
     ];
-    let result = Provider::GitHub.submit_full_review(
+    let result = Provider::github_for_test().submit_full_review(
         PrId(7),
         ReviewVerdict::Comment,
         "",
@@ -241,7 +245,7 @@ fn github_batched_review_refuses_unsafe_batches_without_calling_gh() {
 #[test]
 fn github_reopen_sets_the_state_back_to_open() {
     let installed = FakeGh::new().on("api", "{}").install();
-    Provider::GitHub.reopen(PrId(7)).unwrap();
+    Provider::github_for_test().reopen(PrId(7)).unwrap();
 
     assert_eq!(
         installed.calls(),
@@ -258,7 +262,7 @@ fn github_refusing_a_reopen_reaches_the_user_in_githubs_words() {
             "gh: Validation Failed: the head branch was deleted (HTTP 422)",
         )
         .install();
-    let error = Provider::GitHub.reopen(PrId(7)).unwrap_err();
+    let error = Provider::github_for_test().reopen(PrId(7)).unwrap_err();
 
     assert!(matches!(error, FetchError::GhFailed { .. }), "{error:?}");
     assert!(
@@ -280,14 +284,16 @@ fn github_edits_and_deletes_a_comment_where_its_kind_lives() {
         id: CommentId(12),
         kind: CommentKind::Conversation,
     };
-    Provider::GitHub
+    Provider::github_for_test()
         .edit_comment(PrId(7), review, "new")
         .unwrap();
-    Provider::GitHub
+    Provider::github_for_test()
         .edit_comment(PrId(7), conversation, "new")
         .unwrap();
-    Provider::GitHub.delete_comment(PrId(7), review).unwrap();
-    Provider::GitHub
+    Provider::github_for_test()
+        .delete_comment(PrId(7), review)
+        .unwrap();
+    Provider::github_for_test()
         .delete_comment(PrId(7), conversation)
         .unwrap();
 
@@ -306,7 +312,7 @@ fn github_edits_and_deletes_a_comment_where_its_kind_lives() {
 fn github_resolves_a_thread_by_its_node_id_and_refuses_another_providers_handle() {
     use crate::domain::comment::{CommentId, ThreadHandle};
     let installed = FakeGh::new().on("api", "{}").install();
-    Provider::GitHub
+    Provider::github_for_test()
         .set_thread_resolved(PrId(7), &ThreadHandle::NodeId("PRRT_1".into()), true)
         .unwrap();
     let calls = installed.calls();
@@ -314,7 +320,7 @@ fn github_resolves_a_thread_by_its_node_id_and_refuses_another_providers_handle(
     assert!(calls[0].contains("resolveReviewThread"), "{calls:?}");
     assert!(calls[0].contains("PRRT_1"), "{calls:?}");
 
-    let refused = Provider::GitHub.set_thread_resolved(
+    let refused = Provider::github_for_test().set_thread_resolved(
         PrId(7),
         &ThreadHandle::RootComment(CommentId(3)),
         true,
@@ -326,7 +332,7 @@ fn github_resolves_a_thread_by_its_node_id_and_refuses_another_providers_handle(
 #[test]
 fn github_auto_merge_asks_gh_for_the_chosen_strategy_and_off_disables_it() {
     let installed = FakeGh::new().on("pr", "").install();
-    Provider::GitHub
+    Provider::github_for_test()
         .set_auto_merge(
             PrId(7),
             &AutoMerge::On {
@@ -335,7 +341,7 @@ fn github_auto_merge_asks_gh_for_the_chosen_strategy_and_off_disables_it() {
             },
         )
         .unwrap();
-    Provider::GitHub
+    Provider::github_for_test()
         .set_auto_merge(PrId(7), &AutoMerge::Off)
         .unwrap();
 
@@ -363,7 +369,9 @@ fn github_runs_the_failed_jobs_of_each_failed_run_again_and_nothing_else() {
         .on("actions/runs?head_sha=abc123", &runs)
         .on("rerun-failed-jobs", "{}")
         .install();
-    Provider::GitHub.rerun_failed_builds(PrId(7)).unwrap();
+    Provider::github_for_test()
+        .rerun_failed_builds(PrId(7))
+        .unwrap();
 
     let calls = installed.calls();
     let reruns: Vec<_> = calls.iter().filter(|call| call.contains("rerun")).collect();
@@ -380,7 +388,9 @@ fn github_says_so_when_no_actions_run_failed() {
         .on("--jq .head.sha", "abc123\n")
         .on("actions/runs?head_sha=abc123", &runs)
         .install();
-    let error = Provider::GitHub.rerun_failed_builds(PrId(7)).unwrap_err();
+    let error = Provider::github_for_test()
+        .rerun_failed_builds(PrId(7))
+        .unwrap_err();
     assert!(error.user_message().contains("No failed"), "{error:?}");
 }
 
@@ -397,7 +407,9 @@ fn github_keeps_going_when_one_run_cannot_be_started_and_says_how_many_did() {
         .fail("runs/11/rerun-failed-jobs", 1, "run 11 is too old")
         .on("runs/13/rerun-failed-jobs", "{}")
         .install();
-    let error = Provider::GitHub.rerun_failed_builds(PrId(7)).unwrap_err();
+    let error = Provider::github_for_test()
+        .rerun_failed_builds(PrId(7))
+        .unwrap_err();
 
     assert!(
         error.user_message().contains("1 of 2"),
@@ -423,7 +435,7 @@ fn github_a_merge_of_a_branch_that_moved_says_the_pr_changed_and_deletes_nothing
         )
         .on("api", "{}")
         .install();
-    let error = Provider::GitHub
+    let error = Provider::github_for_test()
         .merge(
             PrId(7),
             MergeStrategy::Merge,
@@ -449,7 +461,7 @@ fn github_a_verdict_alone_names_the_commit_it_is_of() {
         .on("--jq .head.sha", "abc123\n")
         .on("api", "{}")
         .install();
-    Provider::GitHub
+    Provider::github_for_test()
         .submit_full_review(PrId(7), ReviewVerdict::Approve, "", "me", &[], &read_head())
         .unwrap();
 
@@ -468,7 +480,7 @@ fn github_refuses_a_verdict_on_a_branch_that_moved_and_sends_nothing() {
         .on("--jq .head.sha", "def456\n")
         .on("api", "{}")
         .install();
-    let alone = Provider::GitHub.submit_full_review(
+    let alone = Provider::github_for_test().submit_full_review(
         PrId(7),
         ReviewVerdict::Approve,
         "",
@@ -476,7 +488,7 @@ fn github_refuses_a_verdict_on_a_branch_that_moved_and_sends_nothing() {
         &[],
         &read_head(),
     );
-    let batch = Provider::GitHub.submit_full_review(
+    let batch = Provider::github_for_test().submit_full_review(
         PrId(7),
         ReviewVerdict::Approve,
         "",
@@ -498,5 +510,42 @@ fn github_refuses_a_verdict_on_a_branch_that_moved_and_sends_nothing() {
             .all(|call| call.contains("--jq .head.sha")),
         "only the head was read: {:?}",
         installed.calls()
+    );
+}
+
+#[test]
+fn every_call_acts_on_the_repository_the_provider_was_given() {
+    use crate::providers::GhRepo;
+    let installed = FakeGh::new().on("api", "{}").on("pr", "").install();
+    let provider = Provider::GitHub(GhRepo::new("github.com", "upstream", "slussa").unwrap());
+    // `gh api`, which fills `{owner}/{repo}`, and `gh pr <number>`, which finds
+    // the repository itself: both follow what they are told.
+    provider
+        .merge(PrId(7), MergeStrategy::Merge, None, &read_head())
+        .unwrap();
+    provider.set_auto_merge(PrId(7), &AutoMerge::Off).unwrap();
+    provider.decline(PrId(7)).unwrap();
+
+    assert_eq!(installed.calls().len(), 3);
+    assert_eq!(
+        installed.repos(),
+        ["github.com/upstream/slussa"; 3],
+        "{:?}",
+        installed.calls()
+    );
+}
+
+#[test]
+fn another_provider_acts_on_another_repository() {
+    use crate::providers::GhRepo;
+    let installed = FakeGh::new().on("api", "{}").install();
+    for name in ["one", "two"] {
+        Provider::GitHub(GhRepo::new("github.com", "me", name).unwrap())
+            .decline(PrId(7))
+            .unwrap();
+    }
+    assert_eq!(
+        installed.repos(),
+        ["github.com/me/one", "github.com/me/two"]
     );
 }

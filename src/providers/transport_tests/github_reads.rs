@@ -9,7 +9,10 @@ fn fetch_group_with(
     after: Option<&str>,
 ) -> (Result<crate::domain::pr::PrBatch, FetchError>, InstalledGh) {
     let installed = gh.install();
-    (Provider::GitHub.fetch_prs(group, after), installed)
+    (
+        Provider::github_for_test().fetch_prs(group, after),
+        installed,
+    )
 }
 
 fn fetch_prs_with(gh: FakeGh) -> (Result<crate::domain::pr::PrBatch, FetchError>, InstalledGh) {
@@ -31,7 +34,9 @@ fn github_open_group_is_read_a_page_at_a_time_with_drafts_and_nothing_closed() {
         )
         .install();
 
-    let first = Provider::GitHub.fetch_prs(PrGroup::Open, None).unwrap();
+    let first = Provider::github_for_test()
+        .fetch_prs(PrGroup::Open, None)
+        .unwrap();
     assert_eq!(first.more.as_deref(), Some("c1"), "the caller reads on");
     assert_eq!(
         first.prs.iter().map(|pr| pr.id.0).collect::<Vec<_>>(),
@@ -50,7 +55,7 @@ fn github_open_group_is_read_a_page_at_a_time_with_drafts_and_nothing_closed() {
     );
     assert_eq!(pr.reviewers.len(), 1);
 
-    let last = Provider::GitHub
+    let last = Provider::github_for_test()
         .fetch_prs(PrGroup::Open, Some("c1"))
         .unwrap();
     assert_eq!(last.more, None);
@@ -175,7 +180,9 @@ fn github_list_query_leaves_out_the_body_and_the_labels() {
             &gh_list_page(&[gh_pr(1, "2026-09-01T10:00:00Z")], None),
         )
         .install();
-    Provider::GitHub.fetch_prs(PrGroup::Open, None).unwrap();
+    Provider::github_for_test()
+        .fetch_prs(PrGroup::Open, None)
+        .unwrap();
 
     let calls = gh.calls();
     assert_eq!(calls.len(), 1, "{calls:?}");
@@ -203,7 +210,7 @@ fn github_failure_carries_the_exit_code_and_stderr() {
 fn github_reports_a_missing_gh() {
     let _installed = InstalledGh::missing();
     assert!(matches!(
-        Provider::GitHub.fetch_prs(PrGroup::Open, None),
+        Provider::github_for_test().fetch_prs(PrGroup::Open, None),
         Err(FetchError::GhMissing)
     ));
 }
@@ -212,7 +219,7 @@ fn github_reports_a_missing_gh() {
 fn github_without_an_installed_fake_never_reaches_the_real_gh() {
     let _nothing_installed = InstalledGh::none();
     assert!(matches!(
-        Provider::GitHub.current_user(),
+        Provider::github_for_test().current_user(),
         Err(FetchError::GhMissing)
     ));
 }
@@ -257,7 +264,7 @@ fn github_an_answer_of_the_wrong_shape_is_an_error_and_not_a_panic() {
         .on("check-runs", "[[1, 2]]")
         .on("pulls/7", "abc\n")
         .install();
-    let result = Provider::GitHub.fetch_builds(PrId(7));
+    let result = Provider::github_for_test().fetch_builds(PrId(7));
     assert!(
         matches!(result, Err(FetchError::ParseFailed(_))),
         "{result:?}"
@@ -267,7 +274,7 @@ fn github_an_answer_of_the_wrong_shape_is_an_error_and_not_a_panic() {
 #[test]
 fn github_asking_who_is_logged_in_fails_instead_of_naming_nobody() {
     let installed = FakeGh::new().on("api user", "\n").install();
-    let result = Provider::GitHub.current_user();
+    let result = Provider::github_for_test().current_user();
     drop(installed);
     assert!(
         matches!(result, Err(FetchError::ParseFailed(_))),
@@ -277,7 +284,7 @@ fn github_asking_who_is_logged_in_fails_instead_of_naming_nobody() {
     let installed = FakeGh::new()
         .fail("api user", 1, "gh: HTTP 401: Bad credentials")
         .install();
-    let result = Provider::GitHub.current_user();
+    let result = Provider::github_for_test().current_user();
     drop(installed);
     assert!(
         matches!(result, Err(FetchError::GhFailed { .. })),
@@ -285,7 +292,10 @@ fn github_asking_who_is_logged_in_fails_instead_of_naming_nobody() {
     );
 
     let _installed = FakeGh::new().on("api user", "octocat\n").install();
-    assert_eq!(Provider::GitHub.current_user().unwrap().as_str(), "octocat");
+    assert_eq!(
+        Provider::github_for_test().current_user().unwrap().as_str(),
+        "octocat"
+    );
 }
 
 #[test]
@@ -304,7 +314,7 @@ fn github_older_prs_continue_from_the_cursor_and_report_when_they_end() {
         )
         .install();
 
-    let first = Provider::GitHub
+    let first = Provider::github_for_test()
         .fetch_prs(PrGroup::Declined, Some("x"))
         .unwrap();
     assert_eq!(
@@ -314,7 +324,7 @@ fn github_older_prs_continue_from_the_cursor_and_report_when_they_end() {
     assert_eq!(first.prs[0].status, PrStatus::Declined);
     assert_eq!(first.more.as_deref(), Some("y"));
 
-    let last = Provider::GitHub
+    let last = Provider::github_for_test()
         .fetch_prs(PrGroup::Declined, Some("y"))
         .unwrap();
     assert_eq!(
@@ -358,7 +368,7 @@ fn github_commits_carry_their_message_and_a_bot_address_marks_a_bot() {
     }}}}})
     .to_string();
     let _gh = FakeGh::new().on("commits", &answer).install();
-    let commits = Provider::GitHub.fetch_commits(PrId(5)).unwrap();
+    let commits = Provider::github_for_test().fetch_commits(PrId(5)).unwrap();
 
     assert_eq!(commits.len(), 2);
     assert!(commits[0].message.ends_with("<noreply@anthropic.com>"));

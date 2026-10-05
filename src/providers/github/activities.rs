@@ -1,3 +1,4 @@
+use super::GhRepo;
 use super::{comments, events, review_threads};
 use crate::domain::{
     activity::Activity,
@@ -7,18 +8,22 @@ use crate::domain::{
 };
 use crate::providers::error::FetchError;
 
-pub fn fetch(pr_number: PrId) -> Result<Activity, FetchError> {
+pub fn fetch(repo: &GhRepo, pr_number: PrId) -> Result<Activity, FetchError> {
     timed(pr_number, "activity", || {
         fetch_parts(
             || {
                 timed(pr_number, "comments", || {
-                    comments::fetch_comments(pr_number)
+                    comments::fetch_comments(repo, pr_number)
                 })
             },
-            || timed(pr_number, "events", || events::fetch_events(pr_number)),
+            || {
+                timed(pr_number, "events", || {
+                    events::fetch_events(repo, pr_number)
+                })
+            },
             || {
                 timed(pr_number, "review_threads", || {
-                    review_threads::fetch_review_threads(pr_number)
+                    review_threads::fetch_review_threads(repo, pr_number)
                 })
             },
         )
