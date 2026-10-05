@@ -59,6 +59,12 @@ impl SeenStorage {
 }
 
 #[cfg(test)]
+/// Open a scope again after dropping its storage.
+pub fn reopen(root: &Path, scope: &str) -> io::Result<(SeenStorage, Seen)> {
+    super::file::reopen_when_released(|| SeenStorage::open(root, scope.into()))
+}
+
+#[cfg(test)]
 mod tests {
     use super::*;
     use crate::domain::pr::PrId;
@@ -81,7 +87,7 @@ mod tests {
         storage.save(&seen).unwrap();
         drop(storage);
 
-        let (_storage, restored) = SeenStorage::open(root, "repo/a".into()).unwrap();
+        let (_storage, restored) = reopen(root, "repo/a").unwrap();
         assert_eq!(restored, seen);
         // Another account or repository has its own file.
         let (_other, theirs) = SeenStorage::open(root, "repo/b".into()).unwrap();
@@ -110,7 +116,7 @@ mod tests {
         let path = storage.file.path().to_path_buf();
         drop(storage);
         fs::write(&path, b"broken").unwrap();
-        assert!(SeenStorage::open(root, "scope".into()).is_err());
+        assert!(reopen(root, "scope").is_err());
         assert_eq!(fs::read(&path).unwrap(), b"broken");
     }
 

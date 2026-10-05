@@ -86,6 +86,23 @@ impl ScopedFile {
     }
 }
 
+/// Open again after the earlier handle was dropped. A child process started by
+/// a concurrent test can briefly hold a copy of the lock file descriptor between
+/// fork and exec, so a release is not always visible at once; this waits for it.
+#[cfg(test)]
+pub fn reopen_when_released<T>(open: impl Fn() -> io::Result<T>) -> io::Result<T> {
+    let mut attempt = 0;
+    loop {
+        match open() {
+            Err(error) if attempt < 100 && error.to_string().contains("already in use") => {
+                attempt += 1;
+                std::thread::sleep(std::time::Duration::from_millis(10));
+            }
+            result => return result,
+        }
+    }
+}
+
 fn private_options() -> OpenOptions {
     let mut options = crate::private_file::options();
     options.read(true).write(true);

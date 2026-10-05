@@ -80,7 +80,7 @@ fn what_was_looked_at_is_written_when_it_changes_and_read_back_on_the_next_start
     // Another start: the file holds the look, and the same list marks the PR
     // once it has been updated since.
     app.seen_file = SeenFile::Unavailable;
-    let (_storage, seen) = SeenStorage::open(dir.path(), "scope".into()).unwrap();
+    let (_storage, seen) = crate::local::seen::reopen(dir.path(), "scope").unwrap();
     assert_eq!(seen.len(), 1);
     let mut later = list(&app).remove(0);
     later.updated += Duration::minutes(5);
