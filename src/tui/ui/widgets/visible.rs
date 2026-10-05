@@ -17,9 +17,10 @@ pub struct Run {
 }
 
 /// Whether `c` is drawn as nothing, or as something other than what it does to
-/// the text around it. `before` and `after` are its neighbours: a joiner is
-/// ordinary between two letters of a script that uses it, and invisible only
-/// where it sits against ASCII, as in an identifier.
+/// the text around it. `before` and `after` are its neighbours: a joiner has an
+/// effect only between two characters of one kind that it joins, as in an emoji
+/// sequence or a word of a script that uses it, and is invisible anywhere else,
+/// as in an identifier or between two quotation marks.
 fn is_invisible(c: char, before: Option<char>, after: Option<char>) -> bool {
     match c {
         '\t' => false,
@@ -43,11 +44,42 @@ fn is_invisible(c: char, before: Option<char>, after: Option<char>) -> bool {
         | '\u{2029}'
         | '\u{E0000}'..='\u{E007F}'
         | '\u{E0100}'..='\u{E01EF}' => true,
-        '\u{200C}' | '\u{200D}' => {
-            let ascii = |c: Option<char>| c.is_none_or(|c| c.is_ascii());
-            ascii(before) || ascii(after)
-        }
+        '\u{200C}' | '\u{200D}' => !matches!(
+            (before.and_then(joins), after.and_then(joins)),
+            (Some(a), Some(b)) if a == b
+        ),
         _ => false,
+    }
+}
+
+/// What kind of text a joiner may join, if `c` is of one.
+#[derive(PartialEq, Eq, Clone, Copy)]
+enum Joins {
+    /// Emoji and the symbols that go into emoji sequences, with their selector.
+    Emoji,
+    /// A script whose words are joined or kept apart by joiners.
+    Script,
+}
+
+const fn joins(c: char) -> Option<Joins> {
+    match c {
+        '\u{1F000}'..='\u{1FAFF}'
+        | '\u{2300}'..='\u{23FF}'
+        | '\u{2600}'..='\u{27BF}'
+        | '\u{2B00}'..='\u{2BFF}'
+        | '\u{FE0F}' => Some(Joins::Emoji),
+        // Arabic, Syriac, N'Ko, Indic scripts, Myanmar, Khmer, Mongolian, Adlam
+        // and the Arabic presentation forms (not the byte order mark).
+        '\u{0600}'..='\u{07FF}'
+        | '\u{08A0}'..='\u{08FF}'
+        | '\u{0900}'..='\u{0DFF}'
+        | '\u{1000}'..='\u{109F}'
+        | '\u{1780}'..='\u{17FF}'
+        | '\u{1800}'..='\u{18AF}'
+        | '\u{1E900}'..='\u{1E95F}'
+        | '\u{FB50}'..='\u{FDFF}'
+        | '\u{FE70}'..='\u{FEFE}' => Some(Joins::Script),
+        _ => None,
     }
 }
 
@@ -170,9 +202,19 @@ mod tests {
         // An emoji with a joiner, and a Persian word with a non-joiner.
         assert_eq!(drawn("👩\u{200D}💻"), "👩\u{200D}💻");
         assert_eq!(drawn("می\u{200C}خواهم"), "می\u{200C}خواهم");
+        // An emoji with a selector before the joiner, and a Devanagari conjunct.
+        assert_eq!(drawn("❤\u{FE0F}\u{200D}🔥"), "❤\u{FE0F}\u{200D}🔥");
+        assert_eq!(drawn("क\u{200D}ष"), "क\u{200D}ष");
         // The same characters inside an identifier.
         assert_eq!(drawn("is\u{200D}Admin"), "is‹U+200D›Admin");
         assert_eq!(drawn("a\u{200C}b"), "a‹U+200C›b");
+        // Where it joins nothing: between marks that are not of a joining kind,
+        // between two kinds, or at the edge of the text.
+        assert_eq!(drawn("«\u{200D}»"), "«‹U+200D›»");
+        assert_eq!(drawn("é\u{200C}è"), "é‹U+200C›è");
+        assert_eq!(drawn("👩\u{200D}ب"), "👩‹U+200D›ب");
+        assert_eq!(drawn("\u{200D}"), "‹U+200D›");
+        assert_eq!(drawn("🙂\u{200D}"), "🙂‹U+200D›");
     }
 
     #[test]
