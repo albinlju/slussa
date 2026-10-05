@@ -284,7 +284,7 @@ fn commit_list_returns_to_the_same_viewport_after_opening_a_commit() {
         .commits = LoadState::Loaded(
         (0..40)
             .map(|n| Commit {
-                oid: CommitOid(format!("{n:07x}")),
+                oid: CommitOid::from(format!("{n:07x}").as_str()),
                 headline: format!("Commit number {n}"),
                 message: format!("Commit number {n}"),
                 account: AccountKind::Person,

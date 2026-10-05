@@ -499,3 +499,27 @@ fn github_a_draft_can_have_a_conflict_too() {
     assert_eq!(status.label(), "Draft");
     assert!(status.has_conflicts());
 }
+
+#[test]
+fn github_a_commit_id_that_is_not_hexadecimal_is_refused_not_put_in_a_path() {
+    let node = json!({"commit": {
+        "oid": "../../repos/other/x",
+        "messageHeadline": "h",
+        "message": "h",
+        "authoredDate": "2026-10-01T10:00:00Z",
+        "additions": 0,
+        "deletions": 0,
+        "author": {"name": "a", "email": "a@example.com"}
+    }});
+    let answer = json!({"data": {"repository": {"item": {"connection": {
+        "nodes": [node],
+        "pageInfo": {"hasNextPage": false, "endCursor": null}
+    }}}}})
+    .to_string();
+    let _gh = FakeGh::new().on("commits", &answer).install();
+    let result = Provider::github_for_test().fetch_commits(PrId(5));
+    assert!(
+        matches!(result, Err(FetchError::ParseFailed(_))),
+        "{result:?}"
+    );
+}

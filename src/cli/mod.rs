@@ -71,8 +71,11 @@ pub fn dispatch(mut args: Vec<String>) -> Dispatch {
             Dispatch::RunTui { session, open }
         }
         Err(err) => {
-            tracing::error!("preflight failed: {err}");
-            eprintln!("slussa: {err}");
+            // The text may hold what a server or a remote said, which a terminal
+            // would act on.
+            let said = crate::domain::printable::printable(&err.to_string());
+            tracing::error!("preflight failed: {said}");
+            eprintln!("slussa: {said}");
             Dispatch::Done(ExitCode::from(1))
         }
     }

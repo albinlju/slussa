@@ -56,13 +56,13 @@ async fn a_merge_is_tied_to_the_head_the_list_gave_when_no_diff_was_read() {
 #[tokio::test]
 async fn a_merge_is_tied_to_the_head_of_the_diff_that_was_read_not_a_newer_listed_one() {
     let mut app = app();
-    listed_head(&mut app, Some("newer"));
+    listed_head(&mut app, Some("beef01"));
     detail(&mut app, DetailTab::Overview);
-    read_diff_at(&mut app, "read");
+    read_diff_at(&mut app, "cafe02");
     press(&mut app, KeyCode::Char('m'));
     assert_eq!(
         merge_command(&mut app).1,
-        "read",
+        "cafe02",
         "the author pushed after the diff was read: GitHub will refuse"
     );
 }

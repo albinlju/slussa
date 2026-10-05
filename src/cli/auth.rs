@@ -24,7 +24,7 @@ pub(super) fn run(args: &[String]) -> ExitCode {
             match result {
                 Ok(()) => ExitCode::SUCCESS,
                 Err(err) => {
-                    eprintln!("slussa: {err}");
+                    eprintln!("slussa: {}", crate::domain::printable::printable(&err));
                     ExitCode::from(1)
                 }
             }

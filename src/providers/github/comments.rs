@@ -1,6 +1,7 @@
 use super::GhRepo;
 use crate::domain::{
     comment::{Comment, CommentId, CommentKey, CommentKind},
+    commit::CommitOid,
     diff::LineRef,
     pr::PrId,
     review::ReviewComment,
@@ -115,14 +116,26 @@ pub fn set_thread_resolved(repo: &GhRepo, node_id: &str, resolved: bool) -> Resu
     } else {
         "unresolveReviewThread"
     };
+    // The thread's id is a variable and not part of the query text: it comes
+    // from the server, and a quote in it would end the string it sits in.
     let query = format!(
-        "mutation {{ {mutation}(input: {{ threadId: \"{node_id}\" }}) {{ thread {{ isResolved }} }} }}"
+        "mutation($id: ID!) {{ {mutation}(input: {{ threadId: $id }}) {{ thread {{ isResolved }} }} }}"
     );
-    super::cli::run_gh(repo, &["api", "graphql", "-f", &format!("query={query}")])?;
+    super::cli::run_gh(
+        repo,
+        &[
+            "api",
+            "graphql",
+            "-f",
+            &format!("query={query}"),
+            "-f",
+            &format!("id={node_id}"),
+        ],
+    )?;
     Ok(())
 }
 
-pub(super) fn head_sha(repo: &GhRepo, pr_number: PrId) -> Result<String, FetchError> {
+pub(super) fn head_sha(repo: &GhRepo, pr_number: PrId) -> Result<CommitOid, FetchError> {
     let out = super::cli::run_gh(
         repo,
         &[
@@ -132,7 +145,8 @@ pub(super) fn head_sha(repo: &GhRepo, pr_number: PrId) -> Result<String, FetchEr
             ".head.sha",
         ],
     )?;
-    Ok(String::from_utf8_lossy(&out).trim().to_string())
+    CommitOid::parse(String::from_utf8_lossy(&out).trim())
+        .ok_or_else(|| FetchError::ParseFailed("a commit id that is not hexadecimal".into()))
 }
 
 /// Fails unless the PR's branch is still at `head`, the one that was read.
@@ -141,7 +155,7 @@ pub(super) fn ensure_head(
     pr_number: PrId,
     head: &crate::domain::review::ReviewedHead,
 ) -> Result<(), FetchError> {
-    if head_sha(repo, pr_number)? == head.as_str() {
+    if head_sha(repo, pr_number)?.as_str() == head.as_str() {
         Ok(())
     } else {
         Err(super::merge::moved_since_read())

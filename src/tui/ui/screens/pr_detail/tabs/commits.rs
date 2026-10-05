@@ -383,7 +383,7 @@ mod tests {
     fn commit_rows_prioritize_title_in_narrow_views() {
         let now = Utc::now();
         let commit = Commit {
-            oid: CommitOid("abcdef123456".into()),
+            oid: CommitOid::from("abcdef123456"),
             headline: "Fix 非常に長い headline with more details".into(),
             message: "Fix 非常に長い headline with more details".into(),
             account: AccountKind::Person,
@@ -411,7 +411,7 @@ mod tests {
 
     fn commit_by(authorship: Authorship) -> Commit {
         Commit {
-            oid: CommitOid("abcdef123456".into()),
+            oid: CommitOid::from("abcdef123456"),
             headline: "Fix the lock".into(),
             message: "Fix the lock".into(),
             account: AccountKind::Person,
