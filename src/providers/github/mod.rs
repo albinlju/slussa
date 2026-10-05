@@ -7,6 +7,7 @@ mod commits;
 mod diff;
 mod events;
 mod graphql;
+mod merge;
 mod pagination;
 mod prs;
 mod review_threads;
@@ -18,6 +19,7 @@ pub use comments::{
 };
 pub use commits::fetch_commits;
 pub use diff::{fetch_commit_diff, fetch_diff};
+pub use merge::{merge, set_auto_merge};
 pub use prs::{fetch_info, fetch_pr, fetch_prs};
 
 use chrono::{DateTime, Utc};
@@ -26,10 +28,10 @@ use serde::de::DeserializeOwned;
 
 use crate::domain::authorship::Authorship;
 use crate::domain::comment::{Comment, CommentId, Reaction};
-use crate::domain::pr::{DeletableBranch, MergeStrategy, Mergeability, PrId};
+use crate::domain::pr::{MergeStrategy, Mergeability, PrId};
 use crate::domain::review::{ReviewComment, ReviewVerdict};
 use crate::domain::user::{AccountKind, User, Username};
-use crate::providers::error::{FetchError, MergeError};
+use crate::providers::error::FetchError;
 
 pub fn current_user() -> Result<Username, FetchError> {
     let out = cli::run_gh(&["api", "user", "--jq", ".login"])?;
@@ -101,90 +103,6 @@ fn merge_status(mergeable: &str, state: &str, review_decision: Option<&str>) -> 
         ("MERGEABLE", "CLEAN" | "HAS_HOOKS" | "UNSTABLE") => Mergeability::Mergeable,
         _ => Mergeability::Unknown,
     }
-}
-
-/// Merge the PR, then delete the branch it came from when asked to. A branch
-/// that cannot be deleted does not undo the merge: that is `BranchDeleteFailed`.
-pub fn merge(
-    pr_number: PrId,
-    strategy: MergeStrategy,
-    delete: Option<&DeletableBranch>,
-) -> Result<(), MergeError> {
-    let method = match strategy {
-        MergeStrategy::Merge => "merge",
-        MergeStrategy::Squash => "squash",
-        MergeStrategy::Rebase => "rebase",
-    };
-    cli::run_gh(&[
-        "api",
-        "--method",
-        "PUT",
-        &format!("repos/{{owner}}/{{repo}}/pulls/{pr_number}/merge"),
-        "-f",
-        &format!("merge_method={method}"),
-    ])?;
-    if let Some(branch) = delete {
-        delete_branch(branch).map_err(MergeError::BranchDeleteFailed)?;
-    }
-    Ok(())
-}
-
-/// A branch that is already gone counts as deleted: GitHub removes the head
-/// branch itself where the repository asks it to, and answers 422 `Reference
-/// does not exist` to a delete that comes second.
-fn delete_branch(branch: &DeletableBranch) -> Result<(), FetchError> {
-    let deleted = cli::run_gh(&[
-        "api",
-        "--method",
-        "DELETE",
-        &format!(
-            "repos/{{owner}}/{{repo}}/git/refs/heads/{}",
-            ref_path(branch.name())
-        ),
-    ]);
-    match deleted {
-        Ok(_) => Ok(()),
-        Err(FetchError::GhFailed { ref stderr, .. })
-            if stderr.contains("Reference does not exist") =>
-        {
-            Ok(())
-        }
-        Err(error) => Err(error),
-    }
-}
-
-/// A branch name as the tail of a URL path: slashes stay, anything that is not
-/// plain is escaped, so a `#` or `?` in a name does not end the path.
-fn ref_path(name: &str) -> String {
-    use std::fmt::Write;
-    name.bytes().fold(String::new(), |mut out, byte| {
-        if byte.is_ascii_alphanumeric() || matches!(byte, b'-' | b'.' | b'_' | b'~' | b'/') {
-            out.push(char::from(byte));
-        } else {
-            let _ = write!(out, "%{byte:02X}");
-        }
-        out
-    })
-}
-
-/// Merge the PR by itself with `strategy` once its checks and reviews allow it,
-/// or stop it from doing so (`None`). GitHub refuses when the repository does
-/// not allow auto-merge; that message reaches the user as it is.
-pub fn set_auto_merge(pr_number: PrId, strategy: Option<MergeStrategy>) -> Result<(), FetchError> {
-    let pr = pr_number.to_string();
-    let flag = match strategy {
-        Some(MergeStrategy::Merge) => "--merge",
-        Some(MergeStrategy::Squash) => "--squash",
-        Some(MergeStrategy::Rebase) => "--rebase",
-        None => "--disable-auto",
-    };
-    let args: &[&str] = if strategy.is_some() {
-        &["pr", "merge", &pr, "--auto", flag]
-    } else {
-        &["pr", "merge", &pr, flag]
-    };
-    cli::run_gh(args)?;
-    Ok(())
 }
 
 /// Reopen a closed PR. GitHub refuses when the head branch is gone or the PR
