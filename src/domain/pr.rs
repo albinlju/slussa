@@ -71,6 +71,18 @@ impl PrStatus {
         matches!(self, Self::Open(OpenPr { draft: false, .. }))
     }
 
+    /// Whether the provider says an open PR has no conflict. Not the same as
+    /// not having one that is known: where it does not say, it is neither.
+    pub const fn is_conflict_free(&self) -> bool {
+        matches!(
+            self,
+            Self::Open(OpenPr {
+                conflicts: Conflicts::No,
+                ..
+            })
+        )
+    }
+
     pub const fn has_conflicts(&self) -> bool {
         matches!(
             self,

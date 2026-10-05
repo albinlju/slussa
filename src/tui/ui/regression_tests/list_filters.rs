@@ -3,8 +3,8 @@
 use super::support::*;
 use crate::domain::review::{Reviewer, ReviewerState};
 
-/// Three PRs: #1 by alice with failing checks, #2 by bob, #3 by alice, approved
-/// by a reviewer.
+/// Three PRs: #1 by alice with failing checks, #2 by bob with a conflict, #3 by
+/// alice, approved by a reviewer and without a conflict.
 fn list() -> AppState {
     let mut state = fixture();
     state.screen = Screen::List;
@@ -25,6 +25,10 @@ fn list() -> AppState {
     let one = by(1, "alice", &|pr| pr.ci = CiSummary::Failed);
     let two = by(2, "bob", &|pr| pr.status = PrStatus::conflicting());
     let three = by(3, "alice", &|pr| {
+        pr.status = PrStatus::Open(OpenPr {
+            draft: false,
+            conflicts: Conflicts::No,
+        });
         pr.reviewers = vec![Reviewer {
             author: User {
                 username: "carol".into(),
@@ -56,6 +60,9 @@ fn filters_narrow_the_list_as_they_are_typed() {
     assert_eq!(rows_after("author:alice"), [1, 3]);
     assert_eq!(rows_after("review:none"), [1, 2]);
     assert_eq!(rows_after("merge:conflicts"), [2]);
+    // #1's conflict is not known, so it is in neither.
+    assert_eq!(rows_after("merge:clean"), [3]);
+    assert_eq!(rows_after("merge:c"), [1, 2, 3], "c begins both values");
     assert_eq!(rows_after("ci:failed"), [1]);
     assert_eq!(rows_after("review:approved"), [3]);
     // Together, and with words.
