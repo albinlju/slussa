@@ -428,7 +428,8 @@ where it is used. Three shapes, in the order to reach for them:
   `CommitsView`, `EditMode`, `NavTarget` (a thread, and a fold row that stands
   for its thread), `Mergeability` (the reasons are in `Conflicts` and
   `Blocked`), `PrStatus` (being a draft and having a conflict are in `Open`,
-  so a merged PR has neither), `ThreadHandle`, `LineRef`, `CommentKind`, `AccountKind` and
+  so a merged PR has neither; `Conflicts` says yes, no or unknown, since a
+  provider does not always say), `ThreadHandle`, `LineRef`, `CommentKind`, `AccountKind` and
   `Authorship` (who wrote a comment), `AuthorFilter` (and `hides`, which says
   whose comments a filter leaves out), `Reveal` and `Folds`. A
   `match` on one of these names every variant, so a new one is a compile error

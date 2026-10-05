@@ -16,27 +16,35 @@ pub enum PrStatus {
 pub struct OpenPr {
     /// The author has not asked for a review yet.
     pub draft: bool,
-    /// The provider says it cannot be merged as it is, for a conflict with the
-    /// branch it targets. A provider that does not say, or has not worked it
-    /// out, leaves it false.
-    pub conflicts: bool,
+    pub conflicts: Conflicts,
+}
+
+/// Whether an open PR conflicts with the branch it targets, as far as the
+/// provider says.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+pub enum Conflicts {
+    Yes,
+    No,
+    /// The provider does not say in the list, or has not worked it out yet.
+    #[default]
+    Unknown,
 }
 
 impl PrStatus {
-    /// An open PR that is ready for review and has no conflict.
+    /// An open PR that is ready for review, about which nothing more is known.
     pub const fn open() -> Self {
         Self::Open(OpenPr {
             draft: false,
-            conflicts: false,
+            conflicts: Conflicts::Unknown,
         })
     }
 
-    /// An open PR that is a draft and has no conflict.
+    /// An open PR that is a draft, about which nothing more is known.
     #[cfg(test)]
     pub const fn draft() -> Self {
         Self::Open(OpenPr {
             draft: true,
-            conflicts: false,
+            conflicts: Conflicts::Unknown,
         })
     }
 
@@ -45,7 +53,7 @@ impl PrStatus {
     pub const fn conflicting() -> Self {
         Self::Open(OpenPr {
             draft: false,
-            conflicts: true,
+            conflicts: Conflicts::Yes,
         })
     }
 
@@ -67,7 +75,7 @@ impl PrStatus {
         matches!(
             self,
             Self::Open(OpenPr {
-                conflicts: true,
+                conflicts: Conflicts::Yes,
                 ..
             })
         )

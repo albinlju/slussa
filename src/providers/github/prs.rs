@@ -3,7 +3,7 @@ use serde::Deserialize;
 
 use crate::domain::ci::CiSummary;
 use crate::domain::pr::{
-    AiReview, LinkedIssue, OpenPr, PrBatch, PrGroup, PrId, PrInfo, PrStatus, PullRequest,
+    AiReview, Conflicts, LinkedIssue, OpenPr, PrBatch, PrGroup, PrId, PrInfo, PrStatus, PullRequest,
 };
 use crate::domain::review::{Reviewer, ReviewerState};
 use crate::domain::user::User;
@@ -289,7 +289,12 @@ fn map_pr(gh: GhPr) -> PullRequest {
             "CLOSED" => PrStatus::Declined,
             _ => PrStatus::Open(OpenPr {
                 draft: gh.is_draft,
-                conflicts: gh.state == "OPEN" && gh.mergeable.as_deref() == Some("CONFLICTING"),
+                conflicts: match (gh.state.as_str(), gh.mergeable.as_deref()) {
+                    ("OPEN", Some("CONFLICTING")) => Conflicts::Yes,
+                    ("OPEN", Some("MERGEABLE")) => Conflicts::No,
+                    // Not worked out yet, or not said.
+                    _ => Conflicts::Unknown,
+                },
             }),
         },
         reviewers,

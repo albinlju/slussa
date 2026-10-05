@@ -282,6 +282,7 @@ impl Operation {
         match self {
             Self::Merge => Some(PrStatus::Merged),
             Self::Decline => Some(PrStatus::Declined),
+            // Whether it is a draft or has a conflict is read with the list again.
             Self::Reopen => Some(PrStatus::open()),
             Self::Comment | Self::Moderation | Self::Review | Self::RerunBuilds => None,
         }

@@ -1,6 +1,7 @@
 //! GitHub reads through a fake `gh`: the list, failures.
 
 use super::support::*;
+use crate::domain::pr::Conflicts;
 
 fn fetch_group_with(
     gh: FakeGh,
@@ -439,7 +440,7 @@ fn github_list_does_not_call_a_review_current_when_its_commit_is_gone() {
     assert_eq!(read_ai(&[gone], "head", "OPEN"), AiReview::Stale);
 }
 
-fn read_conflicts(mergeable: Option<&str>, state: &str) -> bool {
+fn read_conflicts(mergeable: Option<&str>, state: &str) -> Conflicts {
     let mut pr = gh_pr(7, "2026-10-01T10:00:00Z");
     pr["state"] = json!(state);
     if let Some(mergeable) = mergeable {
@@ -447,19 +448,33 @@ fn read_conflicts(mergeable: Option<&str>, state: &str) -> bool {
     }
     let (result, _installed) =
         fetch_prs_with(FakeGh::new().on("states:", &gh_list_page(&[pr], None)));
-    result.unwrap().prs[0].status.has_conflicts()
+    match result.unwrap().prs[0].status {
+        PrStatus::Open(open) => open.conflicts,
+        PrStatus::Merged | PrStatus::Declined => Conflicts::Unknown,
+    }
 }
 
 #[test]
-fn github_list_says_a_pr_has_conflicts_only_when_it_is_open_and_github_says_so() {
-    assert!(read_conflicts(Some("CONFLICTING"), "OPEN"));
-    // Not worked out yet, mergeable, or not said at all: no claim.
-    assert!(!read_conflicts(Some("UNKNOWN"), "OPEN"));
-    assert!(!read_conflicts(Some("MERGEABLE"), "OPEN"));
-    assert!(!read_conflicts(None, "OPEN"));
-    // A PR that is over has nothing to resolve.
-    assert!(!read_conflicts(Some("CONFLICTING"), "MERGED"));
-    assert!(!read_conflicts(Some("CONFLICTING"), "CLOSED"));
+fn github_list_says_yes_no_or_unknown_to_a_conflict_for_an_open_pr() {
+    assert_eq!(read_conflicts(Some("CONFLICTING"), "OPEN"), Conflicts::Yes);
+    assert_eq!(read_conflicts(Some("MERGEABLE"), "OPEN"), Conflicts::No);
+    // Not worked out yet, or not said at all: no claim either way.
+    assert_eq!(read_conflicts(Some("UNKNOWN"), "OPEN"), Conflicts::Unknown);
+    assert_eq!(read_conflicts(None, "OPEN"), Conflicts::Unknown);
+}
+
+#[test]
+fn github_a_pr_that_is_over_has_nothing_to_resolve() {
+    for state in ["MERGED", "CLOSED"] {
+        let mut pr = gh_pr(7, "2026-10-01T10:00:00Z");
+        pr["state"] = json!(state);
+        pr["mergeable"] = json!("CONFLICTING");
+        let (result, _installed) =
+            fetch_prs_with(FakeGh::new().on("states:", &gh_list_page(&[pr], None)));
+        let status = result.unwrap().prs[0].status.clone();
+        assert!(!status.has_conflicts(), "{state}");
+        assert!(!matches!(status, PrStatus::Open(_)), "{state}");
+    }
 }
 
 #[test]
