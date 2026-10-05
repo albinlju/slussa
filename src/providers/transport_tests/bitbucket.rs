@@ -360,3 +360,18 @@ fn bitbucket_reads_the_commit_a_pr_is_at_with_the_list() {
     let batch = bitbucket(&server).fetch_prs(PrGroup::Open, None).unwrap();
     assert_eq!(batch.prs[0].head_oid.as_deref(), Some("0123abc"));
 }
+
+#[test]
+fn bitbucket_a_redirect_is_not_followed_with_the_token() {
+    let server = MockHttp::start(vec![
+        Route::get(&format!("{PR_BASE}/44"), 302, "").redirecting_to("/somewhere/else"),
+        Route::get("/somewhere/else", 200, "{}"),
+    ]);
+    let error = bitbucket(&server).fetch_pr(PrId(44)).unwrap_err();
+
+    assert!(
+        matches!(error, FetchError::HttpFailed { status: 302, .. }),
+        "{error:?}"
+    );
+    assert_eq!(server.requests().len(), 1, "it was not sent on");
+}

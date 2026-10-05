@@ -19,6 +19,8 @@ pub struct Route {
     target: String,
     status: u16,
     body: String,
+    /// Where a redirect says to go.
+    location: Option<String>,
     /// Answer at most this many requests, then fall through to later routes.
     limit: Option<usize>,
     used: usize,
@@ -37,6 +39,12 @@ impl Route {
         Self::new("PUT", target, status, body)
     }
 
+    /// Answer with a `Location` header too, as a redirect does.
+    pub fn redirecting_to(mut self, location: &str) -> Self {
+        self.location = Some(location.to_owned());
+        self
+    }
+
     /// Answer only the first `count` matching requests.
     pub fn times(mut self, count: usize) -> Self {
         self.limit = Some(count);
@@ -49,6 +57,7 @@ impl Route {
             target: target.to_owned(),
             status,
             body: body.to_owned(),
+            location: None,
             limit: None,
             used: 0,
         }
@@ -181,11 +190,12 @@ fn respond(
             body,
         });
 
-    let (status, reply) = route.map_or((404, "no route"), |route| {
-        (route.status, route.body.as_str())
+    let (status, reply, location) = route.map_or((404, "no route", None), |route| {
+        (route.status, route.body.as_str(), route.location.as_deref())
     });
+    let location = location.map_or_else(String::new, |to| format!("Location: {to}\r\n"));
     let response = format!(
-        "HTTP/1.1 {status} Mock\r\nContent-Type: application/json\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{reply}",
+        "HTTP/1.1 {status} Mock\r\nContent-Type: application/json\r\n{location}Content-Length: {}\r\nConnection: close\r\n\r\n{reply}",
         reply.len()
     );
     stream.write_all(response.as_bytes())?;
