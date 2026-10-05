@@ -54,17 +54,23 @@ pub fn fetch_commits(repo: &GhRepo, pr_number: PrId) -> Result<Vec<Commit>, Fetc
         "commits",
         "commit { oid messageHeadline message authoredDate additions deletions author { name email } }",
     )?;
-    Ok(nodes.into_iter().map(|n| map_commit(n.commit)).collect())
+    nodes.into_iter().map(|n| map_commit(n.commit)).collect()
 }
 
-fn map_commit(c: GqlCommit) -> Commit {
+/// What is said of a commit id that git would not write.
+fn not_a_commit_id() -> FetchError {
+    FetchError::ParseFailed("a commit id that is not hexadecimal".into())
+}
+
+fn map_commit(c: GqlCommit) -> Result<Commit, FetchError> {
     let bot = c
         .author
         .as_ref()
         .and_then(|a| a.email.as_deref())
         .is_some_and(is_bot_address);
-    Commit {
-        oid: CommitOid(c.oid),
+    let oid = CommitOid::parse(&c.oid).ok_or_else(not_a_commit_id)?;
+    Ok(Commit {
+        oid,
         headline: c.message_headline,
         message: c.message,
         account: if bot {
@@ -77,5 +83,5 @@ fn map_commit(c: GqlCommit) -> Commit {
         authored_at: c.authored_date,
         additions: c.additions,
         deletions: c.deletions,
-    }
+    })
 }

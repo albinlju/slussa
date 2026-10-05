@@ -56,8 +56,8 @@ impl ReviewedHead {
             .filter(|revision| !revision.commit)
             .map(|revision| revision.head.as_str());
         read.or(listed)
-            .filter(|head| !head.is_empty())
-            .map(|head| Self(head.to_owned()))
+            .and_then(super::commit::CommitOid::parse)
+            .map(|head| Self(head.as_str().to_owned()))
     }
 
     pub fn as_str(&self) -> &str {
@@ -264,6 +264,20 @@ mod reviewed_head_tests {
         assert_eq!(
             ReviewedHead::of(Some(&one_commit), Some("abc123")),
             named("abc123")
+        );
+    }
+
+    #[test]
+    fn a_head_that_is_not_a_commit_id_is_no_head() {
+        assert_eq!(ReviewedHead::of(None, Some("../../x")), None);
+        assert_eq!(
+            ReviewedHead::of(None, Some("abc")),
+            None,
+            "too short for one"
+        );
+        assert_eq!(
+            ReviewedHead::of(Some(&diff_at("not hex", false)), None),
+            None
         );
     }
 

@@ -1,6 +1,6 @@
 use super::GhRepo;
-use crate::domain::diff::Diff;
 use crate::domain::pr::PrId;
+use crate::domain::{commit::CommitOid, diff::Diff};
 use crate::providers::error::FetchError;
 use crate::providers::github::cli::run_gh;
 use crate::providers::unified_diff;
@@ -20,7 +20,7 @@ pub fn fetch_diff(repo: &GhRepo, pr_number: PrId) -> Result<Diff, FetchError> {
     Ok(diff)
 }
 
-pub fn fetch_commit_diff(repo: &GhRepo, oid: &str) -> Result<Diff, FetchError> {
+pub fn fetch_commit_diff(repo: &GhRepo, oid: &CommitOid) -> Result<Diff, FetchError> {
     let endpoint = format!("repos/{{owner}}/{{repo}}/commits/{oid}");
     let stdout = run_gh(
         repo,
@@ -34,7 +34,7 @@ pub fn fetch_commit_diff(repo: &GhRepo, oid: &str) -> Result<Diff, FetchError> {
     let text = String::from_utf8_lossy(&stdout);
     let mut diff = unified_diff::parse(&text);
     diff.revision = Some(crate::domain::diff::DiffRevision {
-        head: oid.into(),
+        head: oid.as_str().into(),
         base: None,
         commit: true,
     });

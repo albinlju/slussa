@@ -1,6 +1,7 @@
 use serde::Deserialize;
 
 use super::Config;
+use crate::domain::commit::CommitOid;
 use crate::domain::diff::{Diff, DiffLine, FileDiff, Hunk};
 use crate::domain::pr::PrId;
 use crate::providers::bitbucket_dc::http::get_json;
@@ -67,7 +68,7 @@ pub(super) fn fetch(config: &Config, pr_id: PrId) -> Result<Diff, FetchError> {
     fetch_path(config, &path)
 }
 
-pub(super) fn fetch_commit(config: &Config, oid: &str) -> Result<Diff, FetchError> {
+pub(super) fn fetch_commit(config: &Config, oid: &CommitOid) -> Result<Diff, FetchError> {
     let path = format!(
         "/rest/api/1.0/projects/{}/repos/{}/commits/{oid}/diff",
         config.repo.project_key, config.repo.repo_slug

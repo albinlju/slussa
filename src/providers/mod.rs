@@ -92,8 +92,8 @@ impl Provider {
 
     pub fn fetch_commit_diff(&self, oid: &CommitOid) -> Result<Diff, FetchError> {
         match self {
-            Self::GitHub(repo) => github::fetch_commit_diff(repo, oid.as_str()),
-            Self::BitbucketDc(c) => bitbucket_dc::fetch_commit_diff(c, oid.as_str()),
+            Self::GitHub(repo) => github::fetch_commit_diff(repo, oid),
+            Self::BitbucketDc(c) => bitbucket_dc::fetch_commit_diff(c, oid),
         }
     }
 

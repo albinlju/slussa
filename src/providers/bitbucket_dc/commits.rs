@@ -34,12 +34,14 @@ pub fn fetch_commits(config: &Config, pr_id: PrId) -> Result<Vec<Commit>, FetchE
         config.repo.project_key, config.repo.repo_slug
     );
     let values: Vec<BbCommit> = get_all(&config.repo.base_url, &path, &config.pat)?;
-    Ok(values.into_iter().map(map_commit).collect())
+    values.into_iter().map(map_commit).collect()
 }
 
-fn map_commit(c: BbCommit) -> Commit {
-    Commit {
-        oid: CommitOid(c.id),
+fn map_commit(c: BbCommit) -> Result<Commit, FetchError> {
+    let oid = CommitOid::parse(&c.id)
+        .ok_or_else(|| FetchError::ParseFailed("a commit id that is not hexadecimal".into()))?;
+    Ok(Commit {
+        oid,
         headline: c.message.lines().next().unwrap_or("").to_string(),
         message: c.message,
         // Bitbucket Data Center does not mark bot accounts.
@@ -49,5 +51,5 @@ fn map_commit(c: BbCommit) -> Commit {
         authored_at: ms_to_utc(c.author_timestamp),
         additions: 0,
         deletions: 0,
-    }
+    })
 }

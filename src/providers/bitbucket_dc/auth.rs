@@ -3,6 +3,7 @@ use std::io::Write;
 use std::time::Duration;
 
 use super::{APP_PROPERTIES_PATH, http};
+use crate::domain::printable::printable;
 
 pub(crate) const SERVICE: &str = "slussa";
 
@@ -57,10 +58,16 @@ fn save_pat(name: &str, pat: &str) -> Result<(), String> {
 }
 
 pub fn login(host: &str, base_url: &str) -> Result<(), String> {
-    println!("Detected host: {host}\n\n{}\n", token_setup_hint(base_url));
+    // The host and the address come from a remote, which whoever wrote the
+    // directory's `.git/config` chose.
+    let (host_shown, base_shown) = (printable(host), printable(base_url));
+    println!(
+        "Detected host: {host_shown}\n\n{}\n",
+        token_setup_hint(&base_shown)
+    );
     if base_url.starts_with("http://") {
         println!(
-            "Warning: {base_url} is not https, so the token is sent unencrypted. \
+            "Warning: {base_shown} is not https, so the token is sent unencrypted. \
              Use an https remote if the server has one.\n"
         );
     }

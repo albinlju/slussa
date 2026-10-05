@@ -169,7 +169,7 @@ mod tests {
 
     fn commit(message: &str, account: AccountKind) -> Commit {
         Commit {
-            oid: CommitOid("abc1234def".into()),
+            oid: CommitOid::from("abc1234def"),
             headline: message.lines().next().unwrap_or_default().into(),
             message: message.into(),
             author_name: "alice".into(),

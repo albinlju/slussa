@@ -4,9 +4,17 @@ use chrono::{DateTime, Utc};
 /// A commit's full object id. A type of its own, so that it cannot be passed
 /// where another string (a path, a cursor, a branch) is expected.
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
-pub struct CommitOid(pub String);
+pub struct CommitOid(String);
 
 impl CommitOid {
+    /// A commit id as git writes it: hexadecimal digits, from the four an
+    /// abbreviation has to the sixty-four of a SHA-256. It goes into the paths
+    /// of requests, so nothing else is let in: the only way to make one.
+    pub fn parse(text: &str) -> Option<Self> {
+        let hex = (4..=64).contains(&text.len()) && text.bytes().all(|b| b.is_ascii_hexdigit());
+        hex.then(|| Self(text.to_owned()))
+    }
+
     pub fn as_str(&self) -> &str {
         &self.0
     }
@@ -14,6 +22,12 @@ impl CommitOid {
     /// The seven characters a commit is known by.
     pub fn short(&self) -> String {
         self.0.chars().take(7).collect()
+    }
+}
+
+impl std::fmt::Display for CommitOid {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str(&self.0)
     }
 }
 
@@ -44,5 +58,31 @@ pub struct Commit {
 impl Commit {
     pub fn is_ai(&self) -> bool {
         self.authorship == Authorship::Ai
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::CommitOid;
+
+    #[test]
+    fn a_commit_id_is_hexadecimal_and_nothing_else_is() {
+        for ok in ["abcd", "ABCDEF12", &"a".repeat(40), &"0".repeat(64)] {
+            assert!(CommitOid::parse(ok).is_some(), "{ok}");
+        }
+        for bad in [
+            "",
+            "abc",
+            "../../x",
+            "abcd/../x",
+            "abcd?x=1",
+            "abcd#",
+            "abcd ",
+            "abcg",
+            "ååååå",
+            &"a".repeat(65),
+        ] {
+            assert!(CommitOid::parse(bad).is_none(), "{bad:?}");
+        }
     }
 }

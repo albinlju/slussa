@@ -8,7 +8,13 @@ use tracing_subscriber::{EnvFilter, fmt};
 use crate::private_file;
 
 pub fn init() -> std::io::Result<()> {
-    let path = log_path();
+    // With no data directory there is no log: one in the current directory would
+    // be written wherever slussa is started, and truncated through a link that
+    // someone left there.
+    let Some(data_dir) = dirs::data_dir() else {
+        return Ok(());
+    };
+    let path = log_path(&data_dir);
     if let Some(parent) = path.parent() {
         create_dir_all(parent)?;
     }
@@ -37,15 +43,14 @@ fn open(path: &Path) -> std::io::Result<File> {
     Ok(file)
 }
 
-pub fn log_path() -> PathBuf {
-    dirs::data_dir()
-        .map_or_else(|| PathBuf::from("."), |d| d.join("slussa"))
-        .join("slussa.log")
+/// The log's place in the data directory.
+fn log_path(data_dir: &Path) -> PathBuf {
+    data_dir.join("slussa").join("slussa.log")
 }
 
 #[cfg(all(test, unix))]
 mod tests {
-    use super::open;
+    use super::{log_path, open};
     use crate::test_support::TempDir;
     use std::{fs, os::unix::fs::PermissionsExt, path::Path};
 
@@ -64,5 +69,13 @@ mod tests {
         drop(open(&path).unwrap());
         assert_eq!(mode(&path), 0o600, "an existing log");
         assert_eq!(fs::read_to_string(&path).unwrap(), "");
+    }
+
+    #[test]
+    fn the_log_has_a_place_in_the_data_directory() {
+        assert_eq!(
+            log_path(Path::new("/data")),
+            Path::new("/data/slussa/slussa.log")
+        );
     }
 }

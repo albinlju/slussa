@@ -11,6 +11,7 @@ pub mod commit;
 pub mod diff;
 pub mod event;
 pub mod pr;
+pub mod printable;
 pub mod query;
 pub mod review;
 pub mod seen;
