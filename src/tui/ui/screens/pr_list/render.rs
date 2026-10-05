@@ -92,7 +92,7 @@ pub(super) fn render(
         .is_some_and(|prs| prs.iter().any(|pr| attention(pr, ctx.viewer).is_some()));
     let any_conflict = filtered
         .as_ref()
-        .is_some_and(|prs| prs.iter().any(|pr| pr.has_conflicts));
+        .is_some_and(|prs| prs.iter().any(|pr| pr.status.has_conflicts()));
     // So does the AI column: only while some PR has been reviewed by an agent, so
     // a repository without one has no column of hollow diamonds.
     let any_ai = filtered

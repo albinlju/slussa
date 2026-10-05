@@ -3,7 +3,7 @@ use serde::Deserialize;
 
 use crate::domain::ci::CiSummary;
 use crate::domain::pr::{
-    AiReview, LinkedIssue, PrBatch, PrGroup, PrId, PrInfo, PrStatus, PullRequest,
+    AiReview, Conflicts, LinkedIssue, OpenPr, PrBatch, PrGroup, PrId, PrInfo, PrStatus, PullRequest,
 };
 use crate::domain::review::{Reviewer, ReviewerState};
 use crate::domain::user::User;
@@ -282,12 +282,20 @@ fn map_pr(gh: GhPr) -> PullRequest {
             username: gh.author.login,
         },
         ci: ci_state,
-        // Only an open PR is a draft: GitHub keeps the flag on a closed one.
+        // Only an open PR is a draft or has a conflict to resolve: GitHub keeps
+        // the draft flag on a closed one.
         status: match gh.state.as_str() {
             "MERGED" => PrStatus::Merged,
             "CLOSED" => PrStatus::Declined,
-            _ if gh.is_draft => PrStatus::Draft,
-            _ => PrStatus::Open,
+            _ => PrStatus::Open(OpenPr {
+                draft: gh.is_draft,
+                conflicts: match (gh.state.as_str(), gh.mergeable.as_deref()) {
+                    ("OPEN", Some("CONFLICTING")) => Conflicts::Yes,
+                    ("OPEN", Some("MERGEABLE")) => Conflicts::No,
+                    // Not worked out yet, or not said.
+                    _ => Conflicts::Unknown,
+                },
+            }),
         },
         reviewers,
         labels: Vec::new(),
@@ -300,8 +308,6 @@ fn map_pr(gh: GhPr) -> PullRequest {
         created: gh.created_at,
         updated: gh.updated_at,
         ai_review,
-        // Only an open PR can have a conflict to resolve.
-        has_conflicts: gh.state == "OPEN" && gh.mergeable.as_deref() == Some("CONFLICTING"),
     }
 }
 

@@ -51,7 +51,7 @@ fn bitbucket_open_group_reads_every_page_with_drafts_and_nothing_closed() {
         vec![1, 2]
     );
     assert_eq!(batch.prs[0].source_branch, "feature");
-    assert_eq!(batch.prs[1].status, PrStatus::Draft);
+    assert_eq!(batch.prs[1].status, PrStatus::draft());
     let requests = server.requests();
     assert_eq!(requests.len(), 2);
     for request in &requests {

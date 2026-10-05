@@ -61,7 +61,7 @@ impl MergeIs {
 
     const fn holds(self, pr: &PullRequest) -> bool {
         match self {
-            Self::Conflicts => pr.has_conflicts,
+            Self::Conflicts => pr.status.has_conflicts(),
         }
     }
 }
@@ -165,7 +165,7 @@ impl Filter {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::domain::{review::Reviewer, user::User};
+    use crate::domain::{pr::PrStatus, review::Reviewer, user::User};
     use chrono::Utc;
 
     fn pr(title: &str, author: &str) -> PullRequest {
@@ -262,7 +262,7 @@ mod tests {
     #[test]
     fn merge_conflicts_keeps_the_prs_with_a_conflict() {
         let conflicting = PullRequest {
-            has_conflicts: true,
+            status: PrStatus::conflicting(),
             ..pr("A", "x")
         };
         let clean = pr("B", "x");

@@ -2,7 +2,7 @@ use std::sync::OnceLock;
 
 use ratatui::style::Color;
 
-use crate::domain::pr::PrStatus;
+use crate::domain::pr::{OpenPr, PrStatus};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct Theme {
@@ -168,8 +168,8 @@ pub const TERMINAL: Theme = Theme {
 impl Theme {
     pub const fn status_color(&self, status: &PrStatus) -> Color {
         match status {
-            PrStatus::Open => self.status_open,
-            PrStatus::Draft => self.status_draft,
+            PrStatus::Open(OpenPr { draft: false, .. }) => self.status_open,
+            PrStatus::Open(OpenPr { draft: true, .. }) => self.status_draft,
             PrStatus::Merged => self.status_merged,
             PrStatus::Declined => self.status_declined,
         }

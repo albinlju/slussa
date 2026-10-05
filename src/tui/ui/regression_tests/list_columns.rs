@@ -9,7 +9,11 @@ fn list(filter: StatusFilter, conflicting: bool) -> AppState {
     state.screen = Screen::List;
     state.ui.list.filter = filter;
     if let LoadState::Loaded(prs) = &mut state.store.cache.prs {
-        prs[0].has_conflicts = conflicting;
+        prs[0].status = if conflicting {
+            PrStatus::conflicting()
+        } else {
+            PrStatus::open()
+        };
     }
     state
 }
@@ -39,7 +43,7 @@ fn where_the_column_is_there_for_a_conflict_the_other_rows_say_what_they_are() {
     if let LoadState::Loaded(prs) = &mut state.store.cache.prs {
         let mut other = prs[0].clone();
         other.id = PrId(7);
-        other.has_conflicts = false;
+        other.status = PrStatus::open();
         prs.push(other);
     }
     let text = draw(&mut state, 130, 12);

@@ -74,7 +74,7 @@ pub(super) fn render(
         ]);
     }
     // Mergeability is only meaningful while the PR is still open.
-    let open = !matches!(pr.status, PrStatus::Merged | PrStatus::Declined);
+    let open = matches!(pr.status, PrStatus::Open(_));
     if open && let Some(badge) = mergeability.and_then(mergeability_badge) {
         left_spans.push(Span::raw("    "));
         left_spans.push(badge);
