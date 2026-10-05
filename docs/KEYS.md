@@ -9,7 +9,7 @@ connected provider does not support, so it can show fewer keys than this page.
 | --- | --- |
 | `j` / `k`, arrows | move |
 | `enter` | open the PR |
-| `/` | search title and author; `esc` clears the search |
+| `/` | search title and author; `esc` clears the search; a number after a hash (as in #44) and `enter` opens that PR, also one the list does not hold |
 | `f` | filter by status (open, draft, merged, declined, all) |
 | `s` | pick the sort order: needs you first, newest, recently updated or oldest |
 | `L` | load more PRs, while the heading says more are unread; in the merged and declined views, the next older batch |

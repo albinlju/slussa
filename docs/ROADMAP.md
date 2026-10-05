@@ -133,7 +133,6 @@ says so on the row.
 - [ ] **Search older PRs and show the total.** Merged and declined PRs are read a
   batch at a time and `L` reads older ones. Missing: searching older PRs at the
   provider, and showing how many exist in total.
-- [ ] **Jump to PR by number** (`#123`) inside the TUI. `slussa 44` already reads one PR by its number and opens it; this would take the number in the list.
 - [ ] **Status bar** — provider, repo, match count, loading spinner. Only if it
   fits in the existing footer line; a second persistent bar is not wanted.
 
