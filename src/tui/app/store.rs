@@ -258,6 +258,8 @@ pub enum Operation {
     Moderation,
     Review,
     Merge,
+    AutoMerge,
+    CancelAutoMerge,
     RerunBuilds,
     Decline,
     Reopen,
@@ -268,6 +270,8 @@ impl Operation {
     pub const fn done_label(self) -> &'static str {
         match self {
             Self::Merge => "merged",
+            Self::AutoMerge => "will merge when ready",
+            Self::CancelAutoMerge => "auto-merge off",
             Self::RerunBuilds => "failed builds run again",
             Self::Decline => "closed / declined",
             Self::Reopen => "reopened",
@@ -284,7 +288,12 @@ impl Operation {
             Self::Decline => Some(PrStatus::Declined),
             // Whether it is a draft or has a conflict is read with the list again.
             Self::Reopen => Some(PrStatus::open()),
-            Self::Comment | Self::Moderation | Self::Review | Self::RerunBuilds => None,
+            Self::Comment
+            | Self::Moderation
+            | Self::Review
+            | Self::AutoMerge
+            | Self::CancelAutoMerge
+            | Self::RerunBuilds => None,
         }
     }
 
@@ -292,9 +301,13 @@ impl Operation {
     pub const fn sends_editor_text(self) -> bool {
         match self {
             Self::Comment | Self::Review => true,
-            Self::Moderation | Self::Merge | Self::RerunBuilds | Self::Decline | Self::Reopen => {
-                false
-            }
+            Self::Moderation
+            | Self::Merge
+            | Self::AutoMerge
+            | Self::CancelAutoMerge
+            | Self::RerunBuilds
+            | Self::Decline
+            | Self::Reopen => false,
         }
     }
 }

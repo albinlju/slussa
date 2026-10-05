@@ -26,6 +26,9 @@ pub enum Command {
         body: String,
     },
     Merge(MergeStrategy),
+    /// Merge by itself with this strategy once the PR is ready.
+    AutoMerge(MergeStrategy),
+    CancelAutoMerge,
     RerunFailedBuilds,
     Decline,
     Reopen,
@@ -51,6 +54,10 @@ impl Command {
                 CommentTarget::Review { verdict } => caps.can_submit_verdict(*verdict, false),
             },
             Self::Merge(strategy) => caps.merge_strategies.contains(strategy),
+            Self::AutoMerge(strategy) => {
+                caps.supports(Feature::AutoMerge) && caps.merge_strategies.contains(strategy)
+            }
+            Self::CancelAutoMerge => caps.supports(Feature::AutoMerge),
             Self::RerunFailedBuilds => caps.supports(Feature::RerunBuilds),
             Self::Decline => caps.supports(Feature::ClosePr),
             Self::Reopen => caps.supports(Feature::ReopenPr),
@@ -111,6 +118,16 @@ impl App {
             Command::Merge(strategy) => {
                 if let Some(ticket) = self.begin_write(pr_id, Operation::Merge) {
                     self.spawn_merge(ticket, strategy);
+                }
+            }
+            Command::AutoMerge(strategy) => {
+                if let Some(ticket) = self.begin_write(pr_id, Operation::AutoMerge) {
+                    self.spawn_auto_merge(ticket, Some(strategy));
+                }
+            }
+            Command::CancelAutoMerge => {
+                if let Some(ticket) = self.begin_write(pr_id, Operation::CancelAutoMerge) {
+                    self.spawn_auto_merge(ticket, None);
                 }
             }
             Command::RerunFailedBuilds => {

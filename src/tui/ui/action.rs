@@ -181,6 +181,8 @@ pub enum ReviewAction {
 #[derive(Debug, Clone, Copy)]
 pub enum MergeAction {
     Move(i16),
+    /// `a`: merge when ready instead of now, or turn that off.
+    Auto,
     Select,
     Close,
 }

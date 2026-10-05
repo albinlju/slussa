@@ -181,6 +181,20 @@ fn github_resolves_a_thread_by_its_node_id_and_refuses_another_providers_handle(
 }
 
 #[test]
+fn github_auto_merge_asks_gh_for_the_chosen_strategy_and_off_disables_it() {
+    let installed = FakeGh::new().on("pr", "").install();
+    Provider::GitHub
+        .set_auto_merge(PrId(7), Some(MergeStrategy::Squash))
+        .unwrap();
+    Provider::GitHub.set_auto_merge(PrId(7), None).unwrap();
+
+    assert_eq!(
+        installed.calls(),
+        vec!["pr merge 7 --auto --squash", "pr merge 7 --disable-auto"]
+    );
+}
+
+#[test]
 fn github_runs_the_failed_jobs_of_each_failed_run_again_and_nothing_else() {
     let runs = json!([{"workflow_runs": [
         {"id": 11, "conclusion": "failure"},

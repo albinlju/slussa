@@ -23,6 +23,7 @@ fn mergeability_badge(state: &LoadState<Mergeability>) -> Option<Span<'static>> 
             Mergeability::Mergeable => (icons::CHECK_CIRCLE, "mergeable", theme.success),
             Mergeability::Conflicts(_) => (icons::TIMES_CIRCLE, "conflicts", theme.warning),
             Mergeability::Blocked(_) => (icons::CLOCK, "blocked", theme.warning),
+            Mergeability::AutoMerge { .. } => (icons::CLOCK, "merges when ready", theme.info),
             Mergeability::Unknown => (icons::QUESTION_CIRCLE, "mergeability unknown", theme.muted),
         },
         LoadState::NotRequested | LoadState::Failed(_) => return None,

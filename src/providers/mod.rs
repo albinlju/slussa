@@ -126,6 +126,20 @@ impl Provider {
         }
     }
 
+    /// Merge by itself with `strategy` once the PR is ready, or stop doing so.
+    pub fn set_auto_merge(
+        &self,
+        pr_id: PrId,
+        strategy: Option<MergeStrategy>,
+    ) -> Result<(), FetchError> {
+        match self {
+            Self::GitHub => github::set_auto_merge(pr_id, strategy),
+            Self::BitbucketDc(_) => Err(FetchError::Unsupported(
+                "Bitbucket does not merge a PR by itself when it is ready.".into(),
+            )),
+        }
+    }
+
     /// Run again the builds of the PR that failed.
     pub fn rerun_failed_builds(&self, pr_id: PrId) -> Result<(), FetchError> {
         match self {
@@ -172,7 +186,7 @@ impl Provider {
             Self::GitHub => Capabilities {
                 features: features
                     .into_iter()
-                    .chain([Feature::PrInfo, Feature::RerunBuilds])
+                    .chain([Feature::PrInfo, Feature::AutoMerge, Feature::RerunBuilds])
                     .collect(),
                 review: Some(ReviewCaps {
                     verdicts: vec![

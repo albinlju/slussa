@@ -15,6 +15,7 @@ pub enum Feature {
     Mergeability,
     ClosePr,
     ReopenPr,
+    AutoMerge,
     RerunBuilds,
     /// The list omits the description and labels; they are read per PR.
     PrInfo,

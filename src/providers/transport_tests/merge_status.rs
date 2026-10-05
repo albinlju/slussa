@@ -183,3 +183,42 @@ fn bitbucket_refused_merge_reports_the_vetoes() {
         "Merging is vetoed: Not all required builds are successful yet; At least 1 approval is required"
     );
 }
+
+#[test]
+fn github_a_pr_set_to_merge_by_itself_says_how_and_what_it_waits_for() {
+    let answer = |mergeable: &str, state: &str| {
+        json!({"data": {"repository": {"pullRequest": {
+            "mergeable": mergeable,
+            "mergeStateStatus": state,
+            "reviewDecision": "REVIEW_REQUIRED",
+            "autoMergeRequest": {"mergeMethod": "SQUASH"}
+        }}}})
+        .to_string()
+    };
+    let gh = FakeGh::new()
+        .on("graphql", &answer("MERGEABLE", "BLOCKED"))
+        .install();
+    let status = Provider::GitHub.fetch_mergeability(PrId(7)).unwrap();
+    let Mergeability::AutoMerge { strategy, waiting } = status else {
+        panic!("{status:?}");
+    };
+    assert_eq!(strategy, MergeStrategy::Squash);
+    assert!(
+        waiting
+            .iter()
+            .any(|reason| reason.contains("approving review"))
+    );
+    drop(gh);
+
+    // A conflict is one more thing it waits for, and the request stays there to
+    // be turned off.
+    let _second = FakeGh::new()
+        .on("graphql", &answer("CONFLICTING", "DIRTY"))
+        .install();
+    let status = Provider::GitHub.fetch_mergeability(PrId(7)).unwrap();
+    let Mergeability::AutoMerge { strategy, waiting } = status else {
+        panic!("{status:?}");
+    };
+    assert_eq!(strategy, MergeStrategy::Squash);
+    assert!(waiting.iter().any(|reason| reason.contains("conflicts")));
+}

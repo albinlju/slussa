@@ -34,6 +34,11 @@ pub struct DetailContext<'a> {
 }
 
 impl<'a> DetailContext<'a> {
+    /// What the provider said about merging the PR, once it has.
+    pub fn mergeability(&self) -> Option<&'a Mergeability> {
+        self.data.and_then(|data| data.mergeability.loaded())
+    }
+
     /// `None` when the PR is neither in the list nor the one the reader named
     /// and that was read before the list was. The list keeps the PR that is
     /// open (`App::adopt_group`), so that means there is nothing to show.
@@ -360,6 +365,7 @@ impl DetailView<'_> {
             },
             A::Review(ReviewAction::Select) => caps.reviews(),
             A::Merge(MergeAction::Select) => !caps.merge_strategies.is_empty(),
+            A::Merge(MergeAction::Auto) => caps.supports(F::AutoMerge),
             A::Nav(NavAction::SelectTab(tab)) => tab.supported_by(caps),
             A::Review(ReviewAction::Move(_) | ReviewAction::Preview | ReviewAction::Close)
             | A::Merge(MergeAction::Move(_) | MergeAction::Close)
