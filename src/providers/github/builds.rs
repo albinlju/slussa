@@ -1,3 +1,4 @@
+use super::GhRepo;
 use crate::{
     domain::{
         ci::{Build, BuildState},
@@ -22,13 +23,15 @@ struct Status {
     state: String,
 }
 
-pub fn fetch_builds(pr_number: PrId) -> Result<Vec<Build>, FetchError> {
-    let head = super::comments::head_sha(pr_number)?;
+pub fn fetch_builds(repo: &GhRepo, pr_number: PrId) -> Result<Vec<Build>, FetchError> {
+    let head = super::comments::head_sha(repo, pr_number)?;
     let checks: Vec<Check> = pages(
+        repo,
         &format!("repos/{{owner}}/{{repo}}/commits/{head}/check-runs?per_page=100"),
         "check_runs",
     )?;
     let statuses: Vec<Status> = pages(
+        repo,
         &format!("repos/{{owner}}/{{repo}}/commits/{head}/status?per_page=100"),
         "statuses",
     )?;
@@ -53,15 +56,16 @@ pub fn fetch_builds(pr_number: PrId) -> Result<Vec<Build>, FetchError> {
 
 /// Run again the jobs that failed, in each workflow run of the PR's head that
 /// did not succeed. Checks that are not GitHub Actions cannot be run from here.
-pub fn rerun_failed(pr_number: PrId) -> Result<(), FetchError> {
+pub fn rerun_failed(repo: &GhRepo, pr_number: PrId) -> Result<(), FetchError> {
     #[derive(serde::Deserialize)]
     struct Run {
         id: u64,
         #[serde(default)]
         conclusion: Option<String>,
     }
-    let head = super::comments::head_sha(pr_number)?;
+    let head = super::comments::head_sha(repo, pr_number)?;
     let runs: Vec<Run> = pages(
+        repo,
         &format!("repos/{{owner}}/{{repo}}/actions/runs?head_sha={head}&per_page=100"),
         "workflow_runs",
     )?;
@@ -85,12 +89,15 @@ pub fn rerun_failed(pr_number: PrId) -> Result<(), FetchError> {
     let mut done = 0;
     let mut first_error = None;
     for id in failed {
-        let started = super::cli::run_gh(&[
-            "api",
-            "--method",
-            "POST",
-            &format!("repos/{{owner}}/{{repo}}/actions/runs/{id}/rerun-failed-jobs"),
-        ]);
+        let started = super::cli::run_gh(
+            repo,
+            &[
+                "api",
+                "--method",
+                "POST",
+                &format!("repos/{{owner}}/{{repo}}/actions/runs/{id}/rerun-failed-jobs"),
+            ],
+        );
         match started {
             Ok(_) => done += 1,
             Err(error) => {
@@ -109,9 +116,13 @@ pub fn rerun_failed(pr_number: PrId) -> Result<(), FetchError> {
     }
 }
 
-fn pages<T: serde::de::DeserializeOwned>(path: &str, field: &str) -> Result<Vec<T>, FetchError> {
+fn pages<T: serde::de::DeserializeOwned>(
+    repo: &GhRepo,
+    path: &str,
+    field: &str,
+) -> Result<Vec<T>, FetchError> {
     let pages: Vec<serde_json::Value> =
-        super::cli::run_gh_json(&["api", "--paginate", "--slurp", path])?;
+        super::cli::run_gh_json(repo, &["api", "--paginate", "--slurp", path])?;
     let mut items = Vec::new();
     for mut page in pages {
         // `page[field]` would panic on a page that is not an object.

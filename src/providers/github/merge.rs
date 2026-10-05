@@ -1,5 +1,6 @@
 //! Merging a PR: now, by itself when ready, and deleting its branch after.
 
+use super::GhRepo;
 use super::cli;
 use crate::domain::{
     pr::{AutoMerge, DeletableBranch, MergeStrategy, PrId},
@@ -18,6 +19,7 @@ pub(super) fn moved_since_read() -> FetchError {
 /// came from when asked to. A branch that cannot be deleted does not undo the
 /// merge: that is `BranchDeleteFailed`.
 pub fn merge(
+    repo: &GhRepo,
     pr_number: PrId,
     strategy: MergeStrategy,
     delete: Option<&DeletableBranch>,
@@ -28,18 +30,21 @@ pub fn merge(
         MergeStrategy::Squash => "squash",
         MergeStrategy::Rebase => "rebase",
     };
-    cli::run_gh(&[
-        "api",
-        "--method",
-        "PUT",
-        &format!("repos/{{owner}}/{{repo}}/pulls/{pr_number}/merge"),
-        "-f",
-        &format!("merge_method={method}"),
-        // GitHub refuses with 409 when the head is not this one, so a push
-        // after the PR was read is not merged unseen.
-        "-f",
-        &format!("sha={}", head.as_str()),
-    ])
+    cli::run_gh(
+        repo,
+        &[
+            "api",
+            "--method",
+            "PUT",
+            &format!("repos/{{owner}}/{{repo}}/pulls/{pr_number}/merge"),
+            "-f",
+            &format!("merge_method={method}"),
+            // GitHub refuses with 409 when the head is not this one, so a push
+            // after the PR was read is not merged unseen.
+            "-f",
+            &format!("sha={}", head.as_str()),
+        ],
+    )
     .map_err(|error| {
         if let FetchError::GhFailed { stderr, .. } = &error
             && stderr.contains("Head branch was modified")
@@ -50,7 +55,7 @@ pub fn merge(
         }
     })?;
     if let Some(branch) = delete {
-        delete_branch(branch).map_err(MergeError::BranchDeleteFailed)?;
+        delete_branch(repo, branch).map_err(MergeError::BranchDeleteFailed)?;
     }
     Ok(())
 }
@@ -58,16 +63,19 @@ pub fn merge(
 /// A branch that is already gone counts as deleted: GitHub removes the head
 /// branch itself where the repository asks it to, and answers 422 `Reference
 /// does not exist` to a delete that comes second.
-fn delete_branch(branch: &DeletableBranch) -> Result<(), FetchError> {
-    let deleted = cli::run_gh(&[
-        "api",
-        "--method",
-        "DELETE",
-        &format!(
-            "repos/{{owner}}/{{repo}}/git/refs/heads/{}",
-            ref_path(branch.name())
-        ),
-    ]);
+fn delete_branch(repo: &GhRepo, branch: &DeletableBranch) -> Result<(), FetchError> {
+    let deleted = cli::run_gh(
+        repo,
+        &[
+            "api",
+            "--method",
+            "DELETE",
+            &format!(
+                "repos/{{owner}}/{{repo}}/git/refs/heads/{}",
+                ref_path(branch.name())
+            ),
+        ],
+    );
     match deleted {
         Ok(_) => Ok(()),
         Err(FetchError::GhFailed { ref stderr, .. })
@@ -97,7 +105,11 @@ fn ref_path(name: &str) -> String {
 /// doing so. GitHub refuses when the repository does not allow auto-merge; that
 /// message reaches the user as it is. Turning it on holds only if the branch is
 /// still at the head that was read: a later push is merged once the checks pass.
-pub fn set_auto_merge(pr_number: PrId, change: &AutoMerge) -> Result<(), FetchError> {
+pub fn set_auto_merge(
+    repo: &GhRepo,
+    pr_number: PrId,
+    change: &AutoMerge,
+) -> Result<(), FetchError> {
     let pr = pr_number.to_string();
     match change {
         AutoMerge::On { strategy, head } => {
@@ -106,18 +118,21 @@ pub fn set_auto_merge(pr_number: PrId, change: &AutoMerge) -> Result<(), FetchEr
                 MergeStrategy::Squash => "--squash",
                 MergeStrategy::Rebase => "--rebase",
             };
-            cli::run_gh(&[
-                "pr",
-                "merge",
-                &pr,
-                "--auto",
-                flag,
-                "--match-head-commit",
-                head.as_str(),
-            ])?;
+            cli::run_gh(
+                repo,
+                &[
+                    "pr",
+                    "merge",
+                    &pr,
+                    "--auto",
+                    flag,
+                    "--match-head-commit",
+                    head.as_str(),
+                ],
+            )?;
         }
         AutoMerge::Off => {
-            cli::run_gh(&["pr", "merge", &pr, "--disable-auto"])?;
+            cli::run_gh(repo, &["pr", "merge", &pr, "--disable-auto"])?;
         }
     }
     Ok(())

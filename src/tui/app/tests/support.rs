@@ -62,7 +62,7 @@ pub(super) fn read_head() -> crate::domain::review::ReviewedHead {
 
 pub(super) fn app() -> App {
     let mut app = App::new(
-        Session::for_test(Provider::GitHub, "reviewer"),
+        Session::for_test(Provider::github_for_test(), "reviewer"),
         Drafts::Nowhere,
     );
     app.state = ui::regression_tests::fixture();

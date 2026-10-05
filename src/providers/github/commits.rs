@@ -1,3 +1,4 @@
+use super::GhRepo;
 use chrono::{DateTime, Utc};
 use serde::Deserialize;
 
@@ -46,8 +47,9 @@ fn is_bot_address(email: &str) -> bool {
     email.ends_with("[bot]@users.noreply.github.com")
 }
 
-pub fn fetch_commits(pr_number: PrId) -> Result<Vec<Commit>, FetchError> {
+pub fn fetch_commits(repo: &GhRepo, pr_number: PrId) -> Result<Vec<Commit>, FetchError> {
     let nodes: Vec<GqlCommitNode> = super::pagination::pr_nodes(
+        repo,
         pr_number,
         "commits",
         "commit { oid messageHeadline message authoredDate additions deletions author { name email } }",

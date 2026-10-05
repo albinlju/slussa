@@ -5,8 +5,8 @@ use super::App;
 use crate::{
     domain::pr::PrId,
     local::{
-        drafts::{DraftStorage, Snapshot},
-        scope::scope,
+        drafts::{DraftStorage, Snapshot, adopt_earlier},
+        scope::{earlier_scope, scope},
     },
     session::{self, Session},
 };
@@ -26,13 +26,17 @@ impl App {
     pub fn open(session: Session) -> io::Result<Self> {
         let remote = session::remote::origin_url().map_err(io::Error::other)?;
         let scope = scope(session.provider(), &remote, session.user())?;
+        let earlier = earlier_scope(session.provider(), &remote, session.user())?;
         let root = dirs::data_local_dir()
             .ok_or_else(|| io::Error::other("Cannot locate local data directory"))?
             .join("slussa/drafts");
-        let (storage, snapshot) = DraftStorage::open(&root, scope.clone())?;
+        let (mut storage, mut snapshot) = DraftStorage::open(&root, scope.clone())?;
+        if let Some(earlier) = &earlier {
+            snapshot = adopt_earlier(&root, earlier, &mut storage, snapshot);
+        }
         let mut app = Self::new(session, Drafts::Disk(storage));
         app.restore(snapshot);
-        app.open_seen(scope);
+        app.open_seen(scope, earlier.as_deref());
         Ok(app)
     }
 

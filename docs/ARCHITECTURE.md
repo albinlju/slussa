@@ -134,7 +134,7 @@ src/
 │           ├── markdown.rs
 │           └── table.rs
 ├── local/                 What slussa keeps on disk, shared by the TUI and the subcommands
-│   ├── scope.rs           Provider, host, repository and account → the file's name
+│   ├── scope.rs           Provider, host, the repository slussa acts on and account → the file's name
 │   ├── file.rs            One file per scope: lock and atomic write
 │   ├── drafts.rs          The drafts file, version 1, and its fixture
 │   └── seen.rs            When each PR was last looked at (numbers and times only)

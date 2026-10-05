@@ -134,7 +134,11 @@ says so on the row.
   batch at a time and `L` reads older ones. Missing: searching older PRs at the
   provider, and showing how many exist in total.
 - [ ] **Status bar** — provider, repo, match count, loading spinner. Only if it
-  fits in the existing footer line; a second persistent bar is not wanted.
+  fits in the existing footer line; a second persistent bar is not wanted. The
+  repository is the part that matters most now: slussa acts on the one `gh`
+  places the directory in (see *Which repository*, below), and in a fork that
+  can be the upstream or the fork, with nothing on screen saying which. **Open:**
+  where it goes: the list's heading is the candidate, since it is there already.
 
 ### 2. AI review integration
 
@@ -376,6 +380,15 @@ rank below the decision path.
 - [ ] **Unified cross-provider list** with a provider icon per row.
 - [ ] **Normalized "requirements to merge"** — GitLab approvals, Bitbucket
   default reviewers / merge checks, GitHub branch protection → one shared model.
+- [ ] **Which repository, said.** slussa fixes the repository it acts on once
+  (the one `gh` places the directory in, else `origin`'s) and tells every `gh`
+  call, so nothing can go to two repositories. Missing, none of it a risk: the
+  repository is not shown (see *Status bar*); a directory that `gh` could not
+  place falls back to `origin` without saying so, where a line such as "acting
+  on me/slussa; `gh repo set-default` chooses another" would; and it has not
+  been tried in a real fork (what `gh repo view` answers there is read from its
+  documentation, not run). **Open:** the wording, and whether the line is a
+  notice at start or part of the heading.
 - [ ] **Config** — repos / providers, default filters, keybindings, agent
   commands.
 - [ ] **Empty / loading / error states** per view (use `LoadState` everywhere).

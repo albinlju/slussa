@@ -82,7 +82,15 @@ pub(super) fn run() -> Result<Provider, PreflightError> {
                 return Err(PreflightError::GhNotAuthenticated { host });
             }
             tracing::info!("gh auth ok for {host}");
-            Ok(Provider::GitHub)
+            // Asked once: every call after this acts on this repository, whatever
+            // `gh` would pick for it later.
+            let repo = github::GhRepo::resolve(&remote).ok_or_else(|| {
+                PreflightError::UnparseableRemote {
+                    remote: remote.clone(),
+                }
+            })?;
+            tracing::info!("acting on {repo}");
+            Ok(Provider::GitHub(repo))
         }
         HostKind::BitbucketCloud => Err(PreflightError::BitbucketCloudUnsupported),
         HostKind::BitbucketDc => {

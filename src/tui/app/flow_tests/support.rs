@@ -29,7 +29,7 @@ pub(super) fn read_head() -> crate::domain::review::ReviewedHead {
 
 pub(super) fn app() -> App {
     App::new(
-        crate::session::Session::for_test(Provider::GitHub, "me"),
+        crate::session::Session::for_test(Provider::github_for_test(), "me"),
         crate::tui::app::drafts::Drafts::Nowhere,
     )
 }

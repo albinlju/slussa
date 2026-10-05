@@ -1,3 +1,4 @@
+use super::GhRepo;
 use serde::Deserialize;
 
 use crate::domain::{
@@ -59,16 +60,21 @@ const THREAD_FIELDS: &str = r"
     }
 ";
 
-pub fn fetch_review_threads(pr_number: PrId) -> Result<Vec<CommentThread>, FetchError> {
+pub fn fetch_review_threads(
+    repo: &GhRepo,
+    pr_number: PrId,
+) -> Result<Vec<CommentThread>, FetchError> {
     let fields = format!("{COMMENT_FIELDS} commit {{ oid }} originalCommit {{ oid }}");
     // Keep the nested page modest: a PR page can contain 100 review threads.
     let nodes: Vec<GqlThread> = super::pagination::pr_nodes(
+        repo,
         pr_number,
         "reviewThreads",
         &super::graphql::fill(THREAD_FIELDS, &[("fields", &fields)]),
     )?;
     complete_threads(nodes, |id, cursor| {
         super::pagination::node_nodes_after(
+            repo,
             id,
             "PullRequestReviewThread",
             "comments",

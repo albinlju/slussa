@@ -75,7 +75,9 @@ fn github_merge_status_reads_the_state_and_explains_a_block() {
         let installed = FakeGh::new()
             .on("graphql", &gh_merge_fields(mergeable, state, decision))
             .install();
-        let status = Provider::GitHub.fetch_mergeability(PrId(7)).unwrap();
+        let status = Provider::github_for_test()
+            .fetch_mergeability(PrId(7))
+            .unwrap();
 
         assert!(
             same_state(&status, &expected),
@@ -201,7 +203,9 @@ fn github_a_pr_set_to_merge_by_itself_says_how_and_what_it_waits_for() {
     let gh = FakeGh::new()
         .on("graphql", &answer("MERGEABLE", "BLOCKED"))
         .install();
-    let status = Provider::GitHub.fetch_mergeability(PrId(7)).unwrap();
+    let status = Provider::github_for_test()
+        .fetch_mergeability(PrId(7))
+        .unwrap();
     let Mergeability::AutoMerge { strategy, waiting } = status else {
         panic!("{status:?}");
     };
@@ -218,7 +222,9 @@ fn github_a_pr_set_to_merge_by_itself_says_how_and_what_it_waits_for() {
     let _second = FakeGh::new()
         .on("graphql", &answer("CONFLICTING", "DIRTY"))
         .install();
-    let status = Provider::GitHub.fetch_mergeability(PrId(7)).unwrap();
+    let status = Provider::github_for_test()
+        .fetch_mergeability(PrId(7))
+        .unwrap();
     let Mergeability::AutoMerge { strategy, waiting } = status else {
         panic!("{status:?}");
     };

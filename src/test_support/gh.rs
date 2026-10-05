@@ -38,6 +38,7 @@ pub fn gh_command() -> Command {
 
 const GH_SCRIPT: &str = r#"dir=$(dirname "$0")
 printf '%s\n' "$*" >> "$dir/calls.log"
+printf '%s\n' "${GH_REPO-}" >> "$dir/repos.log"
 cat >> "$dir/stdin.log"
 i=0
 while [ -f "$dir/n$i" ]; do
@@ -167,6 +168,12 @@ impl InstalledGh {
     /// Every call so far, as the space-joined argument list.
     pub fn calls(&self) -> Vec<String> {
         self.read("calls.log").lines().map(str::to_owned).collect()
+    }
+
+    /// The repository each call was told to act on (`GH_REPO`), one per call, in
+    /// the order of `calls`; empty where the call was not told.
+    pub fn repos(&self) -> Vec<String> {
+        self.read("repos.log").lines().map(str::to_owned).collect()
     }
 
     /// Everything the provider wrote to `gh`'s standard input.

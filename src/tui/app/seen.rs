@@ -6,7 +6,10 @@
 use chrono::Utc;
 
 use super::{App, navigation::Screen};
-use crate::{domain::pr::PrId, local::seen::SeenStorage};
+use crate::{
+    domain::pr::PrId,
+    local::seen::{SeenStorage, adopt_earlier},
+};
 
 /// Where what was looked at is kept. It is a convenience, so an app starts
 /// without it: marks then last this run only.
@@ -19,12 +22,15 @@ pub enum SeenFile {
 impl App {
     /// Open the file of what was looked at, and forget the old. Without it the
     /// app goes on, remembering for this run only.
-    pub(super) fn open_seen(&mut self, scope: String) {
+    pub(super) fn open_seen(&mut self, scope: String, earlier: Option<&str>) {
         let Some(root) = dirs::data_local_dir().map(|dir| dir.join("slussa/seen")) else {
             return;
         };
         match SeenStorage::open(&root, scope) {
-            Ok((storage, mut seen)) => {
+            Ok((mut storage, mut seen)) => {
+                if let Some(earlier) = earlier {
+                    seen = adopt_earlier(&root, earlier, &mut storage, seen);
+                }
                 seen.forget_old(Utc::now());
                 self.state.store.seen = seen;
                 self.seen_file = SeenFile::Disk(storage);

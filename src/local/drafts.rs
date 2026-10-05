@@ -16,12 +16,18 @@ use crate::domain::{
     review::{CommentDraft, PendingReview},
 };
 
-#[derive(Debug, Default, Serialize, Deserialize)]
+#[derive(Debug, Default, Clone, Serialize, Deserialize)]
 pub struct Snapshot {
     pub editors: BTreeMap<PrId, CommentDraft>,
     pub reviews: BTreeMap<PrId, PendingReview>,
     pub interrupted: BTreeSet<PrId>,
 }
+impl Snapshot {
+    pub fn is_empty(&self) -> bool {
+        self.editors.is_empty() && self.reviews.is_empty() && self.interrupted.is_empty()
+    }
+}
+
 #[derive(Serialize, Deserialize)]
 struct Envelope {
     version: u32,
@@ -66,6 +72,39 @@ impl DraftStorage {
         })?;
         self.file.write(bytes)
     }
+}
+
+/// What was saved under `earlier`, the name a fork's drafts had before slussa
+/// fixed the repository it acts on, moved under `storage`'s name when that has
+/// nothing. The earlier file is then left empty; if it cannot be read or the
+/// move fails it is left as it was, so nothing is lost.
+pub fn adopt_earlier(
+    root: &Path,
+    earlier: &str,
+    storage: &mut DraftStorage,
+    snapshot: Snapshot,
+) -> Snapshot {
+    if !snapshot.is_empty() {
+        return snapshot;
+    }
+    let (mut old, found) = match DraftStorage::open(root, earlier.to_owned()) {
+        Ok(opened) => opened,
+        Err(error) => {
+            tracing::warn!("could not read earlier drafts: {error}");
+            return snapshot;
+        }
+    };
+    if found.is_empty() {
+        return snapshot;
+    }
+    if let Err(error) = storage.save(found.clone()) {
+        tracing::warn!("could not move earlier drafts: {error}");
+        return snapshot;
+    }
+    if let Err(error) = old.save(Snapshot::default()) {
+        tracing::warn!("could not empty the earlier drafts after moving them: {error}");
+    }
+    found
 }
 
 #[cfg(test)]
@@ -238,5 +277,80 @@ mod tests {
         assert!(reopen(&root, "scope").is_err());
         assert_eq!(fs::read(path).unwrap(), b"broken");
         fs::remove_dir_all(root).unwrap();
+    }
+
+    fn one_draft() -> Snapshot {
+        Snapshot {
+            editors: [(
+                PrId(1),
+                CommentDraft {
+                    target: CommentTarget::Pr,
+                    text: "kept".into(),
+                },
+            )]
+            .into(),
+            ..Snapshot::default()
+        }
+    }
+
+    #[test]
+    fn drafts_filed_under_an_earlier_name_move_to_the_new_one() {
+        let root = directory();
+        let (mut earlier, _) = DraftStorage::open(&root, "fork".into()).unwrap();
+        earlier.save(one_draft()).unwrap();
+        drop(earlier);
+
+        let (mut now, nothing) = DraftStorage::open(&root, "upstream".into()).unwrap();
+        let adopted = adopt_earlier(&root, "fork", &mut now, nothing);
+        assert_eq!(adopted.editors[&PrId(1)].text, "kept");
+        drop(now);
+
+        let (_now, again) = reopen(&root, "upstream").unwrap();
+        assert_eq!(
+            again.editors[&PrId(1)].text,
+            "kept",
+            "saved under the new name"
+        );
+        let (_earlier, left) = reopen(&root, "fork").unwrap();
+        assert!(left.is_empty(), "and not left in two places");
+    }
+
+    #[test]
+    fn what_the_new_name_already_holds_is_kept_and_the_earlier_left_alone() {
+        let root = directory();
+        let (mut earlier, _) = DraftStorage::open(&root, "fork".into()).unwrap();
+        earlier.save(one_draft()).unwrap();
+        drop(earlier);
+        let (mut now, _) = DraftStorage::open(&root, "upstream".into()).unwrap();
+        let mine = Snapshot {
+            interrupted: [PrId(9)].into(),
+            ..Snapshot::default()
+        };
+
+        let kept = adopt_earlier(&root, "fork", &mut now, mine);
+        assert!(kept.editors.is_empty() && kept.interrupted.contains(&PrId(9)));
+        drop(now);
+        let (_earlier, still) = reopen(&root, "fork").unwrap();
+        assert_eq!(still.editors[&PrId(1)].text, "kept");
+    }
+
+    #[test]
+    fn nothing_filed_earlier_is_nothing_to_move() {
+        let root = directory();
+        let (mut now, nothing) = DraftStorage::open(&root, "upstream".into()).unwrap();
+        assert!(adopt_earlier(&root, "fork", &mut now, nothing).is_empty());
+    }
+
+    #[test]
+    fn an_earlier_file_that_cannot_be_read_is_left_as_it_was() {
+        let root = directory();
+        let (earlier, _) = DraftStorage::open(&root, "fork".into()).unwrap();
+        let path = earlier.file.path().to_path_buf();
+        drop(earlier);
+        fs::write(&path, b"broken").unwrap();
+        let (mut now, nothing) = DraftStorage::open(&root, "upstream".into()).unwrap();
+
+        assert!(adopt_earlier(&root, "fork", &mut now, nothing).is_empty());
+        assert_eq!(fs::read(&path).unwrap(), b"broken");
     }
 }

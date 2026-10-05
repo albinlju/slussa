@@ -58,6 +58,32 @@ impl SeenStorage {
     }
 }
 
+/// What was looked at under `earlier`, moved under `storage`'s name when that
+/// has nothing: the same as for the drafts, for the same reason.
+pub fn adopt_earlier(root: &Path, earlier: &str, storage: &mut SeenStorage, seen: Seen) -> Seen {
+    if seen != Seen::new() {
+        return seen;
+    }
+    let (mut old, found) = match SeenStorage::open(root, earlier.to_owned()) {
+        Ok(opened) => opened,
+        Err(error) => {
+            tracing::warn!("could not read what was looked at earlier: {error}");
+            return seen;
+        }
+    };
+    if found == Seen::new() {
+        return seen;
+    }
+    if let Err(error) = storage.save(&found) {
+        tracing::warn!("could not move what was looked at earlier: {error}");
+        return seen;
+    }
+    if let Err(error) = old.save(&Seen::new()) {
+        tracing::warn!("could not empty what was looked at earlier: {error}");
+    }
+    found
+}
+
 #[cfg(test)]
 /// Open a scope again after dropping its storage.
 pub fn reopen(root: &Path, scope: &str) -> io::Result<(SeenStorage, Seen)> {
@@ -127,5 +153,25 @@ mod tests {
         let (_first, _) = SeenStorage::open(root, "scope".into()).unwrap();
         let second = SeenStorage::open(root, "scope".into());
         assert!(second.is_err_and(|e| e.to_string().contains("in use")));
+    }
+
+    #[test]
+    fn what_was_looked_at_under_an_earlier_name_moves_to_the_new_one() {
+        let dir = TempDir::new("seen");
+        let root = dir.path();
+        let (mut earlier, _) = SeenStorage::open(root, "fork".into()).unwrap();
+        let mut seen = Seen::default();
+        seen.mark(PrId(7), at(1_000), at(2_000));
+        earlier.save(&seen).unwrap();
+        drop(earlier);
+
+        let (mut now, nothing) = SeenStorage::open(root, "upstream".into()).unwrap();
+        let adopted = adopt_earlier(root, "fork", &mut now, nothing);
+        assert_eq!(adopted, seen);
+        drop(now);
+        let (_now, again) = reopen(root, "upstream").unwrap();
+        assert_eq!(again, seen);
+        let (_earlier, left) = reopen(root, "fork").unwrap();
+        assert!(left.is_empty());
     }
 }

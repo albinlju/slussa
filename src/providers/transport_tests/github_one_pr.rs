@@ -20,7 +20,7 @@ fn github_info_reads_the_description_and_the_labels_of_one_pr() {
     let gh = FakeGh::new()
         .on("pullRequest(number: $pr)", &info_answer(&["bug"], false))
         .install();
-    let info = Provider::GitHub.fetch_info(PrId(7)).unwrap();
+    let info = Provider::github_for_test().fetch_info(PrId(7)).unwrap();
 
     assert_eq!(info.description.as_deref(), Some("Explains the change."));
     assert_eq!(info.labels, vec!["bug"]);
@@ -39,7 +39,7 @@ fn github_info_reads_on_when_the_labels_are_truncated() {
         .on("node(id: \"PR_1\")", &node_page)
         .on("pullRequest(number: $pr)", &info_answer(&["bug"], true))
         .install();
-    let info = Provider::GitHub.fetch_info(PrId(1)).unwrap();
+    let info = Provider::github_for_test().fetch_info(PrId(1)).unwrap();
 
     assert_eq!(info.labels, vec!["bug", "ux"]);
     assert_eq!(gh.calls().len(), 2);
@@ -48,7 +48,11 @@ fn github_info_reads_on_when_the_labels_are_truncated() {
 #[test]
 fn only_github_reads_the_description_and_labels_apart_from_the_list() {
     use crate::domain::capabilities::Feature;
-    assert!(Provider::GitHub.capabilities().supports(Feature::PrInfo));
+    assert!(
+        Provider::github_for_test()
+            .capabilities()
+            .supports(Feature::PrInfo)
+    );
 }
 
 #[test]
@@ -57,7 +61,7 @@ fn github_reads_one_pr_by_its_number_as_the_list_holds_it() {
         json!({"data": {"repository": {"pullRequest": gh_pr(44, "2026-10-01T10:00:00Z")}}})
             .to_string();
     let gh = FakeGh::new().on("statusCheckRollup", &answer).install();
-    let pr = Provider::GitHub.fetch_pr(PrId(44)).unwrap();
+    let pr = Provider::github_for_test().fetch_pr(PrId(44)).unwrap();
 
     assert_eq!((pr.id, pr.title.as_str()), (PrId(44), "PR number 44"));
     assert_eq!(gh.calls().len(), 1);
@@ -73,7 +77,7 @@ fn github_reports_a_pr_that_does_not_exist_as_an_error() {
             "GraphQL: Could not resolve to a PullRequest",
         )
         .install();
-    assert!(Provider::GitHub.fetch_pr(PrId(9999)).is_err());
+    assert!(Provider::github_for_test().fetch_pr(PrId(9999)).is_err());
 }
 
 #[test]
@@ -91,7 +95,7 @@ fn github_info_reads_the_issues_the_pr_closes() {
     let _gh = FakeGh::new()
         .on("pullRequest(number: $pr)", &answer)
         .install();
-    let info = Provider::GitHub.fetch_info(PrId(7)).unwrap();
+    let info = Provider::github_for_test().fetch_info(PrId(7)).unwrap();
 
     let issues: Vec<_> = info
         .issues
@@ -127,7 +131,7 @@ fn github_info_reads_on_when_the_closing_issues_are_truncated() {
         .on("node(id: \"PR_1\")", &all)
         .on("pullRequest(number: $pr)", &first_page)
         .install();
-    let info = Provider::GitHub.fetch_info(PrId(1)).unwrap();
+    let info = Provider::github_for_test().fetch_info(PrId(1)).unwrap();
 
     let numbers: Vec<_> = info.issues.iter().map(|issue| issue.number).collect();
     assert_eq!(numbers, [1, 2]);
@@ -138,6 +142,8 @@ fn github_info_reads_on_when_the_closing_issues_are_truncated() {
 fn github_a_pr_answered_with_null_is_said_not_to_exist() {
     let answer = json!({"data": {"repository": {"pullRequest": null}}}).to_string();
     let _gh = FakeGh::new().on("statusCheckRollup", &answer).install();
-    let error = Provider::GitHub.fetch_pr(PrId(9999)).unwrap_err();
+    let error = Provider::github_for_test()
+        .fetch_pr(PrId(9999))
+        .unwrap_err();
     assert!(error.user_message().contains("no PR #9999"), "{error:?}");
 }

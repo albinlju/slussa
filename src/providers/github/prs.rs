@@ -1,3 +1,4 @@
+use super::GhRepo;
 use chrono::{DateTime, Utc};
 use serde::Deserialize;
 
@@ -156,28 +157,36 @@ const DECLINED_ARGS: &str = "states: CLOSED, orderBy: {field: UPDATED_AT, direct
 /// position to continue from in `more` (`None` at the end). The open group is
 /// read the same way, a page at a time, so the caller can show the first page
 /// while the rest are read.
-pub fn fetch_prs(group: PrGroup, after: Option<&str>) -> Result<PrBatch, FetchError> {
+pub fn fetch_prs(
+    repo: &GhRepo,
+    group: PrGroup,
+    after: Option<&str>,
+) -> Result<PrBatch, FetchError> {
     let args = match group {
         PrGroup::Open => OPEN_ARGS,
         PrGroup::Merged => MERGED_ARGS,
         PrGroup::Declined => DECLINED_ARGS,
     };
-    let (nodes, more) = one_page(args, after)?;
+    let (nodes, more) = one_page(repo, args, after)?;
     Ok(PrBatch {
-        prs: complete(nodes)?,
+        prs: complete(repo, nodes)?,
         more,
     })
 }
 
-fn one_page(args: &str, after: Option<&str>) -> Result<(Vec<GhPr>, Option<String>), FetchError> {
-    super::pagination::repo_page("pullRequests", args, PR_FIELDS, PAGE, after)
+fn one_page(
+    repo: &GhRepo,
+    args: &str,
+    after: Option<&str>,
+) -> Result<(Vec<GhPr>, Option<String>), FetchError> {
+    super::pagination::repo_page(repo, "pullRequests", args, PR_FIELDS, PAGE, after)
 }
 
 /// Read the nested connections the list query capped at 100, order newest
 /// first and map to the domain.
-fn complete(mut prs: Vec<GhPr>) -> Result<Vec<PullRequest>, FetchError> {
+fn complete(repo: &GhRepo, mut prs: Vec<GhPr>) -> Result<Vec<PullRequest>, FetchError> {
     for pr in &mut prs {
-        read_all_reviews(pr)?;
+        read_all_reviews(repo, pr)?;
     }
     // Match the list's existing newest-first presentation.
     prs.sort_by_key(|pr| std::cmp::Reverse(pr.created_at));
@@ -185,9 +194,10 @@ fn complete(mut prs: Vec<GhPr>) -> Result<Vec<PullRequest>, FetchError> {
 }
 
 /// Read on in the reviews when the list query's 100 were not all of them.
-fn read_all_reviews(pr: &mut GhPr) -> Result<(), FetchError> {
+fn read_all_reviews(repo: &GhRepo, pr: &mut GhPr) -> Result<(), FetchError> {
     if pr.latest_reviews.page_info.has_next_page {
         pr.latest_reviews.nodes = super::pagination::node_nodes(
+            repo,
             &pr.id,
             "PullRequest",
             "latestReviews",
@@ -199,7 +209,7 @@ fn read_all_reviews(pr: &mut GhPr) -> Result<(), FetchError> {
 
 /// One PR as the list shows it, asked for by its number: for a PR the reader
 /// names that the list has not read, such as an old one.
-pub fn fetch_pr(pr: PrId) -> Result<PullRequest, FetchError> {
+pub fn fetch_pr(repo: &GhRepo, pr: PrId) -> Result<PullRequest, FetchError> {
     let query = format!(
         "query($owner: String!, $name: String!, $pr: Int!) {{
            repository(owner: $owner, name: $name) {{
@@ -207,14 +217,14 @@ pub fn fetch_pr(pr: PrId) -> Result<PullRequest, FetchError> {
            }}
          }}"
     );
-    let mut found: GhPr = super::run_pr_graphql::<Option<GhPr>>(&query, pr)?
+    let mut found: GhPr = super::run_pr_graphql::<Option<GhPr>>(repo, &query, pr)?
         .ok_or_else(|| FetchError::InvalidInput(format!("There is no PR #{pr}.")))?;
-    read_all_reviews(&mut found)?;
+    read_all_reviews(repo, &mut found)?;
     Ok(map_pr(found))
 }
 
 /// The description, labels and closing issues of one PR.
-pub fn fetch_info(pr: PrId) -> Result<PrInfo, FetchError> {
+pub fn fetch_info(repo: &GhRepo, pr: PrId) -> Result<PrInfo, FetchError> {
     #[derive(Deserialize)]
     #[serde(rename_all = "camelCase")]
     struct Fields {
@@ -233,14 +243,15 @@ pub fn fetch_info(pr: PrId) -> Result<PrInfo, FetchError> {
         #[serde(default)]
         url: Option<String>,
     }
-    let fields: Fields = super::run_pr_graphql(super::graphql::INFO, pr)?;
+    let fields: Fields = super::run_pr_graphql(repo, super::graphql::INFO, pr)?;
     let labels = if fields.labels.page_info.has_next_page {
-        super::pagination::node_nodes(&fields.id, "PullRequest", "labels", "name")?
+        super::pagination::node_nodes(repo, &fields.id, "PullRequest", "labels", "name")?
     } else {
         fields.labels.nodes
     };
     let issues = match fields.closing_issues_references {
         Some(issues) if issues.page_info.has_next_page => super::pagination::node_nodes(
+            repo,
             &fields.id,
             "PullRequest",
             "closingIssuesReferences",

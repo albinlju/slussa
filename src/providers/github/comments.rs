@@ -1,3 +1,4 @@
+use super::GhRepo;
 use crate::domain::{
     comment::{Comment, CommentId, CommentKey, CommentKind},
     diff::LineRef,
@@ -7,9 +8,9 @@ use crate::domain::{
 use crate::providers::error::FetchError;
 use crate::providers::github::{COMMENT_FIELDS, GqlComment, map_gql_comment};
 
-pub fn fetch_comments(pr_number: PrId) -> Result<Vec<Comment>, FetchError> {
+pub fn fetch_comments(repo: &GhRepo, pr_number: PrId) -> Result<Vec<Comment>, FetchError> {
     let nodes: Vec<GqlComment> =
-        super::pagination::pr_nodes(pr_number, "comments", COMMENT_FIELDS)?;
+        super::pagination::pr_nodes(repo, pr_number, "comments", COMMENT_FIELDS)?;
     Ok(nodes
         .into_iter()
         .map(|c| Comment {
@@ -27,7 +28,11 @@ pub(super) const fn side(line: LineRef) -> &'static str {
     }
 }
 
-pub fn post_comment(pr_number: PrId, comment: &ReviewComment) -> Result<(), FetchError> {
+pub fn post_comment(
+    repo: &GhRepo,
+    pr_number: PrId,
+    comment: &ReviewComment,
+) -> Result<(), FetchError> {
     let ReviewComment {
         revision,
         path,
@@ -36,46 +41,60 @@ pub fn post_comment(pr_number: PrId, comment: &ReviewComment) -> Result<(), Fetc
     } = comment;
     let commit_id = &revision.head;
     let (side, line) = (side(*line), line.number());
-    super::cli::run_gh(&[
-        "api",
-        "--method",
-        "POST",
-        &format!("repos/{{owner}}/{{repo}}/pulls/{pr_number}/comments"),
-        "-f",
-        &format!("body={body}"),
-        "-f",
-        &format!("commit_id={commit_id}"),
-        "-f",
-        &format!("path={path}"),
-        "-F",
-        &format!("line={line}"),
-        "-f",
-        &format!("side={side}"),
-    ])?;
+    super::cli::run_gh(
+        repo,
+        &[
+            "api",
+            "--method",
+            "POST",
+            &format!("repos/{{owner}}/{{repo}}/pulls/{pr_number}/comments"),
+            "-f",
+            &format!("body={body}"),
+            "-f",
+            &format!("commit_id={commit_id}"),
+            "-f",
+            &format!("path={path}"),
+            "-F",
+            &format!("line={line}"),
+            "-f",
+            &format!("side={side}"),
+        ],
+    )?;
     Ok(())
 }
 
-pub fn post_pr_comment(pr_number: PrId, body: &str) -> Result<(), FetchError> {
-    super::cli::run_gh(&[
-        "api",
-        "--method",
-        "POST",
-        &format!("repos/{{owner}}/{{repo}}/issues/{pr_number}/comments"),
-        "-f",
-        &format!("body={body}"),
-    ])?;
+pub fn post_pr_comment(repo: &GhRepo, pr_number: PrId, body: &str) -> Result<(), FetchError> {
+    super::cli::run_gh(
+        repo,
+        &[
+            "api",
+            "--method",
+            "POST",
+            &format!("repos/{{owner}}/{{repo}}/issues/{pr_number}/comments"),
+            "-f",
+            &format!("body={body}"),
+        ],
+    )?;
     Ok(())
 }
 
-pub fn reply_comment(pr_number: PrId, parent: CommentId, body: &str) -> Result<(), FetchError> {
-    super::cli::run_gh(&[
-        "api",
-        "--method",
-        "POST",
-        &format!("repos/{{owner}}/{{repo}}/pulls/{pr_number}/comments/{parent}/replies"),
-        "-f",
-        &format!("body={body}"),
-    ])?;
+pub fn reply_comment(
+    repo: &GhRepo,
+    pr_number: PrId,
+    parent: CommentId,
+    body: &str,
+) -> Result<(), FetchError> {
+    super::cli::run_gh(
+        repo,
+        &[
+            "api",
+            "--method",
+            "POST",
+            &format!("repos/{{owner}}/{{repo}}/pulls/{pr_number}/comments/{parent}/replies"),
+            "-f",
+            &format!("body={body}"),
+        ],
+    )?;
     Ok(())
 }
 
@@ -91,24 +110,30 @@ fn comment_endpoint(comment: CommentKey) -> String {
     )
 }
 
-pub fn edit_comment(comment: CommentKey, body: &str) -> Result<(), FetchError> {
-    super::cli::run_gh(&[
-        "api",
-        "--method",
-        "PATCH",
-        &comment_endpoint(comment),
-        "-f",
-        &format!("body={body}"),
-    ])?;
+pub fn edit_comment(repo: &GhRepo, comment: CommentKey, body: &str) -> Result<(), FetchError> {
+    super::cli::run_gh(
+        repo,
+        &[
+            "api",
+            "--method",
+            "PATCH",
+            &comment_endpoint(comment),
+            "-f",
+            &format!("body={body}"),
+        ],
+    )?;
     Ok(())
 }
 
-pub fn delete_comment(comment: CommentKey) -> Result<(), FetchError> {
-    super::cli::run_gh(&["api", "--method", "DELETE", &comment_endpoint(comment)])?;
+pub fn delete_comment(repo: &GhRepo, comment: CommentKey) -> Result<(), FetchError> {
+    super::cli::run_gh(
+        repo,
+        &["api", "--method", "DELETE", &comment_endpoint(comment)],
+    )?;
     Ok(())
 }
 
-pub fn set_thread_resolved(node_id: &str, resolved: bool) -> Result<(), FetchError> {
+pub fn set_thread_resolved(repo: &GhRepo, node_id: &str, resolved: bool) -> Result<(), FetchError> {
     let mutation = if resolved {
         "resolveReviewThread"
     } else {
@@ -117,26 +142,30 @@ pub fn set_thread_resolved(node_id: &str, resolved: bool) -> Result<(), FetchErr
     let query = format!(
         "mutation {{ {mutation}(input: {{ threadId: \"{node_id}\" }}) {{ thread {{ isResolved }} }} }}"
     );
-    super::cli::run_gh(&["api", "graphql", "-f", &format!("query={query}")])?;
+    super::cli::run_gh(repo, &["api", "graphql", "-f", &format!("query={query}")])?;
     Ok(())
 }
 
-pub(super) fn head_sha(pr_number: PrId) -> Result<String, FetchError> {
-    let out = super::cli::run_gh(&[
-        "api",
-        &format!("repos/{{owner}}/{{repo}}/pulls/{pr_number}"),
-        "--jq",
-        ".head.sha",
-    ])?;
+pub(super) fn head_sha(repo: &GhRepo, pr_number: PrId) -> Result<String, FetchError> {
+    let out = super::cli::run_gh(
+        repo,
+        &[
+            "api",
+            &format!("repos/{{owner}}/{{repo}}/pulls/{pr_number}"),
+            "--jq",
+            ".head.sha",
+        ],
+    )?;
     Ok(String::from_utf8_lossy(&out).trim().to_string())
 }
 
 /// Fails unless the PR's branch is still at `head`, the one that was read.
 pub(super) fn ensure_head(
+    repo: &GhRepo,
     pr_number: PrId,
     head: &crate::domain::review::ReviewedHead,
 ) -> Result<(), FetchError> {
-    if head_sha(pr_number)? == head.as_str() {
+    if head_sha(repo, pr_number)? == head.as_str() {
         Ok(())
     } else {
         Err(super::merge::moved_since_read())
@@ -144,6 +173,7 @@ pub(super) fn ensure_head(
 }
 
 pub(super) fn diff_revision(
+    repo: &GhRepo,
     pr_number: PrId,
 ) -> Result<crate::domain::diff::DiffRevision, FetchError> {
     #[derive(serde::Deserialize)]
@@ -155,10 +185,13 @@ pub(super) fn diff_revision(
         head: Ref,
         base: Ref,
     }
-    let pr: Pr = super::cli::run_gh_json(&[
-        "api",
-        &format!("repos/{{owner}}/{{repo}}/pulls/{pr_number}"),
-    ])?;
+    let pr: Pr = super::cli::run_gh_json(
+        repo,
+        &[
+            "api",
+            &format!("repos/{{owner}}/{{repo}}/pulls/{pr_number}"),
+        ],
+    )?;
     Ok(crate::domain::diff::DiffRevision {
         head: pr.head.sha,
         base: Some(pr.base.sha),
