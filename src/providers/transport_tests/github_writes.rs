@@ -49,15 +49,31 @@ fn github_merge_then_deletes_the_branch_with_its_name_escaped() {
 #[test]
 fn github_a_branch_that_cannot_be_deleted_leaves_the_merge_done() {
     let installed = FakeGh::new()
-        .fail("git/refs", 1, "Reference does not exist")
+        .fail("git/refs", 1, "Resource not accessible by integration")
         .on("api", "{}")
         .install();
     let error = Provider::GitHub
         .merge(PrId(7), MergeStrategy::Merge, Some(&branch("feature")))
         .unwrap_err();
 
-    assert!(matches!(error, MergeError::BranchKept(_)), "{error:?}");
+    assert!(
+        matches!(error, MergeError::BranchDeleteFailed(_)),
+        "{error:?}"
+    );
     assert_eq!(installed.calls().len(), 2, "the merge was sent first");
+}
+
+#[test]
+fn github_a_branch_that_is_already_gone_is_deleted_as_far_as_the_merge_goes() {
+    // The repository deletes head branches itself, and was first.
+    let installed = FakeGh::new()
+        .fail("git/refs", 1, "gh: Reference does not exist (HTTP 422)")
+        .on("api", "{}")
+        .install();
+    Provider::GitHub
+        .merge(PrId(7), MergeStrategy::Merge, Some(&branch("feature")))
+        .unwrap();
+    assert_eq!(installed.calls().len(), 2);
 }
 
 #[test]

@@ -61,9 +61,10 @@ pub enum MergeError {
     /// Nothing was merged.
     #[error(transparent)]
     Failed(#[from] FetchError),
-    /// The PR was merged, and the branch it came from is still there.
-    #[error("merged, but the branch was not deleted: {0}")]
-    BranchKept(FetchError),
+    /// The PR was merged; deleting the branch it came from failed, so whether
+    /// the branch is still there is not known.
+    #[error("merged, but deleting the branch failed: {0}")]
+    BranchDeleteFailed(FetchError),
 }
 
 /// Why a review sent as a batch failed.

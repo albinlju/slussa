@@ -205,8 +205,13 @@ impl PrDetailScreen {
                 None
             }
             MergeAction::DeleteBranch => {
+                // Merging when ready leaves the branch to the repository, and the
+                // dialog hides the box then: the choice cannot change unseen.
+                let waiting = AutoMergeOffer::of(&ctx.store.capabilities, ctx.mergeability())
+                    == AutoMergeOffer::Available;
                 if ctx.deletable_branch().is_some()
                     && let Some(Overlay::Merge(dialog)) = &mut self.overlay
+                    && !(dialog.when_ready && waiting)
                 {
                     dialog.delete_branch = !dialog.delete_branch;
                 }

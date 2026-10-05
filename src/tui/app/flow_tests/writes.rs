@@ -287,7 +287,11 @@ async fn a_merge_deletes_its_branch_and_is_then_refetched() {
 async fn a_branch_that_stays_is_a_notice_and_the_merge_is_still_refetched() {
     let gh = FakeGh::new()
         .on("pulls/1/merge", "{}")
-        .fail("git/refs/heads/feature", 1, "Reference does not exist")
+        .fail(
+            "git/refs/heads/feature",
+            1,
+            "Resource not accessible by integration",
+        )
         .on(OPEN_QUERY, &one_pr_page())
         .on("graphql", &any_connection())
         .install();
@@ -300,7 +304,7 @@ async fn a_branch_that_stays_is_a_notice_and_the_merge_is_still_refetched() {
     assert!(
         notice
             .as_deref()
-            .is_some_and(|n| n.contains("merged, but the branch was not deleted")),
+            .is_some_and(|n| n.contains("merged, but deleting the branch failed")),
         "{notice:?}"
     );
     assert!(

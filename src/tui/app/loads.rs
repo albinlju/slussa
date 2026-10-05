@@ -92,9 +92,9 @@ impl App {
                 self.write_done(pr_id, operation, notice);
             }
             // A merge whose branch stayed is done, and says what did not happen.
-            Err(WriteError::BranchKept(error)) => {
+            Err(WriteError::BranchDeleteFailed(error)) => {
                 let notice = Notice::error(format!(
-                    "PR #{pr_id} · merged, but the branch was not deleted: {}",
+                    "PR #{pr_id} · merged, but deleting the branch failed: {}",
                     error.user_message()
                 ));
                 self.write_done(pr_id, operation, notice);

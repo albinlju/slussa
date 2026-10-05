@@ -104,7 +104,7 @@ fn merge_status(mergeable: &str, state: &str, review_decision: Option<&str>) -> 
 }
 
 /// Merge the PR, then delete the branch it came from when asked to. A branch
-/// that cannot be deleted does not undo the merge: that is `BranchKept`.
+/// that cannot be deleted does not undo the merge: that is `BranchDeleteFailed`.
 pub fn merge(
     pr_number: PrId,
     strategy: MergeStrategy,
@@ -124,13 +124,16 @@ pub fn merge(
         &format!("merge_method={method}"),
     ])?;
     if let Some(branch) = delete {
-        delete_branch(branch).map_err(MergeError::BranchKept)?;
+        delete_branch(branch).map_err(MergeError::BranchDeleteFailed)?;
     }
     Ok(())
 }
 
+/// A branch that is already gone counts as deleted: GitHub removes the head
+/// branch itself where the repository asks it to, and answers 422 `Reference
+/// does not exist` to a delete that comes second.
 fn delete_branch(branch: &DeletableBranch) -> Result<(), FetchError> {
-    cli::run_gh(&[
+    let deleted = cli::run_gh(&[
         "api",
         "--method",
         "DELETE",
@@ -138,8 +141,16 @@ fn delete_branch(branch: &DeletableBranch) -> Result<(), FetchError> {
             "repos/{{owner}}/{{repo}}/git/refs/heads/{}",
             ref_path(branch.name())
         ),
-    ])?;
-    Ok(())
+    ]);
+    match deleted {
+        Ok(_) => Ok(()),
+        Err(FetchError::GhFailed { ref stderr, .. })
+            if stderr.contains("Reference does not exist") =>
+        {
+            Ok(())
+        }
+        Err(error) => Err(error),
+    }
 }
 
 /// A branch name as the tail of a URL path: slashes stay, anything that is not

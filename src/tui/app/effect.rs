@@ -121,8 +121,8 @@ pub enum WriteError {
     #[error(transparent)]
     Failed(#[from] FetchError),
     /// The PR was merged; the branch it came from was not deleted.
-    #[error("merged, but the branch was not deleted: {0}")]
-    BranchKept(FetchError),
+    #[error("merged, but deleting the branch failed: {0}")]
+    BranchDeleteFailed(FetchError),
     /// A review sent as several requests, some of which arrived.
     #[error("review partially sent ({posted_comments} comments): {source}")]
     PartialReview {
@@ -137,7 +137,7 @@ impl From<MergeError> for WriteError {
     fn from(error: MergeError) -> Self {
         match error {
             MergeError::Failed(error) => Self::Failed(error),
-            MergeError::BranchKept(error) => Self::BranchKept(error),
+            MergeError::BranchDeleteFailed(error) => Self::BranchDeleteFailed(error),
         }
     }
 }
@@ -162,8 +162,8 @@ impl WriteError {
     pub fn user_message(&self) -> String {
         match self {
             Self::Failed(error) => error.user_message(),
-            Self::BranchKept(error) => format!(
-                "Merged, but the branch was not deleted: {}",
+            Self::BranchDeleteFailed(error) => format!(
+                "Merged, but deleting the branch failed: {}",
                 error.user_message()
             ),
             Self::PartialReview {
@@ -181,7 +181,7 @@ impl WriteError {
     pub const fn may_have_reached_server(&self) -> bool {
         match self {
             Self::Failed(error) => error.may_have_reached_server(),
-            Self::BranchKept(_) | Self::PartialReview { .. } => true,
+            Self::BranchDeleteFailed(_) | Self::PartialReview { .. } => true,
         }
     }
 }
