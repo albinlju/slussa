@@ -22,6 +22,11 @@ pub(super) use crate::{
 pub(super) use serde_json::json;
 pub(super) use std::time::Duration;
 
+/// The commit the reader has seen, for the commands that are tied to it.
+pub(super) fn read_head() -> crate::domain::review::ReviewedHead {
+    crate::domain::review::ReviewedHead::of(None, Some("abc123")).expect("a head was listed")
+}
+
 pub(super) fn app() -> App {
     App::new(
         crate::session::Session::for_test(Provider::GitHub, "me"),

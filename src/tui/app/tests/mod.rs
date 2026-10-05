@@ -10,6 +10,7 @@ mod recovery;
 mod rerequest;
 mod rerun;
 mod review;
+mod reviewed_head;
 mod seen;
 mod status;
 mod submission;

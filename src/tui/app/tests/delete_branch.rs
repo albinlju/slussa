@@ -33,7 +33,9 @@ async fn d_marks_the_branch_and_enter_merges_with_it_marked() {
     );
 
     let Some(Effect::Command {
-        command: Command::Merge { strategy, delete },
+        command: Command::Merge {
+            strategy, delete, ..
+        },
         ..
     }) = enter(&mut app)
     else {

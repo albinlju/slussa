@@ -9,7 +9,10 @@ use super::{
     view::issues_to_open,
 };
 use crate::{
-    domain::{pr::PrId, review::CommentTarget},
+    domain::{
+        pr::{AutoMerge, PrId},
+        review::CommentTarget,
+    },
     tui::{
         app::{commands::Command, effect::Effect},
         ui::{
@@ -157,6 +160,7 @@ impl PrDetailScreen {
                 let verdict = self
                     .review_picker()?
                     .selected(&self.view(ctx).review_context())?;
+                let head = ctx.reviewed_head()?;
                 self.overlay = None;
                 if verdict.needs_body() {
                     self.open_draft(Some(CommentTarget::Review { verdict }));
@@ -167,6 +171,7 @@ impl PrDetailScreen {
                     Command::SubmitReview {
                         verdict,
                         body: String::new(),
+                        head,
                     },
                 ))
             }
@@ -229,7 +234,7 @@ impl PrDetailScreen {
                     }
                     AutoMergeOffer::On(_) => {
                         self.overlay = None;
-                        return Some(Self::command(pr_id, Command::CancelAutoMerge));
+                        return Some(Self::command(pr_id, Command::AutoMerge(AutoMerge::Off)));
                     }
                 }
                 None
@@ -262,28 +267,44 @@ impl PrDetailScreen {
                 }
                 let when_ready = dialog.when_ready;
                 let delete = ctx.deletable_branch().filter(|_| dialog.delete_branch);
+                // What the reader has seen of the PR now, not when the dialog
+                // opened: it is that commit the merge is tied to.
+                let head = ctx.reviewed_head()?;
                 self.overlay = None;
                 let strategy = strategy?;
                 Some(Self::command(
                     pr_id,
                     if when_ready {
-                        Command::AutoMerge(strategy)
+                        Command::AutoMerge(AutoMerge::On { strategy, head })
                     } else {
-                        Command::Merge { strategy, delete }
+                        Command::Merge {
+                            strategy,
+                            delete,
+                            head,
+                        }
                     },
                 ))
             }
         }
     }
 
-    pub(super) fn submit_editor(&self, pr_id: PrId) -> Option<Effect> {
+    pub(super) fn submit_editor(&self, pr_id: PrId, ctx: &DetailContext<'_>) -> Option<Effect> {
         let CommentDraft { target, text } = self.editor.draft()?;
         // A blank draft is not a comment: Ctrl+S does nothing until it has text.
         let text = crate::domain::comment::NonBlank::new(text)?;
-        Some(Self::command(
-            pr_id,
-            Command::SubmitComment { target, text },
-        ))
+        let command = match target {
+            // A verdict is tied to the commit that was read.
+            CommentTarget::Review { verdict } => Command::SubmitReview {
+                verdict,
+                body: text.into_string(),
+                head: ctx.reviewed_head()?,
+            },
+            CommentTarget::Pr
+            | CommentTarget::Line(_)
+            | CommentTarget::Reply(_)
+            | CommentTarget::Edit(_) => Command::SubmitComment { target, text },
+        };
+        Some(Self::command(pr_id, command))
     }
 
     pub(super) fn pr_action(

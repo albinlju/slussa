@@ -1,6 +1,7 @@
 //! Reads: refresh bookkeeping, failed reloads and what capabilities switch off.
 
 use super::support::*;
+use crate::domain::pr::AutoMerge;
 
 #[test]
 fn refresh_failure_preserves_visible_data() {
@@ -134,6 +135,7 @@ fn read_only_capabilities_block_shortcuts_commands_and_optional_loads() {
         Command::SubmitReview {
             verdict: ReviewVerdict::Comment,
             body: "summary".into(),
+            head: read_head(),
         },
         Command::SubmitComment {
             target: CommentTarget::Pr,
@@ -142,9 +144,13 @@ fn read_only_capabilities_block_shortcuts_commands_and_optional_loads() {
         Command::Merge {
             strategy: MergeStrategy::Merge,
             delete: None,
+            head: read_head(),
         },
-        Command::AutoMerge(MergeStrategy::Merge),
-        Command::CancelAutoMerge,
+        Command::AutoMerge(AutoMerge::On {
+            strategy: MergeStrategy::Merge,
+            head: read_head(),
+        }),
+        Command::AutoMerge(AutoMerge::Off),
         Command::RerunFailedBuilds,
         Command::Decline,
         Command::DeleteComment(CommentKey {

@@ -53,6 +53,8 @@ struct BbProps {
 #[serde(rename_all = "camelCase")]
 struct BbRef {
     display_id: String,
+    #[serde(default)]
+    latest_commit: Option<String>,
 }
 
 #[derive(Debug, Deserialize)]
@@ -152,6 +154,7 @@ fn map_pr(bb: BbPr) -> PullRequest {
         comment_count: bb.properties.comment_count,
         source_branch: bb.from_ref.display_id,
         source_repo: SourceRepo::Unknown,
+        head_oid: bb.from_ref.latest_commit,
         target_branch: bb.to_ref.display_id,
         additions: 0,
         deletions: 0,

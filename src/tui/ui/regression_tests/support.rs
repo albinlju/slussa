@@ -60,6 +60,7 @@ pub(crate) fn fixture() -> AppState {
         comment_count: 0,
         source_branch: "feature".into(),
         source_repo: SourceRepo::Unknown,
+        head_oid: Some("abc123".into()),
         target_branch: "main".into(),
         additions: 1,
         deletions: 1,

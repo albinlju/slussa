@@ -34,9 +34,9 @@ The search also takes filters, written `key:value` among the words and combined 
 | `space` | toggle a fold (a folder in the file tree, a resolved thread); in the Overview, open or fold a long comment; in the diff's code pane, expand or collapse a resolved thread, or, on a long comment's fold row (`j`/`k` stop there), open or fold that comment |
 | `/` | search in the diff files or the commits; `n` / `N` jump to the next / previous match |
 | `H` / `L` | pan a wide Description |
-| `a` | submit a review verdict |
+| `a` | submit a review verdict; tied to the commit you were shown (the head of the diff you opened, otherwise the list's), so it is refused if the branch has moved, and dimmed with `commit unknown` when none is known |
 | `v` | start or finish a batched review; `V` discards it |
-| `m` | merge; the dialog lists what blocks it. On GitHub, while the PR waits on checks or reviews, `a` in the dialog makes `enter` merge it by itself when ready, and turns that off again. On GitHub, `d` in the dialog marks the PR's branch for deletion once it is merged (only a branch of the same repository, never the one merged into); if the branch cannot be deleted the merge still stands and a notice says so |
+| `m` | merge, tied to the commit you were shown like `a`; the dialog lists what blocks it. On GitHub, while the PR waits on checks or reviews, `a` in the dialog makes `enter` merge it by itself when ready, and turns that off again. On GitHub, `d` in the dialog marks the PR's branch for deletion once it is merged (only a branch of the same repository, never the one merged into); if the branch cannot be deleted the merge still stands and a notice says so |
 | `x` | close or decline the PR, or reopen a declined one |
 | `b` | in the Builds tab, run the failed builds again; offered when one has failed or was cancelled, and dimmed with the reason on a merged or declined PR (GitHub Actions) |
 | `p` | ask those who asked for changes to review again (GitHub); named in the footer (`p: ask alice again`), hidden when nobody asked for changes, dimmed with the reason on a merged or declined PR |

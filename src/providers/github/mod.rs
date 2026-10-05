@@ -31,7 +31,7 @@ use serde::de::DeserializeOwned;
 use crate::domain::authorship::Authorship;
 use crate::domain::comment::{Comment, CommentId, Reaction};
 use crate::domain::pr::{MergeStrategy, Mergeability, PrId};
-use crate::domain::review::{ReviewComment, ReviewVerdict};
+use crate::domain::review::{ReviewComment, ReviewVerdict, ReviewedHead};
 use crate::domain::user::{AccountKind, User, Username};
 use crate::providers::error::FetchError;
 
@@ -149,6 +149,7 @@ pub fn submit_review(
     pr_number: PrId,
     verdict: ReviewVerdict,
     body: &str,
+    head: &ReviewedHead,
 ) -> Result<(), FetchError> {
     let Some(event) = review_event(verdict) else {
         return Err(FetchError::Unsupported(
@@ -158,7 +159,18 @@ pub fn submit_review(
     let endpoint = format!("repos/{{owner}}/{{repo}}/pulls/{pr_number}/reviews");
     let event_arg = format!("event={event}");
     let body_arg = format!("body={body}");
-    let mut args: Vec<&str> = vec!["api", "--method", "POST", &endpoint, "-f", &event_arg];
+    let commit_arg = format!("commit_id={}", head.as_str());
+    comments::ensure_head(pr_number, head)?;
+    let mut args: Vec<&str> = vec![
+        "api",
+        "--method",
+        "POST",
+        &endpoint,
+        "-f",
+        &event_arg,
+        "-f",
+        &commit_arg,
+    ];
     if !body.is_empty() {
         args.push("-f");
         args.push(&body_arg);
@@ -175,9 +187,10 @@ pub fn submit_full_review(
     verdict: ReviewVerdict,
     body: &str,
     comments: &[ReviewComment],
+    head: &ReviewedHead,
 ) -> Result<(), FetchError> {
     let Some(first) = comments.first() else {
-        return submit_review(pr_number, verdict, body);
+        return submit_review(pr_number, verdict, body, head);
     };
     let Some(event) = review_event(verdict) else {
         return Err(FetchError::Unsupported(
@@ -185,6 +198,7 @@ pub fn submit_full_review(
         ));
     };
     let payload = review_payload(event, body, &first.revision, comments)?;
+    comments::ensure_head(pr_number, head)?;
     let endpoint = format!("repos/{{owner}}/{{repo}}/pulls/{pr_number}/reviews");
     let input = serde_json::to_vec(&payload).map_err(|e| FetchError::ParseFailed(e.into()))?;
     cli::run_gh_stdin(

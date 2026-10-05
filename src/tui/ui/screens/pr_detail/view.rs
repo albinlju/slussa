@@ -6,7 +6,7 @@ use crate::{
         commit::CommitOid,
         diff::FileDiff,
         pr::{DeletableBranch, LinkedIssue, Mergeability, PrId, PrInfo, PrStatus, PullRequest},
-        review::{CommentTarget, Rerequest, ReviewVerdict},
+        review::{CommentTarget, Rerequest, ReviewVerdict, ReviewedHead},
     },
     tui::{
         app::{
@@ -44,6 +44,11 @@ impl<'a> DetailContext<'a> {
         issues_to_open(self.data)
     }
 
+    /// The commit the reader has seen, which a verdict or a merge is tied to.
+    pub fn reviewed_head(&self) -> Option<ReviewedHead> {
+        reviewed_head(self.data, self.pr)
+    }
+
     /// The branch a merge may delete: only where the provider does it and the
     /// PR's branch is its own to delete.
     pub fn deletable_branch(&self) -> Option<DeletableBranch> {
@@ -73,6 +78,15 @@ impl<'a> DetailContext<'a> {
             refreshing: store.refreshing(Screen::Detail { pr_id, tab }),
         })
     }
+}
+
+/// The commit the reader has seen of the PR: its loaded diff's head, and
+/// otherwise the head the list last gave. A verdict or a merge is tied to it.
+pub fn reviewed_head(data: Option<&PrData>, pr: &PullRequest) -> Option<ReviewedHead> {
+    ReviewedHead::of(
+        data.and_then(|data| data.diff.loaded()),
+        pr.head_oid.as_deref(),
+    )
 }
 
 /// The issues the PR closes that have an address, once they are read.
@@ -170,6 +184,11 @@ impl<'a> DetailView<'a> {
     /// The issues `i` can open, once they are read.
     pub fn issues_to_open(&self) -> Vec<(&'a LinkedIssue, &'a str)> {
         issues_to_open(self.data)
+    }
+
+    /// The commit the reader has seen, which a verdict or a merge is tied to.
+    pub fn reviewed_head(&self) -> Option<ReviewedHead> {
+        reviewed_head(self.data, self.pr)
     }
 
     /// Those who asked for changes, when there are some to ask again.

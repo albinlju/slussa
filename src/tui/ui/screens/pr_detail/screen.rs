@@ -230,7 +230,7 @@ impl Component for PrDetailScreen {
             DetailAction::Review(action) => return self.review_action(action, pr_id, ctx),
             DetailAction::Merge(action) => return self.merge_action(action, pr_id, ctx),
             DetailAction::Issues(action) => return self.issue_action(action, ctx),
-            DetailAction::Editor(EditorAction::Submit) => return self.submit_editor(pr_id),
+            DetailAction::Editor(EditorAction::Submit) => return self.submit_editor(pr_id, ctx),
             DetailAction::Editor(action) => {
                 self.editor.update(action, &());
             }

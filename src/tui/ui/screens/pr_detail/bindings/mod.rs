@@ -172,6 +172,15 @@ pub(super) fn hint(view: &DetailView<'_>, key: char) -> Option<Hint> {
         .find_map(|row| row.hint(view))
 }
 
+/// An action that sends a verdict or a merge, which is tied to the commit that
+/// was read: offered once there is one, and dimmed with the reason before.
+fn offered_on_a_known_head(view: &DetailView<'_>, action: PrAction) -> Offer {
+    match offered(view, action) {
+        Offer::Offered(_) if view.reviewed_head().is_none() => Offer::Blocked("commit unknown"),
+        other => other,
+    }
+}
+
 /// An action every provider that supports it offers, hidden where it does not.
 fn offered(view: &DetailView<'_>, action: PrAction) -> Offer {
     if view.supports_action(DetailAction::Pr(action)) {

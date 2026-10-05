@@ -104,6 +104,7 @@ async fn failed_review_and_error_stay_with_their_pr_until_success() {
         command: Command::SubmitReview {
             verdict: ReviewVerdict::Approve,
             body: String::new(),
+            head: read_head(),
         },
     }));
     assert_eq!(app.state.store.reviews[&PrId(42)].comments.len(), 1);
@@ -125,6 +126,7 @@ async fn failed_review_and_error_stay_with_their_pr_until_success() {
         command: Command::SubmitReview {
             verdict: ReviewVerdict::Approve,
             body: String::new(),
+            head: read_head(),
         },
     }));
     finish_write(&mut app, PrId(42), Ok(()));

@@ -5,9 +5,10 @@ use crate::{
     domain::{
         comment::{CommentKey, ThreadHandle},
         commit::CommitOid,
-        pr::{DeletableBranch, MergeStrategy, PrGroup, PrId},
+        pr::{AutoMerge, DeletableBranch, MergeStrategy, PrGroup, PrId},
         review::{
             CommentAnchor, CommentTarget, PendingComment, Rerequest, ReviewComment, ReviewVerdict,
+            ReviewedHead,
         },
     },
     providers::FetchError,
@@ -216,18 +217,19 @@ impl App {
         ticket: WriteTicket,
         strategy: MergeStrategy,
         delete: Option<DeletableBranch>,
+        head: ReviewedHead,
     ) {
         let provider = self.provider.clone();
         let pr_id = ticket.pr_id();
         self.spawn_write(ticket, move || {
-            provider.merge(pr_id, strategy, delete.as_ref())
+            provider.merge(pr_id, strategy, delete.as_ref(), &head)
         });
     }
 
-    pub(super) fn spawn_auto_merge(&self, ticket: WriteTicket, strategy: Option<MergeStrategy>) {
+    pub(super) fn spawn_auto_merge(&self, ticket: WriteTicket, change: AutoMerge) {
         let provider = self.provider.clone();
         let pr_id = ticket.pr_id();
-        self.spawn_write(ticket, move || provider.set_auto_merge(pr_id, strategy));
+        self.spawn_write(ticket, move || provider.set_auto_merge(pr_id, &change));
     }
 
     pub(super) fn spawn_rerun_builds(&self, ticket: WriteTicket) {
@@ -292,6 +294,7 @@ impl App {
         body: String,
         user: String,
         comments: Vec<PendingComment>,
+        head: ReviewedHead,
     ) {
         let provider = self.provider.clone();
         let pr_id = ticket.pr_id();
@@ -302,7 +305,7 @@ impl App {
                 .map(|comment| postable(comment.anchor, comment.text, hint))
                 .collect::<Result<Vec<_>, _>>()?;
             provider
-                .submit_full_review(pr_id, verdict, &body, &user, &comments)
+                .submit_full_review(pr_id, verdict, &body, &user, &comments, &head)
                 .map_err(|error| WriteError::from_review(error, body))
         });
     }

@@ -1,6 +1,6 @@
 //! The rows: one per key, in the order the keys are tried in.
 
-use super::{Binding, Doc, Label, Mods, Needs, Offer, Place, offered};
+use super::{Binding, Doc, Label, Mods, Needs, Offer, Place, offered, offered_on_a_known_head};
 use crate::{
     domain::{capabilities::Feature, pr::PrStatus},
     tui::{
@@ -64,7 +64,7 @@ pub(in crate::tui::ui::screens::pr_detail) static SUBMIT_REVIEW: Binding = Bindi
     }),
     needs: Needs::Reviews,
     label: Label::Fixed("a: submit review"),
-    offer: |view| offered(view, PrAction::OpenReviewPicker),
+    offer: |view| offered_on_a_known_head(view, PrAction::OpenReviewPicker),
 };
 
 /// `v` finishes the review in progress: it opens the verdict menu. It works on
@@ -82,7 +82,7 @@ pub(in crate::tui::ui::screens::pr_detail) static FINISH_REVIEW: Binding = Bindi
         format!("v: finish draft ({queued})")
     }),
     offer: |view| match view.pending_review() {
-        Some(_) => offered(view, PrAction::FinishReview),
+        Some(_) => offered_on_a_known_head(view, PrAction::FinishReview),
         None => Offer::Hidden,
     },
 };
@@ -137,7 +137,7 @@ pub(in crate::tui::ui::screens::pr_detail) static MERGE: Binding = Binding {
         }
         match view.merge_blocked_reason() {
             Some(reason) => Offer::Blocked(reason),
-            None => Offer::Offered(Action::from(PrAction::OpenMergePicker)),
+            None => offered_on_a_known_head(view, PrAction::OpenMergePicker),
         }
     },
 };

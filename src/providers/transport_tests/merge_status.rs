@@ -166,7 +166,7 @@ fn bitbucket_refused_merge_reports_the_vetoes() {
         Route::get(
             &format!("{PR_BASE}/9"),
             200,
-            &json!({"version": 3}).to_string(),
+            &json!({"version": 3, "fromRef": {"latestCommit": HEAD}}).to_string(),
         ),
         Route::post(
             &format!("{}?version=3", merge_url(9)),
@@ -175,7 +175,7 @@ fn bitbucket_refused_merge_reports_the_vetoes() {
         ),
     ]);
     let error = bitbucket(&server)
-        .merge(PrId(9), MergeStrategy::Merge, None)
+        .merge(PrId(9), MergeStrategy::Merge, None, &read_head())
         .unwrap_err();
 
     let MergeError::Failed(error) = error else {

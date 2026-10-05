@@ -33,9 +33,10 @@ use crate::domain::{
     commit::{Commit, CommitOid},
     diff::Diff,
     pr::{
-        DeletableBranch, MergeStrategy, Mergeability, PrBatch, PrGroup, PrId, PrInfo, PullRequest,
+        AutoMerge, DeletableBranch, MergeStrategy, Mergeability, PrBatch, PrGroup, PrId, PrInfo,
+        PullRequest,
     },
-    review::{Rerequest, ReviewComment, ReviewVerdict},
+    review::{Rerequest, ReviewComment, ReviewVerdict, ReviewedHead},
     user::Username,
 };
 
@@ -116,12 +117,14 @@ impl Provider {
         }
     }
 
-    /// Merge the PR and, with `delete`, then delete the branch it came from.
+    /// Merge the PR if its branch is still at `head`, the commit that was read,
+    /// and, with `delete`, then delete the branch it came from.
     pub fn merge(
         &self,
         pr_id: PrId,
         strategy: MergeStrategy,
         delete: Option<&DeletableBranch>,
+        head: &ReviewedHead,
     ) -> Result<(), MergeError> {
         let caps = self.capabilities();
         if !caps.merge_strategies.contains(&strategy) {
@@ -137,19 +140,15 @@ impl Provider {
             .into());
         }
         match self {
-            Self::GitHub => github::merge(pr_id, strategy, delete),
-            Self::BitbucketDc(c) => Ok(bitbucket_dc::merge(c, pr_id)?),
+            Self::GitHub => github::merge(pr_id, strategy, delete, head),
+            Self::BitbucketDc(c) => Ok(bitbucket_dc::merge(c, pr_id, head)?),
         }
     }
 
-    /// Merge by itself with `strategy` once the PR is ready, or stop doing so.
-    pub fn set_auto_merge(
-        &self,
-        pr_id: PrId,
-        strategy: Option<MergeStrategy>,
-    ) -> Result<(), FetchError> {
+    /// Merge by itself once the PR is ready, or stop doing so.
+    pub fn set_auto_merge(&self, pr_id: PrId, change: &AutoMerge) -> Result<(), FetchError> {
         match self {
-            Self::GitHub => github::set_auto_merge(pr_id, strategy),
+            Self::GitHub => github::set_auto_merge(pr_id, change),
             Self::BitbucketDc(_) => Err(FetchError::Unsupported(
                 "Bitbucket does not merge a PR by itself when it is ready.".into(),
             )),
@@ -329,12 +328,15 @@ impl Provider {
         body: &str,
         user: &str,
         comments: &[ReviewComment],
+        head: &ReviewedHead,
     ) -> Result<(), ReviewError> {
         match self {
             // One request: it arrives whole or not at all.
-            Self::GitHub => Ok(github::submit_full_review(pr_id, verdict, body, comments)?),
+            Self::GitHub => Ok(github::submit_full_review(
+                pr_id, verdict, body, comments, head,
+            )?),
             Self::BitbucketDc(c) => {
-                bitbucket_dc::submit_full_review(c, pr_id, verdict, body, user, comments)
+                bitbucket_dc::submit_full_review(c, pr_id, verdict, body, user, comments, head)
             }
         }
     }
@@ -350,6 +352,10 @@ impl Provider {
 #[cfg(test)]
 mod capability_tests {
     use super::*;
+
+    fn read_head() -> ReviewedHead {
+        ReviewedHead::of(None, Some("abc123")).expect("a listed head")
+    }
     use crate::domain::capabilities::ReviewSubmission;
 
     #[test]
@@ -379,9 +385,11 @@ mod capability_tests {
         // These must reject locally, before trying authentication or the network.
         assert!(
             bitbucket
-                .merge(PrId(1), MergeStrategy::Squash, None)
+                .merge(PrId(1), MergeStrategy::Squash, None, &read_head())
                 .is_err()
         );
-        assert!(github::submit_review(PrId(1), ReviewVerdict::Unapprove, "").is_err());
+        assert!(
+            github::submit_review(PrId(1), ReviewVerdict::Unapprove, "", &read_head()).is_err()
+        );
     }
 }
