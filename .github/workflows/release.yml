@@ -9,7 +9,9 @@ name: Release
 # tests) and `version` in Cargo.toml, with Cargo.lock, equals the tag without
 # the `v`. The first job fails the run if either does not hold; a dry run only
 # warns about CI, so that it still shows the check working. Each archive gets
-# a `.sha256` and the release a combined `SHA256SUMS`. The crate is published
+# a `.sha256` and the release a combined `SHA256SUMS`, and the archives are
+# attested (build provenance). The attestation step runs in the release job, so
+# a dry run does not exercise it: watch the first tagged run. The crate is published
 # by hand with `cargo publish` from the same tag, after this workflow has
 # succeeded.
 on:
@@ -42,6 +44,8 @@ jobs:
       version: ${{ steps.version.outputs.version }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
       - id: version
         run: |
           version=$(cargo metadata --no-deps --format-version 1 | jq -r '.packages[0].version')
@@ -94,9 +98,10 @@ jobs:
             cross: true
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-      - uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2
         with:
-          key: ${{ matrix.target }}
+          persist-credentials: false
+      # No build cache here, unlike in ci.yml: what a release is built from is
+      # the source and the locked dependencies, not what an earlier run left.
       - name: Add target
         run: rustup target add ${{ matrix.target }}
       - name: Install the aarch64 Linux cross toolchain
@@ -132,6 +137,8 @@ jobs:
     timeout-minutes: 10
     permissions:
       contents: write
+      id-token: write # to sign the attestation
+      attestations: write
     steps:
       - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
         with:
@@ -140,6 +147,12 @@ jobs:
           path: dist
       - name: Combine checksums
         run: cd dist && cat ./*.sha256 > SHA256SUMS && cat SHA256SUMS
+      # Says which workflow run built each archive from which commit; check one
+      # with `gh attestation verify <archive> --repo albinlju/slussa`. Before the
+      # release is created, so that a release is never published without one.
+      - uses: actions/attest-build-provenance@4d101475d8b20a2381f78447822ac1eab6504dd8 # v4.2.2
+        with:
+          subject-path: dist/*.tar.gz
       - name: Create release
         env:
           GH_TOKEN: ${{ github.token }}

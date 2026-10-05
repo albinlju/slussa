@@ -56,7 +56,9 @@ CI. Windows is not built or tested yet.
 downloaded in a browser may be blocked; remove the flag with
 `xattr -d com.apple.quarantine slussa`. Check a download with
 `grep <target> SHA256SUMS | shasum -a 256 -c -`, for example
-`aarch64-apple-darwin`.
+`aarch64-apple-darwin`. A release made by the workflow also carries a build
+attestation, which says which run built the archive from which commit; check
+one with `gh attestation verify <archive> --repo albinlju/slussa`.
 
 **From crates.io.** With a recent Rust toolchain (1.95 or newer):
 
