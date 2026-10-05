@@ -23,7 +23,7 @@ fn list() -> AppState {
         pr
     };
     let one = by(1, "alice", &|pr| pr.ci = CiSummary::Failed);
-    let two = by(2, "bob", &|_| {});
+    let two = by(2, "bob", &|pr| pr.status = PrStatus::conflicting());
     let three = by(3, "alice", &|pr| {
         pr.reviewers = vec![Reviewer {
             author: User {
@@ -55,6 +55,7 @@ fn filters_narrow_the_list_as_they_are_typed() {
     assert_eq!(rows_after(""), [1, 2, 3]);
     assert_eq!(rows_after("author:alice"), [1, 3]);
     assert_eq!(rows_after("review:none"), [1, 2]);
+    assert_eq!(rows_after("merge:conflicts"), [2]);
     assert_eq!(rows_after("ci:failed"), [1]);
     assert_eq!(rows_after("review:approved"), [3]);
     // Together, and with words.
@@ -82,7 +83,7 @@ fn the_empty_field_says_what_it_understands_and_a_typed_one_does_not() {
     let mut state = list();
     local_key(&mut state, KeyCode::Char('/'));
     let empty = draw(&mut state, 120, 14);
-    assert!(empty.contains("author:  review:  ci:"), "{empty}");
+    assert!(empty.contains("author:  review:  ci:  merge:"), "{empty}");
     local_key(&mut state, KeyCode::Char('c'));
     let typed = draw(&mut state, 120, 14);
     assert!(

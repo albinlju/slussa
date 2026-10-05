@@ -121,7 +121,7 @@ impl<'a> DetailView<'a> {
         match self.pr.status {
             PrStatus::Merged => return Some("merged"),
             PrStatus::Declined => return Some("declined"),
-            PrStatus::Open | PrStatus::Draft => {}
+            PrStatus::Open(_) => {}
         }
         (self
             .store
@@ -154,7 +154,7 @@ impl<'a> DetailView<'a> {
     /// Why declining is unavailable, for the dimmed footer hint — `None` when open.
     pub const fn decline_blocked_reason(&self) -> Option<&'static str> {
         match self.pr.status {
-            PrStatus::Open | PrStatus::Draft => None,
+            PrStatus::Open(_) => None,
             PrStatus::Merged => Some("merged"),
             PrStatus::Declined => Some("declined"),
         }

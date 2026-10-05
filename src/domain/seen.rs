@@ -96,7 +96,7 @@ mod tests {
                 username: "alice".into(),
             },
             ci: CiSummary::Unknown,
-            status: PrStatus::Open,
+            status: PrStatus::open(),
             reviewers: vec![],
             labels: vec![],
             comment_count: 0,

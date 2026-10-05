@@ -206,7 +206,7 @@ impl App {
             }
             Effect::Navigate(screen) => self.state.screen = screen,
             Effect::Refresh => self.refresh_actions(),
-            Effect::OpenPr(id) => self.open_pr(id),
+            Effect::OpenPr(id) => self.open_named_pr(id),
             Effect::LoadOlder => self.load_older_prs(),
             Effect::LoadView => self.ensure_view_loaded(),
             Effect::LoadCommitDiff { pr_id, oid } => {

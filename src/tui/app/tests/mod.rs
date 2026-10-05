@@ -8,6 +8,7 @@ mod recovery;
 mod rerun;
 mod review;
 mod seen;
+mod status;
 mod submission;
 mod support;
 mod tickets;

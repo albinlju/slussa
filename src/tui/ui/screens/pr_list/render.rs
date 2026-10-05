@@ -26,7 +26,7 @@ use ratatui::{
 const GUTTER: u16 = 2;
 
 /// What the search field understands, besides words, shown while it is empty.
-const SEARCH_HINT: &str = "author:  review:  ci:";
+const SEARCH_HINT: &str = "author:  review:  ci:  merge:";
 
 /// What the AI column's diamonds mean, listed in the help while the column is
 /// there.
@@ -90,16 +90,24 @@ pub(super) fn render(
     let any_reason = filtered
         .as_ref()
         .is_some_and(|prs| prs.iter().any(|pr| attention(pr, ctx.viewer).is_some()));
+    let any_conflict = filtered
+        .as_ref()
+        .is_some_and(|prs| prs.iter().any(|pr| pr.status.has_conflicts()));
     // So does the AI column: only while some PR has been reviewed by an agent, so
     // a repository without one has no column of hollow diamonds.
     let any_ai = filtered
         .as_ref()
         .is_some_and(|prs| prs.iter().any(|pr| pr.ai_review != AiReview::None));
-    let columns: Vec<ListColumn> = ListColumn::visible(width)
+    let columns: Vec<ListColumn> = ListColumn::visible(width, any_conflict)
         .iter()
         .copied()
         .filter(|&column| column != ListColumn::Attention || any_reason)
         .filter(|&column| column != ListColumn::Ai || any_ai)
+        // The status says which view this is, except where the views are mixed, and
+        // a conflict is worth a column wherever there is one.
+        .filter(|&column| {
+            column != ListColumn::Status || screen.filter == StatusFilter::All || any_conflict
+        })
         .collect();
     let definitions: Vec<_> = columns.iter().map(|column| column.spec()).collect();
     let table = table::Table::new(&definitions, width);
@@ -213,10 +221,7 @@ fn render_table_body(
     let items: Vec<ListItem<'_>> = prs
         .iter()
         .map(|pr| {
-            let cells: Vec<_> = columns
-                .iter()
-                .map(|column| column.cell(pr, ctx.viewer, ctx.seen))
-                .collect();
+            let cells: Vec<_> = columns.iter().map(|column| column.cell(pr, ctx)).collect();
             ListItem::new(table.row(&cells))
         })
         .collect();

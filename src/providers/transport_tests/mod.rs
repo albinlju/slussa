@@ -8,6 +8,7 @@
 )]
 
 mod bitbucket;
+mod github_one_pr;
 mod github_reads;
 mod github_writes;
 mod merge_status;

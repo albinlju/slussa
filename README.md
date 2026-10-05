@@ -90,13 +90,18 @@ connected provider does not support are hidden; actions blocked by the PR's
 state (for example merging with conflicts) stay visible and say why.
 
 The search takes words, and filters among them: `author:alice`,
-`review:approved` (or `changes`, `requested`, `none`) and `ci:failed` (or `pending`,
-`passing`), for example `/ author:alice ci:failed retry`. They narrow the list as you type.
+`review:approved` (or `changes`, `requested`, `none`), `ci:failed` (or `pending`,
+`passing`) and `merge:conflicts` (GitHub), for example `/ author:alice ci:failed retry`. They narrow the list as you type.
 
 A "Needs you" column, shown at 90 columns or wider, says why a PR is on top:
 changes requested, CI failed, review requested, or approved. Team review requests
 on GitHub are not counted yet. Press `s` to pick another order (newest, recently
 updated, oldest), or set `sort` in the config.
+
+A PR GitHub says cannot be merged for a conflict has `conflicts` in the `Status` column in place of its
+status, whoever wrote it. The column stands there when some row has one, and otherwise only in
+the All view, where it says `Open`, `Merged` and so on; in the other views the status is the one
+you chose with `f`. Bitbucket Data Center does not say, so it has no such mark.
 
 On GitHub an "AI review" column, also from 90 columns, says whether a bot account
 (CodeRabbit, for one) has reviewed the PR; it is not about who wrote it. `◆` means it reviewed the head the PR has now, `◈` an older

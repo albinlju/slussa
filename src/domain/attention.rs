@@ -4,12 +4,7 @@
 //! reviewers' states and the CI summary. Activity since the viewer last looked
 //! and mentions are not here yet; they need local state.
 
-use super::{
-    ci::CiSummary,
-    pr::{PrStatus, PullRequest},
-    review::ReviewerState,
-    user::Username,
-};
+use super::{ci::CiSummary, pr::PullRequest, review::ReviewerState, user::Username};
 
 /// Why a PR needs you. Variants are declared from most to least urgent, and
 /// the derived order is what the list sorts by.
@@ -39,7 +34,7 @@ impl Attention {
 /// The reason `pr` needs `viewer`, if any. Only open PRs ask for anything.
 /// Usernames compare without regard to case, as providers differ on that.
 pub fn attention(pr: &PullRequest, viewer: &Username) -> Option<Attention> {
-    if pr.status != PrStatus::Open {
+    if !pr.status.is_ready() {
         return None;
     }
     let is = |name: &str| viewer.is(name);
@@ -65,7 +60,11 @@ pub fn attention(pr: &PullRequest, viewer: &Username) -> Option<Attention> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::domain::{pr::PrId, review::Reviewer, user::User};
+    use crate::domain::{
+        pr::{PrId, PrStatus},
+        review::Reviewer,
+        user::User,
+    };
     use chrono::Utc;
 
     fn reviewer(name: &str, state: ReviewerState) -> Reviewer {
@@ -87,7 +86,7 @@ mod tests {
                 username: author.into(),
             },
             ci,
-            status: PrStatus::Open,
+            status: PrStatus::open(),
             reviewers,
             labels: Vec::new(),
             comment_count: 0,
@@ -176,7 +175,7 @@ mod tests {
         merged.status = PrStatus::Merged;
         assert_eq!(attention(&merged, &"me".into()), None);
         let mut draft = pr("me", CiSummary::Failed, Vec::new());
-        draft.status = PrStatus::Draft;
+        draft.status = PrStatus::draft();
         assert_eq!(attention(&draft, &"me".into()), None);
         // A deleted account has no name, and its PR is nobody's.
         assert_eq!(

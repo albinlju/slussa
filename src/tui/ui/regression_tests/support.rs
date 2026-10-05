@@ -54,7 +54,7 @@ pub(crate) fn fixture() -> AppState {
             username: "alice".into(),
         },
         ci: CiSummary::Success,
-        status: PrStatus::Open,
+        status: PrStatus::open(),
         reviewers: vec![],
         labels: vec!["rust".into()],
         comment_count: 0,
