@@ -90,3 +90,32 @@ async fn a_does_nothing_where_the_pr_can_be_merged_now() {
     );
     assert!(app.state.store.operations.is_empty());
 }
+
+#[tokio::test]
+async fn when_what_the_pr_waits_on_changes_under_an_armed_dialog_enter_does_not_merge_now() {
+    let mut app = app();
+    detail(&mut app, DetailTab::Overview);
+    blocked(&mut app);
+    press(&mut app, KeyCode::Char('m'));
+    press(&mut app, KeyCode::Char('a'));
+    // The read that was under way finishes with a PR that can be merged now.
+    if let Some(data) = app.state.store.cache.details.get_mut(&PrId(42)) {
+        data.mergeability = LoadState::Loaded(Mergeability::Mergeable);
+    }
+    press(&mut app, KeyCode::Enter);
+    assert!(app.state.store.operations.is_empty(), "nothing was sent");
+    assert!(
+        app.state
+            .ui
+            .detail
+            .merge_picker()
+            .is_some_and(|d| !d.when_ready),
+        "the dialog stays, and says merge now"
+    );
+
+    press(&mut app, KeyCode::Enter);
+    assert_eq!(
+        app.state.store.operations.get(&PrId(42)),
+        Some(&Operation::Merge)
+    );
+}

@@ -210,10 +210,15 @@ fn github_a_pr_set_to_merge_by_itself_says_how_and_what_it_waits_for() {
     );
     drop(gh);
 
-    // A conflict stops it whatever was asked for.
+    // A conflict is one more thing it waits for, and the request stays there to
+    // be turned off.
     let _second = FakeGh::new()
         .on("graphql", &answer("CONFLICTING", "DIRTY"))
         .install();
     let status = Provider::GitHub.fetch_mergeability(PrId(7)).unwrap();
-    assert!(matches!(status, Mergeability::Conflicts(_)), "{status:?}");
+    let Mergeability::AutoMerge { strategy, waiting } = status else {
+        panic!("{status:?}");
+    };
+    assert_eq!(strategy, MergeStrategy::Squash);
+    assert!(waiting.iter().any(|reason| reason.contains("conflicts")));
 }

@@ -69,8 +69,9 @@ pub fn fetch_mergeability(pr_number: PrId) -> Result<Mergeability, FetchError> {
             _ => None,
         });
     Ok(match (strategy, status) {
-        // A conflict stops it whatever was asked for.
-        (Some(strategy), Mergeability::Blocked(waiting)) => {
+        // A conflict is one more thing it waits for, and the request stays there
+        // to be turned off.
+        (Some(strategy), Mergeability::Blocked(waiting) | Mergeability::Conflicts(waiting)) => {
             Mergeability::AutoMerge { strategy, waiting }
         }
         (_, status) => status,

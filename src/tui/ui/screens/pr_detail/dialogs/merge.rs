@@ -36,8 +36,10 @@ impl AutoMergeOffer {
         }
         match mergeability {
             Some(Mergeability::AutoMerge { strategy, .. }) => Self::On(*strategy),
-            Some(Mergeability::Blocked(_) | Mergeability::Unknown) => Self::Available,
-            Some(Mergeability::Mergeable | Mergeability::Conflicts(_)) | None => Self::Unavailable,
+            Some(Mergeability::Blocked(_)) => Self::Available,
+            // Not known to wait on anything, so there may be nothing to wait for.
+            Some(Mergeability::Mergeable | Mergeability::Conflicts(_) | Mergeability::Unknown)
+            | None => Self::Unavailable,
         }
     }
 }
@@ -287,7 +289,11 @@ mod tests {
             AutoMergeOffer::of(&caps(false), Some(&waiting)),
             AutoMergeOffer::Unavailable
         );
-        for settled in [Mergeability::Mergeable, Mergeability::Conflicts(vec![])] {
+        for settled in [
+            Mergeability::Mergeable,
+            Mergeability::Conflicts(vec![]),
+            Mergeability::Unknown,
+        ] {
             assert_eq!(
                 AutoMergeOffer::of(&caps(true), Some(&settled)),
                 AutoMergeOffer::Unavailable

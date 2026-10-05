@@ -207,9 +207,17 @@ impl PrDetailScreen {
             MergeAction::Select => {
                 let dialog = self.merge_picker()?;
                 let strategy = dialog.selected(strategies);
-                let when_ready = dialog.when_ready
-                    && AutoMergeOffer::of(&ctx.store.capabilities, ctx.mergeability())
-                        == AutoMergeOffer::Available;
+                let offered = AutoMergeOffer::of(&ctx.store.capabilities, ctx.mergeability())
+                    == AutoMergeOffer::Available;
+                if dialog.when_ready && !offered {
+                    // What the PR waits on changed while the dialog was open: the
+                    // dialog says merge now again, and asks for another Enter.
+                    if let Some(Overlay::Merge(dialog)) = &mut self.overlay {
+                        dialog.when_ready = false;
+                    }
+                    return None;
+                }
+                let when_ready = dialog.when_ready;
                 self.overlay = None;
                 let strategy = strategy?;
                 Some(Self::command(
