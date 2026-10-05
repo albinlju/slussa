@@ -78,6 +78,7 @@ fn render(frame: &mut Frame<'_>, view: &MergeView<'_>, dialog: &MergeDialog, are
     let mut lines = vec![
         Line::from(Span::styled(title, Style::default().fg(theme.fg))),
         Line::styled(view.pr.label.clone(), normal),
+        Line::default(),
         Line::from(vec![
             Span::styled("Into: ", normal),
             Span::styled(
@@ -176,13 +177,14 @@ fn render(frame: &mut Frame<'_>, view: &MergeView<'_>, dialog: &MergeDialog, are
         ));
     }
     hints.push(("Esc", "cancel"));
-    crate::tui::ui::widgets::dialog::choices_with_hints(
+    crate::tui::ui::widgets::dialog::choices_with_room(
         frame,
         area,
         "Merge",
         lines,
         selected_line,
         &hints,
+        crate::tui::ui::widgets::dialog::Room::Roomy,
     );
 }
 
@@ -421,5 +423,65 @@ mod tests {
         );
         assert!(!armed.contains("Delete feature"), "{armed}");
         assert!(!armed.contains("d keep branch"), "{armed}");
+    }
+
+    #[test]
+    fn the_dialog_is_at_least_sixty_wide_and_sets_the_pr_apart_from_its_branches() {
+        let text = drawn(&[]);
+        let top = text
+            .lines()
+            .find(|line| line.contains("╭ Merge"))
+            .expect("the dialog's top edge");
+        // From the left corner to the right one: not the spaces after it.
+        let edge: String = top
+            .chars()
+            .skip_while(|c| *c != '╭')
+            .take_while(|c| *c != '╮')
+            .chain(['╮'])
+            .collect();
+        assert!(
+            edge.chars().count() >= 60,
+            "{} wide: {text}",
+            edge.chars().count()
+        );
+
+        let lines: Vec<&str> = text.lines().collect();
+        let label = lines
+            .iter()
+            .position(|line| line.contains("PR #7 · Fix it"))
+            .expect("the PR label");
+        assert!(
+            lines[label + 1]
+                .trim_matches(|c: char| c == '│' || c.is_whitespace())
+                .is_empty(),
+            "an empty line follows the label: {text}"
+        );
+        assert!(lines[label + 2].contains("Into: main"), "{text}");
+    }
+
+    #[test]
+    fn a_short_terminal_drops_the_blank_lines_before_it_hides_a_strategy() {
+        let view = MergeView {
+            auto: AutoMergeOffer::Unavailable,
+            strategies: &[MergeStrategy::Merge, MergeStrategy::Squash],
+            pr: PrSummary {
+                label: "PR #7 · Fix it".into(),
+                target_branch: "main",
+                source_branch: "feature",
+            },
+            blockers: &[],
+            branch: None,
+        };
+        let mut terminal = Terminal::new(TestBackend::new(90, 11)).unwrap();
+        terminal
+            .draw(|frame| MergeDialog::default().render(frame, frame.area(), &view))
+            .unwrap();
+        let buffer = terminal.backend().buffer();
+        let text = (0..11)
+            .map(|y| (0..90).map(|x| buffer[(x, y)].symbol()).collect::<String>())
+            .collect::<Vec<_>>()
+            .join("\n");
+        assert!(text.contains("Merge commit"), "{text}");
+        assert!(text.contains("Squash and merge"), "{text}");
     }
 }
