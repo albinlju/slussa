@@ -87,8 +87,12 @@ pub fn adopt_earlier(
     if !snapshot.is_empty() {
         return snapshot;
     }
-    let Ok((mut old, found)) = DraftStorage::open(root, earlier.to_owned()) else {
-        return snapshot;
+    let (mut old, found) = match DraftStorage::open(root, earlier.to_owned()) {
+        Ok(opened) => opened,
+        Err(error) => {
+            tracing::warn!("could not read earlier drafts: {error}");
+            return snapshot;
+        }
     };
     if found.is_empty() {
         return snapshot;
@@ -335,5 +339,18 @@ mod tests {
         let root = directory();
         let (mut now, nothing) = DraftStorage::open(&root, "upstream".into()).unwrap();
         assert!(adopt_earlier(&root, "fork", &mut now, nothing).is_empty());
+    }
+
+    #[test]
+    fn an_earlier_file_that_cannot_be_read_is_left_as_it_was() {
+        let root = directory();
+        let (earlier, _) = DraftStorage::open(&root, "fork".into()).unwrap();
+        let path = earlier.file.path().to_path_buf();
+        drop(earlier);
+        fs::write(&path, b"broken").unwrap();
+        let (mut now, nothing) = DraftStorage::open(&root, "upstream".into()).unwrap();
+
+        assert!(adopt_earlier(&root, "fork", &mut now, nothing).is_empty());
+        assert_eq!(fs::read(&path).unwrap(), b"broken");
     }
 }

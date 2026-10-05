@@ -64,8 +64,12 @@ pub fn adopt_earlier(root: &Path, earlier: &str, storage: &mut SeenStorage, seen
     if seen != Seen::new() {
         return seen;
     }
-    let Ok((mut old, found)) = SeenStorage::open(root, earlier.to_owned()) else {
-        return seen;
+    let (mut old, found) = match SeenStorage::open(root, earlier.to_owned()) {
+        Ok(opened) => opened,
+        Err(error) => {
+            tracing::warn!("could not read what was looked at earlier: {error}");
+            return seen;
+        }
     };
     if found == Seen::new() {
         return seen;
