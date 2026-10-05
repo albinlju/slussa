@@ -183,6 +183,8 @@ pub enum MergeAction {
     Move(i16),
     /// `a`: merge when ready instead of now, or turn that off.
     Auto,
+    /// `d`: delete the source branch with the merge, or not.
+    DeleteBranch,
     Select,
     Close,
 }

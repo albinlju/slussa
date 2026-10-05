@@ -258,6 +258,7 @@ impl PullRequest {
             labels: vec![],
             comment_count: 0,
             source_branch: String::new(),
+            source_repo: SourceRepo::Unknown,
             target_branch: String::new(),
             additions: 0,
             deletions: 0,
@@ -282,6 +283,7 @@ pub struct PullRequest {
     pub labels: Vec<String>,
     pub comment_count: u32,
     pub source_branch: String,
+    pub source_repo: SourceRepo,
     pub target_branch: String,
     pub additions: u32,
     pub deletions: u32,
@@ -291,9 +293,42 @@ pub struct PullRequest {
     pub ai_review: AiReview,
 }
 
+/// Whether the source branch lives in the repository the PR targets.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+pub enum SourceRepo {
+    /// The same repository: the branch is the author's own to delete.
+    Same,
+    /// A fork: a branch of that name in this repository is another branch.
+    Fork,
+    /// The provider does not say.
+    #[default]
+    Unknown,
+}
+
+/// A source branch that may be deleted once its PR is merged: in the same
+/// repository as the PR's target, and not the target itself. Only
+/// [`DeletableBranch::of`] makes one, so a delete cannot name a fork's branch
+/// or the branch merged into.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct DeletableBranch(String);
+
+impl DeletableBranch {
+    pub fn of(pr: &PullRequest) -> Option<Self> {
+        let named = !pr.source_branch.is_empty() && pr.source_branch != pr.target_branch;
+        match pr.source_repo {
+            SourceRepo::Same if named => Some(Self(pr.source_branch.clone())),
+            SourceRepo::Same | SourceRepo::Fork | SourceRepo::Unknown => None,
+        }
+    }
+
+    pub fn name(&self) -> &str {
+        &self.0
+    }
+}
+
 #[cfg(test)]
 mod tests {
-    use super::PrId;
+    use super::{DeletableBranch, PrId, PullRequest, SourceRepo};
 
     #[test]
     fn a_pr_number_is_digits_with_or_without_a_hash() {
@@ -311,5 +346,33 @@ mod tests {
         }
         // Too large for a number: not one.
         assert_eq!(PrId::parse("99999999999999999999999"), None);
+    }
+
+    fn pr_from(source: &str, repo: SourceRepo) -> PullRequest {
+        PullRequest {
+            source_branch: source.into(),
+            source_repo: repo,
+            target_branch: "main".into(),
+            ..PullRequest::for_test(1, chrono::Utc::now())
+        }
+    }
+
+    #[test]
+    fn only_a_branch_of_this_repository_other_than_the_target_may_be_deleted() {
+        let ok = DeletableBranch::of(&pr_from("feature/x", SourceRepo::Same));
+        assert_eq!(ok.as_ref().map(DeletableBranch::name), Some("feature/x"));
+        assert_eq!(
+            DeletableBranch::of(&pr_from("feature", SourceRepo::Fork)),
+            None
+        );
+        assert_eq!(
+            DeletableBranch::of(&pr_from("feature", SourceRepo::Unknown)),
+            None
+        );
+        assert_eq!(
+            DeletableBranch::of(&pr_from("main", SourceRepo::Same)),
+            None
+        );
+        assert_eq!(DeletableBranch::of(&pr_from("", SourceRepo::Same)), None);
     }
 }

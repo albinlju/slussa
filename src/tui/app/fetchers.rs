@@ -5,7 +5,7 @@ use crate::{
     domain::{
         comment::{CommentKey, ThreadHandle},
         commit::CommitOid,
-        pr::{MergeStrategy, PrGroup, PrId},
+        pr::{DeletableBranch, MergeStrategy, PrGroup, PrId},
         review::{CommentAnchor, CommentTarget, PendingComment, ReviewComment, ReviewVerdict},
     },
     providers::FetchError,
@@ -209,10 +209,17 @@ impl App {
         );
     }
 
-    pub(super) fn spawn_merge(&self, ticket: WriteTicket, strategy: MergeStrategy) {
+    pub(super) fn spawn_merge(
+        &self,
+        ticket: WriteTicket,
+        strategy: MergeStrategy,
+        delete: Option<DeletableBranch>,
+    ) {
         let provider = self.provider.clone();
         let pr_id = ticket.pr_id();
-        self.spawn_write(ticket, move || provider.merge(pr_id, strategy));
+        self.spawn_write(ticket, move || {
+            provider.merge(pr_id, strategy, delete.as_ref())
+        });
     }
 
     pub(super) fn spawn_auto_merge(&self, ticket: WriteTicket, strategy: Option<MergeStrategy>) {

@@ -3,7 +3,7 @@ use serde::Deserialize;
 use super::{Config, ms_to_utc};
 use crate::domain::{
     ci::CiSummary,
-    pr::{Conflicts, OpenPr, PrBatch, PrGroup, PrId, PrStatus, PullRequest},
+    pr::{Conflicts, OpenPr, PrBatch, PrGroup, PrId, PrStatus, PullRequest, SourceRepo},
     review::{Reviewer, ReviewerState},
     user::User,
 };
@@ -151,6 +151,7 @@ fn map_pr(bb: BbPr) -> PullRequest {
         labels: Vec::new(),
         comment_count: bb.properties.comment_count,
         source_branch: bb.from_ref.display_id,
+        source_repo: SourceRepo::Unknown,
         target_branch: bb.to_ref.display_id,
         additions: 0,
         deletions: 0,

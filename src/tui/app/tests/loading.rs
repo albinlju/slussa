@@ -139,7 +139,10 @@ fn read_only_capabilities_block_shortcuts_commands_and_optional_loads() {
             target: CommentTarget::Pr,
             text: "comment".into(),
         },
-        Command::Merge(MergeStrategy::Merge),
+        Command::Merge {
+            strategy: MergeStrategy::Merge,
+            delete: None,
+        },
         Command::AutoMerge(MergeStrategy::Merge),
         Command::CancelAutoMerge,
         Command::RerunFailedBuilds,

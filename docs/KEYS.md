@@ -36,7 +36,7 @@ The search also takes filters, written `key:value` among the words and combined 
 | `H` / `L` | pan a wide Description |
 | `a` | submit a review verdict |
 | `v` | start or finish a batched review; `V` discards it |
-| `m` | merge; the dialog lists what blocks it. On GitHub, while the PR waits on checks or reviews, `a` in the dialog makes `enter` merge it by itself when ready, and turns that off again |
+| `m` | merge; the dialog lists what blocks it. On GitHub, while the PR waits on checks or reviews, `a` in the dialog makes `enter` merge it by itself when ready, and turns that off again. On GitHub, `d` in the dialog marks the PR's branch for deletion once it is merged (only a branch of the same repository, never the one merged into); if the branch cannot be deleted the merge still stands and a notice says so |
 | `x` | close or decline the PR, or reopen a declined one |
 | `b` | in the Builds tab, run the failed builds again; offered when one has failed or was cancelled, and dimmed with the reason on a merged or declined PR (GitHub Actions) |
 | `c` | comment |

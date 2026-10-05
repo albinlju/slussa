@@ -17,6 +17,8 @@ pub enum Feature {
     ReopenPr,
     AutoMerge,
     RerunBuilds,
+    /// A merged PR's source branch can be deleted with the merge.
+    DeleteBranch,
     /// The list omits the description and labels; they are read per PR.
     PrInfo,
 }

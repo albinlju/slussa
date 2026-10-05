@@ -2,7 +2,7 @@ use crate::{
     domain::{
         capabilities::{Capabilities, Feature},
         comment::{CommentKey, NonBlank, ThreadHandle},
-        pr::{MergeStrategy, PrId},
+        pr::{DeletableBranch, MergeStrategy, PrId},
         review::{CommentTarget, PendingComment, ReviewVerdict},
     },
     tui::app::{
@@ -25,7 +25,11 @@ pub enum Command {
         verdict: ReviewVerdict,
         body: String,
     },
-    Merge(MergeStrategy),
+    /// Merge, and then delete the branch the PR came from when `delete` has one.
+    Merge {
+        strategy: MergeStrategy,
+        delete: Option<DeletableBranch>,
+    },
     /// Merge by itself with this strategy once the PR is ready.
     AutoMerge(MergeStrategy),
     CancelAutoMerge,
@@ -53,7 +57,10 @@ impl Command {
                 CommentTarget::Edit(_) => caps.supports(Feature::EditComments),
                 CommentTarget::Review { verdict } => caps.can_submit_verdict(*verdict, false),
             },
-            Self::Merge(strategy) => caps.merge_strategies.contains(strategy),
+            Self::Merge { strategy, delete } => {
+                caps.merge_strategies.contains(strategy)
+                    && (delete.is_none() || caps.supports(Feature::DeleteBranch))
+            }
             Self::AutoMerge(strategy) => {
                 caps.supports(Feature::AutoMerge) && caps.merge_strategies.contains(strategy)
             }
@@ -115,9 +122,9 @@ impl App {
             Command::SubmitReview { verdict, body } => {
                 self.submit_review_verdict(pr_id, verdict, body);
             }
-            Command::Merge(strategy) => {
+            Command::Merge { strategy, delete } => {
                 if let Some(ticket) = self.begin_write(pr_id, Operation::Merge) {
-                    self.spawn_merge(ticket, strategy);
+                    self.spawn_merge(ticket, strategy, delete);
                 }
             }
             Command::AutoMerge(strategy) => {

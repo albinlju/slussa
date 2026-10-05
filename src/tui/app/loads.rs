@@ -88,57 +88,69 @@ impl App {
         }
         match result {
             Ok(()) => {
-                self.state.store.notice = Some(Notice::info(format!(
-                    "PR #{pr_id} · {}",
-                    operation.done_label()
-                )));
-                self.state.store.uncertain_submissions.remove(&pr_id);
-                self.state.store.errors.remove(&pr_id);
-                // Show the new status at once; the refetch below confirms it.
-                // Without this the PR would vanish from the list until the
-                // group it moved to is read.
-                if let Some(status) = operation.moves_pr_to()
-                    && let LoadState::Loaded(prs) = &mut self.state.store.cache.prs
-                    && let Some(pr) = prs.iter_mut().find(|pr| pr.id == pr_id)
-                {
-                    pr.status = status;
-                }
-                if operation == Operation::RerunBuilds {
-                    self.reload_builds(pr_id);
-                }
-                if operation == Operation::Review {
-                    self.state.store.reviews.remove(&pr_id);
-                }
-                self.reload_after_mutation(pr_id);
+                let notice = Notice::info(format!("PR #{pr_id} · {}", operation.done_label()));
+                self.write_done(pr_id, operation, notice);
             }
-            Err(error) => {
-                // A write that never left, or that the server refused, changed
-                // nothing; any other failure leaves the outcome open.
-                if error.may_have_reached_server() {
-                    self.state.store.uncertain_submissions.insert(pr_id);
-                    // Some of the runs may have started.
-                    if operation == Operation::RerunBuilds {
-                        self.reload_builds(pr_id);
-                    }
-                }
-                self.state.store.errors.insert(pr_id, error.user_message());
-                if let WriteError::PartialReview {
-                    posted_comments,
-                    submitted_summary,
-                    ..
-                } = error
-                {
-                    // What arrived is not sent again, and is read back.
-                    if let Some(review) = self.state.store.reviews.get_mut(&pr_id) {
-                        let count = posted_comments.min(review.comments.len());
-                        review.comments.drain(..count);
-                        if submitted_summary.is_some() {
-                            review.submitted_summary = submitted_summary;
-                        }
-                    }
-                    self.reload_after_mutation(pr_id);
+            // A merge whose branch stayed is done, and says what did not happen.
+            Err(WriteError::BranchDeleteFailed(error)) => {
+                let notice = Notice::error(format!(
+                    "PR #{pr_id} · merged, but deleting the branch failed: {}",
+                    error.user_message()
+                ));
+                self.write_done(pr_id, operation, notice);
+            }
+            Err(error) => self.write_failed(pr_id, operation, error),
+        }
+    }
+
+    fn write_done(&mut self, pr_id: PrId, operation: Operation, notice: Notice) {
+        self.state.store.notice = Some(notice);
+        self.state.store.uncertain_submissions.remove(&pr_id);
+        self.state.store.errors.remove(&pr_id);
+        // Show the new status at once; the refetch below confirms it.
+        // Without this the PR would vanish from the list until the
+        // group it moved to is read.
+        if let Some(status) = operation.moves_pr_to()
+            && let LoadState::Loaded(prs) = &mut self.state.store.cache.prs
+            && let Some(pr) = prs.iter_mut().find(|pr| pr.id == pr_id)
+        {
+            pr.status = status;
+        }
+        if operation == Operation::RerunBuilds {
+            self.reload_builds(pr_id);
+        }
+        if operation == Operation::Review {
+            self.state.store.reviews.remove(&pr_id);
+        }
+        self.reload_after_mutation(pr_id);
+    }
+
+    fn write_failed(&mut self, pr_id: PrId, operation: Operation, error: WriteError) {
+        // A write that never left, or that the server refused, changed
+        // nothing; any other failure leaves the outcome open.
+        if error.may_have_reached_server() {
+            self.state.store.uncertain_submissions.insert(pr_id);
+            // Some of the runs may have started.
+            if operation == Operation::RerunBuilds {
+                self.reload_builds(pr_id);
+            }
+        }
+        self.state.store.errors.insert(pr_id, error.user_message());
+        if let WriteError::PartialReview {
+            posted_comments,
+            submitted_summary,
+            ..
+        } = error
+        {
+            // What arrived is not sent again, and is read back.
+            if let Some(review) = self.state.store.reviews.get_mut(&pr_id) {
+                let count = posted_comments.min(review.comments.len());
+                review.comments.drain(..count);
+                if submitted_summary.is_some() {
+                    review.submitted_summary = submitted_summary;
                 }
             }
+            self.reload_after_mutation(pr_id);
         }
     }
 

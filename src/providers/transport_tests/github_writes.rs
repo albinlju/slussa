@@ -1,18 +1,104 @@
 //! GitHub writes through a fake `gh`: merge, close, reopen, comment, review.
 
 use super::support::*;
+use crate::domain::pr::{DeletableBranch, PullRequest, SourceRepo};
 
 #[test]
 fn github_merge_sends_the_chosen_strategy() {
     let installed = FakeGh::new().on("api", "{}").install();
     Provider::GitHub
-        .merge(PrId(7), MergeStrategy::Squash)
+        .merge(PrId(7), MergeStrategy::Squash, None)
         .unwrap();
 
     assert_eq!(
         installed.calls(),
         vec!["api --method PUT repos/{owner}/{repo}/pulls/7/merge -f merge_method=squash"]
     );
+}
+
+fn branch(name: &str) -> DeletableBranch {
+    let pr = PullRequest {
+        source_branch: name.into(),
+        source_repo: SourceRepo::Same,
+        target_branch: "main".into(),
+        ..PullRequest::for_test(7, chrono::Utc::now())
+    };
+    DeletableBranch::of(&pr).expect("a branch of this repository")
+}
+
+#[test]
+fn github_merge_then_deletes_the_branch_with_its_name_escaped() {
+    let installed = FakeGh::new().on("api", "{}").install();
+    Provider::GitHub
+        .merge(
+            PrId(7),
+            MergeStrategy::Squash,
+            Some(&branch("feature/fix #1?")),
+        )
+        .unwrap();
+
+    assert_eq!(
+        installed.calls(),
+        vec![
+            "api --method PUT repos/{owner}/{repo}/pulls/7/merge -f merge_method=squash",
+            "api --method DELETE repos/{owner}/{repo}/git/refs/heads/feature/fix%20%231%3F",
+        ]
+    );
+}
+
+#[test]
+fn github_a_branch_that_cannot_be_deleted_leaves_the_merge_done() {
+    let installed = FakeGh::new()
+        .fail("git/refs", 1, "Resource not accessible by integration")
+        .on("api", "{}")
+        .install();
+    let error = Provider::GitHub
+        .merge(PrId(7), MergeStrategy::Merge, Some(&branch("feature")))
+        .unwrap_err();
+
+    assert!(
+        matches!(error, MergeError::BranchDeleteFailed(_)),
+        "{error:?}"
+    );
+    assert_eq!(installed.calls().len(), 2, "the merge was sent first");
+}
+
+#[test]
+fn github_a_branch_that_is_already_gone_is_deleted_as_far_as_the_merge_goes() {
+    // The repository deletes head branches itself, and was first.
+    let installed = FakeGh::new()
+        .fail("git/refs", 1, "gh: Reference does not exist (HTTP 422)")
+        .on("api", "{}")
+        .install();
+    Provider::GitHub
+        .merge(PrId(7), MergeStrategy::Merge, Some(&branch("feature")))
+        .unwrap();
+    assert_eq!(installed.calls().len(), 2);
+}
+
+#[test]
+fn github_a_merge_that_fails_does_not_delete_the_branch() {
+    let installed = FakeGh::new()
+        .fail("pulls/7/merge", 1, "Not mergeable")
+        .install();
+    let error = Provider::GitHub
+        .merge(PrId(7), MergeStrategy::Merge, Some(&branch("feature")))
+        .unwrap_err();
+
+    assert!(matches!(error, MergeError::Failed(_)), "{error:?}");
+    assert_eq!(installed.calls().len(), 1, "{:?}", installed.calls());
+}
+
+#[test]
+fn bitbucket_does_not_delete_the_branch_with_the_merge() {
+    let server = MockHttp::start(vec![]);
+    let error = bitbucket(&server)
+        .merge(PrId(7), MergeStrategy::Merge, Some(&branch("feature")))
+        .unwrap_err();
+    assert!(matches!(
+        error,
+        MergeError::Failed(FetchError::Unsupported(_))
+    ));
 }
 
 #[test]

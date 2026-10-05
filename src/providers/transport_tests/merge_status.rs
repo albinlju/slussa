@@ -175,9 +175,12 @@ fn bitbucket_refused_merge_reports_the_vetoes() {
         ),
     ]);
     let error = bitbucket(&server)
-        .merge(PrId(9), MergeStrategy::Merge)
+        .merge(PrId(9), MergeStrategy::Merge, None)
         .unwrap_err();
 
+    let MergeError::Failed(error) = error else {
+        panic!("nothing was merged: {error:?}");
+    };
     assert_eq!(
         error.user_message(),
         "Merging is vetoed: Not all required builds are successful yet; At least 1 approval is required"

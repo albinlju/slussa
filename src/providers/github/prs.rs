@@ -3,7 +3,8 @@ use serde::Deserialize;
 
 use crate::domain::ci::CiSummary;
 use crate::domain::pr::{
-    AiReview, Conflicts, LinkedIssue, OpenPr, PrBatch, PrGroup, PrId, PrInfo, PrStatus, PullRequest,
+    AiReview, Conflicts, LinkedIssue, OpenPr, PrBatch, PrGroup, PrId, PrInfo, PrStatus,
+    PullRequest, SourceRepo,
 };
 use crate::domain::review::{Reviewer, ReviewerState};
 use crate::domain::user::User;
@@ -94,6 +95,8 @@ struct GhPr {
     #[serde(default)]
     is_draft: bool,
     head_ref_name: String,
+    #[serde(default)]
+    is_cross_repository: Option<bool>,
     base_ref_name: String,
     created_at: DateTime<Utc>,
     updated_at: DateTime<Utc>,
@@ -129,7 +132,7 @@ struct GhPr {
 const PR_FIELDS: &str = r"
     id url title number
     author { login }
-    state isDraft headRefName baseRefName createdAt updatedAt
+    state isDraft headRefName isCrossRepository baseRefName createdAt updatedAt
     additions deletions changedFiles
     comments { totalCount }
     headRefOid
@@ -301,6 +304,11 @@ fn map_pr(gh: GhPr) -> PullRequest {
         labels: Vec::new(),
         comment_count,
         source_branch: gh.head_ref_name,
+        source_repo: match gh.is_cross_repository {
+            Some(false) => SourceRepo::Same,
+            Some(true) => SourceRepo::Fork,
+            None => SourceRepo::Unknown,
+        },
         target_branch: gh.base_ref_name,
         additions: gh.additions,
         deletions: gh.deletions,

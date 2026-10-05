@@ -7,6 +7,7 @@ mod commits;
 mod diff;
 mod events;
 mod graphql;
+mod merge;
 mod pagination;
 mod prs;
 mod review_threads;
@@ -18,6 +19,7 @@ pub use comments::{
 };
 pub use commits::fetch_commits;
 pub use diff::{fetch_commit_diff, fetch_diff};
+pub use merge::{merge, set_auto_merge};
 pub use prs::{fetch_info, fetch_pr, fetch_prs};
 
 use chrono::{DateTime, Utc};
@@ -101,43 +103,6 @@ fn merge_status(mergeable: &str, state: &str, review_decision: Option<&str>) -> 
         ("MERGEABLE", "CLEAN" | "HAS_HOOKS" | "UNSTABLE") => Mergeability::Mergeable,
         _ => Mergeability::Unknown,
     }
-}
-
-pub fn merge(pr_number: PrId, strategy: MergeStrategy) -> Result<(), FetchError> {
-    let method = match strategy {
-        MergeStrategy::Merge => "merge",
-        MergeStrategy::Squash => "squash",
-        MergeStrategy::Rebase => "rebase",
-    };
-    cli::run_gh(&[
-        "api",
-        "--method",
-        "PUT",
-        &format!("repos/{{owner}}/{{repo}}/pulls/{pr_number}/merge"),
-        "-f",
-        &format!("merge_method={method}"),
-    ])?;
-    Ok(())
-}
-
-/// Merge the PR by itself with `strategy` once its checks and reviews allow it,
-/// or stop it from doing so (`None`). GitHub refuses when the repository does
-/// not allow auto-merge; that message reaches the user as it is.
-pub fn set_auto_merge(pr_number: PrId, strategy: Option<MergeStrategy>) -> Result<(), FetchError> {
-    let pr = pr_number.to_string();
-    let flag = match strategy {
-        Some(MergeStrategy::Merge) => "--merge",
-        Some(MergeStrategy::Squash) => "--squash",
-        Some(MergeStrategy::Rebase) => "--rebase",
-        None => "--disable-auto",
-    };
-    let args: &[&str] = if strategy.is_some() {
-        &["pr", "merge", &pr, "--auto", flag]
-    } else {
-        &["pr", "merge", &pr, flag]
-    };
-    cli::run_gh(args)?;
-    Ok(())
 }
 
 /// Reopen a closed PR. GitHub refuses when the head branch is gone or the PR
