@@ -104,6 +104,17 @@ pub struct PrInfo {
     pub issues: Vec<LinkedIssue>,
 }
 
+impl PrInfo {
+    /// The issues that can be opened: those the provider gave an address for,
+    /// with it.
+    pub fn issues_to_open(&self) -> Vec<(&LinkedIssue, &str)> {
+        self.issues
+            .iter()
+            .filter_map(|issue| Some((issue, issue.url.as_deref()?)))
+            .collect()
+    }
+}
+
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct LinkedIssue {
     pub number: u64,

@@ -5,7 +5,7 @@ use crate::{
         comment::{Comment, CommentId, CommentKey, CommentKind, ThreadHandle},
         commit::CommitOid,
         diff::FileDiff,
-        pr::{DeletableBranch, LinkedIssue, Mergeability, PrId, PrStatus, PullRequest},
+        pr::{DeletableBranch, LinkedIssue, Mergeability, PrId, PrInfo, PrStatus, PullRequest},
         review::{CommentTarget, Rerequest, ReviewVerdict},
     },
     tui::{
@@ -39,6 +39,11 @@ impl<'a> DetailContext<'a> {
         self.data.and_then(|data| data.mergeability.loaded())
     }
 
+    /// The issues `i` can open, once they are read.
+    pub fn issues_to_open(&self) -> Vec<(&'a LinkedIssue, &'a str)> {
+        issues_to_open(self.data)
+    }
+
     /// The branch a merge may delete: only where the provider does it and the
     /// PR's branch is its own to delete.
     pub fn deletable_branch(&self) -> Option<DeletableBranch> {
@@ -68,6 +73,12 @@ impl<'a> DetailContext<'a> {
             refreshing: store.refreshing(Screen::Detail { pr_id, tab }),
         })
     }
+}
+
+/// The issues the PR closes that have an address, once they are read.
+pub fn issues_to_open(data: Option<&PrData>) -> Vec<(&LinkedIssue, &str)> {
+    data.and_then(|data| data.info.loaded())
+        .map_or_else(Vec::new, PrInfo::issues_to_open)
 }
 
 pub fn diff_files<'a>(data: Option<&'a PrData>, commit: Option<&CommitOid>) -> &'a [FileDiff] {
@@ -156,12 +167,9 @@ impl<'a> DetailView<'a> {
             })
     }
 
-    /// The issue `i` opens: the first the PR closes that has an address, and
-    /// how many more there are.
-    pub fn linked_issue(&self) -> Option<(&'a LinkedIssue, usize)> {
-        let issues = &self.data?.info.loaded()?.issues;
-        let first = issues.iter().position(|issue| issue.url.is_some())?;
-        Some((issues.get(first)?, issues.len().saturating_sub(1)))
+    /// The issues `i` can open, once they are read.
+    pub fn issues_to_open(&self) -> Vec<(&'a LinkedIssue, &'a str)> {
+        issues_to_open(self.data)
     }
 
     /// Those who asked for changes, when there are some to ask again.
@@ -386,6 +394,7 @@ impl DetailView<'_> {
                 PrAction::ResolveThread => caps.supports(F::ResolveThreads),
                 PrAction::RerunBuilds => caps.supports(F::RerunBuilds),
                 PrAction::RerequestReview => caps.supports(F::RerequestReview),
+                PrAction::OpenIssues => caps.supports(F::PrInfo),
             },
             A::Review(ReviewAction::Select) => caps.reviews(),
             A::Merge(MergeAction::Select) => !caps.merge_strategies.is_empty(),
@@ -397,6 +406,7 @@ impl DetailView<'_> {
             | A::Nav(
                 NavAction::Back | NavAction::NextTab | NavAction::PrevTab | NavAction::ToggleHelp,
             )
+            | A::Issues(_)
             | A::Description(_)
             | A::BuildsScroll(_)
             | A::Timeline(_)

@@ -224,7 +224,8 @@ impl Ui {
                         Some(
                             pr_detail::Overlay::Confirm(_)
                             | pr_detail::Overlay::Review(_)
-                            | pr_detail::Overlay::Merge(_),
+                            | pr_detail::Overlay::Merge(_)
+                            | pr_detail::Overlay::Issues(_),
                         )
                         | None => None,
                     },

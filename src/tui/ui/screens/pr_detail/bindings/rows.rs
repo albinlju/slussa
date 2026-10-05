@@ -2,10 +2,7 @@
 
 use super::{Binding, Doc, Label, Mods, Needs, Offer, Place, offered};
 use crate::{
-    domain::{
-        capabilities::Feature,
-        pr::{LinkedIssue, PrStatus},
-    },
+    domain::{capabilities::Feature, pr::PrStatus},
     tui::{
         app::effect::{Effect, LinkAction},
         ui::{
@@ -354,9 +351,9 @@ pub(in crate::tui::ui::screens::pr_detail) static RERUN_BUILDS: Binding = Bindin
     },
 };
 
-/// `i` in the Overview opens the issue the PR closes in the browser: the first,
-/// when there are several. It is what the PR was asked to do, so reading it
-/// is the intent check.
+/// `i` in the Overview opens the issue the PR closes in the browser, or with
+/// several asks which. It is what the PR was asked to do, so reading it is the
+/// intent check.
 pub(in crate::tui::ui::screens::pr_detail) static OPEN_ISSUE: Binding = Binding {
     key: 'i',
     mods: Mods::Plain,
@@ -367,24 +364,18 @@ pub(in crate::tui::ui::screens::pr_detail) static OPEN_ISSUE: Binding = Binding 
     }),
     // The issues are read with the description and labels, where a provider does.
     needs: Needs::Feature(Feature::PrInfo),
-    label: Label::Of(|view| match view.linked_issue() {
-        Some((issue, 0)) => format!("i: open #{}", issue.number),
-        Some((issue, more)) => format!("i: open #{} (+{more})", issue.number),
-        None => "i: open issue".to_owned(),
+    label: Label::Of(|view| match view.issues_to_open().as_slice() {
+        [] => "i: open issue".to_owned(),
+        [(issue, _)] => format!("i: open #{}", issue.number),
+        several => format!("i: open issue ({})", several.len()),
     }),
-    offer: |view| match view.linked_issue() {
-        Some((
-            LinkedIssue {
-                number,
-                url: Some(url),
-                ..
-            },
-            _,
-        )) => Offer::Offered(Action::Effect(Effect::IssueLink {
-            number: *number,
-            url: url.clone(),
+    offer: |view| match view.issues_to_open().as_slice() {
+        [] => Offer::Hidden,
+        [(issue, url)] => Offer::Offered(Action::Effect(Effect::IssueLink {
+            number: issue.number,
+            url: (*url).to_owned(),
         })),
-        Some((LinkedIssue { url: None, .. }, _)) | None => Offer::Hidden,
+        [_, _, ..] => offered(view, PrAction::OpenIssues),
     },
 };
 

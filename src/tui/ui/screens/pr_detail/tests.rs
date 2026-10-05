@@ -398,10 +398,8 @@ fn i_opens_the_issue_the_pr_closes_and_the_footer_names_it() {
     assert!(one.contains("i: open #12"), "{one}");
     assert!(!one.contains("(+"), "{one}");
 
-    let state = with_issues(vec![
-        issue(12, Some("https://example.com/o/r/issues/12")),
-        issue(31, Some("https://example.com/o/other/issues/31")),
-    ]);
+    // With one issue the key opens it.
+    let state = with_issues(vec![issue(12, Some("https://example.com/o/r/issues/12"))]);
     let key = KeyEvent::new(KeyCode::Char('i'), KeyModifiers::NONE);
     assert!(
         matches!(
@@ -409,13 +407,27 @@ fn i_opens_the_issue_the_pr_closes_and_the_footer_names_it() {
             Some(Action::Effect(crate::tui::app::effect::Effect::IssueLink { number: 12, ref url }))
                 if url == "https://example.com/o/r/issues/12"
         ),
-        "the first one is opened"
+        "the only one is opened"
     );
-    let several = footer_of(&mut with_issues(vec![
+}
+
+#[test]
+fn i_with_several_issues_asks_which_and_the_footer_says_how_many() {
+    let several = vec![
         issue(12, Some("https://example.com/o/r/issues/12")),
         issue(31, Some("https://example.com/o/other/issues/31")),
-    ]));
-    assert!(several.contains("i: open #12 (+1)"), "{several}");
+        issue(5, None),
+    ];
+    let footer = footer_of(&mut with_issues(several.clone()));
+    assert!(
+        footer.contains("i: open issue (2)"),
+        "an issue without an address is not counted: {footer}"
+    );
+    let key = KeyEvent::new(KeyCode::Char('i'), KeyModifiers::NONE);
+    assert!(matches!(
+        key_to_action(&with_issues(several), key),
+        Some(Action::Detail(DetailAction::Pr(PrAction::OpenIssues)))
+    ));
 }
 
 #[test]

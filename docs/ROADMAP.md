@@ -165,9 +165,9 @@ and to commits.
   review rises.
 - [ ] **Linked issues / cross-references** — the issues a PR closes are in the
   Overview's side panel under *Closes* (GitHub; read with the description and
-  labels, so the list query is unchanged). `i` in the Overview opens the first
-  one in the browser. Missing: issues it only mentions, opening the others
-  when there are several, and Bitbucket Data Center, which has no such field.
+  labels, so the list query is unchanged). `i` in the Overview opens it in the
+  browser, or asks which when there are several. Missing: issues it only
+  mentions, and Bitbucket Data Center, which has no such field.
   The linked issue is what was asked for, and checking the PR against it is the intent
   check the positioning promises.
 - [ ] **Finding state per thread** — an AI thread is *open*, *fixed* (resolved

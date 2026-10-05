@@ -17,6 +17,7 @@ use crate::{
                 DetailContext, DetailView, Overlay, PrDetailScreen,
                 dialogs::{
                     PrSummary,
+                    issues::IssuesView,
                     merge::{AutoMergeOffer, MergeView},
                 },
                 tabs::{
@@ -278,6 +279,18 @@ pub(super) fn render(
         ),
         Some(Overlay::Confirm(dialog)) => dialog.render(frame, area, &PrSummary::of(pr)),
         Some(Overlay::Review(dialog)) => dialog.render(frame, area, &review_ctx),
+        Some(Overlay::Issues(dialog)) => {
+            let issues = ctx.issues_to_open();
+            dialog.render(
+                frame,
+                area,
+                &IssuesView {
+                    pr_label: format!("PR #{} closes:", pr.id),
+                    pr_url: pr.url.as_deref(),
+                    issues: &issues,
+                },
+            );
+        }
         Some(Overlay::Merge(dialog)) => {
             // What stands in the way of a merge, as far as the provider said.
             let blockers = pr_data

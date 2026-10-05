@@ -40,7 +40,7 @@ The search also takes filters, written `key:value` among the words and combined 
 | `x` | close or decline the PR, or reopen a declined one |
 | `b` | in the Builds tab, run the failed builds again; offered when one has failed or was cancelled, and dimmed with the reason on a merged or declined PR (GitHub Actions) |
 | `p` | ask those who asked for changes to review again (GitHub); named in the footer (`p: ask alice again`), hidden when nobody asked for changes, dimmed with the reason on a merged or declined PR |
-| `i` | in the Overview, open the issue the PR closes in the browser (GitHub); the footer names it (`i: open #12`, with the number of others after it when it closes more; the first is opened) and shows nothing when there is none |
+| `i` | in the Overview, open the issue the PR closes in the browser (GitHub); the footer names it (`i: open #12`) and shows nothing when there is none. When the PR closes several, `i` asks which: `j`/`k` and `enter` in the picker, which names the repository of an issue in another one |
 | `c` | comment |
 | `r` | reply |
 | `e` / `d` | edit / delete your own comment (`d` also removes a queued review comment) |

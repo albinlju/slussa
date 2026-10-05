@@ -77,6 +77,7 @@ pub enum DetailAction {
     Confirm(ConfirmAction),
     Review(ReviewAction),
     Merge(MergeAction),
+    Issues(IssueAction),
     Editor(EditorAction),
     Pr(PrAction),
 }
@@ -90,7 +91,8 @@ impl DetailAction {
             | Self::Description(_)
             | Self::BuildsScroll(_)
             | Self::Timeline(_)
-            | Self::Error(_) => true,
+            | Self::Error(_)
+            | Self::Issues(_) => true,
             Self::Confirm(_) | Self::Review(_) | Self::Merge(_) | Self::Editor(_) | Self::Pr(_) => {
                 false
             }
@@ -121,6 +123,7 @@ detail_action_from! {
     ConfirmAction => Confirm,
     ReviewAction => Review,
     MergeAction => Merge,
+    IssueAction => Issues,
     EditorAction => Editor,
     PrAction => Pr,
 }
@@ -190,6 +193,14 @@ pub enum MergeAction {
 }
 
 #[derive(Debug, Clone, Copy)]
+pub enum IssueAction {
+    Move(i16),
+    /// Open the issue the cursor is on.
+    Select,
+    Close,
+}
+
+#[derive(Debug, Clone, Copy)]
 pub enum EditorAction {
     Type(char),
     Backspace,
@@ -242,6 +253,8 @@ pub enum PrAction {
     ResolveThread,
     RerunBuilds,
     RerequestReview,
+    /// `i` with several issues to open: choose one.
+    OpenIssues,
 }
 
 #[derive(Debug, Clone, Copy)]

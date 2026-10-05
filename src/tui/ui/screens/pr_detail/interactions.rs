@@ -2,16 +2,18 @@ use super::{
     DetailContext, DetailView, Overlay, PrDetailScreen,
     dialogs::{
         confirm::{ConfirmDialog, ConfirmKind},
+        issues::IssueDialog,
         merge::{AutoMergeOffer, MergeDialog},
         review::{ReviewContext, ReviewDialog},
     },
+    view::issues_to_open,
 };
 use crate::{
     domain::{pr::PrId, review::CommentTarget},
     tui::{
         app::{commands::Command, effect::Effect},
         ui::{
-            action::{ConfirmAction, MergeAction, PrAction, ReviewAction},
+            action::{ConfirmAction, IssueAction, MergeAction, PrAction, ReviewAction},
             component::Component,
             components::comment_editor::{CommentDraft, CommentEditor},
         },
@@ -171,6 +173,34 @@ impl PrDetailScreen {
         }
     }
 
+    pub(super) fn issue_action(
+        &mut self,
+        action: IssueAction,
+        ctx: &DetailContext<'_>,
+    ) -> Option<Effect> {
+        let issues = issues_to_open(ctx.data);
+        match action {
+            IssueAction::Move(_) => {
+                if let Some(Overlay::Issues(dialog)) = &mut self.overlay {
+                    dialog.update(action, &issues.len());
+                }
+                None
+            }
+            IssueAction::Close => {
+                self.close(|overlay| matches!(overlay, Overlay::Issues(_)));
+                None
+            }
+            IssueAction::Select => {
+                let (issue, url) = *self.issue_picker()?.selected(&issues)?;
+                self.overlay = None;
+                Some(Effect::IssueLink {
+                    number: issue.number,
+                    url: url.to_owned(),
+                })
+            }
+        }
+    }
+
     pub(super) fn merge_action(
         &mut self,
         action: MergeAction,
@@ -294,6 +324,14 @@ impl PrDetailScreen {
             PrAction::OpenMergePicker => {
                 if !ctx.store.capabilities.merge_strategies.is_empty() {
                     self.overlay = Some(Overlay::Merge(MergeDialog::default()));
+                }
+                return None;
+            }
+            PrAction::OpenIssues => {
+                // With one issue the key opens it, and with none there is
+                // nothing to choose.
+                if issues_to_open(ctx.data).len() > 1 {
+                    self.overlay = Some(Overlay::Issues(IssueDialog::default()));
                 }
                 return None;
             }
