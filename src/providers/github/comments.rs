@@ -131,6 +131,18 @@ pub(super) fn head_sha(pr_number: PrId) -> Result<String, FetchError> {
     Ok(String::from_utf8_lossy(&out).trim().to_string())
 }
 
+/// Fails unless the PR's branch is still at `head`, the one that was read.
+pub(super) fn ensure_head(
+    pr_number: PrId,
+    head: &crate::domain::review::ReviewedHead,
+) -> Result<(), FetchError> {
+    if head_sha(pr_number)? == head.as_str() {
+        Ok(())
+    } else {
+        Err(super::merge::moved_since_read())
+    }
+}
+
 pub(super) fn diff_revision(
     pr_number: PrId,
 ) -> Result<crate::domain::diff::DiffRevision, FetchError> {

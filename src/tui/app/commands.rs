@@ -2,8 +2,8 @@ use crate::{
     domain::{
         capabilities::{Capabilities, Feature},
         comment::{CommentKey, NonBlank, ThreadHandle},
-        pr::{DeletableBranch, MergeStrategy, PrId},
-        review::{CommentTarget, PendingComment, Rerequest, ReviewVerdict},
+        pr::{AutoMerge, DeletableBranch, MergeStrategy, PrId},
+        review::{CommentTarget, PendingComment, Rerequest, ReviewVerdict, ReviewedHead},
     },
     tui::app::{
         App,
@@ -21,18 +21,21 @@ pub enum Command {
         target: CommentTarget,
         text: NonBlank,
     },
+    /// A verdict with its summary, on the head the reviewer read.
     SubmitReview {
         verdict: ReviewVerdict,
         body: String,
+        head: ReviewedHead,
     },
-    /// Merge, and then delete the branch the PR came from when `delete` has one.
+    /// Merge if the branch is still at `head`, the commit the reviewer read, and
+    /// then delete the branch the PR came from when `delete` has one.
     Merge {
         strategy: MergeStrategy,
         delete: Option<DeletableBranch>,
+        head: ReviewedHead,
     },
-    /// Merge by itself with this strategy once the PR is ready.
-    AutoMerge(MergeStrategy),
-    CancelAutoMerge,
+    /// Merge by itself once the PR is ready, or stop doing so.
+    AutoMerge(AutoMerge),
     RerunFailedBuilds,
     /// Ask those who asked for changes to look again.
     RerequestReview(Rerequest),
@@ -59,14 +62,16 @@ impl Command {
                 CommentTarget::Edit(_) => caps.supports(Feature::EditComments),
                 CommentTarget::Review { verdict } => caps.can_submit_verdict(*verdict, false),
             },
-            Self::Merge { strategy, delete } => {
+            Self::Merge {
+                strategy, delete, ..
+            } => {
                 caps.merge_strategies.contains(strategy)
                     && (delete.is_none() || caps.supports(Feature::DeleteBranch))
             }
-            Self::AutoMerge(strategy) => {
+            Self::AutoMerge(AutoMerge::On { strategy, .. }) => {
                 caps.supports(Feature::AutoMerge) && caps.merge_strategies.contains(strategy)
             }
-            Self::CancelAutoMerge => caps.supports(Feature::AutoMerge),
+            Self::AutoMerge(AutoMerge::Off) => caps.supports(Feature::AutoMerge),
             Self::RerunFailedBuilds => caps.supports(Feature::RerunBuilds),
             Self::RerequestReview(_) => caps.supports(Feature::RerequestReview),
             Self::Decline => caps.supports(Feature::ClosePr),
@@ -116,28 +121,40 @@ impl App {
                     self.state.ui.detail.submission_finished(pr_id, true);
                     return;
                 }
-                if let CommentTarget::Review { verdict } = target {
-                    self.submit_review_verdict(pr_id, verdict, text);
+                if let CommentTarget::Review { .. } = target {
+                    // A verdict goes by `SubmitReview`, which names the head it
+                    // was read at; the editor's submit turns into that.
+                    self.state.store.errors.insert(
+                        pr_id,
+                        "A review verdict is sent from the review dialog.".into(),
+                    );
                 } else if let Some(ticket) = self.begin_write(pr_id, Operation::Comment) {
                     self.spawn_comment(ticket, target, text);
                 }
             }
-            Command::SubmitReview { verdict, body } => {
-                self.submit_review_verdict(pr_id, verdict, body);
+            Command::SubmitReview {
+                verdict,
+                body,
+                head,
+            } => {
+                self.submit_review_verdict(pr_id, verdict, body, head);
             }
-            Command::Merge { strategy, delete } => {
+            Command::Merge {
+                strategy,
+                delete,
+                head,
+            } => {
                 if let Some(ticket) = self.begin_write(pr_id, Operation::Merge) {
-                    self.spawn_merge(ticket, strategy, delete);
+                    self.spawn_merge(ticket, strategy, delete, head);
                 }
             }
-            Command::AutoMerge(strategy) => {
-                if let Some(ticket) = self.begin_write(pr_id, Operation::AutoMerge) {
-                    self.spawn_auto_merge(ticket, Some(strategy));
-                }
-            }
-            Command::CancelAutoMerge => {
-                if let Some(ticket) = self.begin_write(pr_id, Operation::CancelAutoMerge) {
-                    self.spawn_auto_merge(ticket, None);
+            Command::AutoMerge(change) => {
+                let operation = match change {
+                    AutoMerge::On { .. } => Operation::AutoMerge,
+                    AutoMerge::Off => Operation::CancelAutoMerge,
+                };
+                if let Some(ticket) = self.begin_write(pr_id, operation) {
+                    self.spawn_auto_merge(ticket, change);
                 }
             }
             Command::RerunFailedBuilds => {
@@ -182,7 +199,13 @@ impl App {
         self.checkpoint_submission(pr_id).then_some(ticket)
     }
 
-    fn submit_review_verdict(&mut self, pr_id: PrId, verdict: ReviewVerdict, body: String) {
+    fn submit_review_verdict(
+        &mut self,
+        pr_id: PrId,
+        verdict: ReviewVerdict,
+        body: String,
+        head: ReviewedHead,
+    ) {
         let own_pr = self.state.store.cache.prs.loaded().is_some_and(|prs| {
             prs.iter()
                 .any(|pr| pr.id == pr_id && self.state.store.current_user.is(&pr.author.username))
@@ -229,7 +252,7 @@ impl App {
         };
         let comments = review.comments.clone();
         if let Some(ticket) = self.begin_write(pr_id, Operation::Review) {
-            self.spawn_submit_full_review(ticket, verdict, body, user, comments);
+            self.spawn_submit_full_review(ticket, verdict, body, user, comments, head);
         }
     }
 }

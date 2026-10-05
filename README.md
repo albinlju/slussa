@@ -8,8 +8,10 @@ opened. Read, comment, review, merge and decline without leaving the terminal,
 next to your editor, git client and coding agent.
 
 The list opens sorted by what needs you, with the reason beside each PR, and a
-merge that cannot go through says why. It is not a replacement for the web UI,
-and it stays small on purpose.
+merge that cannot go through says why. A merge or an approval is tied to the
+commit you were shown, so a push after you read the PR is refused instead of
+merged unseen. It is not a replacement for the web UI, and it stays small on
+purpose.
 
 ![slussa: the list sorted by what needs you, then an agent-written PR: its stated intent, the review conversation and the diff](https://raw.githubusercontent.com/albinlju/slussa/main/docs/media/demo.gif)
 

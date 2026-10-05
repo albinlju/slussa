@@ -55,6 +55,11 @@ pub(super) fn failed(message: &str) -> FetchError {
     }
 }
 
+/// The commit the reader has seen, for the commands that are tied to it.
+pub(super) fn read_head() -> crate::domain::review::ReviewedHead {
+    crate::domain::review::ReviewedHead::of(None, Some("abc123")).expect("a head was listed")
+}
+
 pub(super) fn app() -> App {
     let mut app = App::new(
         Session::for_test(Provider::GitHub, "reviewer"),

@@ -92,6 +92,7 @@ mod tests {
             comment_count: 0,
             source_branch: "f".into(),
             source_repo: crate::domain::pr::SourceRepo::Unknown,
+            head_oid: None,
             target_branch: "main".into(),
             additions: 0,
             deletions: 0,

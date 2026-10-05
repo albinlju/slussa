@@ -1,4 +1,8 @@
-use super::{ci::CiSummary, review::Reviewer, user::User};
+use super::{
+    ci::CiSummary,
+    review::{ReviewedHead, Reviewer},
+    user::User,
+};
 use chrono::{DateTime, Utc};
 
 /// Where a PR is in its life. What only an open PR has, being a draft and
@@ -284,6 +288,7 @@ impl PullRequest {
             comment_count: 0,
             source_branch: String::new(),
             source_repo: SourceRepo::Unknown,
+            head_oid: None,
             target_branch: String::new(),
             additions: 0,
             deletions: 0,
@@ -309,6 +314,8 @@ pub struct PullRequest {
     pub comment_count: u32,
     pub source_branch: String,
     pub source_repo: SourceRepo,
+    /// The commit the source branch was at when the list was read.
+    pub head_oid: Option<String>,
     pub target_branch: String,
     pub additions: u32,
     pub deletions: u32,
@@ -316,6 +323,18 @@ pub struct PullRequest {
     pub created: DateTime<Utc>,
     pub updated: DateTime<Utc>,
     pub ai_review: AiReview,
+}
+
+/// What is asked of merging a PR by itself once it is ready.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum AutoMerge {
+    /// Merge with `strategy` once the checks and reviews allow it, if the
+    /// branch is still at `head` now.
+    On {
+        strategy: MergeStrategy,
+        head: ReviewedHead,
+    },
+    Off,
 }
 
 /// Whether the source branch lives in the repository the PR targets.

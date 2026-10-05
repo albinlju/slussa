@@ -1,5 +1,6 @@
 use super::{
     comment::{CommentId, CommentKey},
+    diff::Diff,
     user::{User, Username},
 };
 
@@ -35,6 +36,31 @@ impl Rerequest {
     }
 
     pub fn names(&self) -> &[Username] {
+        &self.0
+    }
+}
+
+/// The head commit of a PR as the reviewer saw it, which a verdict or a merge
+/// is tied to: the provider refuses it if the branch has moved since, so what
+/// is approved or merged is what was read. Only [`ReviewedHead::of`] makes one,
+/// from what was loaded.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ReviewedHead(String);
+
+impl ReviewedHead {
+    /// What was read: the head of the PR's diff when it has been loaded, and
+    /// otherwise the head the list last gave. `None` where neither says.
+    pub fn of(diff: Option<&Diff>, listed: Option<&str>) -> Option<Self> {
+        let read = diff
+            .and_then(|diff| diff.revision.as_ref())
+            .filter(|revision| !revision.commit)
+            .map(|revision| revision.head.as_str());
+        read.or(listed)
+            .filter(|head| !head.is_empty())
+            .map(|head| Self(head.to_owned()))
+    }
+
+    pub fn as_str(&self) -> &str {
         &self.0
     }
 }
@@ -184,5 +210,67 @@ mod rerequest_tests {
             None,
             "an account without a name is not someone to ask"
         );
+    }
+}
+
+#[cfg(test)]
+mod reviewed_head_tests {
+    use super::*;
+    use crate::domain::diff::DiffRevision;
+
+    fn diff_at(head: &str, commit: bool) -> Diff {
+        Diff {
+            revision: Some(DiffRevision {
+                head: head.into(),
+                base: None,
+                commit,
+            }),
+            files: vec![],
+        }
+    }
+
+    /// A head known only by its listing.
+    fn named(sha: &str) -> Option<ReviewedHead> {
+        ReviewedHead::of(None, Some(sha))
+    }
+
+    #[test]
+    fn what_was_read_is_the_head_of_the_loaded_diff_before_the_listed_one() {
+        let read = diff_at("def456", false);
+        assert_eq!(
+            ReviewedHead::of(Some(&read), Some("abc123")),
+            named("def456"),
+            "the diff the reader saw, not the list's newer head"
+        );
+    }
+
+    #[test]
+    fn without_a_diff_the_listed_head_is_what_there_is() {
+        assert_eq!(ReviewedHead::of(None, Some("abc123")), named("abc123"));
+        let unknown = Diff {
+            revision: None,
+            files: vec![],
+        };
+        assert_eq!(
+            ReviewedHead::of(Some(&unknown), Some("abc123")),
+            named("abc123"),
+            "a diff that does not say what it is of says nothing"
+        );
+    }
+
+    #[test]
+    fn the_diff_of_one_commit_is_not_the_head_that_was_read() {
+        let one_commit = diff_at("def456", true);
+        assert_eq!(
+            ReviewedHead::of(Some(&one_commit), Some("abc123")),
+            named("abc123")
+        );
+    }
+
+    #[test]
+    fn no_head_known_is_no_head() {
+        assert_eq!(ReviewedHead::of(None, None), None);
+        assert_eq!(ReviewedHead::of(None, Some("")), None);
+        assert_eq!(ReviewedHead::of(Some(&diff_at("", false)), None), None);
     }
 }

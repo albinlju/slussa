@@ -13,7 +13,7 @@ pub mod remote;
 use chrono::{DateTime, TimeZone, Utc};
 
 use crate::domain::pr::{Mergeability, PrId};
-use crate::domain::review::{ReviewComment, ReviewVerdict};
+use crate::domain::review::{ReviewComment, ReviewVerdict, ReviewedHead};
 use crate::domain::user::Username;
 use crate::providers::error::{FetchError, ReviewError};
 
@@ -39,6 +39,7 @@ pub fn submit_review(
     verdict: ReviewVerdict,
     body: &str,
     user: &str,
+    head: &ReviewedHead,
 ) -> Result<(), ReviewError> {
     // Bitbucket has no review body — post any summary as a PR comment first.
     if !body.is_empty() {
@@ -55,7 +56,12 @@ pub fn submit_review(
         "/rest/api/1.0/projects/{}/repos/{}/pull-requests/{pr_id}/participants/{user}",
         config.repo.project_key, config.repo.repo_slug,
     );
-    let payload = serde_json::json!({ "status": status });
+    // An approval says which commit it is of.
+    let payload = if verdict == ReviewVerdict::Approve {
+        serde_json::json!({ "status": status, "lastReviewedCommit": head.as_str() })
+    } else {
+        serde_json::json!({ "status": status })
+    };
     http::put_json(&config.repo.base_url, &endpoint, &config.pat, &payload).map_err(|source| {
         // Without a summary the verdict is the only request: its failure is
         // the whole failure, not part of one.
@@ -81,11 +87,22 @@ pub fn submit_full_review(
     body: &str,
     user: &str,
     comments: &[ReviewComment],
+    head: &ReviewedHead,
 ) -> Result<(), ReviewError> {
+    // Before anything is posted: a verdict on a branch that has moved is
+    // refused whole, not after some of its comments arrived. Withdrawing an
+    // approval is the safe direction, so it is not held back by a push.
+    let judges = matches!(
+        verdict,
+        ReviewVerdict::Approve | ReviewVerdict::RequestChanges
+    );
+    if judges && pr_now(config, pr_id)?.head != head.as_str() {
+        return Err(ReviewError::Failed(moved_since_read()));
+    }
     publish_steps(
         comments,
         |comment| post_comment(config, pr_id, comment),
-        || submit_review(config, pr_id, verdict, body, user),
+        || submit_review(config, pr_id, verdict, body, user, head),
     )
 }
 
@@ -170,21 +187,56 @@ pub fn fetch_mergeability(config: &Config, pr_id: PrId) -> Result<Mergeability, 
 /// Bitbucket's merge/decline endpoints take the PR's current version for
 /// optimistic locking, so read it fresh before either.
 fn pr_version(config: &Config, pr_id: PrId) -> Result<u64, FetchError> {
+    Ok(pr_now(config, pr_id)?.version)
+}
+
+/// The PR as it is now: its version, and the commit its source branch is at.
+struct PrNow {
+    version: u64,
+    head: String,
+}
+
+fn pr_now(config: &Config, pr_id: PrId) -> Result<PrNow, FetchError> {
+    #[derive(Default, serde::Deserialize)]
+    #[serde(rename_all = "camelCase")]
+    struct Ref {
+        #[serde(default)]
+        latest_commit: String,
+    }
     #[derive(serde::Deserialize)]
-    struct PrVersion {
+    #[serde(rename_all = "camelCase")]
+    struct Pr {
         version: u64,
+        #[serde(default)]
+        from_ref: Ref,
     }
     let endpoint = format!(
         "/rest/api/1.0/projects/{}/repos/{}/pull-requests/{pr_id}",
         config.repo.project_key, config.repo.repo_slug,
     );
-    let pr: PrVersion = http::get_json(&config.repo.base_url, &endpoint, &config.pat)?;
-    Ok(pr.version)
+    let pr: Pr = http::get_json(&config.repo.base_url, &endpoint, &config.pat)?;
+    Ok(PrNow {
+        version: pr.version,
+        head: pr.from_ref.latest_commit,
+    })
 }
 
-pub fn merge(config: &Config, pr_id: PrId) -> Result<(), FetchError> {
-    // Strategy is the repo's configured default.
-    let version = pr_version(config, pr_id)?;
+/// The answer to a verdict or a merge of a PR whose branch has moved since it
+/// was read.
+fn moved_since_read() -> FetchError {
+    FetchError::Stale(
+        "The PR changed after you read it. Read what is new in the Diff tab (F refreshes it), then try again.".into(),
+    )
+}
+
+pub fn merge(config: &Config, pr_id: PrId, head: &ReviewedHead) -> Result<(), FetchError> {
+    // Strategy is the repo's configured default. The version and the head come
+    // from the same read, so the merge is of the head that was checked.
+    let now = pr_now(config, pr_id)?;
+    if now.head != head.as_str() {
+        return Err(moved_since_read());
+    }
+    let version = now.version;
     let endpoint = format!(
         "/rest/api/1.0/projects/{}/repos/{}/pull-requests/{pr_id}/merge?version={version}",
         config.repo.project_key, config.repo.repo_slug,

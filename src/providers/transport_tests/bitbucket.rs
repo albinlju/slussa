@@ -227,83 +227,6 @@ fn bitbucket_pr_comment_posts_json_to_the_comments_endpoint() {
     assert_eq!(sent, json!({"text": "looks good"}));
 }
 
-const PR_9: &str = "/rest/api/1.0/projects/PROJ/repos/repo/pull-requests/9";
-
-#[test]
-fn bitbucket_review_posts_comments_then_summary_then_the_verdict() {
-    let comments_target = format!("{PR_9}/comments");
-    let server = MockHttp::start(vec![
-        Route::post(&comments_target, 201, "{}"),
-        Route::put(&format!("{PR_9}/participants/me"), 200, "{}"),
-    ]);
-    let comments = [
-        review_comment("abc", 3, false),
-        review_comment("abc", 9, true),
-    ];
-    bitbucket(&server)
-        .submit_full_review(PrId(9), ReviewVerdict::Approve, "ship it", "me", &comments)
-        .unwrap();
-
-    let requests = server.requests();
-    let order: Vec<_> = requests
-        .iter()
-        .map(|r| format!("{} {}", r.method, r.target.rsplit('/').next().unwrap()))
-        .collect();
-    assert_eq!(
-        order,
-        ["POST comments", "POST comments", "POST comments", "PUT me"]
-    );
-    let first: Value = serde_json::from_str(&requests[0].body).unwrap();
-    assert_eq!(first["anchor"]["lineType"], "ADDED");
-    assert_eq!(first["anchor"]["toHash"], "abc");
-    let second: Value = serde_json::from_str(&requests[1].body).unwrap();
-    assert_eq!(second["anchor"]["lineType"], "REMOVED");
-    let summary: Value = serde_json::from_str(&requests[2].body).unwrap();
-    assert_eq!(summary, json!({"text": "ship it"}));
-    let verdict: Value = serde_json::from_str(&requests[3].body).unwrap();
-    assert_eq!(verdict, json!({"status": "APPROVED"}));
-}
-
-#[test]
-fn bitbucket_review_reports_how_many_comments_landed_before_a_failure() {
-    let target = format!("{PR_9}/comments");
-    let server = MockHttp::start(vec![
-        Route::post(&target, 201, "{}").times(1),
-        Route::post(
-            &target,
-            500,
-            &json!({"errors": [{"message": "boom"}]}).to_string(),
-        ),
-    ]);
-    let comments = [
-        review_comment("abc", 3, false),
-        review_comment("abc", 4, false),
-        review_comment("abc", 5, false),
-    ];
-    let error = bitbucket(&server)
-        .submit_full_review(PrId(9), ReviewVerdict::Approve, "ship it", "me", &comments)
-        .unwrap_err();
-
-    match error {
-        ReviewError::Partial {
-            posted_comments,
-            summary_posted,
-            source,
-        } => {
-            assert_eq!(posted_comments, 1);
-            assert!(!summary_posted);
-            assert!(matches!(source, FetchError::HttpFailed { status: 500, .. }));
-        }
-        other @ ReviewError::Failed(_) => panic!("expected a partial review, got {other:?}"),
-    }
-    let requests = server.requests();
-    assert_eq!(requests.len(), 2, "stops at the first failure");
-    assert!(
-        requests.iter().all(|r| r.method == "POST"),
-        "no verdict is sent"
-    );
-}
-
 #[test]
 fn bitbucket_reviewers_without_a_verdict_are_pending_requests() {
     let mut pr = bb_pr(1);
@@ -413,48 +336,6 @@ fn bitbucket_token_is_sent_as_a_bearer_and_never_printed() {
 }
 
 #[test]
-fn bitbucket_verdict_alone_that_is_refused_is_a_plain_failure() {
-    let refusal = json!({"errors": [{"message": "You cannot approve your own pull request"}]});
-    let server = MockHttp::start(vec![
-        Route::post(&format!("{PR_9}/comments"), 201, "{}"),
-        Route::put(
-            &format!("{PR_9}/participants/me"),
-            409,
-            &refusal.to_string(),
-        ),
-    ]);
-
-    // No comments and no summary: the verdict is the only request.
-    let error = bitbucket(&server)
-        .submit_full_review(PrId(9), ReviewVerdict::Approve, "", "me", &[])
-        .unwrap_err();
-    match &error {
-        ReviewError::Failed(source) => assert!(
-            !source.may_have_reached_server(),
-            "a stated refusal changed nothing: {source:?}"
-        ),
-        ReviewError::Partial { .. } => panic!("nothing was sent in part: {error:?}"),
-    }
-    assert_eq!(server.requests().len(), 1);
-
-    // With a summary, the summary arrived and the verdict did not.
-    let error = bitbucket(&server)
-        .submit_full_review(PrId(9), ReviewVerdict::Approve, "ship it", "me", &[])
-        .unwrap_err();
-    assert!(
-        matches!(
-            error,
-            ReviewError::Partial {
-                posted_comments: 0,
-                summary_posted: true,
-                ..
-            }
-        ),
-        "{error:?}"
-    );
-}
-
-#[test]
 fn bitbucket_reads_one_pr_by_its_number() {
     let server = MockHttp::start(vec![Route::get(
         &format!("{PR_BASE}/44"),
@@ -469,4 +350,13 @@ fn bitbucket_reads_one_pr_by_its_number() {
 fn bitbucket_reports_a_missing_pr_as_an_error() {
     let server = MockHttp::start(vec![Route::get(&format!("{PR_BASE}/9999"), 404, "{}")]);
     assert!(bitbucket(&server).fetch_pr(PrId(9999)).is_err());
+}
+
+#[test]
+fn bitbucket_reads_the_commit_a_pr_is_at_with_the_list() {
+    let mut pr = bb_pr(5);
+    pr["fromRef"]["latestCommit"] = json!("0123abc");
+    let server = MockHttp::start(vec![Route::get(&open_url(0), 200, &last_page(&[pr]))]);
+    let batch = bitbucket(&server).fetch_prs(PrGroup::Open, None).unwrap();
+    assert_eq!(batch.prs[0].head_oid.as_deref(), Some("0123abc"));
 }

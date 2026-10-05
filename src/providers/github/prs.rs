@@ -307,6 +307,7 @@ fn map_pr(gh: GhPr) -> PullRequest {
         labels: Vec::new(),
         comment_count,
         source_branch: gh.head_ref_name,
+        head_oid: gh.head_ref_oid.clone(),
         source_repo: match gh.is_cross_repository {
             Some(false) => SourceRepo::Same,
             Some(true) => SourceRepo::Fork,

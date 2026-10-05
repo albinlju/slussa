@@ -1,18 +1,20 @@
 //! GitHub writes through a fake `gh`: merge, close, reopen, comment, review.
 
 use super::support::*;
-use crate::domain::pr::{DeletableBranch, PullRequest, SourceRepo};
+use crate::domain::pr::{AutoMerge, DeletableBranch, PullRequest, SourceRepo};
 
 #[test]
 fn github_merge_sends_the_chosen_strategy() {
     let installed = FakeGh::new().on("api", "{}").install();
     Provider::GitHub
-        .merge(PrId(7), MergeStrategy::Squash, None)
+        .merge(PrId(7), MergeStrategy::Squash, None, &read_head())
         .unwrap();
 
     assert_eq!(
         installed.calls(),
-        vec!["api --method PUT repos/{owner}/{repo}/pulls/7/merge -f merge_method=squash"]
+        vec![
+            "api --method PUT repos/{owner}/{repo}/pulls/7/merge -f merge_method=squash -f sha=abc123"
+        ]
     );
 }
 
@@ -34,13 +36,14 @@ fn github_merge_then_deletes_the_branch_with_its_name_escaped() {
             PrId(7),
             MergeStrategy::Squash,
             Some(&branch("feature/fix #1?")),
+            &read_head(),
         )
         .unwrap();
 
     assert_eq!(
         installed.calls(),
         vec![
-            "api --method PUT repos/{owner}/{repo}/pulls/7/merge -f merge_method=squash",
+            "api --method PUT repos/{owner}/{repo}/pulls/7/merge -f merge_method=squash -f sha=abc123",
             "api --method DELETE repos/{owner}/{repo}/git/refs/heads/feature/fix%20%231%3F",
         ]
     );
@@ -53,7 +56,12 @@ fn github_a_branch_that_cannot_be_deleted_leaves_the_merge_done() {
         .on("api", "{}")
         .install();
     let error = Provider::GitHub
-        .merge(PrId(7), MergeStrategy::Merge, Some(&branch("feature")))
+        .merge(
+            PrId(7),
+            MergeStrategy::Merge,
+            Some(&branch("feature")),
+            &read_head(),
+        )
         .unwrap_err();
 
     assert!(
@@ -71,7 +79,12 @@ fn github_a_branch_that_is_already_gone_is_deleted_as_far_as_the_merge_goes() {
         .on("api", "{}")
         .install();
     Provider::GitHub
-        .merge(PrId(7), MergeStrategy::Merge, Some(&branch("feature")))
+        .merge(
+            PrId(7),
+            MergeStrategy::Merge,
+            Some(&branch("feature")),
+            &read_head(),
+        )
         .unwrap();
     assert_eq!(installed.calls().len(), 2);
 }
@@ -82,7 +95,12 @@ fn github_a_merge_that_fails_does_not_delete_the_branch() {
         .fail("pulls/7/merge", 1, "Not mergeable")
         .install();
     let error = Provider::GitHub
-        .merge(PrId(7), MergeStrategy::Merge, Some(&branch("feature")))
+        .merge(
+            PrId(7),
+            MergeStrategy::Merge,
+            Some(&branch("feature")),
+            &read_head(),
+        )
         .unwrap_err();
 
     assert!(matches!(error, MergeError::Failed(_)), "{error:?}");
@@ -93,7 +111,12 @@ fn github_a_merge_that_fails_does_not_delete_the_branch() {
 fn bitbucket_does_not_delete_the_branch_with_the_merge() {
     let server = MockHttp::start(vec![]);
     let error = bitbucket(&server)
-        .merge(PrId(7), MergeStrategy::Merge, Some(&branch("feature")))
+        .merge(
+            PrId(7),
+            MergeStrategy::Merge,
+            Some(&branch("feature")),
+            &read_head(),
+        )
         .unwrap_err();
     assert!(matches!(
         error,
@@ -149,7 +172,10 @@ fn github_pr_comment_passes_the_body_as_a_literal_argument() {
 
 #[test]
 fn github_batched_review_is_one_call_with_the_comments_on_stdin() {
-    let installed = FakeGh::new().on("api", "{}").install();
+    let installed = FakeGh::new()
+        .on("--jq .head.sha", "abc\n")
+        .on("api", "{}")
+        .install();
     let comments = [
         review_comment("abc", 3, false),
         review_comment("abc", 9, true),
@@ -161,12 +187,16 @@ fn github_batched_review_is_one_call_with_the_comments_on_stdin() {
             "please fix",
             "me",
             &comments,
+            &head_of("abc"),
         )
         .unwrap();
 
     assert_eq!(
         installed.calls(),
-        vec!["api --method POST repos/{owner}/{repo}/pulls/7/reviews --input -"]
+        vec![
+            "api repos/{owner}/{repo}/pulls/7 --jq .head.sha",
+            "api --method POST repos/{owner}/{repo}/pulls/7/reviews --input -"
+        ]
     );
     let sent: Value = serde_json::from_str(&installed.stdin()).unwrap();
     assert_eq!(
@@ -190,8 +220,14 @@ fn github_batched_review_refuses_unsafe_batches_without_calling_gh() {
         review_comment("abc", 1, false),
         review_comment("def", 2, false),
     ];
-    let result =
-        Provider::GitHub.submit_full_review(PrId(7), ReviewVerdict::Comment, "", "me", &mixed);
+    let result = Provider::GitHub.submit_full_review(
+        PrId(7),
+        ReviewVerdict::Comment,
+        "",
+        "me",
+        &mixed,
+        &head_of("abc"),
+    );
     assert!(
         matches!(
             result,
@@ -291,13 +327,24 @@ fn github_resolves_a_thread_by_its_node_id_and_refuses_another_providers_handle(
 fn github_auto_merge_asks_gh_for_the_chosen_strategy_and_off_disables_it() {
     let installed = FakeGh::new().on("pr", "").install();
     Provider::GitHub
-        .set_auto_merge(PrId(7), Some(MergeStrategy::Squash))
+        .set_auto_merge(
+            PrId(7),
+            &AutoMerge::On {
+                strategy: MergeStrategy::Squash,
+                head: read_head(),
+            },
+        )
         .unwrap();
-    Provider::GitHub.set_auto_merge(PrId(7), None).unwrap();
+    Provider::GitHub
+        .set_auto_merge(PrId(7), &AutoMerge::Off)
+        .unwrap();
 
     assert_eq!(
         installed.calls(),
-        vec!["pr merge 7 --auto --squash", "pr merge 7 --disable-auto"]
+        vec![
+            "pr merge 7 --auto --squash --match-head-commit abc123",
+            "pr merge 7 --disable-auto"
+        ]
     );
 }
 
@@ -364,4 +411,92 @@ fn github_keeps_going_when_one_run_cannot_be_started_and_says_how_many_did() {
         .filter(|call| call.contains("rerun-failed-jobs"))
         .count();
     assert_eq!(reruns, 2, "the second run is tried after the first failed");
+}
+
+#[test]
+fn github_a_merge_of_a_branch_that_moved_says_the_pr_changed_and_deletes_nothing() {
+    let installed = FakeGh::new()
+        .fail(
+            "pulls/7/merge",
+            1,
+            "gh: Head branch was modified. Review and try the merge again. (HTTP 409)",
+        )
+        .on("api", "{}")
+        .install();
+    let error = Provider::GitHub
+        .merge(
+            PrId(7),
+            MergeStrategy::Merge,
+            Some(&branch("feature")),
+            &read_head(),
+        )
+        .unwrap_err();
+
+    assert!(
+        matches!(error, MergeError::Failed(FetchError::Stale(_))),
+        "{error:?}"
+    );
+    assert_eq!(
+        installed.calls().len(),
+        1,
+        "no delete after a refused merge"
+    );
+}
+
+#[test]
+fn github_a_verdict_alone_names_the_commit_it_is_of() {
+    let installed = FakeGh::new()
+        .on("--jq .head.sha", "abc123\n")
+        .on("api", "{}")
+        .install();
+    Provider::GitHub
+        .submit_full_review(PrId(7), ReviewVerdict::Approve, "", "me", &[], &read_head())
+        .unwrap();
+
+    assert_eq!(
+        installed.calls(),
+        vec![
+            "api repos/{owner}/{repo}/pulls/7 --jq .head.sha",
+            "api --method POST repos/{owner}/{repo}/pulls/7/reviews -f event=APPROVE -f commit_id=abc123"
+        ]
+    );
+}
+
+#[test]
+fn github_refuses_a_verdict_on_a_branch_that_moved_and_sends_nothing() {
+    let installed = FakeGh::new()
+        .on("--jq .head.sha", "def456\n")
+        .on("api", "{}")
+        .install();
+    let alone = Provider::GitHub.submit_full_review(
+        PrId(7),
+        ReviewVerdict::Approve,
+        "",
+        "me",
+        &[],
+        &read_head(),
+    );
+    let batch = Provider::GitHub.submit_full_review(
+        PrId(7),
+        ReviewVerdict::Approve,
+        "",
+        "me",
+        &[review_comment("abc123", 3, false)],
+        &read_head(),
+    );
+
+    for result in [alone, batch] {
+        assert!(
+            matches!(result, Err(ReviewError::Failed(FetchError::Stale(_)))),
+            "{result:?}"
+        );
+    }
+    assert!(
+        installed
+            .calls()
+            .iter()
+            .all(|call| call.contains("--jq .head.sha")),
+        "only the head was read: {:?}",
+        installed.calls()
+    );
 }

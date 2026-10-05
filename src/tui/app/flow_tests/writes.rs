@@ -222,6 +222,7 @@ async fn a_review_with_a_comment_on_an_unknown_revision_is_refused_whole() {
         command: Command::SubmitReview {
             verdict: crate::domain::review::ReviewVerdict::Comment,
             body: "summary".into(),
+            head: read_head(),
         },
     }));
     settle(&mut app).await;
@@ -250,6 +251,7 @@ fn merge_deleting(app: &mut App, pr_id: PrId) {
         command: Command::Merge {
             strategy: MergeStrategy::Squash,
             delete: DeletableBranch::of(&pr),
+            head: read_head(),
         },
     }));
 }

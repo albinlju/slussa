@@ -196,6 +196,7 @@ fn review_options_follow_capabilities_and_keep_own_pr_restrictions() {
         Command::SubmitReview {
             verdict: ReviewVerdict::Approve,
             body: String::new(),
+            head: read_head(),
         },
     );
     assert!(app.state.store.operations.is_empty());

@@ -51,6 +51,12 @@ pub enum Effect {
     DismissError {
         pr_id: PrId,
     },
+    /// Say why something the reader asked for was not done, as an error on
+    /// this PR.
+    Report {
+        pr_id: PrId,
+        message: String,
+    },
 }
 
 /// What work that ran off the UI thread sends back.
