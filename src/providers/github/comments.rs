@@ -39,41 +39,27 @@ pub fn post_comment(
         line,
         body,
     } = comment;
-    let commit_id = &revision.head;
-    let (side, line) = (side(*line), line.number());
-    super::cli::run_gh(
+    super::cli::send_json(
         repo,
-        &[
-            "api",
-            "--method",
-            "POST",
-            &format!("repos/{{owner}}/{{repo}}/pulls/{pr_number}/comments"),
-            "-f",
-            &format!("body={body}"),
-            "-f",
-            &format!("commit_id={commit_id}"),
-            "-f",
-            &format!("path={path}"),
-            "-F",
-            &format!("line={line}"),
-            "-f",
-            &format!("side={side}"),
-        ],
+        "POST",
+        &format!("repos/{{owner}}/{{repo}}/pulls/{pr_number}/comments"),
+        &serde_json::json!({
+            "body": body,
+            "commit_id": revision.head,
+            "path": path,
+            "line": line.number(),
+            "side": side(*line),
+        }),
     )?;
     Ok(())
 }
 
 pub fn post_pr_comment(repo: &GhRepo, pr_number: PrId, body: &str) -> Result<(), FetchError> {
-    super::cli::run_gh(
+    super::cli::send_json(
         repo,
-        &[
-            "api",
-            "--method",
-            "POST",
-            &format!("repos/{{owner}}/{{repo}}/issues/{pr_number}/comments"),
-            "-f",
-            &format!("body={body}"),
-        ],
+        "POST",
+        &format!("repos/{{owner}}/{{repo}}/issues/{pr_number}/comments"),
+        &serde_json::json!({ "body": body }),
     )?;
     Ok(())
 }
@@ -84,16 +70,11 @@ pub fn reply_comment(
     parent: CommentId,
     body: &str,
 ) -> Result<(), FetchError> {
-    super::cli::run_gh(
+    super::cli::send_json(
         repo,
-        &[
-            "api",
-            "--method",
-            "POST",
-            &format!("repos/{{owner}}/{{repo}}/pulls/{pr_number}/comments/{parent}/replies"),
-            "-f",
-            &format!("body={body}"),
-        ],
+        "POST",
+        &format!("repos/{{owner}}/{{repo}}/pulls/{pr_number}/comments/{parent}/replies"),
+        &serde_json::json!({ "body": body }),
     )?;
     Ok(())
 }
@@ -111,16 +92,11 @@ fn comment_endpoint(comment: CommentKey) -> String {
 }
 
 pub fn edit_comment(repo: &GhRepo, comment: CommentKey, body: &str) -> Result<(), FetchError> {
-    super::cli::run_gh(
+    super::cli::send_json(
         repo,
-        &[
-            "api",
-            "--method",
-            "PATCH",
-            &comment_endpoint(comment),
-            "-f",
-            &format!("body={body}"),
-        ],
+        "PATCH",
+        &comment_endpoint(comment),
+        &serde_json::json!({ "body": body }),
     )?;
     Ok(())
 }
