@@ -6,6 +6,7 @@ pub mod markdown;
 mod panel;
 pub mod table;
 mod text;
+mod visible;
 
 pub(super) use diff_row::numbered_diff_row;
 pub(super) use footer::{
@@ -16,3 +17,4 @@ pub(super) use panel::{
     spinner_frame,
 };
 pub(super) use text::{fitted_row, highlight_query, justify_between, truncate_to_width, wrap_text};
+pub(super) use visible::{reveal, runs_width, spans};

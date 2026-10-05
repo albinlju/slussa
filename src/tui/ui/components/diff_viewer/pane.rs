@@ -257,10 +257,17 @@ fn styled_diff_row(diff_line: &DiffLine) -> Line<'static> {
         DiffLine::Removed(_) => ('-', theme.diff_removed),
         DiffLine::Context(_) => (' ', theme.diff_context),
     };
-    Line::styled(
-        format!("{DIFF_GUTTER}{marker}{}", diff_line.content()),
-        Style::default().fg(color),
-    )
+    let text = Style::default().fg(color);
+    let warning = Style::default()
+        .fg(theme.warning)
+        .add_modifier(Modifier::BOLD);
+    let mut spans = vec![Span::styled(format!("{DIFF_GUTTER}{marker}"), text)];
+    spans.extend(widgets::spans(
+        widgets::reveal(diff_line.content()),
+        text,
+        warning,
+    ));
+    Line::from(spans).style(text)
 }
 
 type CommentIndex<'a> = HashMap<usize, Vec<&'a CommentThread>>;
