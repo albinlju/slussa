@@ -31,8 +31,9 @@ async fn a_comment_is_sent_once_and_followed_by_a_refetch() {
     let calls = gh.calls();
     assert_eq!(
         calls[0],
-        "api --method POST repos/{owner}/{repo}/issues/1/comments -f body=hello"
+        "api --method POST repos/{owner}/{repo}/issues/1/comments --input -"
     );
+    assert!(gh.stdin().contains(r#""body":"hello""#), "{}", gh.stdin());
     assert_eq!(
         calls
             .iter()
@@ -98,7 +99,8 @@ async fn a_second_write_to_the_same_pr_is_ignored_while_one_is_pending() {
         .filter(|c| c.contains("issues/1/comments"))
         .collect();
     assert_eq!(posts.len(), 1, "{posts:?}");
-    assert!(posts[0].ends_with("body=first"));
+    let sent = gh.stdin();
+    assert!(sent.contains("first") && !sent.contains("second"), "{sent}");
 }
 
 fn reopen(app: &mut App, pr_id: PrId) {

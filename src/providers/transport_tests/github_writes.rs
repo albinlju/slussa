@@ -159,7 +159,7 @@ fn github_decline_closes_the_pull_request() {
 }
 
 #[test]
-fn github_pr_comment_passes_the_body_as_a_literal_argument() {
+fn github_pr_comment_sends_the_body_on_stdin_and_never_on_the_command_line() {
     let installed = FakeGh::new().on("api", "{}").install();
     let body = "thanks $(whoami) `id` \"quoted\" & more";
     Provider::github_for_test()
@@ -168,10 +168,57 @@ fn github_pr_comment_passes_the_body_as_a_literal_argument() {
 
     assert_eq!(
         installed.calls(),
-        vec![format!(
-            "api --method POST repos/{{owner}}/{{repo}}/issues/7/comments -f body={body}"
-        )]
+        vec!["api --method POST repos/{owner}/{repo}/issues/7/comments --input -"],
+        "what was written is not in the process list"
     );
+    let sent: Value = serde_json::from_str(&installed.stdin()).unwrap();
+    assert_eq!(sent, json!({ "body": body }));
+}
+
+#[test]
+fn github_a_long_comment_is_not_limited_by_the_command_line() {
+    let installed = FakeGh::new().on("api", "{}").install();
+    // Longer than a command line may be on Linux.
+    let body = "x".repeat(300_000);
+    Provider::github_for_test()
+        .post_pr_comment(PrId(7), &body)
+        .unwrap();
+    let sent: Value = serde_json::from_str(&installed.stdin()).unwrap();
+    assert_eq!(sent["body"].as_str().map(str::len), Some(300_000));
+}
+
+#[test]
+fn github_a_line_comment_and_a_reply_send_their_fields_as_json() {
+    let installed = FakeGh::new().on("api", "{}").install();
+    let provider = Provider::github_for_test();
+    provider
+        .post_comment(PrId(7), &review_comment("abc", 3, true))
+        .unwrap();
+    provider
+        .reply_comment(PrId(7), crate::domain::comment::CommentId(5), "agreed")
+        .unwrap();
+
+    assert_eq!(
+        installed.calls(),
+        vec![
+            "api --method POST repos/{owner}/{repo}/pulls/7/comments --input -",
+            "api --method POST repos/{owner}/{repo}/pulls/7/comments/5/replies --input -"
+        ]
+    );
+    let stdin = installed.stdin();
+    let mut sent = serde_json::Deserializer::from_str(&stdin).into_iter::<Value>();
+    assert_eq!(
+        sent.next().unwrap().unwrap(),
+        json!({
+            "body": "note on line 3",
+            "commit_id": "abc",
+            "path": "src/lib.rs",
+            "line": 3,
+            "side": "LEFT"
+        }),
+        "the line is a number"
+    );
+    assert_eq!(sent.next().unwrap().unwrap(), json!({ "body": "agreed" }));
 }
 
 #[test]
@@ -300,8 +347,8 @@ fn github_edits_and_deletes_a_comment_where_its_kind_lives() {
     assert_eq!(
         installed.calls(),
         vec![
-            "api --method PATCH repos/{owner}/{repo}/pulls/comments/11 -f body=new",
-            "api --method PATCH repos/{owner}/{repo}/issues/comments/12 -f body=new",
+            "api --method PATCH repos/{owner}/{repo}/pulls/comments/11 --input -",
+            "api --method PATCH repos/{owner}/{repo}/issues/comments/12 --input -",
             "api --method DELETE repos/{owner}/{repo}/pulls/comments/11",
             "api --method DELETE repos/{owner}/{repo}/issues/comments/12",
         ]
@@ -469,9 +516,11 @@ fn github_a_verdict_alone_names_the_commit_it_is_of() {
         installed.calls(),
         vec![
             "api repos/{owner}/{repo}/pulls/7 --jq .head.sha",
-            "api --method POST repos/{owner}/{repo}/pulls/7/reviews -f event=APPROVE -f commit_id=abc123"
+            "api --method POST repos/{owner}/{repo}/pulls/7/reviews --input -"
         ]
     );
+    let sent: Value = serde_json::from_str(&installed.stdin()).unwrap();
+    assert_eq!(sent, json!({ "event": "APPROVE", "commit_id": "abc123" }));
 }
 
 #[test]

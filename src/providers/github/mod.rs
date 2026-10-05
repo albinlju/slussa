@@ -165,26 +165,18 @@ pub fn submit_review(
             "This review verdict is not supported by GitHub.".into(),
         ));
     };
-    let endpoint = format!("repos/{{owner}}/{{repo}}/pulls/{pr_number}/reviews");
-    let event_arg = format!("event={event}");
-    let body_arg = format!("body={body}");
-    let commit_arg = format!("commit_id={}", head.as_str());
     comments::ensure_head(repo, pr_number, head)?;
-    let mut args: Vec<&str> = vec![
-        "api",
-        "--method",
+    let payload = if body.is_empty() {
+        serde_json::json!({ "event": event, "commit_id": head.as_str() })
+    } else {
+        serde_json::json!({ "event": event, "commit_id": head.as_str(), "body": body })
+    };
+    cli::send_json(
+        repo,
         "POST",
-        &endpoint,
-        "-f",
-        &event_arg,
-        "-f",
-        &commit_arg,
-    ];
-    if !body.is_empty() {
-        args.push("-f");
-        args.push(&body_arg);
-    }
-    cli::run_gh(repo, &args)?;
+        &format!("repos/{{owner}}/{{repo}}/pulls/{pr_number}/reviews"),
+        &payload,
+    )?;
     Ok(())
 }
 

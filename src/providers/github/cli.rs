@@ -36,6 +36,23 @@ pub(super) fn run_gh_stdin(
     run_command(&mut command, stdin, REQUEST_TIMEOUT)
 }
 
+/// A write of `body` as JSON, through `gh api`'s standard input. What a person
+/// wrote is not put on the command line, where every other user of the machine
+/// can read it in the process list and where a long text fails to start.
+pub(super) fn send_json(
+    repo: &GhRepo,
+    method: &str,
+    endpoint: &str,
+    body: &serde_json::Value,
+) -> Result<Vec<u8>, FetchError> {
+    let input = serde_json::to_vec(body).map_err(|e| FetchError::ParseFailed(e.into()))?;
+    run_gh_stdin(
+        repo,
+        &["api", "--method", method, endpoint, "--input", "-"],
+        &input,
+    )
+}
+
 /// A `gh` call before the repository is known: asking which one `gh` means.
 pub(super) fn run_gh_unpinned(args: &[&str]) -> Result<Vec<u8>, FetchError> {
     let mut command = gh_command();
