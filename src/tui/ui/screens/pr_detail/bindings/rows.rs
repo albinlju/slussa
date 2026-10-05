@@ -344,7 +344,7 @@ pub(in crate::tui::ui::screens::pr_detail) static RERUN_BUILDS: Binding = Bindin
             return Offer::Hidden;
         }
         match view.pr.status {
-            PrStatus::Open | PrStatus::Draft => offered(view, PrAction::RerunBuilds),
+            PrStatus::Open(_) => offered(view, PrAction::RerunBuilds),
             PrStatus::Merged => Offer::Blocked("merged"),
             PrStatus::Declined => Offer::Blocked("declined"),
         }

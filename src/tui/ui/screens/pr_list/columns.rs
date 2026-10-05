@@ -160,7 +160,7 @@ fn ai_cell(review: AiReview) -> Cell {
 /// the column is there.
 fn status_cell(pr: &PullRequest) -> Cell {
     let theme = theme::current();
-    if pr.has_conflicts {
+    if pr.status.has_conflicts() {
         return vec![Span::styled("conflicts", Style::default().fg(theme.error))];
     }
     vec![Span::styled(

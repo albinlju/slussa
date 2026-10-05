@@ -57,7 +57,7 @@ fn footer_of(state: &mut AppState) -> String {
 
 #[test]
 fn x_declines_an_open_pr_and_reopens_a_declined_one() {
-    for status in [PrStatus::Open, PrStatus::Draft] {
+    for status in [PrStatus::open(), PrStatus::draft()] {
         assert!(
             matches!(
                 x(&overview_of(status)),
@@ -97,7 +97,7 @@ fn key(state: &AppState, c: char) -> Option<Action> {
 
 #[test]
 fn the_pr_level_actions_work_from_the_description_too() {
-    let state = on_tab(overview_of(PrStatus::Open), DetailTab::Description);
+    let state = on_tab(overview_of(PrStatus::open()), DetailTab::Description);
     assert!(matches!(
         key(&state, 'x'),
         Some(Action::Detail(DetailAction::Pr(PrAction::OpenDecline)))
@@ -123,8 +123,8 @@ fn the_pr_level_actions_work_from_the_description_too() {
 fn a_hint_dimmed_in_the_footer_does_nothing_and_a_lit_one_works() {
     for tab in [DetailTab::Overview, DetailTab::Description] {
         for status in [
-            PrStatus::Open,
-            PrStatus::Draft,
+            PrStatus::open(),
+            PrStatus::draft(),
             PrStatus::Declined,
             PrStatus::Merged,
         ] {
@@ -149,14 +149,14 @@ fn a_hint_dimmed_in_the_footer_does_nothing_and_a_lit_one_works() {
 
 #[test]
 fn the_pr_level_actions_stay_off_the_builds_tab() {
-    let state = on_tab(overview_of(PrStatus::Open), DetailTab::Builds);
+    let state = on_tab(overview_of(PrStatus::open()), DetailTab::Builds);
     assert!(key(&state, 'x').is_none());
     assert!(key(&state, 'a').is_none());
 }
 
 #[test]
 fn the_description_footer_lists_the_pr_actions() {
-    let mut state = on_tab(overview_of(PrStatus::Open), DetailTab::Description);
+    let mut state = on_tab(overview_of(PrStatus::open()), DetailTab::Description);
     let text = footer_of(&mut state);
     assert!(text.contains("a: submit review"), "{text}");
     assert!(text.contains("x: decline"), "{text}");
@@ -167,7 +167,7 @@ fn the_description_footer_lists_the_pr_actions() {
 fn h_and_l_change_tab_on_every_tab_including_the_diff_panes() {
     for tab in DetailTab::ALL {
         for focus in [DiffFocus::Tree, DiffFocus::Pane] {
-            let mut state = on_tab(overview_of(PrStatus::Open), tab);
+            let mut state = on_tab(overview_of(PrStatus::open()), tab);
             state.ui.detail.diff.focus = focus;
             assert!(
                 matches!(
@@ -189,14 +189,14 @@ fn h_and_l_change_tab_on_every_tab_including_the_diff_panes() {
 
 #[test]
 fn the_diff_footer_says_how_to_go_back_and_change_tab() {
-    let mut state = on_tab(overview_of(PrStatus::Open), DetailTab::Diff);
+    let mut state = on_tab(overview_of(PrStatus::open()), DetailTab::Diff);
     let text = footer_of(&mut state);
     assert!(text.contains("h/l: tabs"), "{text}");
 }
 
 #[test]
 fn the_footer_offers_reopen_only_for_a_declined_pr() {
-    let open = footer_of(&mut overview_of(PrStatus::Open));
+    let open = footer_of(&mut overview_of(PrStatus::open()));
     assert!(open.contains("x: decline"), "{open}");
     assert!(!open.contains("x: reopen"), "{open}");
 
@@ -220,7 +220,7 @@ fn the_footer_offers_reopen_only_for_a_declined_pr() {
 #[test]
 fn a_pr_that_is_not_in_the_list_gives_no_context_and_only_the_way_out() {
     use crate::tui::{app::effect::Effect, ui::screens::pr_detail::DetailContext};
-    let mut state = overview_of(PrStatus::Open);
+    let mut state = overview_of(PrStatus::open());
     assert!(DetailContext::new(&state.store, PrId(42), DetailTab::Overview).is_some());
 
     state.screen = Screen::Detail {
@@ -252,7 +252,7 @@ fn a_pr_that_is_not_in_the_list_gives_no_context_and_only_the_way_out() {
 /// The Commits list, reached after the Diff tab was left with its pane on
 /// `focused`, and with a review in progress.
 fn commit_list_after_the_diff_pane(focused: FocusedNav) -> AppState {
-    let mut state = overview_of(PrStatus::Open);
+    let mut state = overview_of(PrStatus::open());
     state.ui.detail.diff.focus = DiffFocus::Pane;
     state.ui.detail.diff.pane.focused = Some(focused);
     state.store.reviews.entry(PrId(42)).or_default();
@@ -323,13 +323,16 @@ fn the_builds_footer_offers_run_again_for_a_failed_build_and_says_why_not_on_a_c
         }
         state
     };
-    let open = footer_of(&mut failing(PrStatus::Open));
+    let open = footer_of(&mut failing(PrStatus::open()));
     assert!(open.contains("b: run failed again"), "{open}");
     assert!(!open.contains("run failed again ("), "{open}");
 
     let merged = footer_of(&mut failing(PrStatus::Merged));
     assert!(merged.contains("b: run failed again (merged)"), "{merged}");
 
-    let passing = footer_of(&mut on_tab(overview_of(PrStatus::Open), DetailTab::Builds));
+    let passing = footer_of(&mut on_tab(
+        overview_of(PrStatus::open()),
+        DetailTab::Builds,
+    ));
     assert!(!passing.contains("run failed again"), "{passing}");
 }

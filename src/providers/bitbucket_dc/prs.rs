@@ -3,7 +3,7 @@ use serde::Deserialize;
 use super::{Config, ms_to_utc};
 use crate::domain::{
     ci::CiSummary,
-    pr::{PrBatch, PrGroup, PrId, PrStatus, PullRequest},
+    pr::{OpenPr, PrBatch, PrGroup, PrId, PrStatus, PullRequest},
     review::{Reviewer, ReviewerState},
     user::User,
 };
@@ -131,8 +131,11 @@ fn map_pr(bb: BbPr) -> PullRequest {
     let status = match bb.state.as_str() {
         "MERGED" => PrStatus::Merged,
         "DECLINED" => PrStatus::Declined,
-        _ if bb.draft => PrStatus::Draft,
-        _ => PrStatus::Open,
+        // Bitbucket does not say whether an open PR has a conflict in its list.
+        _ => PrStatus::Open(OpenPr {
+            draft: bb.draft,
+            conflicts: false,
+        }),
     };
 
     PullRequest {
@@ -153,7 +156,6 @@ fn map_pr(bb: BbPr) -> PullRequest {
         changed_files: 0,
         // Bitbucket Data Center does not say which accounts are bots.
         ai_review: crate::domain::pr::AiReview::None,
-        has_conflicts: false,
         created: ms_to_utc(bb.created_date),
         updated: ms_to_utc(bb.updated_date),
     }

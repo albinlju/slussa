@@ -282,7 +282,7 @@ impl Operation {
         match self {
             Self::Merge => Some(PrStatus::Merged),
             Self::Decline => Some(PrStatus::Declined),
-            Self::Reopen => Some(PrStatus::Open),
+            Self::Reopen => Some(PrStatus::open()),
             Self::Comment | Self::Moderation | Self::Review | Self::RerunBuilds => None,
         }
     }

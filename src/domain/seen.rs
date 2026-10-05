@@ -96,7 +96,7 @@ mod tests {
                 username: "alice".into(),
             },
             ci: CiSummary::Unknown,
-            status: PrStatus::Open,
+            status: PrStatus::open(),
             reviewers: vec![],
             labels: vec![],
             comment_count: 0,
@@ -108,7 +108,6 @@ mod tests {
             created: at(0),
             updated,
             ai_review: crate::domain::pr::AiReview::None,
-            has_conflicts: false,
         }
     }
 

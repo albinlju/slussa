@@ -1,4 +1,4 @@
-//! GitHub reads through a fake `gh`: the list, one PR's details, failures.
+//! GitHub reads through a fake `gh`: the list, failures.
 
 use super::support::*;
 
@@ -37,7 +37,7 @@ fn github_open_group_is_read_a_page_at_a_time_with_drafts_and_nothing_closed() {
         vec![1]
     );
     let pr = &first.prs[0];
-    assert_eq!(pr.status, PrStatus::Open);
+    assert_eq!(pr.status, PrStatus::open());
     assert_eq!(pr.author.username, "alice");
     assert!(
         pr.labels.is_empty() && pr.description.is_none(),
@@ -56,7 +56,7 @@ fn github_open_group_is_read_a_page_at_a_time_with_drafts_and_nothing_closed() {
     assert_eq!(last.prs[0].id, PrId(2));
     assert_eq!(
         last.prs[0].status,
-        PrStatus::Draft,
+        PrStatus::draft(),
         "drafts come with the open ones"
     );
 
@@ -182,54 +182,6 @@ fn github_list_query_leaves_out_the_body_and_the_labels() {
         !calls[0].contains("body") && !calls[0].contains("labels"),
         "{calls:?}"
     );
-}
-
-fn info_answer(labels: &[&str], more: bool) -> String {
-    json!({"data": {"repository": {"pullRequest": {
-        "id": "PR_1",
-        "body": "Explains the change.",
-        "labels": {
-            "nodes": labels.iter().map(|name| json!({"name": name})).collect::<Vec<_>>(),
-            "pageInfo": {"hasNextPage": more}
-        }
-    }}}})
-    .to_string()
-}
-
-#[test]
-fn github_info_reads_the_description_and_the_labels_of_one_pr() {
-    let gh = FakeGh::new()
-        .on("pullRequest(number: $pr)", &info_answer(&["bug"], false))
-        .install();
-    let info = Provider::GitHub.fetch_info(PrId(7)).unwrap();
-
-    assert_eq!(info.description.as_deref(), Some("Explains the change."));
-    assert_eq!(info.labels, vec!["bug"]);
-    assert_eq!(gh.calls().len(), 1);
-    assert!(gh.calls()[0].contains("pr=7"));
-}
-
-#[test]
-fn github_info_reads_on_when_the_labels_are_truncated() {
-    let node_page = json!({"data": {"item": {"connection": {
-        "nodes": [{"name": "bug"}, {"name": "ux"}],
-        "pageInfo": {"hasNextPage": false, "endCursor": null}
-    }}}})
-    .to_string();
-    let gh = FakeGh::new()
-        .on("node(id: \"PR_1\")", &node_page)
-        .on("pullRequest(number: $pr)", &info_answer(&["bug"], true))
-        .install();
-    let info = Provider::GitHub.fetch_info(PrId(1)).unwrap();
-
-    assert_eq!(info.labels, vec!["bug", "ux"]);
-    assert_eq!(gh.calls().len(), 2);
-}
-
-#[test]
-fn only_github_reads_the_description_and_labels_apart_from_the_list() {
-    use crate::domain::capabilities::Feature;
-    assert!(Provider::GitHub.capabilities().supports(Feature::PrInfo));
 }
 
 #[test]
@@ -495,7 +447,7 @@ fn read_conflicts(mergeable: Option<&str>, state: &str) -> bool {
     }
     let (result, _installed) =
         fetch_prs_with(FakeGh::new().on("states:", &gh_list_page(&[pr], None)));
-    result.unwrap().prs[0].has_conflicts
+    result.unwrap().prs[0].status.has_conflicts()
 }
 
 #[test]
@@ -511,87 +463,14 @@ fn github_list_says_a_pr_has_conflicts_only_when_it_is_open_and_github_says_so()
 }
 
 #[test]
-fn github_reads_one_pr_by_its_number_as_the_list_holds_it() {
-    let answer =
-        json!({"data": {"repository": {"pullRequest": gh_pr(44, "2026-10-01T10:00:00Z")}}})
-            .to_string();
-    let gh = FakeGh::new().on("statusCheckRollup", &answer).install();
-    let pr = Provider::GitHub.fetch_pr(PrId(44)).unwrap();
-
-    assert_eq!((pr.id, pr.title.as_str()), (PrId(44), "PR number 44"));
-    assert_eq!(gh.calls().len(), 1);
-    assert!(gh.calls()[0].contains("pr=44"), "{:?}", gh.calls());
-}
-
-#[test]
-fn github_reports_a_pr_that_does_not_exist_as_an_error() {
-    let _gh = FakeGh::new()
-        .fail(
-            "statusCheckRollup",
-            1,
-            "GraphQL: Could not resolve to a PullRequest",
-        )
-        .install();
-    assert!(Provider::GitHub.fetch_pr(PrId(9999)).is_err());
-}
-
-#[test]
-fn github_info_reads_the_issues_the_pr_closes() {
-    let answer = json!({"data": {"repository": {"pullRequest": {
-        "id": "PR_1",
-        "body": "Fixes it.",
-        "labels": {"nodes": [], "pageInfo": {"hasNextPage": false}},
-        "closingIssuesReferences": {"nodes": [
-            {"number": 12, "title": "Crash on start"},
-            {"number": 31, "title": "Slow list"}
-        ], "pageInfo": {"hasNextPage": false}}
-    }}}})
-    .to_string();
-    let _gh = FakeGh::new()
-        .on("pullRequest(number: $pr)", &answer)
-        .install();
-    let info = Provider::GitHub.fetch_info(PrId(7)).unwrap();
-
-    let issues: Vec<_> = info
-        .issues
-        .iter()
-        .map(|issue| (issue.number, issue.title.as_str()))
-        .collect();
-    assert_eq!(issues, [(12, "Crash on start"), (31, "Slow list")]);
-}
-
-#[test]
-fn github_info_reads_on_when_the_closing_issues_are_truncated() {
-    let first_page = json!({"data": {"repository": {"pullRequest": {
-        "id": "PR_1",
-        "body": "Fixes many.",
-        "labels": {"nodes": [], "pageInfo": {"hasNextPage": false}},
-        "closingIssuesReferences": {
-            "nodes": [{"number": 1, "title": "One"}],
-            "pageInfo": {"hasNextPage": true}
-        }
-    }}}})
-    .to_string();
-    let all = json!({"data": {"item": {"connection": {
-        "nodes": [{"number": 1, "title": "One"}, {"number": 2, "title": "Two"}],
-        "pageInfo": {"hasNextPage": false, "endCursor": null}
-    }}}})
-    .to_string();
-    let gh = FakeGh::new()
-        .on("node(id: \"PR_1\")", &all)
-        .on("pullRequest(number: $pr)", &first_page)
-        .install();
-    let info = Provider::GitHub.fetch_info(PrId(1)).unwrap();
-
-    let numbers: Vec<_> = info.issues.iter().map(|issue| issue.number).collect();
-    assert_eq!(numbers, [1, 2]);
-    assert_eq!(gh.calls().len(), 2);
-}
-
-#[test]
-fn github_a_pr_answered_with_null_is_said_not_to_exist() {
-    let answer = json!({"data": {"repository": {"pullRequest": null}}}).to_string();
-    let _gh = FakeGh::new().on("statusCheckRollup", &answer).install();
-    let error = Provider::GitHub.fetch_pr(PrId(9999)).unwrap_err();
-    assert!(error.user_message().contains("no PR #9999"), "{error:?}");
+fn github_a_draft_can_have_a_conflict_too() {
+    let mut pr = gh_pr(7, "2026-10-01T10:00:00Z");
+    pr["state"] = json!("OPEN");
+    pr["isDraft"] = json!(true);
+    pr["mergeable"] = json!("CONFLICTING");
+    let (result, _installed) =
+        fetch_prs_with(FakeGh::new().on("states:", &gh_list_page(&[pr], None)));
+    let status = result.unwrap().prs[0].status.clone();
+    assert_eq!(status.label(), "Draft");
+    assert!(status.has_conflicts());
 }

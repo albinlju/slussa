@@ -23,7 +23,7 @@ fn list() -> AppState {
         pr
     };
     let one = by(1, "alice", &|pr| pr.ci = CiSummary::Failed);
-    let two = by(2, "bob", &|pr| pr.has_conflicts = true);
+    let two = by(2, "bob", &|pr| pr.status = PrStatus::conflicting());
     let three = by(3, "alice", &|pr| {
         pr.reviewers = vec![Reviewer {
             author: User {

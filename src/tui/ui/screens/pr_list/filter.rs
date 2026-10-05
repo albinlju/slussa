@@ -1,5 +1,5 @@
 //! Which PRs the list shows and in what order.
-use crate::domain::pr::{PrGroup, PrStatus};
+use crate::domain::pr::{OpenPr, PrGroup, PrStatus};
 
 /// How the list is ordered. All but the first keep the provider's order
 /// (newest first) for rows that tie.
@@ -145,8 +145,8 @@ impl StatusFilter {
         matches!(
             (self, status),
             (Self::All, _)
-                | (Self::Open, PrStatus::Open)
-                | (Self::Draft, PrStatus::Draft)
+                | (Self::Open, PrStatus::Open(OpenPr { draft: false, .. }))
+                | (Self::Draft, PrStatus::Open(OpenPr { draft: true, .. }))
                 | (Self::Merged, PrStatus::Merged)
                 | (Self::Declined, PrStatus::Declined)
         )

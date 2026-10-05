@@ -1,22 +1,76 @@
 use super::{ci::CiSummary, review::Reviewer, user::User};
 use chrono::{DateTime, Utc};
 
+/// Where a PR is in its life. What only an open PR has, being a draft and
+/// having a conflict, is in the variant for an open PR, so a merged or declined
+/// PR cannot be written with either.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum PrStatus {
-    Open,
-    Draft,
+    Open(OpenPr),
     Merged,
     Declined,
 }
 
+/// What an open PR can be besides open.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+pub struct OpenPr {
+    /// The author has not asked for a review yet.
+    pub draft: bool,
+    /// The provider says it cannot be merged as it is, for a conflict with the
+    /// branch it targets. A provider that does not say, or has not worked it
+    /// out, leaves it false.
+    pub conflicts: bool,
+}
+
 impl PrStatus {
+    /// An open PR that is ready for review and has no conflict.
+    pub const fn open() -> Self {
+        Self::Open(OpenPr {
+            draft: false,
+            conflicts: false,
+        })
+    }
+
+    /// An open PR that is a draft and has no conflict.
+    #[cfg(test)]
+    pub const fn draft() -> Self {
+        Self::Open(OpenPr {
+            draft: true,
+            conflicts: false,
+        })
+    }
+
+    /// An open PR that is ready for review and has a conflict.
+    #[cfg(test)]
+    pub const fn conflicting() -> Self {
+        Self::Open(OpenPr {
+            draft: false,
+            conflicts: true,
+        })
+    }
+
     pub const fn label(&self) -> &str {
         match self {
-            Self::Open => "Open",
-            Self::Draft => "Draft",
+            Self::Open(OpenPr { draft: false, .. }) => "Open",
+            Self::Open(OpenPr { draft: true, .. }) => "Draft",
             Self::Merged => "Merged",
             Self::Declined => "Declined",
         }
+    }
+
+    /// Open and not a draft: the PRs that ask for a reader.
+    pub const fn is_ready(&self) -> bool {
+        matches!(self, Self::Open(OpenPr { draft: false, .. }))
+    }
+
+    pub const fn has_conflicts(&self) -> bool {
+        matches!(
+            self,
+            Self::Open(OpenPr {
+                conflicts: true,
+                ..
+            })
+        )
     }
 }
 
@@ -52,7 +106,7 @@ impl PrGroup {
     /// The group a PR belongs to, by its status.
     pub const fn of(status: &PrStatus) -> Self {
         match status {
-            PrStatus::Open | PrStatus::Draft => Self::Open,
+            PrStatus::Open(_) => Self::Open,
             PrStatus::Merged => Self::Merged,
             PrStatus::Declined => Self::Declined,
         }
@@ -181,7 +235,7 @@ impl PullRequest {
                 username: "alice".into(),
             },
             ci: CiSummary::Unknown,
-            status: PrStatus::Open,
+            status: PrStatus::open(),
             reviewers: vec![],
             labels: vec![],
             comment_count: 0,
@@ -193,7 +247,6 @@ impl PullRequest {
             created: updated,
             updated,
             ai_review: AiReview::None,
-            has_conflicts: false,
         }
     }
 }
@@ -218,10 +271,6 @@ pub struct PullRequest {
     pub created: DateTime<Utc>,
     pub updated: DateTime<Utc>,
     pub ai_review: AiReview,
-    /// The provider says the PR cannot be merged as it is, for a conflict with
-    /// the branch it targets. Only an open PR has one; a provider that does not
-    /// say, or has not worked it out, leaves it false.
-    pub has_conflicts: bool,
 }
 
 #[cfg(test)]

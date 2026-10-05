@@ -49,7 +49,7 @@ fn pr(id: u64, author: &str, ci: CiSummary, reviewers: Vec<Reviewer>) -> PullReq
             username: author.into(),
         },
         ci,
-        status: PrStatus::Open,
+        status: PrStatus::open(),
         reviewers,
         labels: Vec::new(),
         comment_count: 0,
@@ -61,7 +61,6 @@ fn pr(id: u64, author: &str, ci: CiSummary, reviewers: Vec<Reviewer>) -> PullReq
         created: Utc::now(),
         updated: Utc::now(),
         ai_review: AiReview::None,
-        has_conflicts: false,
     }
 }
 
