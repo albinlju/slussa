@@ -236,7 +236,10 @@ against:
 - [ ] **Re-run CI checks** — `b` in Builds runs the failed or cancelled GitHub Actions jobs again. Missing: one build at a time, all builds, and checks that are not Actions (external statuses).
 - [ ] **Request / re-request reviewers** — `p` asks those who asked for
   changes to review again (GitHub; the footer names them, nothing is shown
-  when nobody asked for changes). Missing: asking someone who has not been
+  when nobody asked for changes). **Not tried against a real review:** it
+  needs a changes-requested review by a second account, so only `FakeGh`
+  covers the request and the reading again; try it on a PR where someone else
+  asked for changes. Missing: asking someone who has not been
   asked, re-requesting an approval that a push made stale, team reviewers,
   and Bitbucket Data Center.
 - [ ] **Delete the source branch after merge** — `d` in the merge dialog
