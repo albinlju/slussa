@@ -83,8 +83,8 @@ fn github_info_reads_the_issues_the_pr_closes() {
         "body": "Fixes it.",
         "labels": {"nodes": [], "pageInfo": {"hasNextPage": false}},
         "closingIssuesReferences": {"nodes": [
-            {"number": 12, "title": "Crash on start"},
-            {"number": 31, "title": "Slow list"}
+            {"number": 12, "title": "Crash on start", "url": "https://github.com/o/r/issues/12"},
+            {"number": 31, "title": "Slow list", "url": "https://github.com/o/other/issues/31"}
         ], "pageInfo": {"hasNextPage": false}}
     }}}})
     .to_string();
@@ -99,6 +99,11 @@ fn github_info_reads_the_issues_the_pr_closes() {
         .map(|issue| (issue.number, issue.title.as_str()))
         .collect();
     assert_eq!(issues, [(12, "Crash on start"), (31, "Slow list")]);
+    assert_eq!(
+        info.issues[1].url.as_deref(),
+        Some("https://github.com/o/other/issues/31"),
+        "an issue of another repository keeps its own address"
+    );
 }
 
 #[test]

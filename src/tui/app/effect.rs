@@ -38,6 +38,11 @@ pub enum Effect {
         pr_id: PrId,
         kind: LinkAction,
     },
+    /// Open an issue the PR closes in the browser.
+    IssueLink {
+        number: u64,
+        url: String,
+    },
     Command {
         pr_id: PrId,
         command: Command,
@@ -57,9 +62,9 @@ pub enum TaskResult {
         ticket: WriteTicket,
         result: Result<(), WriteError>,
     },
-    /// Opening or copying a PR's link is over.
+    /// Opening or copying a link is over.
     LinkFinished {
-        pr_id: PrId,
+        target: LinkTarget,
         result: Result<LinkDone, LinkError>,
     },
 }
@@ -182,6 +187,22 @@ impl WriteError {
         match self {
             Self::Failed(error) => error.may_have_reached_server(),
             Self::BranchDeleteFailed(_) | Self::PartialReview { .. } => true,
+        }
+    }
+}
+
+/// What a link is to, for the notice that says it was opened.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum LinkTarget {
+    Pr(PrId),
+    Issue(u64),
+}
+
+impl std::fmt::Display for LinkTarget {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::Pr(pr_id) => write!(f, "PR #{pr_id}"),
+            Self::Issue(number) => write!(f, "issue #{number}"),
         }
     }
 }

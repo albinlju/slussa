@@ -1,6 +1,7 @@
 pub mod confirm;
 pub(super) mod error;
 pub(super) mod help;
+pub mod issues;
 pub mod merge;
 mod pr_summary;
 pub mod review;

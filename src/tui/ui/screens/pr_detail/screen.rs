@@ -15,7 +15,10 @@ use crate::{
                 search_input::{SearchInput, SearchKind},
             },
             screens::pr_detail::{
-                dialogs::{confirm::ConfirmDialog, merge::MergeDialog, review::ReviewDialog},
+                dialogs::{
+                    confirm::ConfirmDialog, issues::IssueDialog, merge::MergeDialog,
+                    review::ReviewDialog,
+                },
                 tabs::commits::CommitList,
             },
         },
@@ -56,6 +59,7 @@ pub enum Overlay {
     Confirm(ConfirmDialog),
     Review(ReviewDialog),
     Merge(MergeDialog),
+    Issues(IssueDialog),
 }
 
 #[derive(Debug, Default)]
@@ -110,21 +114,40 @@ impl PrDetailScreen {
     pub const fn confirm(&self) -> Option<&ConfirmDialog> {
         match &self.overlay {
             Some(Overlay::Confirm(dialog)) => Some(dialog),
-            Some(Overlay::Help(_) | Overlay::Review(_) | Overlay::Merge(_)) | None => None,
+            Some(
+                Overlay::Help(_) | Overlay::Review(_) | Overlay::Merge(_) | Overlay::Issues(_),
+            )
+            | None => None,
         }
     }
 
     pub const fn review_picker(&self) -> Option<&ReviewDialog> {
         match &self.overlay {
             Some(Overlay::Review(dialog)) => Some(dialog),
-            Some(Overlay::Help(_) | Overlay::Confirm(_) | Overlay::Merge(_)) | None => None,
+            Some(
+                Overlay::Help(_) | Overlay::Confirm(_) | Overlay::Merge(_) | Overlay::Issues(_),
+            )
+            | None => None,
         }
     }
 
     pub const fn merge_picker(&self) -> Option<&MergeDialog> {
         match &self.overlay {
             Some(Overlay::Merge(dialog)) => Some(dialog),
-            Some(Overlay::Help(_) | Overlay::Confirm(_) | Overlay::Review(_)) | None => None,
+            Some(
+                Overlay::Help(_) | Overlay::Confirm(_) | Overlay::Review(_) | Overlay::Issues(_),
+            )
+            | None => None,
+        }
+    }
+
+    pub const fn issue_picker(&self) -> Option<&IssueDialog> {
+        match &self.overlay {
+            Some(Overlay::Issues(dialog)) => Some(dialog),
+            Some(
+                Overlay::Help(_) | Overlay::Confirm(_) | Overlay::Review(_) | Overlay::Merge(_),
+            )
+            | None => None,
         }
     }
 
@@ -206,6 +229,7 @@ impl Component for PrDetailScreen {
             DetailAction::Confirm(action) => return self.confirm_action(action, pr_id),
             DetailAction::Review(action) => return self.review_action(action, pr_id, ctx),
             DetailAction::Merge(action) => return self.merge_action(action, pr_id, ctx),
+            DetailAction::Issues(action) => return self.issue_action(action, ctx),
             DetailAction::Editor(EditorAction::Submit) => return self.submit_editor(pr_id),
             DetailAction::Editor(action) => {
                 self.editor.update(action, &());

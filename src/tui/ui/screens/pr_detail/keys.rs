@@ -40,6 +40,9 @@ pub(in crate::tui::ui) fn key_to_action(
         Some(Overlay::Merge(dialog)) => {
             return dialog.handle_key(key, &state.store.capabilities.merge_strategies.as_slice());
         }
+        Some(Overlay::Issues(dialog)) => {
+            return dialog.handle_key(key, &state.issues_to_open().len());
+        }
         Some(Overlay::Help(help)) => {
             return if matches!(code, KeyCode::Esc | KeyCode::Char('?')) {
                 Some(Action::from(NavAction::ToggleHelp))

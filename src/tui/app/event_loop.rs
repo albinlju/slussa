@@ -5,7 +5,7 @@ use crate::{
     tui::{
         app::{
             drafts::Drafts,
-            effect::{Effect, TaskResult},
+            effect::{Effect, LinkAction, LinkTarget, TaskResult},
             refresh,
             seen::SeenFile,
             state::AppState,
@@ -181,11 +181,11 @@ impl App {
         match result {
             TaskResult::Read(read) => self.apply_read(read),
             TaskResult::Written { ticket, result } => self.apply_write(&ticket, result),
-            TaskResult::LinkFinished { pr_id, result } => {
+            TaskResult::LinkFinished { target, result } => {
                 self.state.store.link_pending = false;
                 self.state.store.notice = Some(match result {
-                    Ok(done) => store::Notice::info(format!("PR #{pr_id}: {}", done.message())),
-                    Err(error) => store::Notice::error(format!("PR #{pr_id}: {error}")),
+                    Ok(done) => store::Notice::info(format!("{target}: {}", done.message())),
+                    Err(error) => store::Notice::error(format!("{target}: {error}")),
                 });
             }
         }
@@ -216,6 +216,9 @@ impl App {
                 self.state.store.errors.remove(&pr_id);
             }
             Effect::PrLink { pr_id, kind } => self.pr_link(pr_id, kind),
+            Effect::IssueLink { number, url } => {
+                self.start_link(LinkTarget::Issue(number), LinkAction::Open, &url);
+            }
             Effect::Command { pr_id, command } => self.execute(pr_id, command),
         }
         Next::Continue

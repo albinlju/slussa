@@ -230,6 +230,8 @@ pub fn fetch_info(pr: PrId) -> Result<PrInfo, FetchError> {
         number: u64,
         #[serde(default)]
         title: String,
+        #[serde(default)]
+        url: Option<String>,
     }
     let fields: Fields = super::run_pr_graphql(super::graphql::INFO, pr)?;
     let labels = if fields.labels.page_info.has_next_page {
@@ -242,7 +244,7 @@ pub fn fetch_info(pr: PrId) -> Result<PrInfo, FetchError> {
             &fields.id,
             "PullRequest",
             "closingIssuesReferences",
-            "number title",
+            "number title url",
         )?,
         Some(issues) => issues.nodes,
         None => Vec::new(),
@@ -255,6 +257,7 @@ pub fn fetch_info(pr: PrId) -> Result<PrInfo, FetchError> {
             .map(|issue| LinkedIssue {
                 number: issue.number,
                 title: issue.title,
+                url: issue.url,
             })
             .collect(),
     })

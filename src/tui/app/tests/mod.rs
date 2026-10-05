@@ -4,6 +4,7 @@ mod auto_merge;
 mod delete_branch;
 mod loading;
 mod navigation;
+mod open_issue;
 mod opening;
 mod recovery;
 mod rerequest;
