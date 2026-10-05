@@ -254,3 +254,23 @@ fn bitbucket_lets_an_approval_be_withdrawn_after_a_push() {
     let sent: Value = serde_json::from_str(&requests[0].body).unwrap();
     assert_eq!(sent, json!({"status": "UNAPPROVED"}));
 }
+
+#[test]
+fn bitbucket_a_user_name_is_kept_to_its_place_in_the_path() {
+    let server = MockHttp::start(vec![Route::put(
+        &format!("{PR_9}/participants/anna%2Fb%40corp"),
+        200,
+        "{}",
+    )]);
+    bitbucket(&server)
+        .submit_full_review(
+            PrId(9),
+            ReviewVerdict::Unapprove,
+            "",
+            "anna/b@corp",
+            &[],
+            &read_head(),
+        )
+        .unwrap();
+    assert_eq!(server.requests().len(), 1);
+}

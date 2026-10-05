@@ -52,6 +52,7 @@ pub fn submit_review(
         // A plain comment review is just the comment posted above — no status flip.
         ReviewVerdict::Comment => return Ok(()),
     };
+    let user = crate::providers::url_path::segment(user);
     let endpoint = format!(
         "/rest/api/1.0/projects/{}/repos/{}/pull-requests/{pr_id}/participants/{user}",
         config.repo.project_key, config.repo.repo_slug,
@@ -280,6 +281,7 @@ pub fn decline(config: &Config, pr_id: PrId) -> Result<(), FetchError> {
 #[derive(Clone, Debug)]
 pub struct RepoLocation {
     pub base_url: String,
+    /// The project and the repository as parts of a path: already escaped.
     pub project_key: String,
     pub repo_slug: String,
 }

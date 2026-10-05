@@ -72,7 +72,7 @@ fn delete_branch(repo: &GhRepo, branch: &DeletableBranch) -> Result<(), FetchErr
             "DELETE",
             &format!(
                 "repos/{{owner}}/{{repo}}/git/refs/heads/{}",
-                ref_path(branch.name())
+                crate::providers::url_path::path(branch.name())
             ),
         ],
     );
@@ -85,20 +85,6 @@ fn delete_branch(repo: &GhRepo, branch: &DeletableBranch) -> Result<(), FetchErr
         }
         Err(error) => Err(error),
     }
-}
-
-/// A branch name as the tail of a URL path: slashes stay, anything that is not
-/// plain is escaped, so a `#` or `?` in a name does not end the path.
-fn ref_path(name: &str) -> String {
-    use std::fmt::Write;
-    name.bytes().fold(String::new(), |mut out, byte| {
-        if byte.is_ascii_alphanumeric() || matches!(byte, b'-' | b'.' | b'_' | b'~' | b'/') {
-            out.push(char::from(byte));
-        } else {
-            let _ = write!(out, "%{byte:02X}");
-        }
-        out
-    })
 }
 
 /// Merge the PR by itself once its checks and reviews allow it, or stop it from

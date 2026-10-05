@@ -100,8 +100,11 @@ pub(super) fn run() -> Result<Provider, PreflightError> {
                     remote: remote.clone(),
                 }
             })?;
-            let pat = bitbucket_dc::auth::load_pat(&host)
-                .ok_or_else(|| PreflightError::DcNotAuthenticated { host: host.clone() })?;
+            let pat = bitbucket_dc::auth::load_pat(&bitbucket_dc::auth::token_name(
+                &repo.base_url,
+                &host,
+            ))
+            .ok_or_else(|| PreflightError::DcNotAuthenticated { host: host.clone() })?;
             tracing::info!(
                 "bitbucket dc preflight ok for {}/{}/{}",
                 host,

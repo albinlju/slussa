@@ -8,8 +8,22 @@ use super::auth::Pat;
 use crate::domain::user::Username;
 use crate::providers::error::FetchError;
 
-pub(super) fn build_client(timeout: Duration) -> reqwest::Result<Client> {
+/// What a client does with a redirect. A request that carries the token is not
+/// sent on to wherever the server says: a REST call has no reason to be
+/// redirected, and a POST that carries a comment is not repeated elsewhere. A
+/// probe with no token may follow it.
+#[derive(Clone, Copy)]
+pub(super) enum Redirects {
+    Follow,
+    Refuse,
+}
+
+pub(super) fn build_client(timeout: Duration, redirects: Redirects) -> reqwest::Result<Client> {
     Client::builder()
+        .redirect(match redirects {
+            Redirects::Follow => reqwest::redirect::Policy::default(),
+            Redirects::Refuse => reqwest::redirect::Policy::none(),
+        })
         .timeout(timeout)
         .user_agent(concat!("slussa/", env!("CARGO_PKG_VERSION")))
         .build()
@@ -20,7 +34,7 @@ fn client() -> Result<&'static Client, FetchError> {
     if let Some(client) = CLIENT.get() {
         return Ok(client);
     }
-    let built = build_client(Duration::from_secs(20))
+    let built = build_client(Duration::from_secs(20), Redirects::Refuse)
         .map_err(|e| FetchError::Network(format!("http client build failed: {e}").into()))?;
     Ok(CLIENT.get_or_init(|| built))
 }

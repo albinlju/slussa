@@ -20,6 +20,7 @@ pub mod bitbucket_dc;
 pub mod error;
 pub mod github;
 mod unified_diff;
+mod url_path;
 
 pub use error::{FetchError, MergeError, ReviewError};
 pub use github::GhRepo;

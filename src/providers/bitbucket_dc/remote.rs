@@ -15,11 +15,12 @@ pub fn locate(remote: &str, host: &str) -> Option<RepoLocation> {
         _ => return None,
     };
 
-    let repo_slug = repo.strip_suffix(".git").unwrap_or(repo).to_string();
+    let repo_slug = repo.strip_suffix(".git").unwrap_or(repo);
+    // Both go into paths as they are, so they are kept to their place in them.
     Some(RepoLocation {
         base_url: base_url(remote, host),
-        project_key: project.to_string(),
-        repo_slug,
+        project_key: crate::providers::url_path::segment(project),
+        repo_slug: crate::providers::url_path::segment(repo_slug),
     })
 }
 
@@ -74,6 +75,15 @@ mod tests {
         assert_eq!(repo.base_url, "https://host.se/bitbucket");
         assert_eq!(repo.project_key, "PLAT");
         assert_eq!(repo.repo_slug, "api");
+    }
+
+    #[test]
+    fn a_name_that_is_not_plain_is_kept_to_its_place_in_a_path() {
+        let repo = locate("git@host.se:PLAT/we ird#name?.git", "host.se").unwrap();
+        assert_eq!(repo.repo_slug, "we%20ird%23name%3F");
+        // A personal project's key keeps its tilde.
+        let personal = locate("https://host.se/scm/~jsmith/api.git", "host.se").unwrap();
+        assert_eq!(personal.project_key, "~jsmith");
     }
 
     #[test]

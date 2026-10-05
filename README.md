@@ -88,7 +88,11 @@ slussa --help
 ```
 
 For Bitbucket Data Center, run `slussa auth login` once per host. For GitHub,
-run `gh auth login` instead.
+run `gh auth login` instead. An `origin` that says `http` has a token of its own,
+apart from the one for the same host over https or ssh, so a token stored for
+https is never sent unencrypted; `slussa auth login` warns when the server is
+http, and a server you reach over http needs one login after this change.
+Requests that carry the token do not follow a redirect.
 
 Press `?` in any view for the keys that are available right now; the full list
 is in [KEYS.md](docs/KEYS.md). To start with: `j`/`k` move, `enter` opens, `/`
