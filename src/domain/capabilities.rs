@@ -19,6 +19,8 @@ pub enum Feature {
     RerunBuilds,
     /// A merged PR's source branch can be deleted with the merge.
     DeleteBranch,
+    /// Those who asked for changes can be asked to review again.
+    RerequestReview,
     /// The list omits the description and labels; they are read per PR.
     PrInfo,
 }

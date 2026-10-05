@@ -241,6 +241,7 @@ pub enum PrAction {
     DeleteComment,
     ResolveThread,
     RerunBuilds,
+    RerequestReview,
 }
 
 #[derive(Debug, Clone, Copy)]

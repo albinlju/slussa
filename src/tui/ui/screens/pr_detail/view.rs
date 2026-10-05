@@ -6,7 +6,7 @@ use crate::{
         commit::CommitOid,
         diff::FileDiff,
         pr::{DeletableBranch, Mergeability, PrId, PrStatus, PullRequest},
-        review::{CommentTarget, ReviewVerdict},
+        review::{CommentTarget, Rerequest, ReviewVerdict},
     },
     tui::{
         app::{
@@ -154,6 +154,11 @@ impl<'a> DetailView<'a> {
                     .iter()
                     .any(|build| matches!(build.state, BuildState::Failed | BuildState::Cancelled))
             })
+    }
+
+    /// Those who asked for changes, when there are some to ask again.
+    pub fn rerequest(&self) -> Option<Rerequest> {
+        Rerequest::of(&self.pr.reviewers)
     }
 
     /// Whether the PR was closed without merging, so `x` reopens it.
@@ -372,6 +377,7 @@ impl DetailView<'_> {
                 PrAction::DeleteComment => caps.supports(F::DeleteComments),
                 PrAction::ResolveThread => caps.supports(F::ResolveThreads),
                 PrAction::RerunBuilds => caps.supports(F::RerunBuilds),
+                PrAction::RerequestReview => caps.supports(F::RerequestReview),
             },
             A::Review(ReviewAction::Select) => caps.reviews(),
             A::Merge(MergeAction::Select) => !caps.merge_strategies.is_empty(),

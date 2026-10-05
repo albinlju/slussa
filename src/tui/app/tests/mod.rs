@@ -6,6 +6,7 @@ mod loading;
 mod navigation;
 mod opening;
 mod recovery;
+mod rerequest;
 mod rerun;
 mod review;
 mod seen;

@@ -11,6 +11,7 @@ mod merge;
 mod pagination;
 mod prs;
 mod review_threads;
+mod reviewers;
 
 pub use activities::fetch as fetch_activity;
 pub use builds::{fetch_builds, rerun_failed};
@@ -21,6 +22,7 @@ pub use commits::fetch_commits;
 pub use diff::{fetch_commit_diff, fetch_diff};
 pub use merge::{merge, set_auto_merge};
 pub use prs::{fetch_info, fetch_pr, fetch_prs};
+pub use reviewers::rerequest;
 
 use chrono::{DateTime, Utc};
 use serde::Deserialize;

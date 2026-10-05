@@ -336,3 +336,34 @@ fn the_builds_footer_offers_run_again_for_a_failed_build_and_says_why_not_on_a_c
     ));
     assert!(!passing.contains("run failed again"), "{passing}");
 }
+
+#[test]
+fn the_footer_names_who_p_asks_again_and_says_why_not_on_a_closed_pr() {
+    use crate::domain::review::{Reviewer, ReviewerState};
+    let asked = |status, names: &[&str]| {
+        let mut state = on_tab(overview_of(status), DetailTab::Overview);
+        if let LoadState::Loaded(prs) = &mut state.store.cache.prs {
+            prs[0].reviewers = names
+                .iter()
+                .map(|name| Reviewer {
+                    author: crate::domain::user::User {
+                        username: (*name).into(),
+                    },
+                    state: ReviewerState::ChangesRequested,
+                })
+                .collect();
+        }
+        state
+    };
+    let one = footer_of(&mut asked(PrStatus::open(), &["alice"]));
+    assert!(one.contains("p: ask alice again"), "{one}");
+
+    let several = footer_of(&mut asked(PrStatus::open(), &["alice", "erin", "frank"]));
+    assert!(several.contains("p: ask alice +2 again"), "{several}");
+
+    let merged = footer_of(&mut asked(PrStatus::Merged, &["alice"]));
+    assert!(merged.contains("p: ask alice again (merged)"), "{merged}");
+
+    let nobody = footer_of(&mut asked(PrStatus::open(), &[]));
+    assert!(!nobody.contains("ask"), "{nobody}");
+}

@@ -234,7 +234,11 @@ against:
 - [ ] **Repo-allowed merge strategies** — pre-filter the merge picker from repo
   settings instead of letting the server reject.
 - [ ] **Re-run CI checks** — `b` in Builds runs the failed or cancelled GitHub Actions jobs again. Missing: one build at a time, all builds, and checks that are not Actions (external statuses).
-- [ ] **Request / re-request reviewers** — including re-request after a push.
+- [ ] **Request / re-request reviewers** — `p` asks those who asked for
+  changes to review again (GitHub; the footer names them, nothing is shown
+  when nobody asked for changes). Missing: asking someone who has not been
+  asked, re-requesting an approval that a push made stale, team reviewers,
+  and Bitbucket Data Center.
 - [ ] **Delete the source branch after merge** — `d` in the merge dialog
   marks it (GitHub; only a branch of the same repository, never the target;
   not offered with *merge when ready*, where the repository's own setting

@@ -3,7 +3,7 @@ use crate::{
         capabilities::{Capabilities, Feature},
         comment::{CommentKey, NonBlank, ThreadHandle},
         pr::{DeletableBranch, MergeStrategy, PrId},
-        review::{CommentTarget, PendingComment, ReviewVerdict},
+        review::{CommentTarget, PendingComment, Rerequest, ReviewVerdict},
     },
     tui::app::{
         App,
@@ -34,6 +34,8 @@ pub enum Command {
     AutoMerge(MergeStrategy),
     CancelAutoMerge,
     RerunFailedBuilds,
+    /// Ask those who asked for changes to look again.
+    RerequestReview(Rerequest),
     Decline,
     Reopen,
     DeleteComment(CommentKey),
@@ -66,6 +68,7 @@ impl Command {
             }
             Self::CancelAutoMerge => caps.supports(Feature::AutoMerge),
             Self::RerunFailedBuilds => caps.supports(Feature::RerunBuilds),
+            Self::RerequestReview(_) => caps.supports(Feature::RerequestReview),
             Self::Decline => caps.supports(Feature::ClosePr),
             Self::Reopen => caps.supports(Feature::ReopenPr),
             Self::DeleteComment { .. } => caps.supports(Feature::DeleteComments),
@@ -140,6 +143,11 @@ impl App {
             Command::RerunFailedBuilds => {
                 if let Some(ticket) = self.begin_write(pr_id, Operation::RerunBuilds) {
                     self.spawn_rerun_builds(ticket);
+                }
+            }
+            Command::RerequestReview(who) => {
+                if let Some(ticket) = self.begin_write(pr_id, Operation::RerequestReview) {
+                    self.spawn_rerequest_review(ticket, who);
                 }
             }
             Command::Decline => {

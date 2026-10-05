@@ -6,7 +6,9 @@ use crate::{
         comment::{CommentKey, ThreadHandle},
         commit::CommitOid,
         pr::{DeletableBranch, MergeStrategy, PrGroup, PrId},
-        review::{CommentAnchor, CommentTarget, PendingComment, ReviewComment, ReviewVerdict},
+        review::{
+            CommentAnchor, CommentTarget, PendingComment, Rerequest, ReviewComment, ReviewVerdict,
+        },
     },
     providers::FetchError,
     tui::app::{
@@ -232,6 +234,12 @@ impl App {
         let provider = self.provider.clone();
         let pr_id = ticket.pr_id();
         self.spawn_write(ticket, move || provider.rerun_failed_builds(pr_id));
+    }
+
+    pub(super) fn spawn_rerequest_review(&self, ticket: WriteTicket, who: Rerequest) {
+        let provider = self.provider.clone();
+        let pr_id = ticket.pr_id();
+        self.spawn_write(ticket, move || provider.rerequest_review(pr_id, &who));
     }
 
     pub(super) fn spawn_decline(&self, ticket: WriteTicket) {

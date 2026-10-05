@@ -35,7 +35,7 @@ use crate::domain::{
     pr::{
         DeletableBranch, MergeStrategy, Mergeability, PrBatch, PrGroup, PrId, PrInfo, PullRequest,
     },
-    review::{ReviewComment, ReviewVerdict},
+    review::{Rerequest, ReviewComment, ReviewVerdict},
     user::Username,
 };
 
@@ -174,6 +174,16 @@ impl Provider {
         }
     }
 
+    /// Ask those who asked for changes to review again.
+    pub fn rerequest_review(&self, pr_id: PrId, who: &Rerequest) -> Result<(), FetchError> {
+        match self {
+            Self::GitHub => github::rerequest(pr_id, who),
+            Self::BitbucketDc(_) => Err(FetchError::Unsupported(
+                "Bitbucket does not ask for a review again from here.".into(),
+            )),
+        }
+    }
+
     /// Reopen a PR that was closed or declined without being merged.
     pub fn reopen(&self, pr_id: PrId) -> Result<(), FetchError> {
         match self {
@@ -207,6 +217,7 @@ impl Provider {
                         Feature::AutoMerge,
                         Feature::RerunBuilds,
                         Feature::DeleteBranch,
+                        Feature::RerequestReview,
                     ])
                     .collect(),
                 review: Some(ReviewCaps {

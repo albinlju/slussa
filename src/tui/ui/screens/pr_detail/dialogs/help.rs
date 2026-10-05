@@ -43,6 +43,7 @@ const HELP: &[Entry] = &[
     Entry::Bound(&bindings::rows::MERGE),
     Entry::Bound(&bindings::rows::REOPEN),
     Entry::Bound(&bindings::rows::RERUN_BUILDS),
+    Entry::Bound(&bindings::rows::REREQUEST_REVIEW),
     Entry::Bound(&bindings::rows::COMMENT),
     Entry::Bound(&bindings::rows::REPLY),
     Key("^j/^k", "step comment", Needs::Nothing),

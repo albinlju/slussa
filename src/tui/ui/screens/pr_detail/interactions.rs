@@ -330,6 +330,7 @@ impl PrDetailScreen {
                 return None;
             }
             PrAction::RerunBuilds => Command::RerunFailedBuilds,
+            PrAction::RerequestReview => Command::RerequestReview(self.view(ctx).rerequest()?),
             PrAction::ResolveThread => {
                 let thread = self.view(ctx).focused_thread()?;
                 Command::ResolveThread {
