@@ -78,6 +78,7 @@ fn render(frame: &mut Frame<'_>, view: &MergeView<'_>, dialog: &MergeDialog, are
     let mut lines = vec![
         Line::from(Span::styled(title, Style::default().fg(theme.fg))),
         Line::styled(view.pr.label.clone(), normal),
+        Line::default(),
         Line::from(vec![
             Span::styled("Into: ", normal),
             Span::styled(
@@ -176,13 +177,14 @@ fn render(frame: &mut Frame<'_>, view: &MergeView<'_>, dialog: &MergeDialog, are
         ));
     }
     hints.push(("Esc", "cancel"));
-    crate::tui::ui::widgets::dialog::choices_with_hints(
+    crate::tui::ui::widgets::dialog::choices_with_room(
         frame,
         area,
         "Merge",
         lines,
         selected_line,
         &hints,
+        crate::tui::ui::widgets::dialog::Room::Roomy,
     );
 }
 
@@ -421,5 +423,33 @@ mod tests {
         );
         assert!(!armed.contains("Delete feature"), "{armed}");
         assert!(!armed.contains("d keep branch"), "{armed}");
+    }
+
+    #[test]
+    fn the_dialog_is_at_least_sixty_wide_and_sets_the_pr_apart_from_its_branches() {
+        let text = drawn(&[]);
+        let top = text
+            .lines()
+            .find(|line| line.contains("╭ Merge"))
+            .expect("the dialog's top edge");
+        let edge: String = top.chars().skip_while(|c| *c != '╭').collect();
+        assert!(
+            edge.chars().count() >= 60,
+            "{} wide: {text}",
+            edge.chars().count()
+        );
+
+        let lines: Vec<&str> = text.lines().collect();
+        let label = lines
+            .iter()
+            .position(|line| line.contains("PR #7 · Fix it"))
+            .expect("the PR label");
+        assert!(
+            lines[label + 1]
+                .trim_matches(|c: char| c == '│' || c.is_whitespace())
+                .is_empty(),
+            "an empty line follows the label: {text}"
+        );
+        assert!(lines[label + 2].contains("Into: main"), "{text}");
     }
 }

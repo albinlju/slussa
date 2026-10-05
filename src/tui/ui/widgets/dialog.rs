@@ -94,6 +94,29 @@ pub fn choices(
     );
 }
 
+/// How narrow a choice dialog may be, how narrow a roomier one may be, and how
+/// wide either may grow.
+const NARROW: u16 = 44;
+const ROOMY: u16 = 60;
+const WIDEST: u16 = 72;
+const _: () = assert!(NARROW <= ROOMY && ROOMY <= WIDEST);
+
+/// How much width a choice dialog is given at least.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Room {
+    Narrow,
+    Roomy,
+}
+
+impl Room {
+    const fn min_width(self) -> u16 {
+        match self {
+            Self::Narrow => NARROW,
+            Self::Roomy => ROOMY,
+        }
+    }
+}
+
 pub fn choices_with_hints(
     frame: &mut Frame<'_>,
     area: Rect,
@@ -102,9 +125,21 @@ pub fn choices_with_hints(
     selected: usize,
     hints: &[(&str, &str)],
 ) {
+    choices_with_room(frame, area, title, lines, selected, hints, Room::Narrow);
+}
+
+pub fn choices_with_room(
+    frame: &mut Frame<'_>,
+    area: Rect,
+    title: &str,
+    lines: Vec<Line<'static>>,
+    selected: usize,
+    hints: &[(&str, &str)],
+    room: Room,
+) {
     let width = saturating_u16(lines.iter().map(Line::width).max().unwrap_or(0))
         .saturating_add(4)
-        .clamp(44, 72);
+        .clamp(room.min_width(), WIDEST);
     let body = self::frame(
         frame,
         area,
