@@ -122,8 +122,12 @@ says so on the row.
   query leaves the labels out, which made a page twice as slow) and `is:agent` (see
   *AI authorship* below).
 - [ ] **More sorts.** `s` opens a picker with needs you first, newest, recently updated and oldest. Comment count and CI status are not sorts: the Comments column and the `ci:` filter cover them. Oldest is the oldest of the PRs read, so in a view that says `recent` it is not the oldest there is.
-- [ ] **Mergeability in the PR list** — conflict / behind-base indicators
-  (the detail header badge is done; this extends it to rows).
+- [ ] **Behind base in the PR list.** A conflict is shown in the `Status`
+  column for any open PR (GitHub only; the list query reads `mergeable` for
+  nothing). Whether
+  the PR is behind its base needs `mergeStateStatus`, which doubled the time of
+  the query (measured on cli/cli) and says `BLOCKED` for most PRs where branch
+  protection is on, so it is left out.
 - [ ] **Labels in the list** — colored and filterable (shown in Overview today).
 - [ ] **Compact diff stats** (files / +/−) on list rows.
 - [ ] **Search older PRs and show the total.** Merged and declined PRs are read a

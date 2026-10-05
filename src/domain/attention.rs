@@ -99,6 +99,7 @@ mod tests {
             created: Utc::now(),
             updated: Utc::now(),
             ai_review: crate::domain::pr::AiReview::None,
+            has_conflicts: false,
         }
     }
 

@@ -14,6 +14,7 @@ enum Filter {
     Author(String),
     Review(ReviewIs),
     Ci(CiIs),
+    Merge(MergeIs),
 }
 
 /// `review:` values.
@@ -44,6 +45,23 @@ impl ReviewIs {
             Self::Changes => any(ReviewerState::ChangesRequested),
             Self::Requested => any(ReviewerState::Requested),
             Self::None => pr.reviewers.is_empty(),
+        }
+    }
+}
+
+/// `merge:` values.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum MergeIs {
+    /// The provider says it cannot be merged for a conflict.
+    Conflicts,
+}
+
+impl MergeIs {
+    const NAMES: [(&'static str, Self); 1] = [("conflicts", Self::Conflicts)];
+
+    const fn holds(self, pr: &PullRequest) -> bool {
+        match self {
+            Self::Conflicts => pr.has_conflicts,
         }
     }
 }
@@ -112,6 +130,9 @@ impl PrQuery {
                 Some(("ci", value)) => {
                     filters.extend(named(value, &CiIs::NAMES).map(Filter::Ci));
                 }
+                Some(("merge", value)) => {
+                    filters.extend(named(value, &MergeIs::NAMES).map(Filter::Merge));
+                }
                 _ => words.push(lower),
             }
         }
@@ -136,6 +157,7 @@ impl Filter {
             Self::Author(name) => pr.author.username.to_lowercase().contains(name),
             Self::Review(review) => review.holds(pr),
             Self::Ci(ci) => ci.holds(pr),
+            Self::Merge(merge) => merge.holds(pr),
         }
     }
 }
@@ -235,5 +257,23 @@ mod tests {
         assert!(!matching("fix:", &pr("Other", "alice")));
         // Filters and words together.
         assert!(matching("fix: ci:unknown_not_a_value", &colon));
+    }
+
+    #[test]
+    fn merge_conflicts_keeps_the_prs_with_a_conflict() {
+        let conflicting = PullRequest {
+            has_conflicts: true,
+            ..pr("A", "x")
+        };
+        let clean = pr("B", "x");
+        for typed in ["merge:conflicts", "merge:conf", "merge:c"] {
+            assert!(matching(typed, &conflicting), "{typed}");
+            assert!(!matching(typed, &clean), "{typed}");
+        }
+        assert!(matching("merge:", &clean), "nothing typed after the colon");
+        assert!(
+            matching("merge:clean", &clean),
+            "not a value: nothing filtered"
+        );
     }
 }

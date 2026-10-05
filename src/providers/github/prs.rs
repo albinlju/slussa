@@ -110,6 +110,10 @@ struct GhPr {
     review_threads: Count,
     #[serde(default)]
     head_ref_oid: Option<String>,
+    /// `MERGEABLE`, `CONFLICTING`, or `UNKNOWN` while GitHub has not worked it
+    /// out, and for a PR that is over.
+    #[serde(default)]
+    mergeable: Option<String>,
     latest_reviews: Connection<GhReviewSummary>,
     #[serde(default)]
     review_requests: ReviewRequests,
@@ -129,6 +133,7 @@ const PR_FIELDS: &str = r"
     additions deletions changedFiles
     comments { totalCount }
     headRefOid
+    mergeable
     reviewThreads { totalCount }
     latestReviews(first: 100) { nodes { state author { __typename login } commit { oid } } pageInfo { hasNextPage } }
     reviewRequests(first: 100) { nodes { requestedReviewer { ... on User { login } } } }
@@ -295,6 +300,8 @@ fn map_pr(gh: GhPr) -> PullRequest {
         created: gh.created_at,
         updated: gh.updated_at,
         ai_review,
+        // Only an open PR can have a conflict to resolve.
+        has_conflicts: gh.state == "OPEN" && gh.mergeable.as_deref() == Some("CONFLICTING"),
     }
 }
 

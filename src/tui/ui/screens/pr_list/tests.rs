@@ -61,6 +61,7 @@ fn pr(id: u64, author: &str, ci: CiSummary, reviewers: Vec<Reviewer>) -> PullReq
         created: Utc::now(),
         updated: Utc::now(),
         ai_review: AiReview::None,
+        has_conflicts: false,
     }
 }
 

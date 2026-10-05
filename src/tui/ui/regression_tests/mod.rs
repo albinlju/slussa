@@ -6,6 +6,7 @@ mod conversation;
 mod dialogs;
 mod keys;
 mod layout;
+mod list_columns;
 mod list_filters;
 mod list_sort;
 mod long_comments;

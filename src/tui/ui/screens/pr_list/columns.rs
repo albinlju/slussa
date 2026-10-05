@@ -1,13 +1,12 @@
 //! The columns of the PR list: which fit, how wide they are and what a row
 //! shows in each.
+use super::ListContext;
 use crate::{
     domain::{
         attention::{Attention, attention},
         ci::CiSummary,
         pr::{AiReview, PullRequest},
         review::{Reviewer, ReviewerState},
-        seen::Seen,
-        user::Username,
     },
     tui::ui::{
         icons, theme,
@@ -41,15 +40,18 @@ pub(super) enum ListColumn {
 impl ListColumn {
     /// The columns a list this wide has room for, in the order they are shown.
     /// The title is given its space first; secondary details remain in the PR
-    /// view.
-    pub(super) const fn visible(width: u16) -> &'static [Self] {
+    /// view. Where a PR has a conflict the status takes the place of the least
+    /// important column that is there, so that the conflict is seen.
+    pub(super) const fn visible(width: u16, conflicts: bool) -> &'static [Self] {
         use ListColumn::{
             Age, Ai, Attention, Author, Ci, Comments, Diff, Id, Reviews, Status, Title,
         };
-        match width {
-            0..=59 => &[Id, Title],
-            60..=89 => &[Id, Title, Author, Ci],
-            90..=119 => &[Id, Title, Attention, Author, Ci, Reviews, Ai, Age],
+        match (width, conflicts) {
+            (0..=59, _) => &[Id, Title],
+            (60..=89, false) => &[Id, Title, Author, Ci],
+            (60..=89, true) => &[Id, Title, Status, Ci],
+            (90..=119, false) => &[Id, Title, Attention, Author, Ci, Reviews, Ai, Age],
+            (90..=119, true) => &[Id, Title, Attention, Author, Status, Ci, Reviews, Ai],
             _ => &[
                 Id, Title, Attention, Author, Status, Ci, Diff, Comments, Reviews, Ai, Age,
             ],
@@ -75,18 +77,15 @@ impl ListColumn {
     }
 
     /// What `pr`'s row shows in this column.
-    pub(super) fn cell(self, pr: &PullRequest, viewer: &Username, seen: &Seen) -> Cell {
+    pub(super) fn cell(self, pr: &PullRequest, ctx: &ListContext<'_>) -> Cell {
         let theme = theme::current();
         let muted = Style::default().fg(theme.muted);
         match self {
             Self::Id => vec![
-                unread_mark(seen.is_unread(pr)),
+                unread_mark(ctx.seen.is_unread(pr)),
                 Span::styled(format!("#{}", pr.id), muted),
             ],
-            Self::Status => vec![Span::styled(
-                pr.status.label().to_string(),
-                Style::default().fg(theme.status_color(&pr.status)),
-            )],
+            Self::Status => status_cell(pr),
             Self::Author => vec![Span::styled(
                 pr.author.username.clone(),
                 Style::default().fg(theme.info),
@@ -123,7 +122,7 @@ impl ListColumn {
             }
             Self::Ai => ai_cell(pr.ai_review),
             Self::Age => vec![Span::styled(age_label(pr.created), muted)],
-            Self::Attention => attention_cell(attention(pr, viewer)),
+            Self::Attention => attention_cell(attention(pr, ctx.viewer)),
         }
     }
 }
@@ -153,6 +152,21 @@ fn ai_cell(review: AiReview) -> Cell {
         AiReview::ChangesRequested => (icons::TIMES_CIRCLE, theme.error),
     };
     vec![Span::styled(glyph, Style::default().fg(color))]
+}
+
+/// `conflicts` for an open PR the provider says cannot be merged for one, in
+/// place of its status, and the status otherwise. The column is only drawn where
+/// the views mix or some row has a conflict, so a row says what it is whenever
+/// the column is there.
+fn status_cell(pr: &PullRequest) -> Cell {
+    let theme = theme::current();
+    if pr.has_conflicts {
+        return vec![Span::styled("conflicts", Style::default().fg(theme.error))];
+    }
+    vec![Span::styled(
+        pr.status.label().to_string(),
+        Style::default().fg(theme.status_color(&pr.status)),
+    )]
 }
 
 fn attention_cell(reason: Option<Attention>) -> Cell {
