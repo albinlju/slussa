@@ -4,6 +4,7 @@ mod ai_diff;
 mod ai_filter;
 mod conversation;
 mod dialogs;
+mod hidden_characters;
 mod keys;
 mod layout;
 mod list_columns;

@@ -87,10 +87,23 @@ pub(in crate::tui::ui) fn render_no_margin(body: &str, width: u16) -> Vec<Line<'
     trim_blank_lines(strip_margin(lines, usize::from(GLAMOUR_MARGIN)))
 }
 
+/// The text without what a terminal would act on. Glamour's output is read for
+/// colours and styles, so an escape sequence in a comment would set its own
+/// (conceal included) and could hide what the comment says. Only the line
+/// breaks and tabs of the text are kept; a carriage return is a line ending.
+fn printable(body: &str) -> String {
+    body.replace("\r\n", "\n")
+        .chars()
+        .filter(|c| !c.is_control() || matches!(c, '\n' | '\t'))
+        .collect()
+}
+
 fn render_glamour(body: &str, width: u16, style: glamour::StyleConfig) -> Vec<Line<'static>> {
     if width == 0 {
         return vec![Line::default()];
     }
+    let body = printable(body);
+    let body = body.as_str();
     let rendered = std::panic::catch_unwind(|| {
         let ansi = glamour::Renderer::new()
             .with_style_config(style)
@@ -267,5 +280,42 @@ mod tests {
             .find(|span| span.content == "d")
             .map(|span| span.style.fg);
         assert_eq!(code, Some(Some(GRAPHITE.orange)));
+    }
+
+    fn styles(lines: &[Line<'static>]) -> Vec<ratatui::style::Style> {
+        lines
+            .iter()
+            .flat_map(|line| line.spans.iter().map(|span| span.style))
+            .collect()
+    }
+
+    #[test]
+    fn an_escape_sequence_in_a_comment_sets_no_style_of_its_own() {
+        let lines = render_no_margin(
+            "before \u{1b}[8mHIDDEN\u{1b}[0m and \u{1b}[31mred\u{1b}[0m after",
+            60,
+        );
+        let text = lines
+            .iter()
+            .map(ToString::to_string)
+            .collect::<Vec<_>>()
+            .join("\n");
+        assert!(text.contains("HIDDEN"), "what it hid is read: {text}");
+        assert!(!text.contains('\u{1b}'), "{text:?}");
+        for style in styles(&lines) {
+            assert!(
+                !style
+                    .add_modifier
+                    .contains(ratatui::style::Modifier::HIDDEN),
+                "{style:?}"
+            );
+            assert_ne!(style.fg, Some(Color::Red), "{style:?}");
+        }
+    }
+
+    #[test]
+    fn what_is_kept_of_the_text_is_its_line_breaks_and_tabs() {
+        assert_eq!(printable("a\r\nb\rc\u{85}d\te\u{7f}f"), "a\nbcd\tef");
+        assert_eq!(printable("åäö 🦀 **bold**"), "åäö 🦀 **bold**");
     }
 }

@@ -164,6 +164,13 @@ a resolved thread opens and closes with `space`, and a long comment has a fold r
 that `j`/`k` can stop on: `space` there opens the comment, and `▲ fold` folds it
 again.
 
+What a diff line holds that a terminal would not draw is shown, not dropped: a tab
+is spread to a tab stop (4 columns), and a control character, a zero-width one or
+one that reorders text (a bidirectional override) is written as a marker such as
+`‹U+202E›` in the warning colour, in the code pane and in the code a comment
+quotes. A comment or description that holds raw escape bytes has them removed
+before it is drawn, so it cannot colour or hide its own text.
+
 ## Documentation
 
 - [KEYS.md](docs/KEYS.md): every key, for the list and for a PR

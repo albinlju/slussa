@@ -25,7 +25,8 @@ pub(in crate::tui::ui) fn numbered_diff_row(
         None => " ".repeat(num_width),
     };
     let gutter = format!(" {num_str} ");
-    let visible = gutter.len() + prefix.len() + 1 + Span::raw(content).width();
+    let runs = super::reveal(content);
+    let visible = gutter.len() + prefix.len() + 1 + super::runs_width(&runs);
     let pad = row_w.saturating_sub(visible);
 
     let apply_bg = |style: Style| match bg {
@@ -35,10 +36,18 @@ pub(in crate::tui::ui) fn numbered_diff_row(
     let gutter_style = apply_bg(Style::default().fg(theme::current().muted));
     let prefix_style = apply_bg(Style::default().fg(prefix_fg).add_modifier(Modifier::BOLD));
     let text_style = apply_bg(Style::default().fg(text_fg));
+    let marker_style = apply_bg(
+        Style::default()
+            .fg(theme::current().warning)
+            .add_modifier(Modifier::BOLD),
+    );
 
-    Line::from(vec![
+    let mut spans = vec![
         Span::styled(gutter, gutter_style),
         Span::styled(prefix, prefix_style),
-        Span::styled(format!(" {content}{}", " ".repeat(pad)), text_style),
-    ])
+        Span::styled(" ", text_style),
+    ];
+    spans.extend(super::spans(runs, text_style, marker_style));
+    spans.push(Span::styled(" ".repeat(pad), text_style));
+    Line::from(spans)
 }
