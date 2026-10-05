@@ -10,6 +10,9 @@ updates:
     directory: "/"
     schedule:
       interval: "monthly"
+    # A release is not taken in the days it can still be yanked or found bad.
+    cooldown:
+      default-days: 7
     groups:
       minor-and-patch:
         update-types: ["minor", "patch"]
