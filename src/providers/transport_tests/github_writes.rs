@@ -102,6 +102,27 @@ fn bitbucket_does_not_delete_the_branch_with_the_merge() {
 }
 
 #[test]
+fn github_asks_each_one_who_asked_for_changes_to_review_again_in_one_call() {
+    use crate::domain::review::{Rerequest, Reviewer};
+    let installed = FakeGh::new().on("api", "{}").install();
+    let asked = |name: &str| Reviewer {
+        author: crate::domain::user::User {
+            username: name.into(),
+        },
+        state: ReviewerState::ChangesRequested,
+    };
+    let who = Rerequest::of(&[asked("alice"), asked("erin")]).expect("two to ask");
+    Provider::GitHub.rerequest_review(PrId(7), &who).unwrap();
+
+    assert_eq!(
+        installed.calls(),
+        vec![
+            "api --method POST repos/{owner}/{repo}/pulls/7/requested_reviewers -f reviewers[]=alice -f reviewers[]=erin"
+        ]
+    );
+}
+
+#[test]
 fn github_decline_closes_the_pull_request() {
     let installed = FakeGh::new().on("api", "{}").install();
     Provider::GitHub.decline(PrId(7)).unwrap();

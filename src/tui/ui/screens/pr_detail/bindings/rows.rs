@@ -351,6 +351,36 @@ pub(in crate::tui::ui::screens::pr_detail) static RERUN_BUILDS: Binding = Bindin
     },
 };
 
+/// `p` asks those who asked for changes to look again, once there are some.
+pub(in crate::tui::ui::screens::pr_detail) static REREQUEST_REVIEW: Binding = Binding {
+    key: 'p',
+    mods: Mods::Plain,
+    place: Place::ReadsPr,
+    doc: Some(Doc {
+        keys: "p",
+        text: "ask those who asked for changes to review again",
+    }),
+    needs: Needs::Feature(Feature::RerequestReview),
+    label: Label::Of(|view| match view.rerequest() {
+        Some(who) => match who.names() {
+            [only] => format!("p: ask {only} again"),
+            [first, rest @ ..] => format!("p: ask {first} +{} again", rest.len()),
+            [] => "p: ask again".to_owned(),
+        },
+        None => "p: ask again".to_owned(),
+    }),
+    offer: |view| {
+        if view.rerequest().is_none() {
+            return Offer::Hidden;
+        }
+        match view.pr.status {
+            PrStatus::Open(_) => offered(view, PrAction::RerequestReview),
+            PrStatus::Merged => Offer::Blocked("merged"),
+            PrStatus::Declined => Offer::Blocked("declined"),
+        }
+    },
+};
+
 /// The order is the order the keys are tried in.
 pub(in crate::tui::ui::screens::pr_detail) static BINDINGS: &[&Binding] = &[
     &OPEN_IN_BROWSER,
@@ -372,4 +402,5 @@ pub(in crate::tui::ui::screens::pr_detail) static BINDINGS: &[&Binding] = &[
     &DELETE_COMMENT,
     &REMOVE_PENDING,
     &RERUN_BUILDS,
+    &REREQUEST_REVIEW,
 ];

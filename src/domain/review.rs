@@ -1,6 +1,6 @@
 use super::{
     comment::{CommentId, CommentKey},
-    user::User,
+    user::{User, Username},
 };
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -16,6 +16,27 @@ pub enum ReviewerState {
 pub struct Reviewer {
     pub author: User,
     pub state: ReviewerState,
+}
+
+/// The people who asked for changes, to be asked to look again. Never empty:
+/// only [`Rerequest::of`] makes one, and it makes none when nobody asked for
+/// changes, so a request for no one cannot be sent.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct Rerequest(Vec<Username>);
+
+impl Rerequest {
+    pub fn of(reviewers: &[Reviewer]) -> Option<Self> {
+        let who: Vec<Username> = reviewers
+            .iter()
+            .filter(|reviewer| reviewer.state == ReviewerState::ChangesRequested)
+            .filter_map(|reviewer| Username::parse(&reviewer.author.username))
+            .collect();
+        (!who.is_empty()).then_some(Self(who))
+    }
+
+    pub fn names(&self) -> &[Username] {
+        &self.0
+    }
 }
 
 /// A review submission's verdict. `Unapprove` (withdraw approval) is only offered
@@ -119,4 +140,49 @@ pub struct PendingComment {
 pub struct CommentDraft {
     pub target: CommentTarget,
     pub text: String,
+}
+
+#[cfg(test)]
+mod rerequest_tests {
+    use super::*;
+
+    fn reviewer(name: &str, state: ReviewerState) -> Reviewer {
+        Reviewer {
+            author: User {
+                username: name.into(),
+            },
+            state,
+        }
+    }
+
+    #[test]
+    fn only_those_who_asked_for_changes_are_asked_again() {
+        let who = Rerequest::of(&[
+            reviewer("alice", ReviewerState::ChangesRequested),
+            reviewer("bob", ReviewerState::Approved),
+            reviewer("carol", ReviewerState::Commented),
+            reviewer("dave", ReviewerState::Requested),
+            reviewer("erin", ReviewerState::ChangesRequested),
+        ])
+        .expect("two asked for changes");
+        let names: Vec<&str> = who.names().iter().map(Username::as_str).collect();
+        assert_eq!(names, ["alice", "erin"]);
+    }
+
+    #[test]
+    fn nobody_asking_for_changes_is_no_request() {
+        assert_eq!(Rerequest::of(&[]), None);
+        assert_eq!(
+            Rerequest::of(&[
+                reviewer("bob", ReviewerState::Approved),
+                reviewer("dave", ReviewerState::Requested),
+            ]),
+            None
+        );
+        assert_eq!(
+            Rerequest::of(&[reviewer(" ", ReviewerState::ChangesRequested)]),
+            None,
+            "an account without a name is not someone to ask"
+        );
+    }
 }

@@ -39,6 +39,7 @@ The search also takes filters, written `key:value` among the words and combined 
 | `m` | merge; the dialog lists what blocks it. On GitHub, while the PR waits on checks or reviews, `a` in the dialog makes `enter` merge it by itself when ready, and turns that off again. On GitHub, `d` in the dialog marks the PR's branch for deletion once it is merged (only a branch of the same repository, never the one merged into); if the branch cannot be deleted the merge still stands and a notice says so |
 | `x` | close or decline the PR, or reopen a declined one |
 | `b` | in the Builds tab, run the failed builds again; offered when one has failed or was cancelled, and dimmed with the reason on a merged or declined PR (GitHub Actions) |
+| `p` | ask those who asked for changes to review again (GitHub); named in the footer (`p: ask alice again`), hidden when nobody asked for changes, dimmed with the reason on a merged or declined PR |
 | `c` | comment |
 | `r` | reply |
 | `e` / `d` | edit / delete your own comment (`d` also removes a queued review comment) |
@@ -50,7 +51,7 @@ The search also takes filters, written `key:value` among the words and combined 
 | `F` | refresh |
 | `q` | quit |
 
-`a`, `v`, `m` and `x` work from both the Description and the Overview tab. In the
+`a`, `v`, `m`, `p` and `x` work from both the Description and the Overview tab. In the
 diff, the arrow keys also move between the file tree and the code. A key that the
 provider does not support is hidden; one that the PR's state blocks (for example
 merging with conflicts) stays visible and says why.

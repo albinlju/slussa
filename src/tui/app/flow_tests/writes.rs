@@ -318,3 +318,38 @@ async fn a_branch_that_stays_is_a_notice_and_the_merge_is_still_refetched() {
         gh.calls()
     );
 }
+
+#[tokio::test]
+async fn asking_again_sends_one_request_and_is_followed_by_a_refetch() {
+    use crate::domain::review::{Rerequest, Reviewer, ReviewerState};
+    let gh = FakeGh::new()
+        .on("requested_reviewers", "{}")
+        .on(OPEN_QUERY, &one_pr_page())
+        .on("graphql", &any_connection())
+        .install();
+    let mut app = app();
+    let who = Rerequest::of(&[Reviewer {
+        author: crate::domain::user::User {
+            username: "alice".into(),
+        },
+        state: ReviewerState::ChangesRequested,
+    }])
+    .expect("one to ask");
+
+    app.apply(Action::Effect(Effect::Command {
+        pr_id: PrId(1),
+        command: Command::RerequestReview(who),
+    }));
+    settle(&mut app).await;
+
+    let calls = gh.calls();
+    assert_eq!(
+        calls[0],
+        "api --method POST repos/{owner}/{repo}/pulls/1/requested_reviewers -f reviewers[]=alice"
+    );
+    assert!(
+        calls.iter().any(|c| c.contains(OPEN_QUERY)),
+        "the reviewers are read again: {calls:?}"
+    );
+    assert!(app.state.store.errors.is_empty());
+}

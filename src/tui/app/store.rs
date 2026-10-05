@@ -261,6 +261,7 @@ pub enum Operation {
     AutoMerge,
     CancelAutoMerge,
     RerunBuilds,
+    RerequestReview,
     Decline,
     Reopen,
 }
@@ -273,6 +274,7 @@ impl Operation {
             Self::AutoMerge => "will merge when ready",
             Self::CancelAutoMerge => "auto-merge off",
             Self::RerunBuilds => "failed builds run again",
+            Self::RerequestReview => "asked to review again",
             Self::Decline => "closed / declined",
             Self::Reopen => "reopened",
             Self::Review => "review submitted",
@@ -293,7 +295,8 @@ impl Operation {
             | Self::Review
             | Self::AutoMerge
             | Self::CancelAutoMerge
-            | Self::RerunBuilds => None,
+            | Self::RerunBuilds
+            | Self::RerequestReview => None,
         }
     }
 
@@ -306,6 +309,7 @@ impl Operation {
             | Self::AutoMerge
             | Self::CancelAutoMerge
             | Self::RerunBuilds
+            | Self::RerequestReview
             | Self::Decline
             | Self::Reopen => false,
         }
