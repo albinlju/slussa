@@ -9,7 +9,7 @@ use crate::{
         diff::Diff,
         pr::{Mergeability, PrBatch, PrGroup, PrId, PrInfo, PullRequest},
     },
-    providers::{FetchError, ReviewError},
+    providers::{FetchError, MergeError, ReviewError},
     tui::app::{
         commands::Command,
         desktop::{LinkDone, LinkError},
@@ -120,6 +120,9 @@ impl Read {
 pub enum WriteError {
     #[error(transparent)]
     Failed(#[from] FetchError),
+    /// The PR was merged; the branch it came from was not deleted.
+    #[error("merged, but the branch was not deleted: {0}")]
+    BranchKept(FetchError),
     /// A review sent as several requests, some of which arrived.
     #[error("review partially sent ({posted_comments} comments): {source}")]
     PartialReview {
@@ -128,6 +131,15 @@ pub enum WriteError {
         submitted_summary: Option<String>,
         source: FetchError,
     },
+}
+
+impl From<MergeError> for WriteError {
+    fn from(error: MergeError) -> Self {
+        match error {
+            MergeError::Failed(error) => Self::Failed(error),
+            MergeError::BranchKept(error) => Self::BranchKept(error),
+        }
+    }
 }
 
 impl WriteError {
@@ -150,6 +162,10 @@ impl WriteError {
     pub fn user_message(&self) -> String {
         match self {
             Self::Failed(error) => error.user_message(),
+            Self::BranchKept(error) => format!(
+                "Merged, but the branch was not deleted: {}",
+                error.user_message()
+            ),
             Self::PartialReview {
                 posted_comments,
                 source,
@@ -165,7 +181,7 @@ impl WriteError {
     pub const fn may_have_reached_server(&self) -> bool {
         match self {
             Self::Failed(error) => error.may_have_reached_server(),
-            Self::PartialReview { .. } => true,
+            Self::BranchKept(_) | Self::PartialReview { .. } => true,
         }
     }
 }

@@ -236,3 +236,81 @@ async fn a_review_with_a_comment_on_an_unknown_revision_is_refused_whole() {
         "the queued comment is kept"
     );
 }
+
+fn merge_deleting(app: &mut App, pr_id: PrId) {
+    use crate::domain::pr::{DeletableBranch, MergeStrategy, PullRequest, SourceRepo};
+    let pr = PullRequest {
+        source_branch: "feature".into(),
+        source_repo: SourceRepo::Same,
+        target_branch: "main".into(),
+        ..PullRequest::for_test(pr_id.0, chrono::Utc::now())
+    };
+    app.apply(Action::Effect(Effect::Command {
+        pr_id,
+        command: Command::Merge {
+            strategy: MergeStrategy::Squash,
+            delete: DeletableBranch::of(&pr),
+        },
+    }));
+}
+
+#[tokio::test]
+async fn a_merge_deletes_its_branch_and_is_then_refetched() {
+    let gh = FakeGh::new()
+        .on("pulls/1/merge", "{}")
+        .on("git/refs/heads/feature", "")
+        .on(OPEN_QUERY, &one_pr_page())
+        .on("graphql", &any_connection())
+        .install();
+    let mut app = app();
+
+    merge_deleting(&mut app, PrId(1));
+    settle(&mut app).await;
+
+    let calls = gh.calls();
+    assert!(
+        calls[0].contains("PUT repos/{owner}/{repo}/pulls/1/merge"),
+        "{calls:?}"
+    );
+    assert_eq!(
+        calls[1],
+        "api --method DELETE repos/{owner}/{repo}/git/refs/heads/feature"
+    );
+    assert!(
+        calls.iter().any(|c| c.contains(OPEN_QUERY)),
+        "refetched: {calls:?}"
+    );
+    assert!(app.state.store.errors.is_empty());
+}
+
+#[tokio::test]
+async fn a_branch_that_stays_is_a_notice_and_the_merge_is_still_refetched() {
+    let gh = FakeGh::new()
+        .on("pulls/1/merge", "{}")
+        .fail("git/refs/heads/feature", 1, "Reference does not exist")
+        .on(OPEN_QUERY, &one_pr_page())
+        .on("graphql", &any_connection())
+        .install();
+    let mut app = app();
+
+    merge_deleting(&mut app, PrId(1));
+    settle(&mut app).await;
+
+    let notice = app.state.store.notice.as_ref().map(|n| n.message.clone());
+    assert!(
+        notice
+            .as_deref()
+            .is_some_and(|n| n.contains("merged, but the branch was not deleted")),
+        "{notice:?}"
+    );
+    assert!(
+        app.state.store.errors.is_empty(),
+        "no error dialog over a done merge"
+    );
+    assert!(app.state.store.uncertain_submissions.is_empty());
+    assert!(
+        gh.calls().iter().any(|c| c.contains(OPEN_QUERY)),
+        "the merge shows: {:?}",
+        gh.calls()
+    );
+}

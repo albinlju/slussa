@@ -1,7 +1,7 @@
 use crate::{
     domain::{
         capabilities::{Capabilities, Feature},
-        pr::{MergeStrategy, Mergeability},
+        pr::{DeletableBranch, MergeStrategy, Mergeability},
     },
     tui::{
         app::effect::Effect,
@@ -52,6 +52,13 @@ pub struct MergeView<'a> {
     /// Why the provider says this PR cannot be merged yet; empty when nothing
     /// is known to stand in the way.
     pub blockers: &'a [String],
+    /// The branch the merge may delete, when the provider and the PR allow it.
+    pub branch: Option<&'a DeletableBranch>,
+}
+
+/// Whether the box says the branch goes: asked for, and there is one to delete.
+const fn delete_offered(view: &MergeView<'_>, dialog: &MergeDialog) -> bool {
+    dialog.delete_branch && view.branch.is_some()
 }
 
 fn render(frame: &mut Frame<'_>, view: &MergeView<'_>, dialog: &MergeDialog, area: Rect) {
@@ -115,6 +122,14 @@ fn render(frame: &mut Frame<'_>, view: &MergeView<'_>, dialog: &MergeDialog, are
         ));
         lines.push(Line::default());
     }
+    let deleting = delete_offered(view, dialog);
+    if let Some(branch) = view.branch.filter(|_| !when_ready) {
+        lines.push(Line::from(vec![
+            Span::styled(if deleting { "[x] " } else { "[ ] " }, normal),
+            Span::styled(format!("Delete {} after the merge", branch.name()), normal),
+        ]));
+        lines.push(Line::default());
+    }
     for (i, strategy) in strategies.iter().enumerate() {
         let marker = if i == dialog.cursor { "▶ " } else { "  " };
         let style = if i == dialog.cursor { selected } else { normal };
@@ -150,6 +165,16 @@ fn render(frame: &mut Frame<'_>, view: &MergeView<'_>, dialog: &MergeDialog, are
         }
         AutoMergeOffer::On(_) => hints.push(("a", "turn off auto-merge")),
     }
+    if view.branch.is_some() && !when_ready {
+        hints.push((
+            "d",
+            if deleting {
+                "keep branch"
+            } else {
+                "delete branch"
+            },
+        ));
+    }
     hints.push(("Esc", "cancel"));
     crate::tui::ui::widgets::dialog::choices_with_hints(
         frame,
@@ -166,6 +191,7 @@ const fn key_to_action(code: KeyCode) -> Option<MergeAction> {
         KeyCode::Left | KeyCode::Up | KeyCode::Char('h' | 'k') => Some(MergeAction::Move(-1)),
         KeyCode::Right | KeyCode::Down | KeyCode::Char('j' | 'l') => Some(MergeAction::Move(1)),
         KeyCode::Char('a') => Some(MergeAction::Auto),
+        KeyCode::Char('d') => Some(MergeAction::DeleteBranch),
         KeyCode::Enter => Some(MergeAction::Select),
         KeyCode::Esc => Some(MergeAction::Close),
         _ => None,
@@ -177,6 +203,8 @@ pub struct MergeDialog {
     cursor: usize,
     /// Enter merges by itself once the PR is ready, not now.
     pub when_ready: bool,
+    /// Enter deletes the source branch after merging it.
+    pub delete_branch: bool,
 }
 impl MergeDialog {
     pub fn selected(&self, strategies: &[MergeStrategy]) -> Option<MergeStrategy> {
@@ -196,7 +224,10 @@ impl Component for MergeDialog {
         match action {
             MergeAction::Move(delta) => self.cursor = step_index(self.cursor, delta, ctx.len()),
             // Closing and merging are the screen's: it holds the dialog.
-            MergeAction::Select | MergeAction::Close | MergeAction::Auto => {}
+            MergeAction::Select
+            | MergeAction::Close
+            | MergeAction::Auto
+            | MergeAction::DeleteBranch => {}
         }
         None
     }
@@ -215,6 +246,16 @@ mod tests {
     }
 
     fn drawn_with(blockers: &[String], auto: AutoMergeOffer, when_ready: bool) -> String {
+        drawn_full(blockers, auto, when_ready, None, false)
+    }
+
+    fn drawn_full(
+        blockers: &[String],
+        auto: AutoMergeOffer,
+        when_ready: bool,
+        branch: Option<&DeletableBranch>,
+        delete_branch: bool,
+    ) -> String {
         let view = MergeView {
             auto,
             strategies: &[MergeStrategy::Merge, MergeStrategy::Squash],
@@ -224,12 +265,14 @@ mod tests {
                 source_branch: "feature",
             },
             blockers,
+            branch,
         };
         let mut terminal = Terminal::new(TestBackend::new(90, 28)).unwrap();
         terminal
             .draw(|frame| {
                 MergeDialog {
                     when_ready,
+                    delete_branch,
                     ..MergeDialog::default()
                 }
                 .render(frame, frame.area(), &view);
@@ -330,5 +373,53 @@ mod tests {
             !drawn(&blocked).contains("a: "),
             "no a where it does nothing"
         );
+    }
+
+    fn own_branch() -> DeletableBranch {
+        use crate::domain::pr::{PullRequest, SourceRepo};
+        DeletableBranch::of(&PullRequest {
+            source_branch: "feature".into(),
+            source_repo: SourceRepo::Same,
+            target_branch: "main".into(),
+            ..PullRequest::for_test(7, chrono::Utc::now())
+        })
+        .expect("a branch of this repository")
+    }
+
+    #[test]
+    fn the_dialog_offers_to_delete_the_branch_only_where_there_is_one_to_delete() {
+        let branch = own_branch();
+        let off = drawn_full(
+            &[],
+            AutoMergeOffer::Unavailable,
+            false,
+            Some(&branch),
+            false,
+        );
+        assert!(off.contains("[ ] Delete feature after the merge"), "{off}");
+        assert!(off.contains("d delete branch"), "{off}");
+
+        let on = drawn_full(&[], AutoMergeOffer::Unavailable, false, Some(&branch), true);
+        assert!(on.contains("[x] Delete feature after the merge"), "{on}");
+        assert!(on.contains("d keep branch"), "{on}");
+
+        let none = drawn_full(&[], AutoMergeOffer::Unavailable, false, None, true);
+        assert!(!none.contains("Delete feature"), "{none}");
+        assert!(!none.contains("d delete branch"), "{none}");
+        assert!(!none.contains("d keep branch"), "{none}");
+    }
+
+    #[test]
+    fn merging_when_ready_leaves_the_branch_to_the_repository() {
+        let branch = own_branch();
+        let armed = drawn_full(
+            &["Checks.".to_owned()],
+            AutoMergeOffer::Available,
+            true,
+            Some(&branch),
+            true,
+        );
+        assert!(!armed.contains("Delete feature"), "{armed}");
+        assert!(!armed.contains("d keep branch"), "{armed}");
     }
 }

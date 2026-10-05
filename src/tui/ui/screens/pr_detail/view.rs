@@ -5,7 +5,7 @@ use crate::{
         comment::{Comment, CommentId, CommentKey, CommentKind, ThreadHandle},
         commit::CommitOid,
         diff::FileDiff,
-        pr::{Mergeability, PrId, PrStatus, PullRequest},
+        pr::{DeletableBranch, Mergeability, PrId, PrStatus, PullRequest},
         review::{CommentTarget, ReviewVerdict},
     },
     tui::{
@@ -37,6 +37,16 @@ impl<'a> DetailContext<'a> {
     /// What the provider said about merging the PR, once it has.
     pub fn mergeability(&self) -> Option<&'a Mergeability> {
         self.data.and_then(|data| data.mergeability.loaded())
+    }
+
+    /// The branch a merge may delete: only where the provider does it and the
+    /// PR's branch is its own to delete.
+    pub fn deletable_branch(&self) -> Option<DeletableBranch> {
+        self.store
+            .capabilities
+            .supports(crate::domain::capabilities::Feature::DeleteBranch)
+            .then(|| DeletableBranch::of(self.pr))
+            .flatten()
     }
 
     /// `None` when the PR is neither in the list nor the one the reader named
@@ -366,6 +376,7 @@ impl DetailView<'_> {
             A::Review(ReviewAction::Select) => caps.reviews(),
             A::Merge(MergeAction::Select) => !caps.merge_strategies.is_empty(),
             A::Merge(MergeAction::Auto) => caps.supports(F::AutoMerge),
+            A::Merge(MergeAction::DeleteBranch) => caps.supports(F::DeleteBranch),
             A::Nav(NavAction::SelectTab(tab)) => tab.supported_by(caps),
             A::Review(ReviewAction::Move(_) | ReviewAction::Preview | ReviewAction::Close)
             | A::Merge(MergeAction::Move(_) | MergeAction::Close)

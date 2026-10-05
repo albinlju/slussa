@@ -54,6 +54,7 @@ fn pr(id: u64, author: &str, ci: CiSummary, reviewers: Vec<Reviewer>) -> PullReq
         labels: Vec::new(),
         comment_count: 0,
         source_branch: "feature".into(),
+        source_repo: crate::domain::pr::SourceRepo::Unknown,
         target_branch: "main".into(),
         additions: 1,
         deletions: 1,

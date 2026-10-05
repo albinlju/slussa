@@ -283,10 +283,12 @@ pub(super) fn render(
             let blockers = pr_data
                 .and_then(|data| data.mergeability.loaded())
                 .map_or(&[][..], Mergeability::blockers);
+            let branch = ctx.deletable_branch();
             dialog.render(
                 frame,
                 area,
                 &MergeView {
+                    branch: branch.as_ref(),
                     auto: AutoMergeOffer::of(&ctx.store.capabilities, ctx.mergeability()),
                     strategies: &ctx.store.capabilities.merge_strategies,
                     pr: PrSummary::of(pr),

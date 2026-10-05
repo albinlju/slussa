@@ -26,10 +26,10 @@ use serde::de::DeserializeOwned;
 
 use crate::domain::authorship::Authorship;
 use crate::domain::comment::{Comment, CommentId, Reaction};
-use crate::domain::pr::{MergeStrategy, Mergeability, PrId};
+use crate::domain::pr::{DeletableBranch, MergeStrategy, Mergeability, PrId};
 use crate::domain::review::{ReviewComment, ReviewVerdict};
 use crate::domain::user::{AccountKind, User, Username};
-use crate::providers::error::FetchError;
+use crate::providers::error::{FetchError, MergeError};
 
 pub fn current_user() -> Result<Username, FetchError> {
     let out = cli::run_gh(&["api", "user", "--jq", ".login"])?;
@@ -103,7 +103,13 @@ fn merge_status(mergeable: &str, state: &str, review_decision: Option<&str>) -> 
     }
 }
 
-pub fn merge(pr_number: PrId, strategy: MergeStrategy) -> Result<(), FetchError> {
+/// Merge the PR, then delete the branch it came from when asked to. A branch
+/// that cannot be deleted does not undo the merge: that is `BranchKept`.
+pub fn merge(
+    pr_number: PrId,
+    strategy: MergeStrategy,
+    delete: Option<&DeletableBranch>,
+) -> Result<(), MergeError> {
     let method = match strategy {
         MergeStrategy::Merge => "merge",
         MergeStrategy::Squash => "squash",
@@ -117,7 +123,37 @@ pub fn merge(pr_number: PrId, strategy: MergeStrategy) -> Result<(), FetchError>
         "-f",
         &format!("merge_method={method}"),
     ])?;
+    if let Some(branch) = delete {
+        delete_branch(branch).map_err(MergeError::BranchKept)?;
+    }
     Ok(())
+}
+
+fn delete_branch(branch: &DeletableBranch) -> Result<(), FetchError> {
+    cli::run_gh(&[
+        "api",
+        "--method",
+        "DELETE",
+        &format!(
+            "repos/{{owner}}/{{repo}}/git/refs/heads/{}",
+            ref_path(branch.name())
+        ),
+    ])?;
+    Ok(())
+}
+
+/// A branch name as the tail of a URL path: slashes stay, anything that is not
+/// plain is escaped, so a `#` or `?` in a name does not end the path.
+fn ref_path(name: &str) -> String {
+    use std::fmt::Write;
+    name.bytes().fold(String::new(), |mut out, byte| {
+        if byte.is_ascii_alphanumeric() || matches!(byte, b'-' | b'.' | b'_' | b'~' | b'/') {
+            out.push(char::from(byte));
+        } else {
+            let _ = write!(out, "%{byte:02X}");
+        }
+        out
+    })
 }
 
 /// Merge the PR by itself with `strategy` once its checks and reviews allow it,

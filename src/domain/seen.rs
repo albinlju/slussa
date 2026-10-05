@@ -101,6 +101,7 @@ mod tests {
             labels: vec![],
             comment_count: 0,
             source_branch: String::new(),
+            source_repo: crate::domain::pr::SourceRepo::Unknown,
             target_branch: String::new(),
             additions: 0,
             deletions: 0,

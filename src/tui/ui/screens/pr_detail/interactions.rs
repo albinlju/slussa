@@ -204,6 +204,14 @@ impl PrDetailScreen {
                 }
                 None
             }
+            MergeAction::DeleteBranch => {
+                if ctx.deletable_branch().is_some()
+                    && let Some(Overlay::Merge(dialog)) = &mut self.overlay
+                {
+                    dialog.delete_branch = !dialog.delete_branch;
+                }
+                None
+            }
             MergeAction::Select => {
                 let dialog = self.merge_picker()?;
                 let strategy = dialog.selected(strategies);
@@ -218,6 +226,7 @@ impl PrDetailScreen {
                     return None;
                 }
                 let when_ready = dialog.when_ready;
+                let delete = ctx.deletable_branch().filter(|_| dialog.delete_branch);
                 self.overlay = None;
                 let strategy = strategy?;
                 Some(Self::command(
@@ -225,7 +234,7 @@ impl PrDetailScreen {
                     if when_ready {
                         Command::AutoMerge(strategy)
                     } else {
-                        Command::Merge(strategy)
+                        Command::Merge { strategy, delete }
                     },
                 ))
             }

@@ -21,7 +21,7 @@ pub mod error;
 pub mod github;
 mod unified_diff;
 
-pub use error::{FetchError, ReviewError};
+pub use error::{FetchError, MergeError, ReviewError};
 
 #[cfg(test)]
 mod transport_tests;
@@ -32,7 +32,9 @@ use crate::domain::{
     comment::{CommentId, CommentKey, ThreadHandle},
     commit::{Commit, CommitOid},
     diff::Diff,
-    pr::{MergeStrategy, Mergeability, PrBatch, PrGroup, PrId, PrInfo, PullRequest},
+    pr::{
+        DeletableBranch, MergeStrategy, Mergeability, PrBatch, PrGroup, PrId, PrInfo, PullRequest,
+    },
     review::{ReviewComment, ReviewVerdict},
     user::Username,
 };
@@ -114,15 +116,29 @@ impl Provider {
         }
     }
 
-    pub fn merge(&self, pr_id: PrId, strategy: MergeStrategy) -> Result<(), FetchError> {
-        if !self.capabilities().merge_strategies.contains(&strategy) {
+    /// Merge the PR and, with `delete`, then delete the branch it came from.
+    pub fn merge(
+        &self,
+        pr_id: PrId,
+        strategy: MergeStrategy,
+        delete: Option<&DeletableBranch>,
+    ) -> Result<(), MergeError> {
+        let caps = self.capabilities();
+        if !caps.merge_strategies.contains(&strategy) {
             return Err(FetchError::Unsupported(
                 "This merge strategy is not supported by the connected provider.".into(),
-            ));
+            )
+            .into());
+        }
+        if delete.is_some() && !caps.supports(crate::domain::capabilities::Feature::DeleteBranch) {
+            return Err(FetchError::Unsupported(
+                "The connected provider does not delete the branch with the merge.".into(),
+            )
+            .into());
         }
         match self {
-            Self::GitHub => github::merge(pr_id, strategy),
-            Self::BitbucketDc(c) => bitbucket_dc::merge(c, pr_id),
+            Self::GitHub => github::merge(pr_id, strategy, delete),
+            Self::BitbucketDc(c) => Ok(bitbucket_dc::merge(c, pr_id)?),
         }
     }
 
@@ -186,7 +202,12 @@ impl Provider {
             Self::GitHub => Capabilities {
                 features: features
                     .into_iter()
-                    .chain([Feature::PrInfo, Feature::AutoMerge, Feature::RerunBuilds])
+                    .chain([
+                        Feature::PrInfo,
+                        Feature::AutoMerge,
+                        Feature::RerunBuilds,
+                        Feature::DeleteBranch,
+                    ])
                     .collect(),
                 review: Some(ReviewCaps {
                     verdicts: vec![
@@ -345,7 +366,11 @@ mod capability_tests {
         assert!(github.merge_strategies.contains(&MergeStrategy::Squash));
         assert_eq!(bb.merge_strategies, vec![MergeStrategy::Merge]);
         // These must reject locally, before trying authentication or the network.
-        assert!(bitbucket.merge(PrId(1), MergeStrategy::Squash).is_err());
+        assert!(
+            bitbucket
+                .merge(PrId(1), MergeStrategy::Squash, None)
+                .is_err()
+        );
         assert!(github::submit_review(PrId(1), ReviewVerdict::Unapprove, "").is_err());
     }
 }

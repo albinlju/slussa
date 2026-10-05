@@ -235,8 +235,11 @@ against:
   settings instead of letting the server reject.
 - [ ] **Re-run CI checks** — `b` in Builds runs the failed or cancelled GitHub Actions jobs again. Missing: one build at a time, all builds, and checks that are not Actions (external statuses).
 - [ ] **Request / re-request reviewers** — including re-request after a push.
-- [ ] **Delete the source branch after merge** — moved here from *Scope
-  decision*: it is part of the merge path, not administration.
+- [ ] **Delete the source branch after merge** — `d` in the merge dialog
+  marks it (GitHub; only a branch of the same repository, never the target;
+  not offered with *merge when ready*, where the repository's own setting
+  decides). A branch that cannot be deleted leaves the merge done and says so.
+  Missing: Bitbucket Data Center, and a remembered choice.
 - [ ] **React to a comment** — add / remove your own emoji reaction.
 
 ### 4. Handoff to the coding agent

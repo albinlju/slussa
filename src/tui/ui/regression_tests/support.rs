@@ -59,6 +59,7 @@ pub(crate) fn fixture() -> AppState {
         labels: vec!["rust".into()],
         comment_count: 0,
         source_branch: "feature".into(),
+        source_repo: SourceRepo::Unknown,
         target_branch: "main".into(),
         additions: 1,
         deletions: 1,
