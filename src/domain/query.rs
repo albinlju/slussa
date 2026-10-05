@@ -54,14 +54,19 @@ impl ReviewIs {
 enum MergeIs {
     /// The provider says it cannot be merged for a conflict.
     Conflicts,
+    /// The provider says there is no conflict. Says nothing of checks or
+    /// reviews, and leaves out a PR whose conflict is not known.
+    Clean,
 }
 
 impl MergeIs {
-    const NAMES: [(&'static str, Self); 1] = [("conflicts", Self::Conflicts)];
+    const NAMES: [(&'static str, Self); 2] =
+        [("conflicts", Self::Conflicts), ("clean", Self::Clean)];
 
     const fn holds(self, pr: &PullRequest) -> bool {
         match self {
             Self::Conflicts => pr.status.has_conflicts(),
+            Self::Clean => pr.status.is_conflict_free(),
         }
     }
 }
@@ -165,7 +170,11 @@ impl Filter {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::domain::{pr::PrStatus, review::Reviewer, user::User};
+    use crate::domain::{
+        pr::{Conflicts, OpenPr, PrStatus},
+        review::Reviewer,
+        user::User,
+    };
     use chrono::Utc;
 
     fn pr(title: &str, author: &str) -> PullRequest {
@@ -266,14 +275,50 @@ mod tests {
             ..pr("A", "x")
         };
         let clean = pr("B", "x");
-        for typed in ["merge:conflicts", "merge:conf", "merge:c"] {
+        for typed in ["merge:conflicts", "merge:conf", "merge:co"] {
             assert!(matching(typed, &conflicting), "{typed}");
             assert!(!matching(typed, &clean), "{typed}");
         }
         assert!(matching("merge:", &clean), "nothing typed after the colon");
         assert!(
-            matching("merge:clean", &clean),
+            matching("merge:c", &clean) && matching("merge:c", &conflicting),
+            "c begins both values: nothing filtered until one is typed"
+        );
+        assert!(
+            matching("merge:nonsense", &clean),
             "not a value: nothing filtered"
+        );
+    }
+
+    #[test]
+    fn merge_clean_keeps_the_prs_the_provider_says_have_no_conflict() {
+        let status = |conflicts| PullRequest {
+            status: PrStatus::Open(OpenPr {
+                draft: false,
+                conflicts,
+            }),
+            ..pr("A", "x")
+        };
+        let (no, yes, unknown) = (
+            status(Conflicts::No),
+            status(Conflicts::Yes),
+            status(Conflicts::Unknown),
+        );
+        for typed in ["merge:clean", "merge:cl"] {
+            assert!(matching(typed, &no), "{typed}");
+            assert!(!matching(typed, &yes), "{typed}");
+            assert!(
+                !matching(typed, &unknown),
+                "{typed}: not known to be free of conflicts"
+            );
+        }
+        let merged = PullRequest {
+            status: PrStatus::Merged,
+            ..pr("B", "x")
+        };
+        assert!(
+            !matching("merge:clean", &merged),
+            "a merged PR has no conflict to be free of"
         );
     }
 }

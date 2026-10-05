@@ -91,7 +91,7 @@ state (for example merging with conflicts) stay visible and say why.
 
 The search takes words, and filters among them: `author:alice`,
 `review:approved` (or `changes`, `requested`, `none`), `ci:failed` (or `pending`,
-`passing`) and `merge:conflicts` (GitHub), for example `/ author:alice ci:failed retry`. They narrow the list as you type.
+`passing`), `merge:conflicts` and `merge:clean` (no conflict; GitHub), for example `/ author:alice ci:failed retry`. They narrow the list as you type.
 
 A "Needs you" column, shown at 90 columns or wider, says why a PR is on top:
 changes requested, CI failed, review requested, or approved. Team review requests
