@@ -58,3 +58,15 @@ pub(super) fn bitbucket(server: &MockHttp) -> Provider {
         pat: crate::providers::bitbucket_dc::auth::Pat::new("secret-token".into()),
     })
 }
+
+pub(super) const PR_9: &str = "/rest/api/1.0/projects/PROJ/repos/repo/pull-requests/9";
+
+/// The PR as Bitbucket answers a read of it: its version, and the commit its
+/// source branch is at.
+pub(super) fn pr_9_now(head: &str) -> Route {
+    Route::get(
+        PR_9,
+        200,
+        &json!({"version": 3, "fromRef": {"latestCommit": head}}).to_string(),
+    )
+}

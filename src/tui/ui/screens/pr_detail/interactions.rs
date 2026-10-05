@@ -23,6 +23,15 @@ use crate::{
     },
 };
 
+/// What is shown when a merge or a verdict is asked for and no commit is known
+/// to tie it to. The keys are dimmed then, so this is for what changed since.
+fn head_unknown(pr_id: PrId) -> Effect {
+    Effect::Report {
+        pr_id,
+        message: "The commit you are reviewing is not known. Refresh and try again.".into(),
+    }
+}
+
 impl PrDetailScreen {
     /// Keep navigation and unfinished editors scoped to their PR for this session.
     pub fn open(&mut self, pr_id: PrId) {
@@ -160,7 +169,9 @@ impl PrDetailScreen {
                 let verdict = self
                     .review_picker()?
                     .selected(&self.view(ctx).review_context())?;
-                let head = ctx.reviewed_head()?;
+                let Some(head) = ctx.reviewed_head() else {
+                    return Some(head_unknown(pr_id));
+                };
                 self.overlay = None;
                 if verdict.needs_body() {
                     self.open_draft(Some(CommentTarget::Review { verdict }));
@@ -269,7 +280,9 @@ impl PrDetailScreen {
                 let delete = ctx.deletable_branch().filter(|_| dialog.delete_branch);
                 // What the reader has seen of the PR now, not when the dialog
                 // opened: it is that commit the merge is tied to.
-                let head = ctx.reviewed_head()?;
+                let Some(head) = ctx.reviewed_head() else {
+                    return Some(head_unknown(pr_id));
+                };
                 self.overlay = None;
                 let strategy = strategy?;
                 Some(Self::command(
@@ -297,7 +310,10 @@ impl PrDetailScreen {
             CommentTarget::Review { verdict } => Command::SubmitReview {
                 verdict,
                 body: text.into_string(),
-                head: ctx.reviewed_head()?,
+                head: match ctx.reviewed_head() {
+                    Some(head) => head,
+                    None => return Some(head_unknown(pr_id)),
+                },
             },
             CommentTarget::Pr
             | CommentTarget::Line(_)

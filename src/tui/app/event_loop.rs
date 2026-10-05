@@ -215,6 +215,9 @@ impl App {
             Effect::DismissError { pr_id } => {
                 self.state.store.errors.remove(&pr_id);
             }
+            Effect::Report { pr_id, message } => {
+                self.state.store.errors.insert(pr_id, message);
+            }
             Effect::PrLink { pr_id, kind } => self.pr_link(pr_id, kind),
             Effect::IssueLink { number, url } => {
                 self.start_link(LinkTarget::Issue(number), LinkAction::Open, &url);

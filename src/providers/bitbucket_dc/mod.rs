@@ -89,9 +89,14 @@ pub fn submit_full_review(
     comments: &[ReviewComment],
     head: &ReviewedHead,
 ) -> Result<(), ReviewError> {
-    // Before anything is posted: an approval of a branch that has moved is
-    // refused whole, not after some of its comments arrived.
-    if verdict == ReviewVerdict::Approve && pr_now(config, pr_id)?.head != head.as_str() {
+    // Before anything is posted: a verdict on a branch that has moved is
+    // refused whole, not after some of its comments arrived. Withdrawing an
+    // approval is the safe direction, so it is not held back by a push.
+    let judges = matches!(
+        verdict,
+        ReviewVerdict::Approve | ReviewVerdict::RequestChanges
+    );
+    if judges && pr_now(config, pr_id)?.head != head.as_str() {
         return Err(ReviewError::Failed(moved_since_read()));
     }
     publish_steps(

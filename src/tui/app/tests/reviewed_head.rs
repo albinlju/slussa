@@ -78,3 +78,29 @@ async fn without_a_known_head_merge_and_review_are_not_offered() {
     assert!(app.state.ui.detail.review_picker().is_none());
     assert!(app.state.store.operations.is_empty());
 }
+
+#[tokio::test]
+async fn a_verdict_draft_whose_head_went_missing_says_so_and_keeps_the_editor_open() {
+    let mut app = app();
+    detail(&mut app, DetailTab::Overview);
+    press(&mut app, KeyCode::Char('a'));
+    // Request changes needs a summary: the editor opens.
+    press(&mut app, KeyCode::Char('j'));
+    press(&mut app, KeyCode::Enter);
+    assert!(
+        app.state.ui.detail.editor.is_open(),
+        "the summary editor is open"
+    );
+    press(&mut app, KeyCode::Char('z'));
+    // The list is read again and gives no head.
+    listed_head(&mut app, None);
+    send_comment(&mut app);
+
+    let error = app.state.store.errors.get(&PrId(42));
+    assert!(
+        error.is_some_and(|e| e.contains("commit you are reviewing is not known")),
+        "{error:?}"
+    );
+    assert!(app.state.store.operations.is_empty());
+    assert!(app.state.ui.detail.editor.is_open(), "the draft is kept");
+}
