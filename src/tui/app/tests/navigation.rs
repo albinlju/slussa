@@ -246,7 +246,7 @@ async fn link_completion_keeps_navigation_and_reports_failure_without_blocking_p
     assert!(app.state.store.link_pending);
     detail(&mut app, DetailTab::Overview);
     app.apply_result(TaskResult::LinkFinished {
-        pr_id: PrId(42),
+        target: LinkTarget::Pr(PrId(42)),
         result: Err(crate::tui::app::desktop::LinkError::Copy(
             std::io::Error::other("clipboard unavailable"),
         )),
@@ -344,4 +344,17 @@ fn returning_to_a_pr_restores_its_tab_focus_and_search() {
     assert_eq!(app.state.ui.detail.diff.pane_search.query, "needle");
     assert_eq!(app.state.ui.detail.diff.pane_scroll, 12);
     assert_eq!(app.state.ui.detail.overview.timeline.scroll, 7);
+}
+
+#[test]
+fn an_issue_link_that_is_not_http_is_rejected_before_starting_desktop_work() {
+    let mut app = app();
+    app.apply(Action::Effect(Effect::IssueLink {
+        number: 12,
+        url: "file:///tmp/local".into(),
+    }));
+    assert!(!app.state.store.link_pending);
+    let notice = app.state.store.notice.as_ref().expect("a notice");
+    assert_eq!(notice.kind, crate::tui::app::store::NoticeKind::Error);
+    assert_eq!(notice.message, "issue #12: There is no valid HTTP(S) link.");
 }

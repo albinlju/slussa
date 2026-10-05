@@ -418,6 +418,7 @@ fn the_sidebar_names_the_issues_a_pr_closes_and_only_then() {
             issues: vec![LinkedIssue {
                 number: 12,
                 title: "Crash on start".into(),
+                url: Some("https://example.com/team/project/issues/12".into()),
             }],
         });
     }

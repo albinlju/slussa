@@ -5,7 +5,7 @@ use crate::{
         comment::{Comment, CommentId, CommentKey, CommentKind, ThreadHandle},
         commit::CommitOid,
         diff::FileDiff,
-        pr::{DeletableBranch, Mergeability, PrId, PrStatus, PullRequest},
+        pr::{DeletableBranch, LinkedIssue, Mergeability, PrId, PrStatus, PullRequest},
         review::{CommentTarget, Rerequest, ReviewVerdict},
     },
     tui::{
@@ -154,6 +154,14 @@ impl<'a> DetailView<'a> {
                     .iter()
                     .any(|build| matches!(build.state, BuildState::Failed | BuildState::Cancelled))
             })
+    }
+
+    /// The issue `i` opens: the first the PR closes that has an address, and
+    /// how many more there are.
+    pub fn linked_issue(&self) -> Option<(&'a LinkedIssue, usize)> {
+        let issues = &self.data?.info.loaded()?.issues;
+        let first = issues.iter().position(|issue| issue.url.is_some())?;
+        Some((issues.get(first)?, issues.len().saturating_sub(1)))
     }
 
     /// Those who asked for changes, when there are some to ask again.

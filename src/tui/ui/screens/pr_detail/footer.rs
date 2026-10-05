@@ -86,6 +86,7 @@ fn footer_actions(state: &DetailView<'_>, tab: DetailTab) -> Vec<Hint> {
             parts.extend(bindings::hint(state, 'R'));
         }
         parts.extend(bindings::hint(state, 'f'));
+        parts.extend(bindings::hint(state, 'i'));
         parts.extend(pr_action_hints(state));
         // Last, so that it is the first to go where the line is short.
         let unresolved = state.detail.overview.timeline.unresolved.len();

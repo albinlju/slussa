@@ -2,7 +2,10 @@
 
 use super::{Binding, Doc, Label, Mods, Needs, Offer, Place, offered};
 use crate::{
-    domain::{capabilities::Feature, pr::PrStatus},
+    domain::{
+        capabilities::Feature,
+        pr::{LinkedIssue, PrStatus},
+    },
     tui::{
         app::effect::{Effect, LinkAction},
         ui::{
@@ -351,6 +354,40 @@ pub(in crate::tui::ui::screens::pr_detail) static RERUN_BUILDS: Binding = Bindin
     },
 };
 
+/// `i` in the Overview opens the issue the PR closes in the browser: the first,
+/// when there are several. It is what the PR was asked to do, so reading it
+/// is the intent check.
+pub(in crate::tui::ui::screens::pr_detail) static OPEN_ISSUE: Binding = Binding {
+    key: 'i',
+    mods: Mods::Plain,
+    place: Place::Overview,
+    doc: Some(Doc {
+        keys: "i",
+        text: "open the issue the PR closes in the browser (Overview)",
+    }),
+    // The issues are read with the description and labels, where a provider does.
+    needs: Needs::Feature(Feature::PrInfo),
+    label: Label::Of(|view| match view.linked_issue() {
+        Some((issue, 0)) => format!("i: open #{}", issue.number),
+        Some((issue, more)) => format!("i: open #{} (+{more})", issue.number),
+        None => "i: open issue".to_owned(),
+    }),
+    offer: |view| match view.linked_issue() {
+        Some((
+            LinkedIssue {
+                number,
+                url: Some(url),
+                ..
+            },
+            _,
+        )) => Offer::Offered(Action::Effect(Effect::IssueLink {
+            number: *number,
+            url: url.clone(),
+        })),
+        Some((LinkedIssue { url: None, .. }, _)) | None => Offer::Hidden,
+    },
+};
+
 /// `p` asks those who asked for changes to look again, once there are some.
 pub(in crate::tui::ui::screens::pr_detail) static REREQUEST_REVIEW: Binding = Binding {
     key: 'p',
@@ -403,4 +440,5 @@ pub(in crate::tui::ui::screens::pr_detail) static BINDINGS: &[&Binding] = &[
     &REMOVE_PENDING,
     &RERUN_BUILDS,
     &REREQUEST_REVIEW,
+    &OPEN_ISSUE,
 ];

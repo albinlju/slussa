@@ -1,7 +1,7 @@
 //! Desktop integration uses argument arrays and stdin, never interpolated shell commands.
 use super::{
     App,
-    effect::{LinkAction, TaskResult},
+    effect::{LinkAction, LinkTarget, TaskResult},
     store::Notice,
 };
 use crate::domain::pr::PrId;
@@ -13,24 +13,29 @@ use std::{
 
 impl App {
     pub(super) fn pr_link(&mut self, pr_id: PrId, kind: LinkAction) {
-        if self.state.store.link_pending {
-            return;
-        }
         let prs = self.state.store.cache.prs.loaded();
         let pr = prs.and_then(|prs| prs.iter().find(|pr| pr.id == pr_id));
         let Some(url) = pr.and_then(|pr| pr.url.clone()) else {
             return;
         };
-        let url = match WebUrl::parse(&url) {
+        self.start_link(LinkTarget::Pr(pr_id), kind, &url);
+    }
+
+    /// Open or copy `url`, one link at a time, off the UI thread.
+    pub(super) fn start_link(&mut self, target: LinkTarget, kind: LinkAction, url: &str) {
+        if self.state.store.link_pending {
+            return;
+        }
+        let url = match WebUrl::parse(url) {
             Ok(url) => url,
             Err(error) => {
-                self.state.store.notice = Some(Notice::error(error.to_string()));
+                self.state.store.notice = Some(Notice::error(format!("{target}: {error}")));
                 return;
             }
         };
         self.state.store.link_pending = true;
         self.state.store.notice = Some(Notice::info(format!(
-            "{} PR #{pr_id}…",
+            "{} {target}…",
             if kind == LinkAction::Open {
                 "Opening"
             } else {
@@ -40,7 +45,7 @@ impl App {
         self.spawn_fetch(
             move || perform(kind, &url),
             move |returned| TaskResult::LinkFinished {
-                pr_id,
+                target,
                 result: returned.unwrap_or_else(|panic| {
                     tracing::error!("desktop worker panicked: {panic}");
                     Err(LinkError::WorkerPanicked)
@@ -59,7 +64,7 @@ struct WebUrl(String);
 /// Why a link action did nothing. The text is what the notice says.
 #[derive(Debug, thiserror::Error)]
 pub enum LinkError {
-    #[error("This PR has no valid HTTP(S) link.")]
+    #[error("There is no valid HTTP(S) link.")]
     InvalidUrl,
     #[error("Could not open browser: {0}")]
     Open(io::Error),

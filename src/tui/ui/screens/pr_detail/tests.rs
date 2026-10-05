@@ -367,3 +367,66 @@ fn the_footer_names_who_p_asks_again_and_says_why_not_on_a_closed_pr() {
     let nobody = footer_of(&mut asked(PrStatus::open(), &[]));
     assert!(!nobody.contains("ask"), "{nobody}");
 }
+
+fn with_issues(issues: Vec<crate::domain::pr::LinkedIssue>) -> AppState {
+    use crate::domain::pr::PrInfo;
+    let mut state = on_tab(overview_of(PrStatus::open()), DetailTab::Overview);
+    if let Some(data) = state.store.cache.details.get_mut(&PrId(42)) {
+        data.info = LoadState::Loaded(PrInfo {
+            description: None,
+            labels: vec![],
+            issues,
+        });
+    }
+    state
+}
+
+fn issue(number: u64, url: Option<&str>) -> crate::domain::pr::LinkedIssue {
+    crate::domain::pr::LinkedIssue {
+        number,
+        title: format!("Issue {number}"),
+        url: url.map(str::to_owned),
+    }
+}
+
+#[test]
+fn i_opens_the_issue_the_pr_closes_and_the_footer_names_it() {
+    let one = footer_of(&mut with_issues(vec![issue(
+        12,
+        Some("https://example.com/o/r/issues/12"),
+    )]));
+    assert!(one.contains("i: open #12"), "{one}");
+    assert!(!one.contains("(+"), "{one}");
+
+    let state = with_issues(vec![
+        issue(12, Some("https://example.com/o/r/issues/12")),
+        issue(31, Some("https://example.com/o/other/issues/31")),
+    ]);
+    let key = KeyEvent::new(KeyCode::Char('i'), KeyModifiers::NONE);
+    assert!(
+        matches!(
+            key_to_action(&state, key),
+            Some(Action::Effect(crate::tui::app::effect::Effect::IssueLink { number: 12, ref url }))
+                if url == "https://example.com/o/r/issues/12"
+        ),
+        "the first one is opened"
+    );
+    let several = footer_of(&mut with_issues(vec![
+        issue(12, Some("https://example.com/o/r/issues/12")),
+        issue(31, Some("https://example.com/o/other/issues/31")),
+    ]));
+    assert!(several.contains("i: open #12 (+1)"), "{several}");
+}
+
+#[test]
+fn i_is_not_offered_without_an_issue_to_open() {
+    for issues in [vec![], vec![issue(12, None)]] {
+        let mut state = with_issues(issues);
+        let key = KeyEvent::new(KeyCode::Char('i'), KeyModifiers::NONE);
+        assert!(key_to_action(&state, key).is_none());
+        assert!(!footer_of(&mut state).contains("i: open"));
+    }
+    // Before the description and issues are read.
+    let mut unread = on_tab(overview_of(PrStatus::open()), DetailTab::Overview);
+    assert!(!footer_of(&mut unread).contains("i: open"));
+}

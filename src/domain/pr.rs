@@ -108,6 +108,8 @@ pub struct PrInfo {
 pub struct LinkedIssue {
     pub number: u64,
     pub title: String,
+    /// Where the issue is, when the provider says; it may be in another repository.
+    pub url: Option<String>,
 }
 
 /// A slice of a repository's PRs that can be read on its own. `Open` holds open
