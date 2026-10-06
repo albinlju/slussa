@@ -11,6 +11,11 @@ const DIFF: &str = "diff --git a/src/a.rs b/src/a.rs\n\
 -old\n\
 +new\n";
 
+/// GitHub's answer about the two commits: the one they share.
+fn shared(sha: &str) -> String {
+    format!(r#"{{"status":"ahead","merge_base_commit":{{"sha":"{sha}"}},"commits":[]}}"#)
+}
+
 fn range() -> DiffRange {
     DiffRange {
         base: CommitOid::parse("aaa111").unwrap(),
@@ -20,7 +25,10 @@ fn range() -> DiffRange {
 
 #[test]
 fn what_is_new_is_a_compare_of_the_two_commits_read_as_a_diff() {
-    let installed = FakeGh::new().on("compare/aaa111...bbb222", DIFF).install();
+    let installed = FakeGh::new()
+        .on("page=2", &shared("aaa111"))
+        .on("compare/aaa111...bbb222", DIFF)
+        .install();
     let diff = Provider::github_for_test()
         .fetch_range_diff(&range())
         .unwrap();
@@ -38,6 +46,43 @@ fn what_is_new_is_a_compare_of_the_two_commits_read_as_a_diff() {
             .any(|call| call.contains("application/vnd.github.diff")),
         "{calls:?}"
     );
+}
+
+#[test]
+fn the_diff_starts_at_the_commit_the_two_share_which_tells_a_rewritten_branch() {
+    let installed = FakeGh::new()
+        .on("page=2", &shared("ccc333"))
+        .on("compare/aaa111...bbb222", DIFF)
+        .install();
+    let diff = Provider::github_for_test()
+        .fetch_range_diff(&range())
+        .unwrap();
+    assert_eq!(
+        range().moved(&diff),
+        Some(crate::domain::diff::Moved::Rewritten {
+            from: CommitOid::parse("ccc333").unwrap()
+        })
+    );
+    // Asked for past the first page, which is the one that lists the files.
+    let calls = installed.calls();
+    assert!(
+        calls
+            .iter()
+            .any(|call| call.contains("compare/aaa111...bbb222?per_page=1&page=2")),
+        "{calls:?}"
+    );
+}
+
+#[test]
+fn an_answer_about_the_commits_that_cannot_be_read_is_an_error_and_no_diff() {
+    let _installed = FakeGh::new()
+        .on("page=2", "{}")
+        .on("compare/aaa111...bbb222", DIFF)
+        .install();
+    let error = Provider::github_for_test()
+        .fetch_range_diff(&range())
+        .unwrap_err();
+    assert!(matches!(error, FetchError::ParseFailed(_)), "{error:?}");
 }
 
 #[test]

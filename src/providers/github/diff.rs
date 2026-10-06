@@ -25,14 +25,29 @@ pub fn fetch_diff(repo: &GhRepo, pr_number: PrId) -> Result<Diff, FetchError> {
 
 /// What changed from `range.base` to `range.head`, as GitHub compares them: from
 /// their common ancestor, so after a merge of the target into the branch it holds
-/// what the merge brought too. A base that was force-pushed away is not there to
-/// compare, and GitHub answers 404; that is told as what it most likely is, with
-/// what GitHub said.
+/// what the merge brought too. The diff's base is that ancestor, the commit the
+/// compare really starts from, which says whether the branch moved forward, was
+/// reset or was rewritten (`DiffRange::moved`). A base that was force-pushed away
+/// is not there to compare, and GitHub answers 404; that is told as what it most
+/// likely is, with what GitHub said.
 pub fn fetch_range_diff(repo: &GhRepo, range: &DiffRange) -> Result<Diff, FetchError> {
+    #[derive(serde::Deserialize)]
+    struct Commit {
+        sha: String,
+    }
+    #[derive(serde::Deserialize)]
+    struct Compared {
+        merge_base_commit: Commit,
+    }
     let endpoint = format!(
         "repos/{{owner}}/{{repo}}/compare/{}...{}",
         range.base, range.head
     );
+    // Only the first page of a compare lists the files; a later one holds what
+    // is asked for here and little else.
+    let about = format!("{endpoint}?per_page=1&page=2");
+    let compared: Compared =
+        super::cli::run_gh_json(repo, &["api", &about]).map_err(commit_gone)?;
     let stdout = run_gh(
         repo,
         &[
@@ -42,25 +57,28 @@ pub fn fetch_range_diff(repo: &GhRepo, range: &DiffRange) -> Result<Diff, FetchE
             "Accept: application/vnd.github.diff",
         ],
     )
-    .map_err(|error| {
-        if let FetchError::GhFailed { stderr, .. } = &error
-            && stderr.contains("HTTP 404")
-        {
-            return FetchError::Stale(format!(
-                "The commit you read is probably no longer on GitHub, since the branch was \
-                 force-pushed, so what is new cannot be told (GitHub said: {stderr})."
-            ));
-        }
-        error
-    })?;
+    .map_err(commit_gone)?;
     let text = String::from_utf8_lossy(&stdout);
     let mut diff = unified_diff::parse(&text);
     diff.revision = Some(crate::domain::diff::DiffRevision {
         head: range.head.as_str().into(),
-        base: Some(range.base.as_str().into()),
+        base: Some(compared.merge_base_commit.sha),
         commit: true,
     });
     Ok(diff)
+}
+
+/// A compare that GitHub answers with 404 is most likely of a commit that is gone.
+fn commit_gone(error: FetchError) -> FetchError {
+    if let FetchError::GhFailed { stderr, .. } = &error
+        && stderr.contains("HTTP 404")
+    {
+        return FetchError::Stale(format!(
+            "The commit you read is probably no longer on GitHub, since the branch was \
+             force-pushed, so what is new cannot be told (GitHub said: {stderr})."
+        ));
+    }
+    error
 }
 
 pub fn fetch_commit_diff(repo: &GhRepo, oid: &CommitOid) -> Result<Diff, FetchError> {

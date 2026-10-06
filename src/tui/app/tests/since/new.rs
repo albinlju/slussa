@@ -204,3 +204,52 @@ async fn nothing_new_in_the_files_of_the_pr_says_so_and_what_it_may_mean() {
         "it says what an empty compare can be"
     );
 }
+
+/// A reader with what is new open, and the PR's diff of the new head there.
+fn reader_asking_what_is_new() -> App {
+    let mut app = returning_reader("aaa111", "bbb222");
+    diff_of_files(&mut app, "bbb222", &["src/main.rs"]);
+    press(&mut app, KeyCode::Char('w'));
+    app
+}
+
+#[tokio::test(flavor = "current_thread")]
+async fn a_branch_that_moved_forward_shows_what_is_new_from_the_commit_that_was_read() {
+    let mut app = reader_asking_what_is_new();
+    compare_from(&mut app, "aaa111", &["src/main.rs"]);
+    let text = screen_text(&mut app);
+    assert!(
+        text.contains("↻ new since you read it  aaa111 → bbb222"),
+        "{text}"
+    );
+    assert!(!text.contains("rewritten"), "{text}");
+}
+
+#[tokio::test(flavor = "current_thread")]
+async fn a_branch_that_was_rewritten_says_the_compare_is_not_only_what_is_new() {
+    let mut app = reader_asking_what_is_new();
+    // The compare starts at the commit the two share, not at the one that was read.
+    compare_from(&mut app, "ccc333", &["src/main.rs"]);
+    let text = screen_text(&mut app);
+    assert!(text.contains("↻ rewritten since you read it"), "{text}");
+    assert!(text.contains("from ccc333, not aaa111"), "{text}");
+    assert!(text.contains("not what was dropped"), "{text}");
+    assert!(!text.contains("↻ new since you read it  aaa111"), "{text}");
+}
+
+#[tokio::test(flavor = "current_thread")]
+async fn a_branch_that_was_reset_says_so_instead_of_that_nothing_is_new() {
+    let mut app = reader_asking_what_is_new();
+    // The head now is under the commit that was read, so the compare starts at it.
+    compare_from(&mut app, "bbb222", &[]);
+    let text = screen_text(&mut app);
+    assert!(
+        text.contains("↻ reset since you read it  aaa111 → back to bbb222"),
+        "{text}"
+    );
+    assert!(
+        text.contains("The branch was reset to a commit older"),
+        "{text}"
+    );
+    assert!(!text.contains("Nothing new"), "{text}");
+}

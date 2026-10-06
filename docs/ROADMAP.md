@@ -159,7 +159,11 @@ let an agent help without deciding.
   force-pushed away says so, with what GitHub answered, since it no longer has it to
   compare. The new part is the compare of GitHub (from the two commits' common
   ancestor) kept to the files the PR touches, which leaves out what a merge of the
-  target brought in; an empty one says it may be a reset. Which files those are is
+  target brought in. GitHub is asked which commit the two share, where the compare
+  starts: when that is not the commit that was read, the banner says the branch was
+  rewritten and from where, since the diff then holds what was read already and
+  nothing of what was dropped, and when it is the head now it says the branch was
+  reset. Which files those are is
   read from the PR's diff of the new head, so that is read first: a compare that
   arrives without it is not kept and does not count as read, and a branch that
   moved again meanwhile says so. Missing: the
@@ -168,8 +172,9 @@ let an agent help without deciding.
   of them were answered or resolved since; the mark on the list's row (left out of
   the first version; the list already has `●` for changed since); a compare that is
   of the two commits themselves (after a rebase GitHub's compare shows the PR's own
-  changes again, and a file the PR touches that the target also changed shows what
-  the target did);
+  changes again, a file the PR touches that the target also changed shows what
+  the target did, and what a force-push dropped is not shown; the banner says that
+  the branch was rewritten, and GitHub has no call that gives the difference);
   and Bitbucket Data Center. **Open:** whether opening the Diff tab is the right
   meaning of read: it clears the mark for a reader who goes straight to the whole
   diff, which is what makes the mark a way in and not a log.

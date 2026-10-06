@@ -116,10 +116,14 @@ moved since, the PR's header says `↻ new since you read it`, and `w` shows onl
 what changed, from that commit to the one now, in the files the PR touches. Which
 files those are is read from the PR's diff of the new commit, so that is read first,
 and if the branch moves again meanwhile `w` says so instead of showing a part. GitHub
-compares from the two commits' common ancestor, so after a merge of the target into
-the branch the files only the merge changed are left out, after a rebase the PR's own
-changes can show again, and a branch reset to an older commit shows nothing (and says
-so). A commit that was force-pushed away may no longer be there to compare, and
+compares from the commit the two share, and slussa asks which that is. When it is the
+commit you read, the branch moved forward and what is shown is what is new, all of it.
+When it is not, the branch was rebased or force-pushed: the banner then says
+`↻ rewritten since you read it` and from which commit, because the diff holds again
+what you had already read and shows nothing of what was dropped from the branch. A
+branch reset to an older commit says `↻ reset since you read it`: nothing is new, and
+what came after is gone. After a merge of the target into the branch the files only the
+merge changed are left out. A commit that was force-pushed away may no longer be there to compare, and
 GitHub's answer is shown with what it probably means; `w` goes back to the whole diff
 and asks again the next time, and `F` asks again too. Arriving at the PR's diff, by
 opening the PR on it or choosing the Diff tab, counts as having read it, so the mark is

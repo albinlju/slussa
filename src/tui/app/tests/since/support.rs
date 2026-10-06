@@ -136,6 +136,22 @@ pub(super) fn compare_arrives(app: &mut App, paths: &[&str]) {
     )));
 }
 
+/// The compare answers with these files, and says it starts at `from`.
+pub(super) fn compare_from(app: &mut App, from: &str, paths: &[&str]) {
+    app.apply_result(TaskResult::Read(Read::RangeDiff(
+        PrId(42),
+        range("aaa111", "bbb222"),
+        Ok(Diff {
+            revision: Some(DiffRevision {
+                head: "bbb222".into(),
+                base: Some(from.into()),
+                commit: true,
+            }),
+            files: files(paths),
+        }),
+    )));
+}
+
 pub(super) fn what_is_new(app: &App) -> &LoadState<Diff> {
     &app.state.store.cache.details[&PrId(42)].range_diffs[&range("aaa111", "bbb222")]
 }
