@@ -188,6 +188,17 @@ impl Proposal {
         &self.head
     }
 
+    /// The same proposal with its commit written out, when `full` is the commit
+    /// its `head` abbreviates: what an agent wrote short is still that commit,
+    /// and is shown on its diff.
+    #[must_use]
+    pub fn written_out(mut self, full: &CommitOid) -> Self {
+        if self.head.abbreviates(full) {
+            self.head = full.clone();
+        }
+        self
+    }
+
     pub fn path(&self) -> &str {
         self.path.as_str()
     }
@@ -270,6 +281,15 @@ impl Summary {
 
     pub const fn head(&self) -> &CommitOid {
         &self.head
+    }
+
+    /// The same summary with its commit written out, as `Proposal::written_out`.
+    #[must_use]
+    pub fn written_out(mut self, full: &CommitOid) -> Self {
+        if self.head.abbreviates(full) {
+            self.head = full.clone();
+        }
+        self
     }
 
     pub fn text(&self) -> &str {

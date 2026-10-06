@@ -162,12 +162,21 @@ cannot be tied to another one. Everything in the PR is told to be data and not a
 instruction, and since what the agent says only becomes proposals that you take or
 discard, an instruction hidden in a PR can at worst waste a review. GitHub only.
 
-**Hand one in.** An agent that has reviewed a PR can hand in what it found, without
-posting anything:
+**Let your own agent review.** An agent that reviews on its own, from a skill or a
+script, reads the PR from slussa and hands in what it finds, without posting anything:
 
 ```sh
+slussa context 44 > pr.txt                 # what the PR is made of, and how to hand in
 slussa propose import 44 < review.json     # or --file review.json
+slussa agent-instructions                  # how to use the two, for AGENTS.md or a skill
 ```
+
+`slussa context` prints what the agent asked with `A` is given, read the same way: the
+title and description, the issues the PR closes, the repository's rules and the diff,
+with the commit the diff is of and the document to write, that commit filled in. It
+carries no review instructions, since your agent has its own. `slussa agent-instructions`
+prints a short text that tells an agent slussa is there and how to use it; an agent that
+is not told never calls it.
 
 The document is read, checked and kept for the reader; the reader sends, edits or
 discards each proposal. `head` is the commit the agent read, and everything in the
@@ -189,13 +198,24 @@ document is tied to it:
 `side` is `new` (the default) or `old`; `id` and `agent` are optional, and a finding
 that is handed in again, by its `id` or else by its words on the same line of the same
 commit, is not kept twice. A field that is not in the schema is refused, so that a
-misspelling is not ignored. It prints one line of JSON and exits: `{"schema":1,"pr":44,"added":3,"duplicates":0,
-"head":"...","current_head":"...","stale":false}`, where `stale` says the PR has moved
-since `head`. A failure is JSON on standard error, `{"schema":1,"error":{"kind":"...",
+misspelling is not ignored. `head` may be written short, with seven characters or more:
+when it is the PR's head it is written out, since a proposal is shown on the diff of
+exactly its commit. A document of the PR's head is checked against the PR's diff before
+anything is kept: a comment on a line that is not in the diff could never be shown, so
+the whole document is refused and the error names each such comment
+(`comments[1]: src/a.rs line 40 (new)`), for the agent to correct and hand in again. A
+document of an older commit is kept unchecked, and shown as written against another
+commit.
+
+It prints one line of JSON and exits: `{"schema":1,"pr":44,"added":3,"duplicates":0,
+"head":"...","current_head":"...","stale":false,"lines_checked":true}`, where `stale`
+says the PR has moved since `head` and `lines_checked` that the comments were checked to
+be on the diff. A failure is JSON on standard error, `{"schema":1,"error":{"kind":"...",
 "message":"..."}}`, and exit code 2 for a command line or a document that is wrong,
-1 for anything else (`not_logged_in`, `not_found`, `failed`). It never asks for input:
-it needs `gh` to be logged in already. GitHub only. The schema is experimental until
-it has been used.
+1 for anything else: `not_logged_in`, `not_found` when the server says there is no such
+PR, and `failed`, which trying again may get past. Neither command asks for input: they
+need `gh` to be logged in already. GitHub only. The schema is experimental until it has
+been used.
 
 In the PR's Diff tab what an agent proposed stands on the line it is about, marked
 `[AI]` with the agent's name, the file list marks each file that has some (`◆ 1`, the same

@@ -45,9 +45,9 @@ keyboard-only use, and prefer an existing interaction over a new visual pattern.
 ```text
 src/
 ├── main.rs                Startup, logging and dispatch to `cli` or `tui`
-├── cli/                   Arguments and the subcommands that print and exit (`auth login`, `-C`)
+├── cli/                   Arguments and the subcommands that print and exit (`auth login`, `-C`, `context`, `propose import`, `agent-instructions`); `exit.rs` is how they fail, `check.rs` what a handed-in document is checked against
 ├── config.rs              config.toml: theme, sort, `agent_review` and `[ai] markers`
-├── agent.rs               Asking an agent for a review: the prompt, running the command, finding its JSON
+├── agent/                 Reviewing with an agent: what a review is made from (`material.rs`, shared by `A` and `slussa context`), what the agent is told, running the command, finding its JSON
 ├── logging.rs             Log file in the data directory (`SLUSSA_LOG`), for its owner only
 ├── private_file.rs        Files only their owner may read: the drafts and the log
 ├── git_url.rs             Splits a git remote into host and path; web base URL

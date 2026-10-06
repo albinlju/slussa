@@ -67,6 +67,27 @@ pub struct Parsed {
     pub summary: Option<Summary>,
 }
 
+impl Parsed {
+    /// The document with its commit written out, when `full` is the commit its
+    /// `head` abbreviates. An agent that wrote the PR's head short still read
+    /// that commit; kept short, nothing it proposed would be shown on the diff.
+    #[must_use]
+    pub fn written_out(self, full: &CommitOid) -> Self {
+        if !self.head.abbreviates(full) {
+            return self;
+        }
+        Self {
+            head: full.clone(),
+            comments: self
+                .comments
+                .into_iter()
+                .map(|comment| comment.written_out(full))
+                .collect(),
+            summary: self.summary.map(|summary| summary.written_out(full)),
+        }
+    }
+}
+
 fn unknown_field(value: &serde_json::Value, known: &[&str], at: &str) -> Option<String> {
     let object = value.as_object()?;
     object
@@ -233,5 +254,25 @@ mod tests {
                 .unwrap_err()
                 .contains("more than")
         );
+    }
+
+    #[test]
+    fn a_head_written_short_is_written_out_when_it_is_that_commit() {
+        let full = oid("abc1234def5678900000000000000000000000ff");
+        let short = r#"{"schema": 1, "head": "abc1234", "summary": "One thing.",
+            "comments": [{"path": "a.rs", "line": 2, "body": "Look here."}]}"#;
+        let parsed = parse(short.as_bytes(), Source::Caller)
+            .unwrap()
+            .written_out(&full);
+        assert_eq!(parsed.head, full);
+        assert_eq!(parsed.comments[0].head(), &full);
+        assert_eq!(parsed.summary.unwrap().head(), &full);
+        // Another commit stays what the agent wrote: it read something else.
+        let other = oid("fff0000def5678900000000000000000000000ff");
+        let kept = parse(short.as_bytes(), Source::Caller)
+            .unwrap()
+            .written_out(&other);
+        assert_eq!(kept.head.as_str(), "abc1234");
+        assert_eq!(kept.comments[0].head().as_str(), "abc1234");
     }
 }

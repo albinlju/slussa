@@ -3,6 +3,11 @@
 //! proposal in the TUI. Nothing is posted. It prints and exits, and never asks
 //! for input: it fails when the account is not logged in.
 //!
+//! A document of the PR's head is checked against the PR's diff before it is
+//! kept: a comment on a line that is not in it could never be shown, so the
+//! document is refused and the lines are named, for the agent to correct. A
+//! `head` written short is written out when it is the PR's head.
+//!
 //! The document is the public contract, and `"schema": 1` is marked experimental
 //! until it is used. Its types are separate from the domain's, so a change inside
 //! does not change what an agent writes.
@@ -15,18 +20,21 @@ use std::{
 
 use serde::Serialize;
 
+use super::{
+    check,
+    exit::{self, Failure, Kind},
+};
 use crate::{
     domain::{
         commit::CommitOid,
         pr::PrId,
-        printable::printable,
-        proposal_document::{self, Source},
+        proposal_document::{self, Parsed, Source},
     },
     local::{
         proposals::{Batch, Imported, import},
         scope::scope,
     },
-    session::{self, remote},
+    session::remote,
 };
 
 /// The most a document may hold, so that an agent that loops cannot fill the
@@ -45,48 +53,9 @@ struct Report {
     /// Whether the PR has moved since the agent read it: what it proposes is then
     /// shown as written against another commit.
     stale: bool,
-}
-
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-enum Kind {
-    Usage,
-    Invalid,
-    NotLoggedIn,
-    NotFound,
-    Failed,
-}
-
-impl Kind {
-    const fn name(self) -> &'static str {
-        match self {
-            Self::Usage => "usage",
-            Self::Invalid => "invalid",
-            Self::NotLoggedIn => "not_logged_in",
-            Self::NotFound => "not_found",
-            Self::Failed => "failed",
-        }
-    }
-
-    const fn exit(self) -> u8 {
-        match self {
-            Self::Usage | Self::Invalid => 2,
-            Self::NotLoggedIn | Self::NotFound | Self::Failed => 1,
-        }
-    }
-}
-
-struct Failure {
-    kind: Kind,
-    message: String,
-}
-
-impl Failure {
-    fn new(kind: Kind, message: impl Into<String>) -> Self {
-        Self {
-            kind,
-            message: message.into(),
-        }
-    }
+    /// Whether the comments were checked to be on lines of the PR's diff. They
+    /// are when `head` is the PR's head; an older commit's diff is not read.
+    lines_checked: bool,
 }
 
 enum Command {
@@ -99,15 +68,7 @@ pub(super) fn run(args: &[String]) -> ExitCode {
             println!("{}", serde_json::to_string(&report).unwrap_or_default());
             ExitCode::SUCCESS
         }
-        Err(failure) => {
-            tracing::warn!("propose failed: {}", failure.kind.name());
-            let error = serde_json::json!({
-                "schema": 1,
-                "error": {"kind": failure.kind.name(), "message": printable(&failure.message)},
-            });
-            eprintln!("{error}");
-            ExitCode::from(failure.kind.exit())
-        }
+        Err(failure) => exit::report("propose", &failure),
     }
 }
 
@@ -174,16 +135,9 @@ fn read_document(file: Option<&Path>) -> Result<Vec<u8>, Failure> {
 
 /// What the document proposes, each part checked: the one that is wrong is
 /// named, and nothing of a document with one is kept.
-fn parse_document(bytes: &[u8]) -> Result<(CommitOid, Batch), Failure> {
-    let parsed = proposal_document::parse(bytes, Source::Caller)
-        .map_err(|message| Failure::new(Kind::Invalid, message))?;
-    Ok((
-        parsed.head,
-        Batch {
-            comments: parsed.comments,
-            summary: parsed.summary,
-        },
-    ))
+fn parse_document(bytes: &[u8]) -> Result<Parsed, Failure> {
+    proposal_document::parse(bytes, Source::Caller)
+        .map_err(|message| Failure::new(Kind::Invalid, message))
 }
 
 fn import_batch(
@@ -207,43 +161,49 @@ fn import_batch(
         head: head.to_string(),
         stale: current.as_ref().is_some_and(|current| current != head),
         current_head: current.map(|current| current.to_string()),
+        lines_checked: false,
     })
 }
 
 fn run_import(args: &[String]) -> Result<Report, Failure> {
     let Command::Import { pr, file } = parse_args(args)?;
-    let (head, batch) = parse_document(&read_document(file.as_deref())?)?;
+    let parsed = parse_document(&read_document(file.as_deref())?)?;
 
-    // Never `cli::connect`, which starts an interactive login.
-    let session = session::connect().map_err(|e| match e {
-        session::preflight::PreflightError::GhNotAuthenticated { .. } => {
-            Failure::new(Kind::NotLoggedIn, e.to_string())
-        }
-        _ => Failure::new(Kind::Failed, e.to_string()),
-    })?;
+    let session = exit::connect()?;
     let found = session
         .provider()
         .fetch_pr(pr)
-        .map_err(|e| Failure::new(Kind::NotFound, format!("PR #{pr}: {}", e.user_message())))?;
+        .map_err(|e| Failure::unread_pr(pr, &e))?;
+    let (parsed, lines_checked) =
+        check::checked(session.provider(), pr, parsed, found.head_oid.as_deref())?;
+    let head = parsed.head.clone();
+    let batch = Batch {
+        comments: parsed.comments,
+        summary: parsed.summary,
+    };
     let origin = remote::origin_url().map_err(|e| Failure::new(Kind::Failed, e.to_string()))?;
     let scope_name = scope(session.provider(), &origin, session.user())
         .map_err(|e| Failure::new(Kind::Failed, e.to_string()))?;
     let root = dirs::data_local_dir()
         .ok_or_else(|| Failure::new(Kind::Failed, "cannot locate the local data directory"))?
         .join("slussa/proposals");
-    let report = import_batch(
-        &root,
-        &scope_name,
-        pr,
-        &head,
-        batch,
-        found.head_oid.as_deref(),
-    )?;
+    let report = Report {
+        lines_checked,
+        ..import_batch(
+            &root,
+            &scope_name,
+            pr,
+            &head,
+            batch,
+            found.head_oid.as_deref(),
+        )?
+    };
     tracing::info!(
-        "propose import: pr={pr} added={} duplicates={} stale={}",
+        "propose import: pr={pr} added={} duplicates={} stale={} lines_checked={}",
         report.added,
         report.duplicates,
-        report.stale
+        report.stale,
+        report.lines_checked
     );
     Ok(report)
 }
@@ -264,6 +224,19 @@ mod tests {
             {"path": "src/a.rs", "line": 3, "side": "old", "body": "Why was this removed?"}
         ]
     }"#;
+
+    fn document() -> (CommitOid, Batch) {
+        let parsed = parse_document(DOCUMENT.as_bytes())
+            .ok()
+            .expect("a document");
+        (
+            parsed.head,
+            Batch {
+                comments: parsed.comments,
+                summary: parsed.summary,
+            },
+        )
+    }
 
     fn kind_of(result: Result<impl Sized, Failure>) -> Kind {
         result.err().map(|failure| failure.kind).expect("a failure")
@@ -294,9 +267,7 @@ mod tests {
 
     #[test]
     fn a_document_becomes_proposals_bound_to_its_head() {
-        let (head, batch) = parse_document(DOCUMENT.as_bytes())
-            .ok()
-            .expect("a document");
+        let (head, batch) = document();
         assert_eq!(head.as_str(), "abc123");
         assert_eq!(batch.comments.len(), 2);
         assert!(batch.summary.is_some());
@@ -343,9 +314,7 @@ mod tests {
     #[test]
     fn a_report_says_whether_the_pr_has_moved_since_the_agent_read_it() {
         let dir = TempDir::new("propose");
-        let (head, batch) = parse_document(DOCUMENT.as_bytes())
-            .ok()
-            .expect("a document");
+        let (head, batch) = document();
         let report = import_batch(dir.path(), "s", PrId(44), &head, batch, Some("def456"))
             .ok()
             .expect("imported");
@@ -354,9 +323,7 @@ mod tests {
         assert_eq!(report.current_head.as_deref(), Some("def456"));
 
         // The same document again adds nothing, and the PR has not moved.
-        let (head, batch) = parse_document(DOCUMENT.as_bytes())
-            .ok()
-            .expect("a document");
+        let (head, batch) = document();
         let report = import_batch(dir.path(), "s", PrId(44), &head, batch, Some("abc123"))
             .ok()
             .expect("imported");

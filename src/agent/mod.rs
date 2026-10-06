@@ -8,8 +8,10 @@
 //! agent to treat all of it as data, and what the agent answers is only ever a
 //! proposal the reader may discard.
 
+mod material;
 mod prompt;
 mod run;
 
-pub use prompt::{ReviewRequest, RulesFile, find_json, prompt};
+pub use material::{Material, MaterialError, Subject};
+pub use prompt::{context, find_json, prompt};
 pub use run::{AgentError, Cancel, TIMEOUT, run, wait_until_stopped};

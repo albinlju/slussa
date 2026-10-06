@@ -12,25 +12,14 @@ use super::{
     store::{FetchKey, Notice, PrResource},
 };
 use crate::{
-    agent::{self, AgentError, ReviewRequest, RulesFile},
+    agent::{self, AgentError, Material, MaterialError, Subject},
     domain::{
-        commit::CommitOid,
-        pr::{IssueText, LinkedIssue, PrId},
+        pr::PrId,
         proposal_document::{self, Source},
     },
     local::proposals::{Batch, import},
     providers::{FetchError, Provider},
 };
-
-/// What the PR is, as the agent is told it.
-struct Subject {
-    title: String,
-    description: Option<String>,
-    source_branch: String,
-    target_branch: String,
-    /// The issues the PR closes, as the provider listed them.
-    issues: Vec<LinkedIssue>,
-}
 
 /// What the review is made from besides the PR: where the repository's rules
 /// are, and the reader's own instructions, if they wrote any.
@@ -41,9 +30,6 @@ struct Sources {
 
 /// How long leaving waits for the agent commands to end.
 const STOP_WAIT: std::time::Duration = std::time::Duration::from_secs(2);
-
-/// The files where a repository writes down its own rules.
-const RULES_FILES: &[&str] = &["AGENTS.md", "CLAUDE.md"];
 
 /// What an asked-for review came to.
 #[derive(Debug)]
@@ -71,6 +57,15 @@ pub enum Failure {
     Agent(#[from] AgentError),
     #[error("{0}")]
     Other(String),
+}
+
+impl From<MaterialError> for Failure {
+    fn from(error: MaterialError) -> Self {
+        match error {
+            MaterialError::Provider(error) => Self::Provider(error),
+            MaterialError::NoHead => Self::Other(error.to_string()),
+        }
+    }
 }
 
 impl Failure {
@@ -241,27 +236,13 @@ fn review(
     sources: &Sources,
     cancel: &agent::Cancel,
 ) -> Result<Outcome, Failure> {
-    let (text, revision) = provider.fetch_diff_text(pr_id)?;
+    let material = Material::gather(provider, pr_id, subject, sources.root.as_deref())?;
     // The agent is given the diff of this commit, so what it proposes is of it,
     // whatever it writes for `head` itself.
-    let head = CommitOid::parse(&revision.head)
-        .ok_or_else(|| Failure::Other("The PR's head commit is not known.".into()))?;
-    let diff = crate::providers::parse_unified_diff(&text);
+    let head = &material.head;
     let agent = command.first().cloned().unwrap_or_default();
     let instructions = read_instructions(sources.instructions.as_deref())?;
-    let (issues, issues_missed) = read_issues(provider, &subject.issues);
-    let rules = read_rules(sources.root.as_deref());
-    let prompt = agent::prompt(&ReviewRequest {
-        title: &subject.title,
-        description: subject.description.as_deref(),
-        source_branch: &subject.source_branch,
-        target_branch: &subject.target_branch,
-        head: head.as_str(),
-        diff: &text,
-        issues: &issues,
-        rules: &rules,
-        instructions: instructions.as_deref(),
-    });
+    let prompt = agent::prompt(&material.request(subject, instructions.as_deref()));
     let answer = agent::run(command, &prompt.text, agent::TIMEOUT, cancel)?;
     let json = agent::find_json(&answer).ok_or_else(|| AgentError::NoJson {
         program: agent.clone(),
@@ -269,7 +250,7 @@ fn review(
     let parsed = proposal_document::parse(
         json.as_bytes(),
         Source::Asked {
-            head: &head,
+            head,
             agent: &agent,
         },
     )
@@ -282,7 +263,7 @@ fn review(
         .comments
         .into_iter()
         .filter(|comment| {
-            diff.has_line(
+            material.diff.has_line(
                 comment.path(),
                 comment.line(),
                 comment.side() == crate::domain::proposal::Side::Old,
@@ -305,7 +286,7 @@ fn review(
         added: imported.added - usize::from(imported.summary_added),
         duplicates: imported.duplicates,
         skipped,
-        issues_missed,
+        issues_missed: material.issues_missed,
         diff_cut: prompt.diff_cut,
     })
 }
@@ -322,39 +303,4 @@ fn read_instructions(path: Option<&std::path::Path>) -> Result<Option<String>, F
             path.display()
         ))
     })
-}
-
-/// What the issues the PR closes say, and how many could not be read.
-fn read_issues(provider: &Provider, listed: &[LinkedIssue]) -> (Vec<IssueText>, usize) {
-    let mut read = Vec::new();
-    let mut missed = 0;
-    for issue in listed {
-        match provider.fetch_issue_text(issue) {
-            Ok(Some(text)) => read.push(text),
-            // In another repository: nothing here to ask for, and not a failure.
-            Ok(None) => {}
-            Err(error) => {
-                tracing::warn!("could not read issue #{}: {error}", issue.number);
-                missed += 1;
-            }
-        }
-    }
-    (read, missed)
-}
-
-/// The repository's own rules, from the files it keeps them in.
-fn read_rules(root: Option<&std::path::Path>) -> Vec<RulesFile> {
-    let Some(root) = root else {
-        return Vec::new();
-    };
-    RULES_FILES
-        .iter()
-        .filter_map(|name| {
-            let text = std::fs::read_to_string(root.join(name)).ok()?;
-            (!text.trim().is_empty()).then(|| RulesFile {
-                name: (*name).to_owned(),
-                text,
-            })
-        })
-        .collect()
 }

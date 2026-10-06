@@ -171,7 +171,14 @@ let an agent help without deciding.
   with the PR after 90 days. A proposal for another commit is counted in the footer
   and not drawn. What is waiting is said in the footer on every tab, and the Overview's
   sidebar shows the latest summary (marked when it is of an older commit) with the count
-  left. At most 1 000 per PR, 500 per document and 2 MiB. **Missing:** the summary is
+  left. At most 1 000 per PR, 500 per document and 2 MiB. A document of the PR's
+  head is checked against the PR's diff before it is kept, and one with a comment on
+  a line that is not there is refused whole with the comments named, since such a
+  comment could never be shown (the agent slussa asks has its own dropped and
+  counted, since it cannot be asked again); a `head` written short is written out
+  when it is the PR's head, where before nothing of such a document was ever drawn.
+  **Missing:** what the reader did with a proposal is not told back to the agent
+  (`slussa propose list`, so that it does not propose again what was discarded); the summary is
   only the latest, cannot be dismissed and is not shown where the sidebar is hidden (a
   narrow terminal); a way to see the
   proposals for another commit (they are only counted); a mark in the PR list; proposals on the commit diffs and on *Since you read it*; `c` marks a
@@ -181,15 +188,21 @@ let an agent help without deciding.
   proposals appearing without a refresh; and Bitbucket Data Center. **Not tried
   against** an agent that is not a script, or in a real terminal: the schema has
   only been written by hand and the Diff tab only through the test backend.
-- [ ] **`slussa context <number>`** — one compact text package for an LLM (title,
-  description, unresolved threads, CI, blockers). It is the package *Send to
-  agent* needs too, so build it once; it needs a size rule for long threads and
-  diffs.
-- [ ] **`slussa agent-instructions`** — prints how an agent should use slussa, as a
-  short snippet for AGENTS.md or a skill. An agent that is not told slussa is
-  there never calls it, so this ships with the proposals and not after them. A
-  CLI plus this is simpler than an MCP server for a local tool built on `gh` and
-  `git`; revisit MCP later (it is also the trigger for a `slussa-core`).
+- [ ] **`slussa context <number>`** *(first version built)*. Prints what a PR is
+  made of for an agent that reviews on its own: the title and description, the
+  issues it closes, the repository's rules (`AGENTS.md`, `CLAUDE.md`) and the diff,
+  with the commit the diff is of and the document to hand in, that commit filled in.
+  It is read by the same code as the review asked for with `A` (`agent::Material`),
+  so both agents review the same thing, and it carries no review instructions. The
+  diff is cut at 150 kB and says so. **Missing:** the unresolved threads, the builds
+  and why a merge is blocked, which *Send to agent* needs too; a way to ask for the
+  whole of a longer diff; and Bitbucket Data Center.
+- [ ] **`slussa agent-instructions`** *(first version built)*. Prints how an agent
+  uses `slussa context` and `slussa propose import`, as a short text for AGENTS.md
+  or a skill: an agent that is not told slussa is there never calls it. A CLI plus
+  this is simpler than an MCP server for a local tool built on `gh` and `git`;
+  revisit MCP later (it is also the trigger for a `slussa-core`). **Missing:**
+  installing it as a skill, which is left to the reader.
 - [ ] **Tried by a few readers.** When the two first items exist: a recording
   that shows them, and a handful of people who review agents' PRs asked to use
   slussa for a week. What they open the web for goes to group 4. This is how the

@@ -357,3 +357,37 @@ fn a_document_that_cannot_be_read_from_a_file_is_a_failure_not_a_usage_error() {
         output.combined
     );
 }
+
+#[test]
+fn help_lists_the_commands_an_agent_reads_a_pr_and_learns_of_slussa_with() {
+    let output = Sandbox::new().run(&["--help"]);
+    for wanted in ["slussa context <PR>", "slussa agent-instructions"] {
+        assert!(output.combined.contains(wanted), "{}", output.combined);
+    }
+}
+
+#[test]
+fn context_without_one_pr_is_a_usage_error_told_as_json_on_stderr() {
+    for args in [&["context"][..], &["context", "x"], &["context", "4", "5"]] {
+        let output = Sandbox::new().run(args);
+        assert_eq!(output.code, 2, "{args:?}: {}", output.combined);
+        let error: serde_json::Value = serde_json::from_str(output.combined.trim())
+            .unwrap_or_else(|e| panic!("{args:?}: not JSON ({e}): {}", output.combined));
+        assert_eq!(error["error"]["kind"], "usage");
+    }
+}
+
+#[test]
+fn agent_instructions_name_the_two_commands_and_that_nothing_is_posted() {
+    let output = Sandbox::new().run(&["agent-instructions"]);
+    assert_eq!(output.code, 0, "{}", output.combined);
+    for wanted in [
+        "slussa context <PR>",
+        "slussa propose import <PR>",
+        "do not post comments",
+        "lines_checked",
+    ] {
+        assert!(output.combined.contains(wanted), "missing {wanted:?}");
+    }
+    assert_eq!(Sandbox::new().run(&["agent-instructions", "x"]).code, 2);
+}
