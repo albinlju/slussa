@@ -274,6 +274,9 @@ pub enum PrAction {
     DiscardProposal,
     /// `A`: ask the configured agent to review the PR, after asking the reader.
     OpenAgentReview,
+    /// `w`: show what is new since the reader looked, or go back to the whole
+    /// diff.
+    ToggleSince,
 }
 
 #[derive(Debug, Clone, Copy)]

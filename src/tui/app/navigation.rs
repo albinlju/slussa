@@ -79,6 +79,7 @@ impl App {
             prs.sort_by_key(|pr| PrGroup::of(&pr.status));
         }
         self.mark_viewed_seen();
+        self.mark_read_head();
     }
 
     pub(super) fn open_pr(&mut self, pr_id: PrId) {
@@ -89,6 +90,7 @@ impl App {
         };
         self.mark_viewed_seen();
         self.read_proposals();
+        self.mark_read_head();
         // Whatever this PR has not had read yet; the rest is shown from cache.
         for key in [
             FetchKey::Pr(PrResource::Commits, pr_id),

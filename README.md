@@ -111,6 +111,26 @@ changes requested, CI failed, review requested, or approved. Team review request
 on GitHub are not counted yet. Press `s` to pick another order (newest, recently
 updated, oldest), or set `sort` in the config.
 
+slussa keeps which commit of a PR's diff you last had open. When the branch has
+moved since, the PR's header says `↻ new since you read it`, and `w` shows only
+what changed, from that commit to the one now, in the files the PR touches now or
+touched when you read it: a file the PR has since put back as the target has it is
+shown, since a check that was added and then removed is exactly what should be seen.
+Which files the PR touches now is read from its diff of the new commit, so that is read
+first, and if the branch moves again meanwhile `w` says so instead of showing a part;
+which it touched before is asked of GitHub, and when that cannot be had whole nothing
+is left out. GitHub
+compares from the two commits' common ancestor, so after a merge of the target into
+the branch the files only the merge changed are left out, after a rebase the PR's own
+changes can show again, and a branch reset to an older commit shows nothing (and says
+so). A commit that was force-pushed away may no longer be there to compare, and
+GitHub's answer is shown with what it probably means; `w` goes back to the whole diff
+and asks again the next time, and `F` asks again too. Arriving at the PR's diff, by
+opening the PR on it or choosing the Diff tab, counts as having read it, so the mark is
+for the way in; a refresh under you does not clear it, whether it brings a newer diff
+or the same one again.
+Bitbucket Data Center does not have it.
+
 A PR GitHub says cannot be merged for a conflict has `conflicts` in the `Status` column in place of its
 status, whoever wrote it. The column stands there when some row has one, and otherwise only in
 the All view, where it says `Open`, `Merged` and so on; in the other views the status is the one
@@ -135,7 +155,8 @@ Drafts (comment editor text and queued review comments) are saved locally and
 survive a restart. A `●` before a PR's number in the list means it has changed since you
 last opened it, and opening it clears the mark. A PR you have never opened is not marked,
 and what you do to a PR yourself while it is open does not mark it. slussa remembers this in
-a file of PR numbers and times, one per repository and account, and nothing else about the PR.
+a file of PR numbers and times, with the commit of the diff you last had open, one per
+repository and account, and nothing else about the PR.
 Copying a link falls back to the terminal's clipboard (OSC 52)
 over SSH; inside tmux that needs `set -g set-clipboard on`.
 

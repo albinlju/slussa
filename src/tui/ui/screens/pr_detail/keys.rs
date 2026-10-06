@@ -3,7 +3,8 @@ use crate::tui::{
     app::effect::Effect,
     ui::{
         action::{
-            Action, BuildsAction, CommitsAction, DetailAction, DiffAction, NavAction, SearchAction,
+            Action, BuildsAction, CommitsAction, DetailAction, DiffAction, NavAction, PrAction,
+            SearchAction,
         },
         component::Component,
         components::diff_viewer::DiffFocus,
@@ -96,6 +97,7 @@ fn escape_action(surface: Surface<'_>, code: KeyCode) -> Option<Action> {
     }
     Some(match surface {
         Surface::CommitDiff(_) => Action::Commits(CommitsAction::Back),
+        Surface::SinceDiff(_) => Action::from(PrAction::ToggleSince),
         Surface::BuildLog => Action::from(BuildsAction::Close),
         Surface::Description
         | Surface::Overview
@@ -127,7 +129,7 @@ fn tab_bracket_key(code: KeyCode) -> Option<Action> {
 
 fn tab_key(state: &super::DetailView<'_>, surface: Surface<'_>, code: KeyCode) -> Option<Action> {
     match surface {
-        Surface::Diff(viewer) => viewer
+        Surface::Diff(viewer) | Surface::SinceDiff(viewer) => viewer
             .handle_key(KeyEvent::new(code, KeyModifiers::NONE), &state.diff_files())
             .or_else(|| tab_letters(code)),
         Surface::CommitDiff(viewer) => match code {

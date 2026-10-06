@@ -26,6 +26,9 @@ pub enum Feature {
     /// The PR's diff can be read as text, which is what an agent is asked to
     /// review.
     AgentReview,
+    /// What changed between two commits of the PR can be read, which is what
+    /// "new since you read it" shows.
+    RangeDiff,
 }
 
 /// How a review with queued line comments reaches the provider.

@@ -68,6 +68,7 @@ impl PrDetailScreen {
             builds: position.builds,
             description: position.description,
             diff: position.diff,
+            since: None,
             commits: position.commits,
             editor,
             overlay: None,
@@ -357,6 +358,18 @@ impl PrDetailScreen {
         Some(Self::command(pr_id, command))
     }
 
+    /// `w`: show what is new since the reader looked, in the Diff tab, or go
+    /// back to the whole diff.
+    fn toggle_since(&mut self, pr_id: PrId, ctx: &DetailContext<'_>) -> Option<Effect> {
+        if self.since.take().is_some() {
+            return None;
+        }
+        let range = self.view(ctx).moved_since_read()?;
+        self.since = Some(super::since::SinceView::new(range.clone()));
+        self.active_tab = super::tabs::DetailTab::Diff;
+        Some(Effect::OpenSince { pr_id, range })
+    }
+
     pub(super) fn pr_action(
         &mut self,
         action: PrAction,
@@ -398,6 +411,7 @@ impl PrDetailScreen {
                 }
                 return None;
             }
+            PrAction::ToggleSince => return self.toggle_since(pr_id, ctx),
             PrAction::OpenIssues => {
                 // With one issue the key opens it, and with none there is
                 // nothing to choose.

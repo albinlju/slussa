@@ -8,6 +8,7 @@ use chrono::{DateTime, Duration, Utc};
 use serde::{Deserialize, Serialize};
 
 use super::{
+    commit::CommitOid,
     pr::{PrId, PullRequest},
     proposal::Proposal,
 };
@@ -50,6 +51,11 @@ struct Look {
     /// so the version 1 text stays as it was.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     handled: Vec<Handled>,
+    /// The head of the diff the reader last had open, for what is new since. A
+    /// file from before it was kept has none, and one with none is written
+    /// without it, so the version 1 text stays as it was.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    head: Option<CommitOid>,
 }
 
 #[derive(Debug, Default, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -75,6 +81,7 @@ impl Seen {
                     updated,
                     at: now,
                     handled: Vec::new(),
+                    head: None,
                 },
             );
             return true;
@@ -107,6 +114,19 @@ impl Seen {
         }
     }
 
+    /// The reader had the diff of `head` open. Returns whether the record
+    /// changed, so that it is written. A PR never looked at has no record to
+    /// put it in: it is opened first, and that is what makes one.
+    pub fn mark_head(&mut self, pr: PrId, head: &CommitOid) -> bool {
+        match self.0.get_mut(&pr) {
+            Some(look) if look.head.as_ref() != Some(head) => {
+                look.head = Some(head.clone());
+                true
+            }
+            Some(_) | None => false,
+        }
+    }
+
     /// Whether the reader has already dealt with this proposal.
     pub fn is_handled(&self, pr: PrId, proposal: &Proposal) -> bool {
         self.0.get(&pr).is_some_and(|look| {
@@ -114,6 +134,11 @@ impl Seen {
                 .iter()
                 .any(|known| known.proposal.same_as(proposal))
         })
+    }
+
+    /// The head of the diff the reader last had open, if one was kept.
+    pub fn read_head(&self, pr: PrId) -> Option<&CommitOid> {
+        self.0.get(&pr)?.head.as_ref()
     }
 
     /// Whether the PR was opened before and has been updated since.
@@ -211,6 +236,26 @@ mod tests {
         // Looking at the PR again moves its date and keeps what was decided.
         seen.mark(PrId(1), at(30), at(31));
         assert!(seen.is_handled(PrId(1), &proposal(1)));
+    }
+
+    #[test]
+    fn the_head_read_is_kept_per_pr_and_survives_a_later_look() {
+        let mut seen = Seen::default();
+        let (first, second) = (CommitOid::from("abc123"), CommitOid::from("def456"));
+        assert!(
+            !seen.mark_head(PrId(1), &first),
+            "a PR never opened has no record"
+        );
+        seen.mark(PrId(1), at(1), at(2));
+        assert_eq!(seen.read_head(PrId(1)), None);
+        assert!(seen.mark_head(PrId(1), &first));
+        assert!(!seen.mark_head(PrId(1), &first), "the same head is no news");
+        // A newer look at the PR does not forget which diff was read.
+        seen.mark(PrId(1), at(3), at(4));
+        assert_eq!(seen.read_head(PrId(1)), Some(&first));
+        assert!(seen.mark_head(PrId(1), &second));
+        assert_eq!(seen.read_head(PrId(1)), Some(&second));
+        assert_eq!(seen.read_head(PrId(2)), None);
     }
 
     #[test]

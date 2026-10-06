@@ -21,7 +21,7 @@ pub use comments::{
     delete_comment, edit_comment, post_comment, post_pr_comment, reply_comment, set_thread_resolved,
 };
 pub use commits::fetch_commits;
-pub use diff::{fetch_commit_diff, fetch_diff, fetch_diff_text};
+pub use diff::{fetch_commit_diff, fetch_diff, fetch_diff_text, fetch_range_diff};
 pub use issues::fetch_issue_text;
 pub use merge::{merge, set_auto_merge};
 pub use prs::{fetch_info, fetch_pr, fetch_prs};

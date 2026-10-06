@@ -406,6 +406,33 @@ pub(in crate::tui::ui::screens::pr_detail) static RERUN_BUILDS: Binding = Bindin
     },
 };
 
+/// `w` shows what is new since the reader had the diff open, once the branch has
+/// moved, and from there goes back to the whole diff.
+pub(in crate::tui::ui::screens::pr_detail) static SINCE: Binding = Binding {
+    key: 'w',
+    mods: Mods::Plain,
+    place: Place::ReadsPrOrDiff,
+    doc: Some(Doc {
+        keys: "w",
+        text: "show what is new since you read it, or the whole diff again",
+    }),
+    needs: Needs::Feature(Feature::RangeDiff),
+    label: Label::Of(|view| {
+        if view.detail.since.is_some() {
+            "w: whole diff".to_owned()
+        } else {
+            "w: new since read".to_owned()
+        }
+    }),
+    offer: |view| {
+        if view.detail.since.is_some() || view.moved_since_read().is_some() {
+            offered(view, PrAction::ToggleSince)
+        } else {
+            Offer::Hidden
+        }
+    },
+};
+
 /// `i` in the Overview opens the issue the PR closes in the browser, or with
 /// several asks which. It is what the PR was asked to do, so reading it is the
 /// intent check.
@@ -487,6 +514,7 @@ pub(in crate::tui::ui::screens::pr_detail) static BINDINGS: &[&Binding] = &[
     &DISCARD_PROPOSAL,
     &AGENT_REVIEW,
     &RERUN_BUILDS,
+    &SINCE,
     &REREQUEST_REVIEW,
     &OPEN_ISSUE,
 ];

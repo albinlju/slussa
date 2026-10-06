@@ -38,6 +38,7 @@ pub(super) fn render(
     frame: &mut Frame<'_>,
     pr: &PullRequest,
     mergeability: Option<&LoadState<Mergeability>>,
+    moved_since_read: bool,
     area: Rect,
 ) {
     let theme = theme::current();
@@ -79,6 +80,14 @@ pub(super) fn render(
     if open && let Some(badge) = mergeability.and_then(mergeability_badge) {
         left_spans.push(Span::raw("    "));
         left_spans.push(badge);
+    }
+    // The branch has moved since the diff the reader last had open.
+    if open && moved_since_read {
+        left_spans.push(Span::raw("    "));
+        left_spans.push(Span::styled(
+            "↻ new since you read it",
+            Style::default().fg(theme.warning),
+        ));
     }
     let meta_line = Line::from(left_spans);
 

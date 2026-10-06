@@ -6,12 +6,13 @@ use crate::{
         app::{
             drafts::Drafts,
             effect::{Effect, LinkAction, LinkTarget, TaskResult},
+            navigation::Screen,
             refresh,
             seen::SeenFile,
             state::AppState,
             store::{self, FetchKey, LoadState, PrResource},
         },
-        ui::{action::Action, key_to_action, render},
+        ui::{action::Action, key_to_action, render, screens::pr_detail::tabs::DetailTab},
     },
 };
 use ratatui::{
@@ -195,7 +196,7 @@ impl App {
         } else if next == Next::Continue {
             self.save_drafts();
         }
-        self.save_seen();
+        self.note_seen();
         next
     }
 
@@ -213,7 +214,7 @@ impl App {
             }
         }
         self.save_drafts();
-        self.save_seen();
+        self.note_seen();
     }
 
     fn run_effect(&mut self, effect: Effect) -> Next {
@@ -222,7 +223,11 @@ impl App {
             // open with the reason in the footer: leaving would lose them.
             // Asks first when an agent is reviewing a PR; see `quit`.
             Effect::Quit => return self.quit_or_ask(),
-            Effect::Navigate(screen) => self.state.screen = screen,
+            Effect::Navigate(screen) => {
+                self.state.screen = screen;
+                // Choosing the Diff tab is arriving at the diff.
+                self.mark_read_head();
+            }
             Effect::Refresh => self.refresh_actions(),
             Effect::OpenPr(id) => self.open_named_pr(id),
             Effect::LoadOlder => self.load_older_prs(),
@@ -232,6 +237,15 @@ impl App {
             }
             Effect::RunAgentReview { pr_id } => self.spawn_agent_review(pr_id),
             Effect::StopAgentReview { pr_id } => self.stop_agent_review(pr_id),
+            Effect::OpenSince { pr_id, range } => {
+                self.state.screen = Screen::Detail {
+                    pr_id,
+                    tab: DetailTab::Diff,
+                };
+                self.load_new_since(pr_id, range);
+                // One that was read before is on screen at once.
+                self.mark_read_head();
+            }
             Effect::LoadBuildLog { pr_id, job } => {
                 self.ensure_loaded(FetchKey::Pr(PrResource::BuildLog(job), pr_id));
             }
