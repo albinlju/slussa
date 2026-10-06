@@ -142,6 +142,7 @@ fn render_content(
                 pr,
                 data: pr_data,
                 capabilities: &ctx.store.capabilities,
+                ai: super::proposed::ai_review(ctx.store, pr),
                 scrollbar: Rect::new(area.right(), area.y, 1, area.height),
             },
         ),

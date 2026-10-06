@@ -192,3 +192,75 @@ async fn a_proposal_the_reader_dealt_with_stays_dealt_with_when_the_file_is_read
     );
     assert!(text.contains("1 proposed by AI"), "the new one is counted");
 }
+
+fn summary(head: &str, text: &str) -> crate::domain::proposal::Summary {
+    crate::domain::proposal::Summary::new(head, text.into(), Some("reviewer".into())).unwrap()
+}
+
+/// The fixture's PR on the Overview, with these proposals and summaries.
+fn overview_with(comments: Vec<Proposal>, summaries: Vec<crate::domain::proposal::Summary>) -> App {
+    let mut app = app();
+    app.state.store.proposals = Proposals::of(
+        PrId(42),
+        ForPr {
+            comments,
+            summaries,
+        },
+    );
+    detail(&mut app, DetailTab::Overview);
+    app
+}
+
+#[test]
+fn what_is_waiting_is_said_on_every_tab_and_not_only_in_the_diff() {
+    let mut app = overview_with(
+        vec![proposal("abc123", 1, "One."), proposal("abc123", 2, "Two.")],
+        vec![],
+    );
+    assert!(screen_text(&mut app).contains("2 proposed by AI (Diff tab)"));
+    for tab in [
+        DetailTab::Description,
+        DetailTab::Commits,
+        DetailTab::Builds,
+    ] {
+        detail(&mut app, tab);
+        assert!(
+            screen_text(&mut app).contains("2 proposed by AI (Diff tab)"),
+            "{tab:?}"
+        );
+    }
+    // Nothing to say when nothing is waiting.
+    let mut none = overview_with(vec![], vec![]);
+    assert!(!screen_text(&mut none).contains("proposed by AI"));
+}
+
+#[test]
+fn the_summary_an_agent_handed_in_is_in_the_sidebar_with_what_is_left_to_decide() {
+    let mut app = overview_with(
+        vec![proposal("abc123", 1, "One.")],
+        vec![summary(
+            "abc123",
+            "Two things deserve attention in this change.",
+        )],
+    );
+    let text = screen_text(&mut app);
+    assert!(text.contains("AI review"), "{text}");
+    assert!(text.contains("[AI] reviewer"));
+    assert!(text.contains("Two things deserve"), "the summary is read");
+    assert!(text.contains("1 proposed · Diff tab"));
+    assert!(
+        !text.contains("older commit"),
+        "it is of the commit the branch is at"
+    );
+}
+
+#[test]
+fn a_summary_of_an_older_commit_says_so_and_one_with_nothing_left_says_that() {
+    let mut app = overview_with(vec![], vec![summary("def456", "All is well.")]);
+    let text = screen_text(&mut app);
+    assert!(text.contains("of an older commit"), "{text}");
+    assert!(text.contains("Nothing left to decide"));
+    // No summary and no proposals: no section at all.
+    let mut empty = overview_with(vec![], vec![]);
+    assert!(!screen_text(&mut empty).contains("AI review"));
+}

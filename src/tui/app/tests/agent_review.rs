@@ -62,9 +62,18 @@ async fn a_asks_what_it_will_run_and_enter_runs_it() {
 
     press(&mut app, KeyCode::Enter);
     assert!(running(&app));
+    let text = screen_text(&mut app);
     assert!(
-        screen_text(&mut app).contains("A: agent review (running)"),
+        text.contains("A: agent review (running)"),
         "a second one is not offered while it runs"
+    );
+    // A spinner that moves, and what is going on, so the wait is seen to be one.
+    assert!(text.contains("agent reviewing…"), "{text}");
+    assert!(
+        "⠋⠙⠹⠸⠼⠴⠦⠧⠇⠏"
+            .chars()
+            .any(|glyph| text.contains(&format!("{glyph} agent reviewing"))),
+        "a spinner beside it"
     );
 }
 

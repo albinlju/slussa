@@ -36,7 +36,9 @@ pub(in crate::tui::ui) fn hints_on(s: &str) -> Vec<Hint> {
     s.split("  ").map(Hint::on).collect()
 }
 
-pub(in crate::tui::ui) fn footer(width: u16, hints: &[Hint], refreshing: bool) -> Line<'static> {
+/// `busy` says what is going on, if anything is: it is shown with a spinner that
+/// moves, so that a long wait is seen to be one.
+pub(in crate::tui::ui) fn footer(width: u16, hints: &[Hint], busy: Option<&str>) -> Line<'static> {
     let theme = theme::current();
     let muted = Style::default().fg(theme.muted);
     let key = Style::default()
@@ -44,10 +46,9 @@ pub(in crate::tui::ui) fn footer(width: u16, hints: &[Hint], refreshing: bool) -
         .add_modifier(Modifier::BOLD);
 
     let width = width as usize;
-    let right = if refreshing && width >= 30 {
-        "refreshing…  ?: help "
-    } else {
-        "?: help "
+    let right = match busy {
+        Some(what) if width >= 30 => format!("{} {what}…  ?: help ", super::spinner_frame()),
+        Some(_) | None => "?: help ".to_owned(),
     };
     let right = truncate_to_width(vec![Span::styled(right, muted)], width);
     let right_width: usize = right.iter().map(Span::width).sum();

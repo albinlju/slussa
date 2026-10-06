@@ -169,9 +169,11 @@ let an agent help without deciding.
   What the reader did is kept in the seen file (`local/seen.rs`, an optional list, so
   the version 1 file reads and writes as before), which also means it is forgotten
   with the PR after 90 days. A proposal for another commit is counted in the footer
-  and not drawn. At most 1 000 per PR, 500 per document and 2 MiB. **Missing:** the
-  summary is kept and not shown (a "reviewed, nothing found" line belongs with the
-  review, which is the one thing that says an agent ran at all); a way to see the
+  and not drawn. What is waiting is said in the footer on every tab, and the Overview's
+  sidebar shows the latest summary (marked when it is of an older commit) with the count
+  left. At most 1 000 per PR, 500 per document and 2 MiB. **Missing:** the summary is
+  only the latest, cannot be dismissed and is not shown where the sidebar is hidden (a
+  narrow terminal); a way to see the
   proposals for another commit (they are only counted); a mark on the file in the
   tree; proposals on the commit diffs and on *Since you read it*; `c` marks a
   proposal taken when the editor opens, not when the comment is sent, so a draft

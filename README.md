@@ -196,8 +196,11 @@ In the PR's Diff tab what an agent proposed stands on the line it is about, mark
 Either way it is not shown again, and that is kept with what you have looked at. A
 proposal written against another commit than the diff's is not drawn on its lines,
 only counted in the footer, so that it is never on the wrong line. The proposals are
-read when a PR is opened and when it refreshes, and the summary an agent hands in is
-kept but not shown yet.
+read when a PR is opened and when it refreshes. What is waiting is said wherever you
+are in the PR, first in the footer (`2 proposed by AI (Diff tab)`), and the Overview's
+sidebar has an *AI review* section with the summary an agent handed in (marked as
+older when the branch has moved on since) and how many proposals are left. While an
+agent runs, the footer says `agent reviewing…` with a spinner that moves.
 
 ## Configure
 

@@ -268,6 +268,18 @@ impl Summary {
         })
     }
 
+    pub const fn head(&self) -> &CommitOid {
+        &self.head
+    }
+
+    pub fn text(&self) -> &str {
+        self.text.as_str()
+    }
+
+    pub fn agent(&self) -> Option<&str> {
+        self.agent.as_ref().map(AgentName::as_str)
+    }
+
     pub fn same_as(&self, other: &Self) -> bool {
         self.head == other.head && self.text == other.text
     }

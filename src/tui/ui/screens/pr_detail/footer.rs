@@ -31,7 +31,12 @@ pub(super) fn render(frame: &mut Frame<'_>, state: &DetailView<'_>, area: Rect) 
     } else if let Some(search) = active_search(state, pr_data, area.width) {
         search
     } else {
-        widgets::footer(area.width, &footer_actions(state, tab), state.refreshing)
+        let busy = if state.agent_reviewing() {
+            Some("agent reviewing")
+        } else {
+            state.refreshing.then_some("refreshing")
+        };
+        widgets::footer(area.width, &footer_actions(state, tab), busy)
     };
     frame.render_widget(Paragraph::new(line), area);
 }
@@ -46,7 +51,27 @@ fn pr_action_hints(state: &DetailView<'_>) -> Vec<Hint> {
         .collect()
 }
 
+/// The hints of the screen, with first among them that an agent has proposed
+/// something, wherever the reader is: what an agent found is not to be missed
+/// because the reader was not in the Diff when it finished. In the Diff the
+/// count is the one of the diff on screen.
 fn footer_actions(state: &DetailView<'_>, tab: DetailTab) -> Vec<Hint> {
+    let mut hints = tab_hints(state, tab);
+    if state.surface().diff_viewer().is_none()
+        && let Some(open) = open_proposals_hint(state)
+    {
+        hints.insert(0, open);
+    }
+    hints
+}
+
+/// How many proposals are waiting, and where they are.
+fn open_proposals_hint(state: &DetailView<'_>) -> Option<Hint> {
+    let open = super::proposed::open_count(state.store, state.pr_id);
+    (open > 0).then(|| Hint::on(format!("{open} proposed by AI (Diff tab)")))
+}
+
+fn tab_hints(state: &DetailView<'_>, tab: DetailTab) -> Vec<Hint> {
     if state.detail.editor.has_draft() {
         return widgets::hints_on("c: resume draft");
     }
