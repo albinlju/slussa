@@ -7,7 +7,7 @@ use crate::{
         build_log::BuildLog,
         ci::{Build, JobId},
         commit::{Commit, CommitOid},
-        diff::{Diff, DiffRange},
+        diff::{Compared, Diff, DiffRange},
         pr::{Mergeability, PrBatch, PrGroup, PrId, PrInfo, PullRequest},
     },
     providers::{FetchError, MergeError, ReviewError},
@@ -105,7 +105,7 @@ pub enum Read {
     Mergeability(PrId, Result<Mergeability, FetchError>),
     Info(PrId, Result<PrInfo, FetchError>),
     CommitDiff(PrId, CommitOid, Result<Diff, FetchError>),
-    RangeDiff(PrId, DiffRange, Result<Diff, FetchError>),
+    RangeDiff(PrId, DiffRange, Result<Compared, FetchError>),
     BuildLog(PrId, JobId, Result<BuildLog, FetchError>),
 }
 
@@ -135,9 +135,8 @@ impl Read {
             Self::Prs { result, .. } => result.as_ref().err(),
             Self::Pr(_, result) => result.as_ref().err(),
             Self::Commits(_, result) => result.as_ref().err(),
-            Self::Diff(_, result)
-            | Self::CommitDiff(_, _, result)
-            | Self::RangeDiff(_, _, result) => result.as_ref().err(),
+            Self::Diff(_, result) | Self::CommitDiff(_, _, result) => result.as_ref().err(),
+            Self::RangeDiff(_, _, result) => result.as_ref().err(),
             Self::Builds(_, result) => result.as_ref().err(),
             Self::Activity(_, result) => result.as_ref().err(),
             Self::Mergeability(_, result) => result.as_ref().err(),

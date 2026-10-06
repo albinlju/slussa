@@ -163,10 +163,13 @@ let an agent help without deciding.
   starts: when that is not the commit that was read, the banner says the branch was
   rewritten and from where, since the diff then holds what was read already and
   nothing of what was dropped, and when it is the head now it says the branch was
-  reset. Which files those are is
-  read from the PR's diff of the new head, so that is read first: a compare that
-  arrives without it is not kept and does not count as read, and a branch that
-  moved again meanwhile says so. Missing: the
+  reset. The files are those of
+  the PR's diff of the new head, so that is read first (a compare that arrives
+  without it is not kept and does not count as read, and a branch that moved again
+  meanwhile says so), and those the PR touched at the head that was read, which
+  GitHub is asked for: a file the PR has put back as the target has it is new, and
+  left out it would hide a check that was read and then removed. When GitHub lists
+  as many files as it lists at most (300), nothing is left out. Missing: the
   commits since (the Commits tab does not mark them), the builds for the head that
   was read with a line when they are for another, and the reader's own threads, which
   of them were answered or resolved since; the mark on the list's row (left out of

@@ -34,7 +34,7 @@ use crate::domain::{
     ci::{Build, JobId},
     comment::{CommentId, CommentKey, ThreadHandle},
     commit::{Commit, CommitOid},
-    diff::{Diff, DiffRange},
+    diff::{Compared, Diff, DiffRange},
     pr::{
         AutoMerge, DeletableBranch, MergeStrategy, Mergeability, PrBatch, PrGroup, PrId, PrInfo,
         PullRequest,
@@ -98,10 +98,15 @@ impl Provider {
         }
     }
 
-    /// What changed between two commits of the PR.
-    pub fn fetch_range_diff(&self, range: &DiffRange) -> Result<Diff, FetchError> {
+    /// What changed between two commits of the PR, and, given the commit the PR
+    /// is against, which files the PR touched at the first of them.
+    pub fn fetch_range_diff(
+        &self,
+        range: &DiffRange,
+        target: Option<&CommitOid>,
+    ) -> Result<Compared, FetchError> {
         match self {
-            Self::GitHub(repo) => github::fetch_range_diff(repo, range),
+            Self::GitHub(repo) => github::fetch_range_diff(repo, range, target),
             Self::BitbucketDc(_) => Err(FetchError::Unsupported(
                 "Bitbucket cannot compare two commits of a PR here.".into(),
             )),

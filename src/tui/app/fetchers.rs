@@ -172,9 +172,10 @@ impl App {
         };
         let provider = self.provider.clone();
         let asked = range.clone();
+        let target = self.target_at(pr_id, &range.head);
         self.spawn_read(
             ticket,
-            move || provider.fetch_range_diff(&asked),
+            move || provider.fetch_range_diff(&asked, target.as_ref()),
             move |r| Read::RangeDiff(pr_id, range, r),
         );
     }

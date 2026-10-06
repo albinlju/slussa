@@ -113,9 +113,13 @@ updated, oldest), or set `sort` in the config.
 
 slussa keeps which commit of a PR's diff you last had open. When the branch has
 moved since, the PR's header says `↻ new since you read it`, and `w` shows only
-what changed, from that commit to the one now, in the files the PR touches. Which
-files those are is read from the PR's diff of the new commit, so that is read first,
-and if the branch moves again meanwhile `w` says so instead of showing a part. GitHub
+what changed, from that commit to the one now, in the files the PR touches now or
+touched when you read it: a file the PR has since put back as the target has it is
+shown, since a check that was added and then removed is exactly what should be seen.
+Which files the PR touches now is read from its diff of the new commit, so that is read
+first, and if the branch moves again meanwhile `w` says so instead of showing a part;
+which it touched before is asked of GitHub, and when that cannot be had whole nothing
+is left out. GitHub
 compares from the commit the two share, and slussa asks which that is. When it is the
 commit you read, the branch moved forward and what is shown is what is new, all of it.
 When it is not, the branch was rebased or force-pushed: the banner then says
