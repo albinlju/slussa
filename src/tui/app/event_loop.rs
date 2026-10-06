@@ -219,7 +219,7 @@ impl App {
                     pr_id,
                     tab: DetailTab::Diff,
                 };
-                self.ensure_loaded(FetchKey::Pr(PrResource::RangeDiff(range), pr_id));
+                self.load_new_since(pr_id, range);
             }
             Effect::LoadBuildLog { pr_id, job } => {
                 self.ensure_loaded(FetchKey::Pr(PrResource::BuildLog(job), pr_id));

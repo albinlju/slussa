@@ -1,11 +1,7 @@
 use crate::{
     domain::pr::{PrGroup, PrId},
     tui::{
-        app::{
-            App,
-            navigation::Screen,
-            store::{FetchKey, PrResource},
-        },
+        app::{App, navigation::Screen},
         ui::screens::pr_detail::tabs::DetailTab,
     },
 };
@@ -88,8 +84,8 @@ impl App {
         let Some(since) = &self.state.ui.detail.since else {
             return;
         };
-        let key = FetchKey::Pr(PrResource::RangeDiff(since.range().clone()), pr_id);
-        self.ensure_loaded(key);
+        let range = since.range().clone();
+        self.load_new_since(pr_id, range);
     }
 
     fn modal_open(&self) -> bool {

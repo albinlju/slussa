@@ -20,6 +20,7 @@ mod notice;
 pub mod pr_groups;
 pub mod refresh;
 mod seen;
+mod since;
 pub mod state;
 pub mod store;
 mod terminal;

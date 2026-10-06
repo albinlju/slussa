@@ -113,7 +113,9 @@ updated, oldest), or set `sort` in the config.
 
 slussa keeps which commit of a PR's diff you last had open. When the branch has
 moved since, the PR's header says `↻ new since you read it`, and `w` shows only
-what changed, from that commit to the one now, in the files the PR touches. GitHub
+what changed, from that commit to the one now, in the files the PR touches. Which
+files those are is read from the PR's diff of the new commit, so that is read first,
+and if the branch moves again meanwhile `w` says so instead of showing a part. GitHub
 compares from the two commits' common ancestor, so after a merge of the target into
 the branch the files only the merge changed are left out, after a rebase the PR's own
 changes can show again, and a branch reset to an older commit shows nothing (and says
@@ -148,7 +150,8 @@ Drafts (comment editor text and queued review comments) are saved locally and
 survive a restart. A `●` before a PR's number in the list means it has changed since you
 last opened it, and opening it clears the mark. A PR you have never opened is not marked,
 and what you do to a PR yourself while it is open does not mark it. slussa remembers this in
-a file of PR numbers and times, one per repository and account, and nothing else about the PR.
+a file of PR numbers and times, with the commit of the diff you last had open, one per
+repository and account, and nothing else about the PR.
 Copying a link falls back to the terminal's clipboard (OSC 52)
 over SSH; inside tmux that needs `set -g set-clipboard on`.
 

@@ -1,5 +1,6 @@
 use crate::{
     domain::pr::PrId,
+    providers::error::FetchError,
     tui::app::{
         App,
         effect::{Read, WriteError},
@@ -53,6 +54,7 @@ impl App {
             }
             Read::Diff(pr_id, result) => {
                 let before = self.loaded_diff_head(pr_id).map(str::to_owned);
+                let failure = result.as_ref().err().map(FetchError::user_message);
                 self.pr_data_mut(pr_id).diff.reload(result);
                 // A diff of another commit that replaces the one the reader is on
                 // has not been read by being swapped in.
@@ -63,6 +65,7 @@ impl App {
                 if !replaced {
                     self.mark_read_head();
                 }
+                self.new_since_after_diff(pr_id, failure);
             }
             Read::Builds(pr_id, result) => self.pr_data_mut(pr_id).builds.reload(result),
             Read::Activity(pr_id, result) => {
@@ -79,21 +82,12 @@ impl App {
                     .insert(oid, LoadState::from_result(result));
             }
             Read::RangeDiff(pr_id, range, result) => {
-                let data = self.pr_data_mut(pr_id);
                 // What is new is what is new in the files of the PR: what a merge
                 // of the target brought into the branch, in files the PR does not
                 // touch, is not part of it.
-                let in_pr: Option<std::collections::HashSet<String>> = data
-                    .diff
-                    .loaded()
-                    .map(|diff| diff.files.iter().map(|file| file.path.clone()).collect());
-                let result = result.map(|mut diff| {
-                    if let Some(paths) = &in_pr {
-                        diff.files.retain(|file| paths.contains(&file.path));
-                    }
-                    diff
-                });
-                data.range_diffs
+                let result = self.new_in_the_pr(pr_id, &range, result);
+                self.pr_data_mut(pr_id)
+                    .range_diffs
                     .insert(range, LoadState::from_result(result));
                 self.mark_read_head();
             }

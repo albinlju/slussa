@@ -12,6 +12,7 @@ use crate::{
 use ratatui::{Terminal, backend::TestBackend};
 
 const MARK: &str = "new since you read it";
+const WHOLE: FetchKey = FetchKey::Pr(PrResource::Diff, PrId(42));
 
 fn oid(text: &str) -> CommitOid {
     CommitOid::parse(text).expect("a commit id")
@@ -116,9 +117,14 @@ async fn a_branch_that_moved_says_so_and_w_shows_what_is_new() {
         },
         "w goes to the Diff tab"
     );
-    let wanted = FetchKey::Pr(PrResource::RangeDiff(range("aaa111", "bbb222")), PrId(42));
-    assert!(app.state.store.fetches.contains(&wanted));
     assert!(app.state.ui.detail.since.is_some());
+    // The whole diff here is of the older head. The PR's diff of the new one is
+    // read first: it says which files are the PR's.
+    let wanted = FetchKey::Pr(PrResource::RangeDiff(range("aaa111", "bbb222")), PrId(42));
+    assert!(app.state.store.fetches.contains(&WHOLE));
+    assert!(!app.state.store.fetches.contains(&wanted));
+    diff_arrives(&mut app, "bbb222", &[]);
+    assert!(app.state.store.fetches.contains(&wanted));
 
     // Until it is read, the head read is still the old one.
     assert_eq!(read_head(&app), Some(&oid("aaa111")));
@@ -230,6 +236,120 @@ fn diff_of_files(app: &mut App, head: &str, paths: &[&str]) {
     }
 }
 
+fn files(paths: &[&str]) -> Vec<crate::domain::diff::FileDiff> {
+    paths
+        .iter()
+        .map(|path| crate::domain::diff::FileDiff {
+            path: (*path).into(),
+            hunks: vec![],
+        })
+        .collect()
+}
+
+/// The PR's diff is read again, and is of `head`.
+fn diff_arrives(app: &mut App, head: &str, paths: &[&str]) {
+    app.apply_result(TaskResult::Read(Read::Diff(
+        PrId(42),
+        Ok(Diff {
+            revision: Some(DiffRevision {
+                head: head.into(),
+                base: Some("0ba5e0".into()),
+                commit: false,
+            }),
+            files: files(paths),
+        }),
+    )));
+}
+
+/// The compare of what is new answers with these files.
+fn compare_arrives(app: &mut App, paths: &[&str]) {
+    app.apply_result(TaskResult::Read(Read::RangeDiff(
+        PrId(42),
+        range("aaa111", "bbb222"),
+        Ok(Diff {
+            revision: None,
+            files: files(paths),
+        }),
+    )));
+}
+
+fn what_is_new(app: &App) -> &LoadState<Diff> {
+    &app.state.store.cache.details[&PrId(42)].range_diffs[&range("aaa111", "bbb222")]
+}
+
+#[tokio::test(flavor = "current_thread")]
+async fn a_file_the_new_head_added_is_new_though_the_diff_on_screen_is_of_the_older_head() {
+    let mut app = returning_reader("aaa111", "bbb222");
+    diff_of_files(&mut app, "aaa111", &["src/main.rs"]);
+    press(&mut app, KeyCode::Char('w'));
+    diff_arrives(&mut app, "bbb222", &["src/main.rs", "src/added.rs"]);
+    // A merge of the target brought other.rs; added.rs came with the new head.
+    compare_arrives(&mut app, &["src/main.rs", "src/added.rs", "other.rs"]);
+
+    let LoadState::Loaded(diff) = what_is_new(&app) else {
+        panic!("read");
+    };
+    let paths: Vec<&str> = diff.files.iter().map(|f| f.path.as_str()).collect();
+    assert_eq!(paths, ["src/main.rs", "src/added.rs"]);
+    assert_eq!(read_head(&app), Some(&oid("bbb222")));
+}
+
+#[tokio::test(flavor = "current_thread")]
+async fn a_compare_that_arrives_beside_the_diff_of_an_older_head_is_not_kept_and_not_read() {
+    let mut app = returning_reader("aaa111", "bbb222");
+    diff_of_files(&mut app, "aaa111", &["src/main.rs"]);
+    press(&mut app, KeyCode::Char('w'));
+    compare_arrives(&mut app, &["src/main.rs", "src/added.rs"]);
+
+    assert!(
+        matches!(what_is_new(&app), LoadState::Failed(_)),
+        "which files are the PR's at the new head is not known"
+    );
+    assert_eq!(read_head(&app), Some(&oid("aaa111")));
+    assert!(screen_text(&mut app).contains(MARK));
+}
+
+#[tokio::test(flavor = "current_thread")]
+async fn a_branch_that_moved_again_while_what_is_new_was_read_says_so() {
+    let mut app = returning_reader("aaa111", "bbb222");
+    press(&mut app, KeyCode::Char('w'));
+    app.state.store.fetches.clear();
+    diff_arrives(&mut app, "ccc333", &["src/main.rs"]);
+
+    let LoadState::Failed(error) = what_is_new(&app) else {
+        panic!("not read");
+    };
+    assert!(error.user_message().contains("moved again"));
+    assert!(screen_text(&mut app).contains("moved again"));
+    assert_eq!(read_head(&app), Some(&oid("aaa111")));
+    let compare = FetchKey::Pr(PrResource::RangeDiff(range("aaa111", "bbb222")), PrId(42));
+    assert!(!app.state.store.fetches.contains(&compare));
+    // The list is read again, since `w` goes by where it says the branch is.
+    let list = FetchKey::Prs(crate::domain::pr::PrGroup::Open);
+    assert!(app.state.store.fetches.contains(&list));
+}
+
+#[tokio::test(flavor = "current_thread")]
+async fn what_is_new_says_when_the_diff_of_the_pr_could_not_be_read_and_f_asks_again() {
+    let mut app = returning_reader("aaa111", "bbb222");
+    press(&mut app, KeyCode::Char('w'));
+    app.apply_result(TaskResult::Read(Read::Diff(
+        PrId(42),
+        Err(failed("offline")),
+    )));
+    let LoadState::Failed(error) = what_is_new(&app) else {
+        panic!("not read");
+    };
+    assert!(error.user_message().contains("offline"));
+    assert_eq!(read_head(&app), Some(&oid("aaa111")));
+
+    press(&mut app, KeyCode::Char('F'));
+    assert!(app.state.store.fetches.contains(&WHOLE), "F reads it again");
+    diff_arrives(&mut app, "bbb222", &[]);
+    let compare = FetchKey::Pr(PrResource::RangeDiff(range("aaa111", "bbb222")), PrId(42));
+    assert!(app.state.store.fetches.contains(&compare));
+}
+
 #[tokio::test(flavor = "current_thread")]
 async fn a_refresh_that_swaps_in_the_newer_diff_does_not_read_it_for_the_reader() {
     let mut app = returning_reader("aaa111", "bbb222");
@@ -293,6 +413,7 @@ async fn leaving_what_is_new_that_could_not_be_read_keeps_what_was_read() {
 #[tokio::test(flavor = "current_thread")]
 async fn f_asks_again_for_what_is_new_that_could_not_be_read() {
     let mut app = returning_reader("aaa111", "bbb222");
+    diff_of_files(&mut app, "bbb222", &[]);
     press(&mut app, KeyCode::Char('w'));
     let wanted = FetchKey::Pr(PrResource::RangeDiff(range("aaa111", "bbb222")), PrId(42));
     app.state.store.fetches.remove(&wanted);
@@ -339,6 +460,7 @@ async fn what_is_new_is_what_is_new_in_the_files_of_the_pr() {
 #[tokio::test(flavor = "current_thread")]
 async fn nothing_new_in_the_files_of_the_pr_says_so_and_what_it_may_mean() {
     let mut app = returning_reader("aaa111", "bbb222");
+    diff_of_files(&mut app, "bbb222", &[]);
     press(&mut app, KeyCode::Char('w'));
     app.apply_result(TaskResult::Read(Read::RangeDiff(
         PrId(42),
