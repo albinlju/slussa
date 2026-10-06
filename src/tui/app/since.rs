@@ -103,7 +103,10 @@ impl App {
     /// out, a check that was read and then removed would go unseen. What is left
     /// out is what a merge of the target brought, in files the PR never touched.
     /// When the files it touched before are not known, nothing is left out. A
-    /// compare that arrives when the PR's diff is not of its head is not kept.
+    /// compare that arrives when the PR's diff is not of its head is not kept,
+    /// and nor is one whose head is no longer where the list says the branch is:
+    /// what is new ends at the branch as it is, as the whole diff that counts
+    /// as read does.
     pub(super) fn new_in_the_pr(
         &self,
         pr_id: PrId,
@@ -114,6 +117,10 @@ impl App {
             mut diff,
             in_pr_before,
         } = compared?;
+        if self.listed_head(pr_id).as_ref() != Some(&range.head) {
+            tracing::warn!("what is new not kept: pr={pr_id}: the branch moved on meanwhile");
+            return Err(FetchError::Stale(MOVED_AGAIN.into()));
+        }
         let Some(now) = self.pr_files_at(pr_id, &range.head) else {
             tracing::warn!("what is new not kept: pr={pr_id}: no diff of the PR at its head");
             return Err(FetchError::Stale(MOVED_AGAIN.into()));

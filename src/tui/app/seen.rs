@@ -53,6 +53,13 @@ impl App {
         matches!(self.state.screen, Screen::Detail { pr_id: shown, .. } if shown == pr_id)
     }
 
+    /// Where the list says the PR's branch is.
+    pub(super) fn listed_head(&self, pr_id: PrId) -> Option<CommitOid> {
+        let prs = self.state.store.cache.prs.loaded()?;
+        let pr = prs.iter().find(|pr| pr.id == pr_id)?;
+        CommitOid::parse(pr.head_oid.as_deref()?)
+    }
+
     /// The head of the PR's own diff, as read.
     pub(super) fn loaded_diff_head(&self, pr_id: PrId) -> Option<&str> {
         let diff = self.state.store.cache.details.get(&pr_id)?.diff.loaded()?;
@@ -79,14 +86,8 @@ impl App {
         else {
             return;
         };
+        let listed = self.listed_head(pr_id);
         let store = &mut self.state.store;
-        let listed = store
-            .cache
-            .prs
-            .loaded()
-            .and_then(|prs| prs.iter().find(|pr| pr.id == pr_id))
-            .and_then(|pr| pr.head_oid.as_deref())
-            .and_then(CommitOid::parse);
         let data = store.cache.details.get(&pr_id);
         let head = match &self.state.ui.detail.since {
             Some(since) => since.head_read(data).cloned(),

@@ -236,3 +236,26 @@ fn the_commit_the_pr_is_against_is_taken_from_the_diff_of_the_head_asked_for() {
     );
     assert_eq!(app.target_at(PrId(42), &oid("ccc333")), None);
 }
+
+#[tokio::test(flavor = "current_thread")]
+async fn a_compare_that_answers_after_the_list_says_the_branch_moved_on_is_not_kept() {
+    let mut app = returning_reader("aaa111", "bbb222");
+    diff_of_files(&mut app, "bbb222", &["src/main.rs"]);
+    press(&mut app, KeyCode::Char('w'));
+    // A push while the compare is on its way: the list is read again and says so.
+    branch_at(&mut app, "ccc333");
+    compare_arrives(&mut app, &["src/main.rs"]);
+
+    let LoadState::Failed(error) = what_is_new(&app) else {
+        panic!("not kept");
+    };
+    assert!(error.user_message().contains("moved again"));
+    assert_eq!(read_head(&app), Some(&oid("aaa111")));
+    // Out and in again is what is new to where the branch is now.
+    press(&mut app, KeyCode::Esc);
+    press(&mut app, KeyCode::Char('w'));
+    assert!(
+        app.state.store.fetches.contains(&WHOLE),
+        "the diff of ccc333 first"
+    );
+}
