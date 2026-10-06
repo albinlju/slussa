@@ -545,7 +545,8 @@ from `domain/review`, tab identities from `pr_detail/tabs`, and editor drafts fr
 `DetailView` for read-only queries. `AppState::detail_view()` is a test helper;
 application effects do not query UI state. `tests/repo_rules.rs` fails a
 `domain`, `providers`, `session`, `cli` or `tui/ui` file that imports from a layer it may not
-(test code and `test_support` excepted).
+(test code and `test_support` excepted). `cli` may use `local`, the files the subcommands
+share with the TUI (`slussa propose import` writes the proposals file), and never `tui`.
 
 Run `cargo clippy --all-targets --locked -- -D warnings` alongside the tests.
 

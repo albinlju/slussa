@@ -5,6 +5,7 @@ use crate::session::{self, Session, preflight::PreflightError};
 use crate::{domain::pr::PrId, providers::github};
 
 mod auth;
+mod propose;
 
 pub enum Dispatch {
     Done(ExitCode),
@@ -32,6 +33,9 @@ pub fn dispatch(mut args: Vec<String>) -> Dispatch {
     let mut open = None;
     match args.get(1).map(String::as_str) {
         Some("auth") => return Dispatch::Done(auth::run(args.get(2..).unwrap_or_default())),
+        Some("propose") => {
+            return Dispatch::Done(propose::run(args.get(2..).unwrap_or_default()));
+        }
         Some("--help" | "-h") => {
             print_help();
             return Dispatch::Done(ExitCode::SUCCESS);
@@ -89,6 +93,7 @@ fn print_help() {
          slussa <number>              Open the PR browser on that PR (or #<number>).\n  \
          slussa -C <dir> [...]        Run as if started in <dir> (matches git/cargo -C).\n  \
          slussa auth login            Store a Bitbucket Data Center PAT for the current repo's host.\n  \
+         slussa propose import <PR>   Keep what an agent proposes on a PR (JSON on stdin or --file) for the reader to send.\n  \
          slussa --version             Show the version.\n  \
          slussa --help                Show this message.\n"
     );

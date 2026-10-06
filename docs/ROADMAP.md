@@ -156,21 +156,23 @@ let an agent help without deciding.
   been updated then, not which commit, so the head that was read has to be saved
   with it. **Open:** what counts as read (the diff opened, or read to its end),
   and whether the list's row says it too.
-- [ ] **Agents propose, the reader sends.** `slussa draft comment …` and
-  `slussa review import …` put proposals in a local inbox; the TUI shows each
-  beside the line it is about, marked as AI, and the reader sends, edits or
-  discards it. The marker it relies on is built. It needs a store separate from
-  the draft file, which the TUI holds locked for as long as it runs
-  (`DraftStorage`) and rewrites whole when its content changes, so a second
-  process cannot write into it; de-duplication (a content hash or finding ID);
-  and anchors that carry their `DiffRevision`, so that a proposal written against
-  another head is shown as such and not on the wrong line. It starts from
-  nothing: `cli/` holds only `auth` today, so the first of these commands brings
-  the headless connection, the JSON types and the exit codes described under
-  *The other direction: an agent calling slussa* in group 5. **Open:** what an
-  agent hands in (the fields of a proposal, and one document for a whole review
-  or one call per comment), and whether a proposal written while the TUI is open
-  appears without a refresh.
+- [ ] **Agents propose, the reader sends** *(the import is built; the TUI is not)*.
+  `slussa propose import <PR>` reads one JSON document (the README gives it: the
+  head the agent read, an optional summary, and line comments, each with a side and
+  perhaps the agent's own finding id) and keeps it in a file of its own under
+  `slussa/proposals`, one per scope. The import takes the file's lock for the moment
+  it needs; the TUI will read the file without it, which is safe because a write
+  replaces the whole file. What the reader does with a proposal is to be kept by the
+  TUI in its own file, so that two processes never write the same one for long.
+  Proposals are bound to the head they were written at; a PR that has moved says
+  `stale` in the report. A finding handed in again is not kept twice. At most 1 000 per
+  PR, 500 per document and 2 MiB. **Missing, the second part:** showing each proposal
+  in the Diff beside its line, marked as AI, with keys to send it (into the review in
+  progress, as a queued line comment that is the reader's own), edit it or discard it;
+  a proposal written against another head shown as such and not on the wrong line;
+  the summary shown with the review; clearing what has been dealt with. Not planned:
+  the proposals appearing without a refresh, and Bitbucket Data Center. **Not tried
+  against** an agent that is not a script: the schema has only been written by hand.
 - [ ] **`slussa context <number>`** — one compact text package for an LLM (title,
   description, unresolved threads, CI, blockers). It is the package *Send to
   agent* needs too, so build it once; it needs a size rule for long threads and

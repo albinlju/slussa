@@ -7,5 +7,6 @@
 
 pub mod drafts;
 pub mod file;
+pub mod proposals;
 pub mod scope;
 pub mod seen;

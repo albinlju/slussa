@@ -68,6 +68,34 @@ impl Sandbox {
         self.run(&full)
     }
 
+    /// Run with `input` on standard input, as an agent that pipes a document.
+    fn run_with_input(&self, args: &[&str], input: &str) -> Output {
+        use std::io::Write;
+        let mut child = self
+            .command()
+            .args(args)
+            .stdin(Stdio::piped())
+            .stdout(Stdio::piped())
+            .stderr(Stdio::piped())
+            .spawn()
+            .expect("run slussa");
+        child
+            .stdin
+            .take()
+            .expect("stdin")
+            .write_all(input.as_bytes())
+            .expect("write the document");
+        let output = child.wait_with_output().expect("wait for slussa");
+        Output {
+            code: output.status.code().unwrap_or(-1),
+            combined: format!(
+                "{}{}",
+                String::from_utf8_lossy(&output.stdout),
+                String::from_utf8_lossy(&output.stderr)
+            ),
+        }
+    }
+
     fn git(&self, args: &[&str]) {
         let status = Command::new("git")
             .args(args)
@@ -262,4 +290,70 @@ fn a_word_that_is_not_a_number_is_still_an_unknown_command() {
     let output = Sandbox::new().run(&["4x4"]);
     assert_eq!(output.code, 2);
     assert!(output.combined.contains("unknown command `4x4`"));
+}
+
+#[test]
+fn help_lists_the_command_an_agent_proposes_with() {
+    let output = Sandbox::new().run(&["--help"]);
+    assert!(
+        output.combined.contains("propose import <PR>"),
+        "{}",
+        output.combined
+    );
+}
+
+#[test]
+fn propose_without_a_pr_is_a_usage_error_told_as_json_on_stderr() {
+    for args in [
+        &["propose"][..],
+        &["propose", "import"],
+        &["propose", "import", "x"],
+        &["propose", "list"],
+    ] {
+        let output = Sandbox::new().run(args);
+        assert_eq!(output.code, 2, "{args:?}: {}", output.combined);
+        let error: serde_json::Value = serde_json::from_str(output.combined.trim())
+            .unwrap_or_else(|e| panic!("{args:?}: not JSON ({e}): {}", output.combined));
+        assert_eq!(error["schema"], 1);
+        assert_eq!(error["error"]["kind"], "usage");
+    }
+}
+
+#[test]
+fn a_document_that_is_not_one_is_refused_before_anything_is_asked_of_the_network() {
+    let sandbox = Sandbox::new();
+    for (input, wanted) in [
+        ("not json", "cannot be read"),
+        (r#"{"schema": 2, "head": "abc123"}"#, "reads 1"),
+        (
+            r#"{"schema": 1, "head": "abc123", "comments": [{"path": "a", "line": 0, "body": "x"}]}"#,
+            "comments[0]",
+        ),
+    ] {
+        let output = sandbox.run_with_input(&["propose", "import", "44"], input);
+        assert_eq!(output.code, 2, "{input}: {}", output.combined);
+        assert!(output.combined.contains(wanted), "{}", output.combined);
+        assert!(
+            output.combined.contains(r#""kind":"invalid""#),
+            "{}",
+            output.combined
+        );
+    }
+}
+
+#[test]
+fn a_document_that_cannot_be_read_from_a_file_is_a_failure_not_a_usage_error() {
+    let output = Sandbox::new().run(&[
+        "propose",
+        "import",
+        "44",
+        "--file",
+        "/nonexistent/review.json",
+    ]);
+    assert_eq!(output.code, 1, "{}", output.combined);
+    assert!(
+        output.combined.contains(r#""kind":"failed""#),
+        "{}",
+        output.combined
+    );
 }

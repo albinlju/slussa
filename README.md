@@ -139,6 +139,42 @@ a file of PR numbers and times, one per repository and account, and nothing else
 Copying a link falls back to the terminal's clipboard (OSC 52)
 over SSH; inside tmux that needs `set -g set-clipboard on`.
 
+## For agents
+
+An agent that has reviewed a PR can hand in what it found, without posting anything:
+
+```sh
+slussa propose import 44 < review.json     # or --file review.json
+```
+
+The document is read, checked and kept for the reader; the reader sends, edits or
+discards each proposal. `head` is the commit the agent read, and everything in the
+document is tied to it:
+
+```json
+{
+  "schema": 1,
+  "head": "9f2c1ab...",
+  "agent": "gator",
+  "summary": "Two things to look at.",
+  "comments": [
+    {"path": "src/a.rs", "line": 12, "body": "This can panic.", "id": "F1"},
+    {"path": "src/a.rs", "line": 3, "side": "old", "body": "Why was this removed?"}
+  ]
+}
+```
+
+`side` is `new` (the default) or `old`; `id` and `agent` are optional, and a finding
+that is handed in again, by its `id` or else by its words on the same line of the same
+commit, is not kept twice. A field that is not in the schema is refused, so that a
+misspelling is not ignored. It prints one line of JSON and exits: `{"schema":1,"pr":44,"added":3,"duplicates":0,
+"head":"...","current_head":"...","stale":false}`, where `stale` says the PR has moved
+since `head`. A failure is JSON on standard error, `{"schema":1,"error":{"kind":"...",
+"message":"..."}}`, and exit code 2 for a command line or a document that is wrong,
+1 for anything else (`not_logged_in`, `not_found`, `failed`). It never asks for input:
+it needs `gh` to be logged in already. GitHub only. The schema is experimental until
+it has been used.
+
 ## Configure
 
 `~/.config/slussa/config.toml` (or `$XDG_CONFIG_HOME/slussa/config.toml`):
