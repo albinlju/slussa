@@ -174,8 +174,7 @@ let an agent help without deciding.
   left. At most 1 000 per PR, 500 per document and 2 MiB. **Missing:** the summary is
   only the latest, cannot be dismissed and is not shown where the sidebar is hidden (a
   narrow terminal); a way to see the
-  proposals for another commit (they are only counted); a mark on the file in the
-  tree; proposals on the commit diffs and on *Since you read it*; `c` marks a
+  proposals for another commit (they are only counted); a mark in the PR list; proposals on the commit diffs and on *Since you read it*; `c` marks a
   proposal taken when the editor opens, not when the comment is sent, so a draft
   that is later thrown away loses the proposal (the draft is kept as any other, and
   the agent's file still has it, but nothing brings it back); undoing a discard; the

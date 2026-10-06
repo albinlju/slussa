@@ -1,9 +1,10 @@
-use super::{DiffContext, DiffFocus, DiffViewer, file_tree::FileComments, pane, tree};
+use super::{DiffContext, DiffFocus, DiffViewer, ProposalAt, file_tree::FileComments, pane, tree};
 use crate::{
     domain::{
         authorship::Authorship,
         comment::CommentThread,
         diff::{DiffLine, FileDiff, LineRef},
+        proposal::Side,
     },
     tui::ui::{layout, widgets},
 };
@@ -51,7 +52,7 @@ pub(super) fn render(
     let comment_counts: Vec<FileComments> = diff
         .files
         .iter()
-        .map(|f| file_comment_count(f, threads, diff.revision.as_ref()))
+        .map(|f| file_comment_count(f, threads, proposals, diff.revision.as_ref()))
         .collect();
 
     let pane_focused = matches!(ui_diff.focus, DiffFocus::Pane);
@@ -91,9 +92,13 @@ pub(super) fn render(
     }
 }
 
+/// The comments on a file's visible lines, counted by who wrote them. What an
+/// agent proposed and the reader has not dealt with counts as an agent's, so that
+/// the file list says which files have something to look at.
 fn file_comment_count(
     file: &FileDiff,
     threads: &[CommentThread],
+    proposals: &[ProposalAt<'_>],
     revision: Option<&crate::domain::diff::DiffRevision>,
 ) -> FileComments {
     // Only anchored (code) threads count toward a file; general discussion doesn't.
@@ -104,7 +109,8 @@ fn file_comment_count(
             .filter_map(|t| t.anchor.as_ref().map(|a| (t, a)))
             .filter(|(_, a)| a.path == file.path)
     };
-    if on_file().next().is_none() {
+    let proposed_here = || proposals.iter().filter(|p| p.proposal.path() == file.path);
+    if on_file().next().is_none() && proposed_here().next().is_none() {
         return FileComments::default();
     }
     let mut new_lines: HashSet<usize> = HashSet::new();
@@ -125,7 +131,7 @@ fn file_comment_count(
             }
         }
     }
-    on_file()
+    let mut counts = on_file()
         .filter(|(_, a)| match a.line {
             Some(LineRef::New(line)) => new_lines.contains(&line),
             Some(LineRef::Old(line)) => old_lines.contains(&line),
@@ -138,7 +144,15 @@ fn file_comment_count(
                 Authorship::Ai => counts.ai += 1,
             }
             counts
+        });
+    // Only those the pane draws: on a line of the diff.
+    counts.ai += proposed_here()
+        .filter(|p| match p.proposal.side() {
+            Side::New => new_lines.contains(&p.proposal.line()),
+            Side::Old => old_lines.contains(&p.proposal.line()),
         })
+        .count();
+    counts
 }
 
 fn count_file_stats(file: &FileDiff) -> (u32, u32) {

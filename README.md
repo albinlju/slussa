@@ -190,7 +190,8 @@ it needs `gh` to be logged in already. GitHub only. The schema is experimental u
 it has been used.
 
 In the PR's Diff tab what an agent proposed stands on the line it is about, marked
-`[AI]` with the agent's name, and the footer counts them. With the cursor on one,
+`[AI]` with the agent's name, the file list marks each file that has some (`◆ 1`, the same
+mark as an agent's comments), and the footer counts them. With the cursor on one,
 `c` takes it: the comment editor opens with its words, to edit and send as your own
 (a line comment joins the review in progress like any other), and `d` discards it.
 Either way it is not shown again, and that is kept with what you have looked at. A

@@ -264,3 +264,28 @@ fn a_summary_of_an_older_commit_says_so_and_one_with_nothing_left_says_that() {
     let mut empty = overview_with(vec![], vec![]);
     assert!(!screen_text(&mut empty).contains("AI review"));
 }
+
+#[tokio::test(flavor = "current_thread")]
+async fn the_file_list_marks_the_files_that_have_a_proposal_to_look_at() {
+    let proposed = proposal("abc123", 1, "This can panic.");
+    let mut app = app_with(vec![proposed.clone()]);
+    assert!(
+        screen_text(&mut app).contains("◆ 1"),
+        "the file has one, and the list says so before the reader has opened it"
+    );
+
+    // One written against another commit, or on a line that is not in the diff,
+    // is not on the file and is not counted there.
+    let mut elsewhere = app_with(vec![
+        proposal("def456", 1, "On an older commit."),
+        proposal("abc123", 99, "On a line the diff does not have."),
+    ]);
+    assert!(!screen_text(&mut elsewhere).contains("◆ "));
+
+    // Once the reader has dealt with it, the mark goes.
+    app.state
+        .store
+        .seen
+        .handle(PrId(42), &proposed, crate::domain::seen::How::Discarded);
+    assert!(!screen_text(&mut app).contains("◆ "));
+}
