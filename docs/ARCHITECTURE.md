@@ -104,7 +104,8 @@ src/
 │       │   │   └── render.rs, columns.rs, filter.rs   Table, its columns, sort and status filter
 │       │   └── pr_detail/
 │       │       ├── screen.rs  PrDetailScreen: children, the surface shown and the overlay
-│       │       ├── interactions.rs  Dialog/editor workflows and resolved commands
+│       │       ├── interactions.rs  Editor workflows, the keys on the PR and resolved commands
+│       │       ├── answers.rs       What the reader's answer in a dialog does
 │       │       ├── bindings/  One row per key the screen routes itself: key, where, help,
 │       │       │              and what it does now (hidden, blocked, offered)
 │       │       ├── keys.rs    Modal priority, then the rows, then the focused child
