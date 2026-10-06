@@ -90,6 +90,10 @@ fn a_proposal_is_drawn_on_its_line_marked_as_an_agents_with_its_words() {
     let text = screen_text(&mut app);
     assert!(text.contains("This can panic."), "{text}");
     assert!(text.contains("[AI]") && text.contains("reviewer"), "{text}");
+    assert!(
+        text.contains("proposed comment, not posted"),
+        "it says what it is: a comment from a review that nobody has posted"
+    );
     assert!(text.contains("1 proposed by AI"), "the footer says so");
 }
 

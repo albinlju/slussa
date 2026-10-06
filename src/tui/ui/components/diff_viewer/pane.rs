@@ -405,6 +405,12 @@ fn push_proposal_lines(
             Style::default().fg(theme.info).add_modifier(Modifier::BOLD),
         ),
     ];
+    // What it is: a comment from a review that has not been posted, which only
+    // the reader can send.
+    title.push(Span::styled(
+        "  ·  proposed comment, not posted",
+        Style::default().fg(theme.muted),
+    ));
     if active {
         title.push(Span::styled(
             "   c: take as a comment  d: discard",
