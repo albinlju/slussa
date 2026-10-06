@@ -19,6 +19,17 @@ slussa is meant to be the **human approval surface for AI-generated pull
 requests**: the place where a reviewer decides, not the place where the code gets
 read line by line.
 
+**What it is chosen for: a decision that can be trusted.** A list sorted by what
+needs the reader, every repository in it, a merge key and a build log are what any
+pull request client has to have, and slussa has to have them too; none of them is
+a reason to choose it. The reason is that what the reader approves is what they
+read: an approval and a merge are bound to the commit that was shown, a branch
+that has moved says what is new since it was read, what an AI wrote is marked as
+AI, and an agent may put its findings beside the code but the reader sends them.
+Nothing is judged for the reader and no model runs inside slussa. When agents
+write the PRs and agents review them, the sign-off is the part that is left to a
+person, and it has to mean that the person saw what was merged.
+
 The assumption behind the backlog: agents write more of the code and open more of
 the PRs, and AI reviewers do the line-level reading. What stays human is triage
 ("what needs me?"), intent-checking ("did the agent do what was asked, and what did
@@ -42,6 +53,17 @@ sentence, and reached with one key or found by name in the palette.
 
 What this rules in (each item says how far it is):
 
+- **A decision bound to what was read** *(built)*. An approval and a merge name
+  the commit the reader was shown, and a push after that is refused instead of
+  merged unseen.
+- **Review in rounds** *(not built)*. An agent's PR is read several times. When
+  the reader comes back, the PR says what is new since the head they read: the
+  commits, the diff from then to now, the builds, and what became of their own
+  threads.
+- **Agents propose, the reader sends** *(not built)*. An agent's findings arrive
+  as private proposals beside the lines they are about, marked as AI; the reader
+  sends, edits or discards each. Nothing an agent wrote is posted without a
+  person choosing it.
 - **The list is the inbox** *(first version built)*. The PR list opens sorted by what needs the user —
   review requests, failed CI, new activity since last look — with a short reason
   on the row. No separate inbox screen; the plain list is the same view with the
@@ -53,8 +75,7 @@ What this rules in (each item says how far it is):
   browser for: why a build failed, a checkout, marking a PR ready, a label or a
   reviewer. Each one that sends someone away makes them doubt the tool.
 - **Reading it well** *(partly built)*. A diff that is hard to read sends people
-  to the web too, and a PR that moves while it is being reviewed needs to say
-  what is new since it was read.
+  to the web too.
 - **AI review is first-class** *(first version built)*. What an AI reviewer
   (a service, an agent, a team bot) did is marked as AI: `[AI]` on its comments and
   commits, a filter for them, and an `AI review` column in the list. Not built:
@@ -92,11 +113,18 @@ What this rules out:
 - **Agents deciding.** An agent may read and propose through the CLI; approving
   and merging stay human.
 
-Priority order for anything new: the whole day in one list and not leaving for the
-web (groups 1 and 3) → reading it well (group 5) → habits (a count for a prompt,
-the next PR) → depth that stays out of sight (group 6) → AI-review integration →
-agent handoff → getting it into more hands (the release gaps), which waits until
-the product is one someone will want → everything else.
+Priority order for anything new: the decision that can be trusted (group 1: since
+you read it, then agents propose, then a few readers who try it) → the whole day
+in one list and not leaving for the web (groups 2 and 4) → reading it well
+(group 6) → habits (a count for a prompt, the next PR) → depth that stays out of
+sight (group 7) → AI-review integration → agent handoff → getting it into more
+hands (the release gaps), which waits until the product is one someone will want →
+everything else.
+
+Why group 1 comes before every repository: the list across repositories is needed
+for daily use, but it is the largest engineering cost here and it is what any
+client has. *Since you read it* is small and builds on what exists. *Agents
+propose* is not small, and it is the part that is slussa's own.
 
 All upcoming features follow the [product and interaction principles](ARCHITECTURE.md#product-and-interaction-principles):
 a calm default view, discoverable contextual actions, focused dialogs, consistent
@@ -110,7 +138,55 @@ scope includes how users find and leave the interaction, not only the API action
 Grouped by the priority order in *Positioning*. Within a group, items marked
 *refined* have a settled design; the rest still need one.
 
-### 1. The list: the whole day, and what needs you
+### 1. A decision that can be trusted
+
+What slussa is chosen for (see *Positioning*). The approval and the merge bound to
+the commit that was read are built. These make that hold over several rounds, and
+let an agent help without deciding.
+
+- [ ] **Since you read it** (review in rounds). A marker in the header when the
+  branch has moved since the diff that was read; then a key that shows only what
+  is new, from the head that was read to now (a head that was force-pushed away
+  may not answer); the builds shown for the head that was read, with a line when
+  they are for another; and the reader's own threads, which of them were answered
+  or resolved since. A merge or a verdict on a moved branch is already refused,
+  and says to read what is new; this is how. Inside one session the list's head
+  and the diff's are both in memory. The next day, which is when it matters, they
+  are not: `local/seen.rs` keeps when a PR was looked at and how recently it had
+  been updated then, not which commit, so the head that was read has to be saved
+  with it. **Open:** what counts as read (the diff opened, or read to its end),
+  and whether the list's row says it too.
+- [ ] **Agents propose, the reader sends.** `slussa draft comment …` and
+  `slussa review import …` put proposals in a local inbox; the TUI shows each
+  beside the line it is about, marked as AI, and the reader sends, edits or
+  discards it. The marker it relies on is built. It needs a store separate from
+  the draft file, which the TUI holds locked for as long as it runs
+  (`DraftStorage`) and rewrites whole when its content changes, so a second
+  process cannot write into it; de-duplication (a content hash or finding ID);
+  and anchors that carry their `DiffRevision`, so that a proposal written against
+  another head is shown as such and not on the wrong line. It starts from
+  nothing: `cli/` holds only `auth` today, so the first of these commands brings
+  the headless connection, the JSON types and the exit codes described under
+  *The other direction: an agent calling slussa* in group 5. **Open:** what an
+  agent hands in (the fields of a proposal, and one document for a whole review
+  or one call per comment), and whether a proposal written while the TUI is open
+  appears without a refresh.
+- [ ] **`slussa context <number>`** — one compact text package for an LLM (title,
+  description, unresolved threads, CI, blockers). It is the package *Send to
+  agent* needs too, so build it once; it needs a size rule for long threads and
+  diffs.
+- [ ] **`slussa agent-instructions`** — prints how an agent should use slussa, as a
+  short snippet for AGENTS.md or a skill. An agent that is not told slussa is
+  there never calls it, so this ships with the proposals and not after them. A
+  CLI plus this is simpler than an MCP server for a local tool built on `gh` and
+  `git`; revisit MCP later (it is also the trigger for a `slussa-core`).
+- [ ] **Tried by a few readers.** When the two first items exist: a recording
+  that shows them, and a handful of people who review agents' PRs asked to use
+  slussa for a week. What they open the web for goes to group 4. This is how the
+  direction is checked, before more is built on it. It is not the release gaps
+  (a package, signing), which still wait.
+
+### 2. The list: the whole day, and what needs you
 
 Still one list, still one PR view. The list knows what needs the user, across
 the repositories they work in, and says so on the row.
@@ -163,7 +239,7 @@ the repositories they work in, and says so on the row.
   can be the upstream or the fork, with nothing on screen saying which. **Open:**
   where it goes: the list's heading is the candidate, since it is there already.
 
-### 2. AI review integration
+### 3. AI review integration
 
 The AI reviewer's output has to be as easy to read and act on as a human's, and
 easier to tell apart.
@@ -242,7 +318,7 @@ against:
   count and "unchanged since last review" so a human knows when the AI has
   stopped adding value.
 
-### 3. Act without leaving: the build, the branch and the small edits
+### 4. Act without leaving: the build, the branch and the small edits
 
 Whatever sends the reader to the web for a minute belongs here. In the order the
 test above ranks them:
@@ -317,7 +393,7 @@ test above ranks them:
   conditional delete (GraphQL `updateRefs` with `beforeOid`, not yet tried).
 - [ ] **React to a comment** — add / remove your own emoji reaction.
 
-### 4. Handoff to the coding agent
+### 5. Handoff to the coding agent
 
 slussa never hosts the conversation; it hands context over and reads the result
 back on refresh.
@@ -389,22 +465,10 @@ decides.** No new view: these are non-interactive subcommands that print and exi
   who is human, who is AI and what was waived. Depends on *AI-authored
   comments and commits marked* and *Finding state per thread*. **Open:** the
   name and flags, and how many PRs one run may read.
-- [ ] **`slussa context <number>`** — one compact text package for an LLM (title,
-  description, unresolved threads, CI, blockers). It is the package *Send to
-  agent* needs too, so build it once; it needs a size rule for long threads and
-  diffs.
-- [ ] **Agents propose, the human decides** — `slussa draft comment …` and
-  `slussa review import …` put proposals in a local inbox that the TUI shows
-  marked as AI, and you send, edit or discard each. Depends on *AI-authored
-  comments and commits marked* and on a store separate from the draft file, which the TUI
-  holds locked for as long as it runs (`DraftStorage`) and rewrites whole when its
-  content changes, so a second process cannot write into it. Needs de-duplication (a content hash or finding ID) and
-  anchors that carry their `DiffRevision`. This is the part nobody else has;
-  build it after the marker.
-- [ ] **`slussa agent-instructions`** — prints how an agent should use slussa, as a
-  short snippet for AGENTS.md or a skill. A CLI plus this is simpler than an MCP
-  server for a local tool built on `gh` and `git`; revisit MCP later (it is also
-  the trigger for a `slussa-core`).
+
+`slussa context`, the proposals an agent hands in and `slussa agent-instructions`
+are in group 1, and are built first; what is said above about the output, the
+errors and a command that never asks for input holds for them too.
 
 Left out on purpose: `wait --ci` (`gh pr checks --watch` does it) and approve or
 merge for agents. The JSON is a public contract, so keep it marked experimental
@@ -412,19 +476,12 @@ merge for agents. The JSON is a public contract, so keep it marked experimental
 these commands go through the same provider code but are not planned to be tested
 against it.
 
-### 5. Reading it well
+### 6. Reading it well
 
 Using it every day means reading code in it, and a diff that is hard to read
 sends people to the web. These rank with the rest, not below them: the reader may
-read less of a diff than before, but what they do read has to be good.
-
-- [ ] **Since you read it.** A marker in the header when the branch has moved since
-  the diff that was read (the list's head against the diff's, both already in
-  memory); then a key that shows only what is new, from the head that was read to
-  now (a head that was force-pushed away may not answer); and the builds shown for
-  the head that was read, with a line when they are for another. A merge or a
-  verdict on a moved branch is already refused, and says to read what is new;
-  this is how.
+read less of a diff than before, but what they do read has to be good. What is
+new since the diff was read is *Since you read it*, in group 1.
 
 - [ ] **Word-level (intra-line) diff.**
 - [ ] **Expand context** — unfold above/below a hunk (needs a full-file fetch).
@@ -434,9 +491,9 @@ read less of a diff than before, but what they do read has to be good.
 - [ ] **Binary / image files** — a clear "(binary file)" instead of a broken diff.
 - [ ] **Viewed-files tracking** — local "mark file reviewed", saved per PR.
 - [ ] **Branch ahead / behind base** info.
-- [ ] **Milestones and projects** (reviewers and labels already shown; assignees are in group 3).
+- [ ] **Milestones and projects** (reviewers and labels already shown; assignees are in group 4).
 
-### 6. Depth that stays out of sight
+### 7. Depth that stays out of sight
 
 How a product with many features stays calm: the features are there, and the
 surface does not show them until they matter.
@@ -450,7 +507,7 @@ surface does not show them until they matter.
 - [ ] **Saved searches.** A search that is used every day gets a name and is one
   key away.
 
-### 7. Providers and platform
+### 8. Providers and platform
 
 - [ ] **GitHub Enterprise Server.** Only `github.com` is recognised as GitHub
   today; any other host is probed as a Bitbucket Data Center and refused if it is
@@ -458,7 +515,7 @@ surface does not show them until they matter.
   recognising it in preflight, and carrying the host in the repository the calls
   are told to act on and in the drafts' name. It decides whether a company that
   runs its own GitHub can try slussa at all.
-- [ ] **GitLab MR support** via `glab` (mirrors `gh` well). Reach more than anything else on this list: a team on GitLab cannot use slussa at all. After groups 1, 3 and 5, since a second provider is also the trigger for the provider trait.
+- [ ] **GitLab MR support** via `glab` (mirrors `gh` well). Reach more than anything else on this list: a team on GitLab cannot use slussa at all. After groups 1, 2, 4 and 6, since a second provider is also the trigger for the provider trait.
 - [ ] **Windows support** — the browser and clipboard code has Windows paths,
   but CI builds only macOS and Linux and nothing has run them. Either add a
   Windows CI job and release target, or keep it stated as unsupported.
@@ -504,7 +561,7 @@ surface does not show them until they matter.
 slussa is review-and-act focused. Authoring and PR *administration* belong in the
 editor, the coding agent or the web UI, and are out of scope unless a
 decision-path feature needs them, or readers open a browser for them every day
-(then they are in group 3):
+(then they are in group 4):
 
 - [ ] **Edit PR title / description** (the description is shown, not editable).
 - [ ] **Create a PR** — the agent or `gh pr create` does this.
@@ -562,7 +619,7 @@ it ahead of the feature that needs it.
   or review grouping, which need the same logic.
 - [ ] **Suspend / resume for child processes.** Agent handoff and *open in
   `$EDITOR`* both need to hand the terminal to a child and take it back. The
-  reference sequence (from OpenShell's `handle_shell_connect`): cancel
+  sequence: cancel
   background refreshes, pause the input reader, leave the alternate screen and
   raw mode, run the child with inherited stdio on `spawn_blocking`, restore raw
   mode and the alternate screen, clear and redraw, drain stale events, resume
