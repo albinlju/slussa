@@ -163,7 +163,9 @@ let an agent help without deciding.
   starts: when that is not the commit that was read, the banner says the branch was
   rewritten and from where, since the diff then holds what was read already and
   nothing of what was dropped, and when it is the head now it says the branch was
-  reset. The files are those of
+  reset. Neither of those two counts as having read the head, which only a branch
+  that moved forward does by what is new: the mark stays until the reader goes on
+  to the whole diff from it, which is then arriving at that diff. The files are those of
   the PR's diff of the new head, so that is read first (a compare that arrives
   without it is not kept and does not count as read, and a branch that moved again
   meanwhile says so), and those the PR touched at the head that was read, which

@@ -126,7 +126,9 @@ When it is not, the branch was rebased or force-pushed: the banner then says
 `↻ rewritten since you read it` and from which commit, because the diff holds again
 what you had already read and shows nothing of what was dropped from the branch. A
 branch reset to an older commit says `↻ reset since you read it`: nothing is new, and
-what came after is gone. After a merge of the target into the branch the files only the
+what came after is gone. Reading either of the two does not count as having read the
+branch, since what was taken away is not in them: the mark stays until you go on to the
+whole diff with `w` or `esc`, and that counts. After a merge of the target into the branch the files only the
 merge changed are left out. A commit that was force-pushed away may no longer be there to compare, and
 GitHub's answer is shown with what it probably means; `w` goes back to the whole diff
 and asks again the next time, and `F` asks again too. Arriving at the PR's diff, by

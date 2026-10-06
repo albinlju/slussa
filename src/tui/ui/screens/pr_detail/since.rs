@@ -52,10 +52,32 @@ impl SinceView {
         &mut self.viewer
     }
 
-    /// The head the reader has on screen once this is open and read.
+    /// How the branch moved over the range, once what is new has been read.
+    fn moved(&self, data: Option<&PrData>) -> Option<Moved> {
+        let diff = data?.range_diffs.get(&self.range)?.loaded()?;
+        self.range.moved(diff)
+    }
+
+    /// The head the reader has read by having this open and read. Only of a
+    /// branch that moved forward: what is shown is then what is new, and all of
+    /// it. Of one that was rewritten or reset it is less than what changed, since
+    /// what was dropped is not in it, so reading it is not reading the head; the
+    /// whole diff is.
     pub fn head_read(&self, data: Option<&PrData>) -> Option<&CommitOid> {
-        data?.range_diffs.get(&self.range)?.loaded()?;
-        Some(&self.range.head)
+        let diff = data?.range_diffs.get(&self.range)?.loaded()?;
+        match self.range.moved(diff) {
+            None | Some(Moved::Forward) => Some(&self.range.head),
+            Some(Moved::Back | Moved::Rewritten { .. }) => None,
+        }
+    }
+
+    /// Whether this told the reader that only the whole diff says what the branch
+    /// is now: leaving it for the whole diff is then arriving at that diff.
+    pub fn sends_to_the_whole_diff(&self, data: Option<&PrData>) -> bool {
+        match self.moved(data) {
+            Some(Moved::Back | Moved::Rewritten { .. }) => true,
+            None | Some(Moved::Forward) => false,
+        }
     }
 }
 
@@ -116,7 +138,8 @@ fn banner_text(range: &DiffRange, moved: Option<&Moved>) -> (&'static str, Strin
         Some(Moved::Rewritten { from }) => (
             "↻ rewritten since you read it  ",
             format!(
-                "from {}, not {base}: also what you had read, and not what was dropped",
+                "from {}, not {base}: also what you had read, and not what was dropped; \
+                 read the whole diff",
                 from.short()
             ),
         ),
@@ -133,7 +156,8 @@ const fn nothing_to_show(moved: Option<&Moved>) -> &'static str {
         Some(Moved::Forward) => "Nothing new in the files of this PR. w: the whole diff.",
         Some(Moved::Back) => {
             "The branch was reset to a commit older than the one you read: nothing is \
-             new, and what came after it is gone from the branch. w: the whole diff."
+             new, and what came after it is gone from the branch. w: the whole diff, \
+             which is what there is to read."
         }
         Some(Moved::Rewritten { .. }) => {
             "Nothing in the files of this PR since the commit the two share. \

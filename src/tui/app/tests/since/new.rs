@@ -227,6 +227,35 @@ async fn a_branch_that_was_rewritten_says_the_compare_is_not_only_what_is_new() 
 }
 
 #[tokio::test(flavor = "current_thread")]
+async fn what_is_new_of_a_rewritten_branch_is_not_reading_it_and_the_whole_diff_is() {
+    let mut app = reader_asking_what_is_new();
+    compare_from(&mut app, "ccc333", &["src/main.rs"]);
+    // What was dropped from the branch is not in it, so the head is not read by it.
+    assert_eq!(read_head(&app), Some(&oid("aaa111")));
+    assert!(
+        screen_text(&mut app).contains(MARK),
+        "the header still says so"
+    );
+
+    // Out to the whole diff, as the banner says: that is arriving at it.
+    press(&mut app, KeyCode::Esc);
+    assert!(app.state.ui.detail.since.is_none());
+    assert_eq!(read_head(&app), Some(&oid("bbb222")));
+    assert!(!screen_text(&mut app).contains(MARK));
+}
+
+#[tokio::test(flavor = "current_thread")]
+async fn a_branch_that_moved_forward_is_read_by_what_is_new() {
+    let mut app = reader_asking_what_is_new();
+    compare_from(&mut app, "aaa111", &["src/main.rs"]);
+    assert_eq!(
+        read_head(&app),
+        Some(&oid("bbb222")),
+        "it is all of what is new"
+    );
+}
+
+#[tokio::test(flavor = "current_thread")]
 async fn a_branch_that_was_reset_says_so_instead_of_that_nothing_is_new() {
     let mut app = reader_asking_what_is_new();
     // The head now is under the commit that was read, so the compare starts at it.
@@ -241,6 +270,10 @@ async fn a_branch_that_was_reset_says_so_instead_of_that_nothing_is_new() {
         "{text}"
     );
     assert!(!text.contains("Nothing new"), "{text}");
+    // What came after is gone and is not shown, so this is not reading the head.
+    assert_eq!(read_head(&app), Some(&oid("aaa111")));
+    press(&mut app, KeyCode::Char('w'));
+    assert_eq!(read_head(&app), Some(&oid("bbb222")), "the whole diff is");
 }
 
 fn kept(app: &App) -> Vec<&str> {
