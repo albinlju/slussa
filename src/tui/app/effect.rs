@@ -47,6 +47,10 @@ pub enum Effect {
     RunAgentReview {
         pr_id: PrId,
     },
+    /// Stop the review that is running, which the reader has said yes to.
+    StopAgentReview {
+        pr_id: PrId,
+    },
     /// Read the log of a build the reader opened.
     LoadBuildLog {
         pr_id: PrId,

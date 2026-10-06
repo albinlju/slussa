@@ -58,6 +58,8 @@ pub struct Store {
     pub proposals: Proposals,
     /// The command that reviews a PR when asked to; empty where there is none.
     pub agent_review: Vec<String>,
+    /// Whether leaving is being asked about, or waited for.
+    pub quit: super::quit::QuitGate,
     /// A file with the instructions the reader wants an asked-for review to follow,
     /// instead of the built-in ones.
     pub agent_review_instructions: Option<std::path::PathBuf>,
@@ -119,6 +121,7 @@ impl Store {
             seen: Seen::new(),
             proposals: Proposals::default(),
             agent_review: Vec::new(),
+            quit: super::quit::QuitGate::default(),
             agent_review_instructions: None,
             requested: None,
             cache: Cache::default(),

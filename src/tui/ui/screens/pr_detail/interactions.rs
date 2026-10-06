@@ -165,6 +165,9 @@ impl PrDetailScreen {
                 self.overlay = None;
                 let command = match accepted? {
                     ConfirmKind::AgentReview => return Some(Effect::RunAgentReview { pr_id }),
+                    ConfirmKind::StopAgentReview => {
+                        return Some(Effect::StopAgentReview { pr_id });
+                    }
                     ConfirmKind::Decline => Command::Decline,
                     ConfirmKind::Reopen => Command::Reopen,
                     ConfirmKind::DiscardReview => Command::AbandonReview,
@@ -412,6 +415,15 @@ impl PrDetailScreen {
                 return None;
             }
             PrAction::OpenComment => return self.open_comment(pr_id, ctx),
+            PrAction::OpenAgentReview if self.view(ctx).agent_reviewing() => {
+                // The same key that asked for it stops it, after asking: minutes of
+                // work are lost, and what it was going to say is not kept.
+                let preview = "What it has found so far is not kept.\n\
+                               Leaving the PR does not stop it; quitting slussa does."
+                    .to_owned();
+                self.ask(ConfirmDialog::new(ConfirmKind::StopAgentReview).with_preview(preview));
+                return None;
+            }
             PrAction::OpenAgentReview => {
                 let command = ctx.store.agent_review.join(" ");
                 let instructions = ctx

@@ -39,6 +39,9 @@ struct Sources {
     instructions: Option<PathBuf>,
 }
 
+/// How long leaving waits for the agent commands to end.
+const STOP_WAIT: std::time::Duration = std::time::Duration::from_secs(2);
+
 /// The files where a repository writes down its own rules.
 const RULES_FILES: &[&str] = &["AGENTS.md", "CLAUDE.md"];
 
@@ -112,8 +115,14 @@ impl App {
         // The read is registered under its key, and `apply_read` ends it.
         drop(ticket);
         let provider = self.provider.clone();
+        let cancel = agent::Cancel::default();
+        self.agent_reviews.insert(pr_id, cancel.clone());
         self.spawn_fetch(
-            move || review(&provider, pr_id, &subject, &command, &place, &sources),
+            move || {
+                review(
+                    &provider, pr_id, &subject, &command, &place, &sources, &cancel,
+                )
+            },
             move |returned| {
                 TaskResult::Read(Read::AgentReview(
                     pr_id,
@@ -123,10 +132,36 @@ impl App {
         );
     }
 
+    /// Stop the review of the PR that is running; what it was going to say is not
+    /// kept. The result that comes back says it was stopped.
+    pub(super) fn stop_agent_review(&self, pr_id: PrId) {
+        if let Some(cancel) = self.agent_reviews.get(&pr_id) {
+            cancel.cancel();
+        }
+    }
+
+    /// Leaving: stop every review that is running, and wait a moment for their
+    /// processes to end, so that none goes on with nobody to read it.
+    pub(super) fn stop_agent_reviews(&self) {
+        for cancel in self.agent_reviews.values() {
+            cancel.cancel();
+        }
+        if !self.agent_reviews.is_empty() && !agent::wait_until_stopped(STOP_WAIT) {
+            tracing::warn!("an agent command was still running when slussa left");
+        }
+    }
+
     /// An asked-for review is over: its proposals are read from the file, or its
     /// failure is the PR's error.
     pub(super) fn agent_review_done(&mut self, pr_id: PrId, result: Result<Outcome, Failure>) {
+        self.agent_reviews.remove(&pr_id);
         match result {
+            // What the reader asked for is not an error on the PR.
+            Err(Failure::Agent(AgentError::Cancelled { .. })) => {
+                self.state.store.notice = Some(Notice::info(format!(
+                    "PR #{pr_id} · the review was stopped"
+                )));
+            }
             Ok(outcome) => {
                 tracing::info!(
                     "agent review: pr={pr_id} added={} duplicates={} skipped={} cut={}",
@@ -204,6 +239,7 @@ fn review(
     command: &[String],
     (root, scope): &(PathBuf, String),
     sources: &Sources,
+    cancel: &agent::Cancel,
 ) -> Result<Outcome, Failure> {
     let (text, revision) = provider.fetch_diff_text(pr_id)?;
     // The agent is given the diff of this commit, so what it proposes is of it,
@@ -226,7 +262,7 @@ fn review(
         rules: &rules,
         instructions: instructions.as_deref(),
     });
-    let answer = agent::run(command, &prompt.text, agent::TIMEOUT)?;
+    let answer = agent::run(command, &prompt.text, agent::TIMEOUT, cancel)?;
     let json = agent::find_json(&answer).ok_or_else(|| AgentError::NoJson {
         program: agent.clone(),
     })?;

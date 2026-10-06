@@ -437,15 +437,16 @@ back on refresh.
   names the command and what it is given and asks first, each time. slussa fixes
   `head` to the commit whose diff the agent was given and drops comments on lines
   that are not in it. It runs off the UI thread (`spawn_fetch`), one at a time per
-  PR, with a 10 minute deadline, and a failure is the PR's error. **Missing:** the
+  PR, with a 10 minute deadline, and a failure is the PR's error. `A` while it runs stops it (after asking), and quitting
+  asks first and waits, with a spinner, for the agent to stop; only the command's own
+  process is ended, not anything it started. **Missing:** the
   kind is only a word at the start of the body and not a field the diff can show or
   filter on; no severity or evidence; the diff is cut at 150 000 bytes (the issues at
   8 000 and a rules file at 20 000, and the agent is told); the existing comments and
   the CI result are not given, so a review can repeat what a reviewer said; only the
   top of the repository is looked in for rules, and no `CONTRIBUTING.md`; the command
   cannot be given the files of the PR, which is *Check out the PR locally*; reviewing
-  only what is new since the reader looked; cancelling a review that runs (it ends at
-  the deadline); a command that is not installed is found out when it runs. **Not
+  only what is new since the reader looked; a command that is not installed is found out when it runs. **Not
   tried against** a real agent with the new prompt: the first real run was with the
   first, thinner one.
 - [ ] **Copy additional references** — SHA / branch / permalink to a line.

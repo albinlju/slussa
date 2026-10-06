@@ -154,7 +154,7 @@ Nothing depends on a skill being installed. If you want a different review,
 `agent_review_instructions` names a file that replaces the instructions (a sentence may
 send the agent to a skill of yours, but nothing needs one); what slussa gives the agent
 and the form of its answer stay as they are. A dialog names the command and what it is
-given and asks first, every time, since the text leaves slussa. The review runs in
+given and asks first, every time, since the text leaves slussa. `A` again while it runs stops it (after asking), and quitting slussa while an agent is at work asks first and then waits, with a spinner, for the agent to stop, so that no command is left running with nobody to read it. The review runs in
 the background (the footer shows it) and a notice says how many comments came; a
 comment on a line that is not in the diff is dropped and counted. slussa sets
 `head` itself, to the commit whose diff the agent was given, so what it proposes

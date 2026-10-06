@@ -4,10 +4,7 @@ use super::{Binding, Doc, Label, Mods, Needs, Offer, Place, offered, offered_on_
 use crate::{
     domain::{capabilities::Feature, pr::PrStatus},
     tui::{
-        app::{
-            effect::{Effect, LinkAction},
-            store::{FetchKey, PrResource},
-        },
+        app::effect::{Effect, LinkAction},
         ui::{
             action::{Action, PrAction, TimelineAction},
             screens::pr_detail::{DetailView, tabs::overview::offers_filter},
@@ -363,24 +360,25 @@ pub(in crate::tui::ui::screens::pr_detail) static AGENT_REVIEW: Binding = Bindin
         text: "ask an agent to review the PR: its findings become proposals (asks first)",
     }),
     needs: Needs::Feature(Feature::AgentReview),
-    label: Label::Fixed("A: agent review"),
+    label: Label::Of(|view| {
+        if view.agent_reviewing() {
+            "A: stop review".to_owned()
+        } else {
+            "A: agent review".to_owned()
+        }
+    }),
     offer: |view| {
         if view.store.agent_review.is_empty() {
             return Offer::Hidden;
         }
-        match view.pr.status {
-            PrStatus::Open(_) => {}
-            PrStatus::Merged => return Offer::Blocked("merged"),
-            PrStatus::Declined => return Offer::Blocked("declined"),
+        // One that is running can be stopped, whatever has happened to the PR.
+        if view.agent_reviewing() {
+            return offered(view, PrAction::OpenAgentReview);
         }
-        let running = view
-            .store
-            .fetches
-            .contains(&FetchKey::Pr(PrResource::AgentReview, view.pr_id));
-        if running {
-            Offer::Blocked("running")
-        } else {
-            offered(view, PrAction::OpenAgentReview)
+        match view.pr.status {
+            PrStatus::Open(_) => offered(view, PrAction::OpenAgentReview),
+            PrStatus::Merged => Offer::Blocked("merged"),
+            PrStatus::Declined => Offer::Blocked("declined"),
         }
     },
 };

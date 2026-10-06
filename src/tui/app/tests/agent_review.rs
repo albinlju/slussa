@@ -68,8 +68,8 @@ async fn a_asks_what_it_will_run_and_enter_runs_it() {
     assert!(running(&app));
     let text = screen_text(&mut app);
     assert!(
-        text.contains("A: agent review (running)"),
-        "a second one is not offered while it runs"
+        text.contains("A: stop review"),
+        "while it runs the key stops it, and does not start a second"
     );
     // A spinner that moves, and what is going on, so the wait is seen to be one.
     assert!(text.contains("agent reviewing…"), "{text}");
@@ -125,4 +125,39 @@ async fn a_provider_that_cannot_give_the_diff_as_text_has_no_key() {
     assert!(!screen_text(&mut app).contains("A: agent review"));
     press(&mut app, KeyCode::Char('A'));
     assert!(!screen_text(&mut app).contains("Ask an agent"));
+}
+
+#[tokio::test(flavor = "current_thread")]
+async fn a_while_it_runs_asks_whether_to_stop_it_and_the_answer_is_no_unless_chosen() {
+    let dir = TempDir::new("agent-key");
+    let mut app = app_with_agent(&dir);
+    press(&mut app, KeyCode::Char('A'));
+    press(&mut app, KeyCode::Enter);
+    assert!(running(&app));
+
+    press(&mut app, KeyCode::Char('A'));
+    let text = screen_text(&mut app);
+    assert!(
+        text.contains("Stop the agent's review of this PR?"),
+        "{text}"
+    );
+    assert!(text.contains("is not kept"), "it says what is lost");
+    assert!(
+        text.contains("quitting slussa does"),
+        "and what leaving does"
+    );
+    // Enter on what is chosen from the start, which is to keep waiting.
+    press(&mut app, KeyCode::Enter);
+    assert!(running(&app), "nothing was stopped");
+    assert!(!app.state.ui.detail.modal_open());
+
+    // Chosen: stopped.
+    press(&mut app, KeyCode::Char('A'));
+    press(&mut app, KeyCode::Left);
+    press(&mut app, KeyCode::Enter);
+    let cancelled = app
+        .agent_reviews
+        .get(&PrId(42))
+        .is_some_and(|cancel| format!("{cancel:?}").contains("true"));
+    assert!(cancelled, "the running review was asked to stop");
 }

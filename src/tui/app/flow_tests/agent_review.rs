@@ -296,3 +296,47 @@ async fn an_issue_that_cannot_be_read_is_said_so_and_the_review_goes_on() {
     );
     assert!(prompt.exists(), "the agent was run without it");
 }
+
+#[tokio::test]
+async fn a_review_that_is_stopped_ends_its_process_and_is_a_notice_and_not_an_error() {
+    let dir = TempDir::new("agent-review");
+    let _gh = fake_gh().install();
+    let mut app = app_asking("sleep 30", &dir);
+    app.apply(Action::Effect(Effect::RunAgentReview { pr_id: PrId(42) }));
+    let started = std::time::Instant::now();
+    app.apply(Action::Effect(Effect::StopAgentReview { pr_id: PrId(42) }));
+    settle(&mut app).await;
+    assert!(
+        started.elapsed() < Duration::from_secs(10),
+        "stopped, not waited for"
+    );
+    assert!(
+        notice(&app).contains("the review was stopped"),
+        "{}",
+        notice(&app)
+    );
+    assert!(
+        app.state.store.errors.is_empty(),
+        "stopping is not an error"
+    );
+    assert!(app.state.store.proposals.for_pr(PrId(42)).is_none());
+    assert!(app.agent_reviews.is_empty());
+    assert!(crate::agent::wait_until_stopped(Duration::from_secs(2)));
+}
+
+#[tokio::test]
+async fn leaving_stops_the_review_that_is_running_and_waits_for_its_process() {
+    let dir = TempDir::new("agent-review");
+    let _gh = fake_gh().install();
+    let mut app = app_asking("sleep 30", &dir);
+    app.apply(Action::Effect(Effect::RunAgentReview { pr_id: PrId(42) }));
+    let started = std::time::Instant::now();
+    app.stop_agent_reviews();
+    settle(&mut app).await;
+    assert!(started.elapsed() < Duration::from_secs(10));
+    assert!(
+        crate::agent::wait_until_stopped(Duration::from_secs(2)),
+        "no process is left running"
+    );
+    assert!(app.state.store.proposals.for_pr(PrId(42)).is_none());
+}

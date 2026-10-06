@@ -41,6 +41,8 @@ pub struct App {
     /// Where the repository's rules files are, for an asked-for review; none in a
     /// test.
     pub(super) review_root: Option<std::path::PathBuf>,
+    /// How to stop the review of each PR that is running.
+    pub(super) agent_reviews: std::collections::HashMap<PrId, crate::agent::Cancel>,
     /// A PR to open as soon as it is read, named when slussa was started.
     pub(super) start_on: Option<PrId>,
     pub state: AppState,
@@ -70,6 +72,7 @@ impl App {
             seen_dirty: false,
             proposals_source: None,
             review_root: None,
+            agent_reviews: std::collections::HashMap::new(),
             start_on: None,
             state: AppState::new(store::Store::new(user, provider.capabilities())),
             provider,
@@ -87,6 +90,8 @@ impl App {
 
     pub async fn run(mut self, terminal: &mut DefaultTerminal) -> std::io::Result<()> {
         let result = self.event_loop(terminal).await;
+        // However the loop ended: a review that is running has nobody to read it.
+        self.stop_agent_reviews();
         // Leaving on a terminal error must not lose text typed since the last save.
         if self.drafts_dirty {
             self.save_drafts();
@@ -110,6 +115,7 @@ impl App {
         loop {
             let animating = self.state.store.link_pending
                 || self.state.is_loading()
+                || matches!(self.state.store.quit, super::quit::QuitGate::Waiting { .. })
                 || self
                     .state
                     .store
@@ -117,7 +123,13 @@ impl App {
                     .as_ref()
                     .is_some_and(store::Notice::visible);
             tokio::select! {
-                () = time::sleep(SPINNER_INTERVAL), if animating => self.draw(terminal)?,
+                () = time::sleep(SPINNER_INTERVAL), if animating => {
+                    // Waiting for the agents to stop before closing: done when they have.
+                    if self.waiting_is_over() {
+                        return Ok(());
+                    }
+                    self.draw(terminal)?;
+                }
                 _ = refresh.tick() => {
                     self.tick_refresh();
                     self.draw(terminal)?;
@@ -152,6 +164,10 @@ impl App {
     /// Apply input before translating the next key; commands must target the
     /// selection/dialog state produced by all preceding input.
     pub(super) fn handle_key(&mut self, key: KeyEvent) -> Next {
+        // The question about leaving takes the keys while it is asked.
+        if let Some(next) = self.quit_key(key) {
+            return next;
+        }
         match key_to_action(&self.state, key) {
             Some(action) => self.apply(action),
             None => Next::Continue,
@@ -204,13 +220,8 @@ impl App {
         match effect {
             // Quitting saves the drafts first, and a failed save keeps slussa
             // open with the reason in the footer: leaving would lose them.
-            Effect::Quit => {
-                return if self.save_drafts() {
-                    Next::Quit
-                } else {
-                    Next::Continue
-                };
-            }
+            // Asks first when an agent is reviewing a PR; see `quit`.
+            Effect::Quit => return self.quit_or_ask(),
             Effect::Navigate(screen) => self.state.screen = screen,
             Effect::Refresh => self.refresh_actions(),
             Effect::OpenPr(id) => self.open_named_pr(id),
@@ -220,6 +231,7 @@ impl App {
                 self.handle_proposal(pr_id, index, how);
             }
             Effect::RunAgentReview { pr_id } => self.spawn_agent_review(pr_id),
+            Effect::StopAgentReview { pr_id } => self.stop_agent_review(pr_id),
             Effect::LoadBuildLog { pr_id, job } => {
                 self.ensure_loaded(FetchKey::Pr(PrResource::BuildLog(job), pr_id));
             }

@@ -16,7 +16,7 @@ connected provider does not support, so it can show fewer keys than this page.
 | `^d` / `^u` | half a page |
 | `o` / `y` | open the PR in the browser / copy its link |
 | `F` | refresh |
-| `q` | quit |
+| `q` | quit; while an agent is reviewing a PR it asks first, since quitting stops the review and loses what it has found, and after a yes it waits with a spinner for the agent to stop before slussa closes |
 
 The search also takes filters, written `key:value` among the words and combined with them: `author:name`, `review:approved` (also `changes`, `requested`, `none`) and `ci:failed` (also `pending`, `passing`), `merge:conflicts` for the PRs that cannot be merged for a conflict and `merge:clean` for those GitHub says have none (GitHub only; it says nothing of checks or reviews, and a PR whose conflict is not computed yet is in neither). A value can be shortened as long as it is the only one that begins so (`ci:f`), and a filter whose value is not complete yet leaves the list as it is. A word with any other key before its colon is searched for as text.
 
@@ -38,7 +38,7 @@ The search also takes filters, written `key:value` among the words and combined 
 | `v` | start or finish a batched review; `V` discards it |
 | `m` | merge, tied to the commit you were shown like `a`; the dialog lists what blocks it. On GitHub, while the PR waits on checks or reviews, `a` in the dialog makes `enter` merge it by itself when ready, and turns that off again. On GitHub, `d` in the dialog marks the PR's branch for deletion once it is merged (only a branch of the same repository, never the one merged into); if the branch cannot be deleted the merge still stands and a notice says so |
 | `x` | close or decline the PR, or reopen a declined one |
-| `A` | ask the configured agent to review the PR (GitHub; an open PR; claude -p unless agent_review in the config says otherwise). A dialog names the command and what it is given (the title and description, the issues the PR closes, the repository's rules and the diff) and asks first. What it finds becomes proposals in the Diff tab, and nothing is posted. The key is dimmed while a review runs |
+| `A` | ask the configured agent to review the PR (GitHub; an open PR; claude -p unless agent_review in the config says otherwise). A dialog names the command and what it is given (the title and description, the issues the PR closes, the repository's rules and the diff) and asks first. What it finds becomes proposals in the Diff tab, and nothing is posted. While a review runs the key stops it instead, after asking: what it has found so far is not kept, and leaving the PR does not stop it |
 | `b` | in the Builds tab, run the failed builds again; offered when one has failed or was cancelled, and dimmed with the reason on a merged or declined PR (GitHub Actions) |
 | `p` | ask those who asked for changes to review again (GitHub); named in the footer (`p: ask alice again`), hidden when nobody asked for changes, dimmed with the reason on a merged or declined PR |
 | `i` | in the Overview, open the issue the PR closes in the browser (GitHub); the footer names it (`i: open #12`) and shows nothing when there is none. When the PR closes several, `i` asks which: `j`/`k` and `enter` in the picker, which names the repository of an issue in another one |
@@ -51,7 +51,7 @@ The search also takes filters, written `key:value` among the words and combined 
 | `u` / `U` | in the Overview, go to the next / previous review thread that is not resolved, round from the last to the first; the footer says how many there are (`u: unresolved (3)`) |
 | `o` / `y` | open the PR in the browser / copy its link |
 | `F` | refresh |
-| `q` | quit |
+| `q` | quit; while an agent is reviewing a PR it asks first, since quitting stops the review and loses what it has found, and after a yes it waits with a spinner for the agent to stop before slussa closes |
 
 `a`, `v`, `m`, `p` and `x` work from both the Description and the Overview tab. In the
 diff, the arrow keys also move between the file tree and the code. A key that the

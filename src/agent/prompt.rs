@@ -1,29 +1,11 @@
-//! Asking an agent for a review: the text it is given, running the configured
-//! command, and finding the answer in what it printed. What it proposes is read
-//! by `domain::proposal_document` and kept for the reader; nothing is posted.
-//!
-//! The command runs in slussa's working directory with the text on its standard
-//! input, off the UI thread and with a deadline. What it is given is the PR's
-//! title, description and diff, which another party wrote: the text tells the
-//! agent to treat all of it as data, and what the agent answers is only ever a
-//! proposal the reader may discard.
+//! What the agent is told: the instructions, the form of the answer, and what the
+//! PR is made of, and finding the answer in what it printed.
 
 use crate::domain::pr::IssueText;
-use std::{
-    fmt::Write as _,
-    io::{Read, Write},
-    process::{Command, Stdio},
-    time::{Duration, Instant},
-};
-
-/// How long an agent may take. A review of a large PR is minutes, not seconds.
-pub const TIMEOUT: Duration = Duration::from_mins(10);
+use std::fmt::Write as _;
 
 /// How much of the diff the agent is given; the rest is said to be left out.
 const MAX_DIFF_BYTES: usize = 150_000;
-
-/// How much of its answer is read, so that a runaway command cannot fill memory.
-const MAX_ANSWER_BYTES: u64 = 4 * 1024 * 1024;
 
 /// How much of one issue, and of one of the repository's rules files, the agent
 /// is given; the rest is said to be left out.
@@ -166,107 +148,6 @@ pub fn find_json(output: &str) -> Option<&str> {
     let start = output.find('{')?;
     let end = output.rfind('}')?;
     output.get(start..=end)
-}
-
-#[derive(Debug, thiserror::Error)]
-pub enum AgentError {
-    #[error("the command is empty; set `agent_review` in the config")]
-    NoCommand,
-    #[error("could not start `{program}`: {reason}")]
-    NotStarted { program: String, reason: String },
-    #[error("`{program}` did not answer within {} minutes", .after.as_secs() / 60)]
-    TimedOut { program: String, after: Duration },
-    #[error("`{program}` failed{}{}", exit(*.code), said(.stderr))]
-    Failed {
-        program: String,
-        code: Option<i32>,
-        stderr: String,
-    },
-    #[error("`{program}` answered with text that is not UTF-8")]
-    NotText { program: String },
-    #[error("there is no JSON in what `{program}` answered")]
-    NoJson { program: String },
-    #[error("what `{program}` answered cannot be used: {reason}")]
-    Unusable { program: String, reason: String },
-}
-
-fn exit(code: Option<i32>) -> String {
-    code.map_or_else(String::new, |code| format!(" (exit {code})"))
-}
-
-fn said(stderr: &str) -> String {
-    let line = stderr.lines().rev().find(|line| !line.trim().is_empty());
-    line.map_or_else(String::new, |line| {
-        let shown: String = line.chars().take(200).collect();
-        format!(": {shown}")
-    })
-}
-
-/// Run `command` with `input` on its standard input and return what it printed.
-pub fn run(command: &[String], input: &str, timeout: Duration) -> Result<String, AgentError> {
-    let (program, args) = command.split_first().ok_or(AgentError::NoCommand)?;
-    let mut child = Command::new(program)
-        .args(args)
-        .stdin(Stdio::piped())
-        .stdout(Stdio::piped())
-        .stderr(Stdio::piped())
-        .spawn()
-        .map_err(|e| AgentError::NotStarted {
-            program: program.clone(),
-            reason: e.to_string(),
-        })?;
-    let (Some(mut stdin), Some(stdout), Some(stderr)) =
-        (child.stdin.take(), child.stdout.take(), child.stderr.take())
-    else {
-        let _ = child.kill();
-        return Err(AgentError::NotStarted {
-            program: program.clone(),
-            reason: "its input or output was not available".into(),
-        });
-    };
-    let input = input.as_bytes().to_vec();
-    // A command that stops reading its input closes the pipe; that is not an error here.
-    let writer = std::thread::spawn(move || stdin.write_all(&input));
-    let out = reader(stdout);
-    let err = reader(stderr);
-    let started = Instant::now();
-    let status = loop {
-        match child.try_wait() {
-            Ok(Some(status)) => break status,
-            Ok(None) if started.elapsed() < timeout => {
-                std::thread::sleep(Duration::from_millis(20));
-            }
-            Ok(None) | Err(_) => {
-                let _ = child.kill();
-                let _ = child.wait();
-                return Err(AgentError::TimedOut {
-                    program: program.clone(),
-                    after: timeout,
-                });
-            }
-        }
-    };
-    let _ = writer.join();
-    let stdout = out.join().unwrap_or_default();
-    let stderr = String::from_utf8_lossy(&err.join().unwrap_or_default()).into_owned();
-    if !status.success() {
-        return Err(AgentError::Failed {
-            program: program.clone(),
-            code: status.code(),
-            stderr,
-        });
-    }
-    String::from_utf8(stdout).map_err(|_not_utf8| AgentError::NotText {
-        program: program.clone(),
-    })
-}
-
-fn reader(pipe: impl Read + Send + 'static) -> std::thread::JoinHandle<Vec<u8>> {
-    std::thread::spawn(move || {
-        let mut bytes = Vec::new();
-        let _ = pipe.take(MAX_ANSWER_BYTES).read_to_end(&mut bytes);
-        bytes
-    })
 }
 
 #[cfg(test)]
@@ -418,73 +299,5 @@ mod tests {
         );
         assert_eq!(find_json("nothing here"), None);
         assert_eq!(find_json("} backwards {"), None);
-    }
-
-    #[cfg(unix)]
-    fn sh(script: &str) -> Vec<String> {
-        vec!["sh".into(), "-c".into(), script.into()]
-    }
-
-    #[cfg(unix)]
-    #[test]
-    fn a_command_is_given_the_text_and_what_it_prints_comes_back() {
-        let answer = run(&sh("cat"), "the prompt", Duration::from_secs(5)).unwrap();
-        assert_eq!(answer, "the prompt");
-        // A command that does not read its input is not an error.
-        let answer = run(
-            &sh("echo ok"),
-            &"x".repeat(1_000_000),
-            Duration::from_secs(5),
-        )
-        .unwrap();
-        assert_eq!(answer.trim(), "ok");
-    }
-
-    #[cfg(unix)]
-    #[test]
-    fn a_command_that_fails_is_told_with_what_it_said_last() {
-        let error = run(
-            &sh("echo first >&2; echo it went wrong >&2; exit 3"),
-            "",
-            Duration::from_secs(5),
-        )
-        .unwrap_err();
-        assert_eq!(error.to_string(), "`sh` failed (exit 3): it went wrong");
-    }
-
-    #[cfg(unix)]
-    #[test]
-    fn a_command_that_takes_too_long_is_stopped() {
-        let started = Instant::now();
-        let error = run(&sh("sleep 5"), "", Duration::from_millis(60)).unwrap_err();
-        assert!(matches!(error, AgentError::TimedOut { .. }), "{error}");
-        assert!(started.elapsed() < Duration::from_secs(2));
-    }
-
-    #[test]
-    fn a_command_that_is_missing_or_empty_is_said_so() {
-        let error = run(
-            &["no-such-agent-program".into()],
-            "",
-            Duration::from_secs(1),
-        )
-        .unwrap_err();
-        assert!(
-            error
-                .to_string()
-                .contains("could not start `no-such-agent-program`"),
-            "{error}"
-        );
-        assert!(matches!(
-            run(&[], "", Duration::from_secs(1)),
-            Err(AgentError::NoCommand)
-        ));
-    }
-
-    #[cfg(unix)]
-    #[test]
-    fn an_answer_that_is_not_text_is_refused() {
-        let error = run(&sh("printf '\\377\\376'"), "", Duration::from_secs(5)).unwrap_err();
-        assert!(matches!(error, AgentError::NotText { .. }), "{error}");
     }
 }
