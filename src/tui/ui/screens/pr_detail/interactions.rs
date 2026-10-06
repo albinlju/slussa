@@ -327,8 +327,18 @@ impl PrDetailScreen {
     /// `w`: show what is new since the reader looked, in the Diff tab, or go
     /// back to the whole diff.
     fn toggle_since(&mut self, pr_id: PrId, ctx: &DetailContext<'_>) -> Option<Effect> {
-        if self.since.take().is_some() {
-            return None;
+        if let Some(since) = self.since.take() {
+            // A branch that was rewritten or reset is read in the whole diff, and
+            // going there from what said so is arriving at it. Leaving any other
+            // is only closing it.
+            return since
+                .sends_to_the_whole_diff(ctx.data)
+                .then_some(Effect::Navigate(
+                    crate::tui::app::navigation::Screen::Detail {
+                        pr_id,
+                        tab: super::tabs::DetailTab::Diff,
+                    },
+                ));
         }
         let range = self.view(ctx).moved_since_read()?;
         self.since = Some(super::since::SinceView::new(range.clone()));

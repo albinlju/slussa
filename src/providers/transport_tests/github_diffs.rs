@@ -11,6 +11,11 @@ const DIFF: &str = "diff --git a/src/a.rs b/src/a.rs\n\
 -old\n\
 +new\n";
 
+/// GitHub's answer about the two commits: the one they share.
+fn shared(sha: &str) -> String {
+    format!(r#"{{"status":"ahead","merge_base_commit":{{"sha":"{sha}"}},"commits":[]}}"#)
+}
+
 fn range() -> DiffRange {
     DiffRange {
         base: CommitOid::parse("aaa111").unwrap(),
@@ -20,7 +25,10 @@ fn range() -> DiffRange {
 
 #[test]
 fn what_is_new_is_a_compare_of_the_two_commits_read_as_a_diff() {
-    let installed = FakeGh::new().on("compare/aaa111...bbb222", DIFF).install();
+    let installed = FakeGh::new()
+        .on("page=2", &shared("aaa111"))
+        .on("compare/aaa111...bbb222", DIFF)
+        .install();
     let compared = Provider::github_for_test()
         .fetch_range_diff(&range(), None)
         .unwrap();
@@ -57,6 +65,7 @@ fn the_files_the_pr_touched_at_the_commit_that_was_read_are_listed_with_what_is_
         {"filename": "src/new_name.rs", "previous_filename": "src/old_name.rs"}
     ]}"#;
     let installed = FakeGh::new()
+        .on("page=2", &shared("aaa111"))
         .on("compare/0ba5e0...aaa111", before)
         .on("compare/aaa111...bbb222", DIFF)
         .install();
@@ -67,7 +76,7 @@ fn the_files_the_pr_touched_at_the_commit_that_was_read_are_listed_with_what_is_
     before.sort();
     assert_eq!(before, ["src/a.rs", "src/new_name.rs", "src/old_name.rs"]);
     assert_eq!(compared.diff.files.len(), 1);
-    assert_eq!(installed.calls().len(), 2);
+    assert_eq!(installed.calls().len(), 3);
 }
 
 #[test]
@@ -76,6 +85,7 @@ fn as_many_files_as_github_lists_at_most_are_not_taken_for_all_of_them() {
         .map(|n| format!(r#"{{"filename": "src/f{n}.rs"}}"#))
         .collect();
     let _installed = FakeGh::new()
+        .on("page=2", &shared("aaa111"))
         .on(
             "compare/0ba5e0...aaa111",
             &format!(r#"{{"files": [{}]}}"#, files.join(",")),
@@ -94,6 +104,7 @@ fn as_many_files_as_github_lists_at_most_are_not_taken_for_all_of_them() {
 #[test]
 fn the_files_that_cannot_be_listed_fail_the_read_instead_of_leaving_some_out() {
     let _installed = FakeGh::new()
+        .on("page=2", &shared("aaa111"))
         .fail("compare/0ba5e0...aaa111", 1, "gh: HTTP 502: Bad Gateway")
         .on("compare/aaa111...bbb222", DIFF)
         .install();
@@ -102,6 +113,43 @@ fn the_files_that_cannot_be_listed_fail_the_read_instead_of_leaving_some_out() {
         matches!(result, Err(FetchError::GhFailed { .. })),
         "{result:?}"
     );
+}
+
+#[test]
+fn the_diff_starts_at_the_commit_the_two_share_which_tells_a_rewritten_branch() {
+    let installed = FakeGh::new()
+        .on("page=2", &shared("ccc333"))
+        .on("compare/aaa111...bbb222", DIFF)
+        .install();
+    let diff = Provider::github_for_test()
+        .fetch_range_diff(&range(), None)
+        .unwrap();
+    assert_eq!(
+        range().moved(&diff.diff),
+        Some(crate::domain::diff::Moved::Rewritten {
+            from: CommitOid::parse("ccc333").unwrap()
+        })
+    );
+    // Asked for past the first page, which is the one that lists the files.
+    let calls = installed.calls();
+    assert!(
+        calls
+            .iter()
+            .any(|call| call.contains("compare/aaa111...bbb222?per_page=1&page=2")),
+        "{calls:?}"
+    );
+}
+
+#[test]
+fn an_answer_about_the_commits_that_cannot_be_read_is_an_error_and_no_diff() {
+    let _installed = FakeGh::new()
+        .on("page=2", "{}")
+        .on("compare/aaa111...bbb222", DIFF)
+        .install();
+    let error = Provider::github_for_test()
+        .fetch_range_diff(&range(), None)
+        .unwrap_err();
+    assert!(matches!(error, FetchError::ParseFailed(_)), "{error:?}");
 }
 
 #[test]

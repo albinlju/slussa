@@ -29,20 +29,34 @@ const COMPARE_FILES: usize = 300;
 
 /// What changed from `range.base` to `range.head`, as GitHub compares them: from
 /// their common ancestor, so after a merge of the target into the branch it holds
-/// what the merge brought too. With `target`, the commit the PR is against, the
-/// files the PR touched at `range.base` are listed too, so that the caller can
-/// tell a file the merge brought from one the PR put back. A base that was
-/// force-pushed away is not there to compare, and GitHub answers 404; that is
-/// told as what it most likely is, with what GitHub said.
+/// what the merge brought too. The diff's base is that ancestor, the commit the
+/// compare really starts from, which says whether the branch moved forward, was
+/// reset or was rewritten (`DiffRange::moved`). With `target`, the commit the PR
+/// is against, the files the PR touched at `range.base` are listed too, so that
+/// the caller can tell a file the merge brought from one the PR put back. A base
+/// that was force-pushed away is not there to compare, and GitHub answers 404;
+/// that is told as what it most likely is, with what GitHub said.
 pub fn fetch_range_diff(
     repo: &GhRepo,
     range: &DiffRange,
     target: Option<&CommitOid>,
 ) -> Result<Compared, FetchError> {
+    #[derive(serde::Deserialize)]
+    struct Commit {
+        sha: String,
+    }
+    #[derive(serde::Deserialize)]
+    struct About {
+        merge_base_commit: Commit,
+    }
     let endpoint = format!(
         "repos/{{owner}}/{{repo}}/compare/{}...{}",
         range.base, range.head
     );
+    // Only the first page of a compare lists the files; a later one holds what
+    // is asked for here and little else.
+    let about = format!("{endpoint}?per_page=1&page=2");
+    let about: About = super::cli::run_gh_json(repo, &["api", &about]).map_err(commit_gone)?;
     let stdout = run_gh(
         repo,
         &[
@@ -57,7 +71,7 @@ pub fn fetch_range_diff(
     let mut diff = unified_diff::parse(&text);
     diff.revision = Some(crate::domain::diff::DiffRevision {
         head: range.head.as_str().into(),
-        base: Some(range.base.as_str().into()),
+        base: Some(about.merge_base_commit.sha),
         commit: true,
     });
     let in_pr_before = match target {

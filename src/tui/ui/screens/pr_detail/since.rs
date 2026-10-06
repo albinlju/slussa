@@ -4,7 +4,10 @@
 //! made on it: its lines are not the PR's.
 
 use crate::{
-    domain::{commit::CommitOid, diff::DiffRange},
+    domain::{
+        commit::CommitOid,
+        diff::{DiffRange, Moved},
+    },
     tui::{
         app::store::{LoadState, PrData},
         ui::{
@@ -49,10 +52,32 @@ impl SinceView {
         &mut self.viewer
     }
 
-    /// The head the reader has on screen once this is open and read.
+    /// How the branch moved over the range, once what is new has been read.
+    fn moved(&self, data: Option<&PrData>) -> Option<Moved> {
+        let diff = data?.range_diffs.get(&self.range)?.loaded()?;
+        self.range.moved(diff)
+    }
+
+    /// The head the reader has read by having this open and read. Only of a
+    /// branch that moved forward: what is shown is then what is new, and all of
+    /// it. Of one that was rewritten or reset it is less than what changed, since
+    /// what was dropped is not in it, so reading it is not reading the head; the
+    /// whole diff is.
     pub fn head_read(&self, data: Option<&PrData>) -> Option<&CommitOid> {
-        data?.range_diffs.get(&self.range)?.loaded()?;
-        Some(&self.range.head)
+        let diff = data?.range_diffs.get(&self.range)?.loaded()?;
+        match self.range.moved(diff) {
+            None | Some(Moved::Forward) => Some(&self.range.head),
+            Some(Moved::Back | Moved::Rewritten { .. }) => None,
+        }
+    }
+
+    /// Whether this told the reader that only the whole diff says what the branch
+    /// is now: leaving it for the whole diff is then arriving at that diff.
+    pub fn sends_to_the_whole_diff(&self, data: Option<&PrData>) -> bool {
+        match self.moved(data) {
+            Some(Moved::Back | Moved::Rewritten { .. }) => true,
+            None | Some(Moved::Forward) => false,
+        }
     }
 }
 
@@ -74,20 +99,17 @@ pub(super) fn render(
         width: banner.width.saturating_sub(1),
         ..banner
     };
-    render_banner(frame, &since.range, banner);
     let state = data.and_then(|data| data.range_diffs.get(&since.range));
+    let moved = state
+        .and_then(LoadState::loaded)
+        .and_then(|diff| since.range.moved(diff));
+    render_banner(frame, &since.range, moved.as_ref(), banner);
     if let Some(LoadState::Loaded(diff)) = state
         && diff.files.is_empty()
     {
         // What the pane drew last is not there to act on any more.
         since.viewer.pane = PaneNav::default();
-        frame.render_widget(
-            widgets::empty_state(
-                "Nothing new in the files of this PR. If the branch was reset to an \
-                 older commit, that is what it looks like too. w: the whole diff.",
-            ),
-            body,
-        );
+        frame.render_widget(widgets::empty_state(nothing_to_show(moved.as_ref())), body);
         return;
     }
     since.viewer.render(
@@ -102,8 +124,51 @@ pub(super) fn render(
     );
 }
 
-fn render_banner(frame: &mut Frame<'_>, range: &DiffRange, area: Rect) {
+/// What the diff below the banner is, and from which commit to which. Only a
+/// branch that moved forward shows what is new and nothing else; one that was
+/// rewritten or reset says so, since the reader decides on what this shows.
+fn banner_text(range: &DiffRange, moved: Option<&Moved>) -> (&'static str, String) {
+    let (base, head) = (range.base.short(), range.head.short());
+    match moved {
+        None | Some(Moved::Forward) => ("↻ new since you read it  ", format!("{base} → {head}")),
+        Some(Moved::Back) => (
+            "↻ reset since you read it  ",
+            format!("{base} → back to {head}"),
+        ),
+        Some(Moved::Rewritten { from }) => (
+            "↻ rewritten since you read it  ",
+            format!(
+                "from {}, not {base}: also what you had read, and not what was dropped; \
+                 read the whole diff",
+                from.short()
+            ),
+        ),
+    }
+}
+
+/// What stands in place of a diff with no files.
+const fn nothing_to_show(moved: Option<&Moved>) -> &'static str {
+    match moved {
+        None => {
+            "Nothing new in the files of this PR. If the branch was reset to an \
+             older commit, that is what it looks like too. w: the whole diff."
+        }
+        Some(Moved::Forward) => "Nothing new in the files of this PR. w: the whole diff.",
+        Some(Moved::Back) => {
+            "The branch was reset to a commit older than the one you read: nothing is \
+             new, and what came after it is gone from the branch. w: the whole diff, \
+             which is what there is to read."
+        }
+        Some(Moved::Rewritten { .. }) => {
+            "Nothing in the files of this PR since the commit the two share. \
+             w: the whole diff."
+        }
+    }
+}
+
+fn render_banner(frame: &mut Frame<'_>, range: &DiffRange, moved: Option<&Moved>, area: Rect) {
     let theme = theme::current();
+    let (what, commits) = banner_text(range, moved);
     let block = Block::default()
         .borders(Borders::BOTTOM)
         .border_style(Style::default().fg(theme.divider));
@@ -111,15 +176,12 @@ fn render_banner(frame: &mut Frame<'_>, range: &DiffRange, area: Rect) {
     frame.render_widget(block, area);
     let left = vec![
         Span::styled(
-            "↻ new since you read it  ",
+            what,
             Style::default()
                 .fg(theme.warning)
                 .add_modifier(Modifier::BOLD),
         ),
-        Span::styled(
-            format!("{} → {}", range.base.short(), range.head.short()),
-            Style::default().fg(theme.muted),
-        ),
+        Span::styled(commits, Style::default().fg(theme.muted)),
     ];
     let hint = if inner.width < 60 {
         "esc: whole"
