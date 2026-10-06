@@ -28,12 +28,17 @@ than a web page. slussa should be the missing piece in a terminal workflow next 
 an editor, a git client and a coding agent — never a competitor to the provider's
 web UI.
 
-**Simplicity is the constraint everything else bends to.** slussa has two views —
-the list and the PR — and stays that way. New capability shows up as a better
-default, a column, a marker or a single key inside those two views, not as a new
-screen, a dashboard or a sidebar of widgets. If a feature cannot be explained in
-one sentence and reached in one keypress, it is not ready. When in doubt, leave
-it out.
+**Simple to enter, deep to use.** The way in stays as small as it is: a list,
+and a PR opened from it. That is the part to protect. It does not mean the
+product stays small. What makes someone use a tool every day is that they never
+have to leave it, and that comes from depth kept out of sight, as in the products
+that look simple and are not. slussa has two views — the list and the PR — and
+stays that way. Depth shows up as a better default, a column, a marker, a key that
+appears when it matters, and a way to find the rest without a screen full of it
+(a command palette), never as a new screen, a dashboard or a sidebar of widgets.
+A feature earns its place by one test: *without it, does someone leave for the
+web?* If so it belongs; if not, leave it out. It must be explainable in one
+sentence, and reached with one key or found by name in the palette.
 
 What this rules in (each item says how far it is):
 
@@ -41,12 +46,17 @@ What this rules in (each item says how far it is):
   review requests, failed CI, new activity since last look — with a short reason
   on the row. No separate inbox screen; the plain list is the same view with the
   attention sort turned off.
-- **Merge risk beside the reason** *(not built)*. Whether a merge can be taken
-  back, and how far a mistake reaches, decides how closely a PR is read. slussa
-  shows what the PR declares next to what the changed paths say, so a
-  contradiction is visible.
+- **The whole day in one list** *(not built)*. The PRs of every repository the
+  reader works in, with the same reasons, so that the tool is open all day and
+  not only inside one repository.
+- **Never leave for the web** *(partly built)*. The small things people open a
+  browser for: why a build failed, a checkout, marking a PR ready, a label or a
+  reviewer. Each one that sends someone away makes them doubt the tool.
+- **Reading it well** *(partly built)*. A diff that is hard to read sends people
+  to the web too, and a PR that moves while it is being reviewed needs to say
+  what is new since it was read.
 - **AI review is first-class** *(first version built)*. What an AI reviewer
-  (Copilot, Claude, a team bot) did is marked as AI: `[AI]` on its comments and
+  (a service, an agent, a team bot) did is marked as AI: `[AI]` on its comments and
   commits, a filter for them, and an `AI review` column in the list. Not built:
   the summary in the PR header, whether it commented or committed fixes: that a
   review happened, and against which commit. Running a review from slussa comes
@@ -64,20 +74,29 @@ What this rules in (each item says how far it is):
 
 What this rules out:
 
-- **Feature parity with the web UI.** Authoring, administration and metadata
-  editing are not the job (see *Scope decision* below).
+- **Feature parity with the web UI for its own sake.** A feature is in when
+  without it someone leaves for the web. Authoring and administration nobody
+  opens a PR to do (settings, permissions, projects) are not the job (see
+  *Scope decision* below).
 - **Being a chat.** slussa is deterministic and immediate. It shows state and takes
   actions; it does not host a conversation with a model. The agent does the
   analysis, slussa is where the decision gets made.
 - **Being a dashboard.** No third view, no configurable panes, no widget grid.
-  gh-dash already exists; slussa wins by being the one you do not have to
-  configure or learn.
+  The inbox is one list, across repositories; what a reader sets is how it sorts
+  and filters, not which boxes it has. Defaults come first, so that nothing has to
+  be configured to start.
+- **Judging the PR for the reader.** No rules that flag a change by pattern and no
+  model inside slussa. A line that says nothing is wrong reads as "safe", most of
+  what such rules catch is already in the file list, and slussa is for the
+  decision the reader makes.
 - **Agents deciding.** An agent may read and propose through the CLI; approving
   and merging stay human.
 
-Priority order for anything new: attention signals in the list → AI-review
-integration → act-on-suggestion / merge path → agent handoff → diff ergonomics →
-everything else.
+Priority order for anything new: the whole day in one list and not leaving for the
+web (groups 1 and 3) → reading it well (group 5) → habits (a count for a prompt,
+the next PR) → depth that stays out of sight (group 6) → AI-review integration →
+agent handoff → getting it into more hands (the release gaps), which waits until
+the product is one someone will want → everything else.
 
 All upcoming features follow the [product and interaction principles](ARCHITECTURE.md#product-and-interaction-principles):
 a calm default view, discoverable contextual actions, focused dialogs, consistent
@@ -91,35 +110,36 @@ scope includes how users find and leave the interaction, not only the API action
 Grouped by the priority order in *Positioning*. Within a group, items marked
 *refined* have a settled design; the rest still need one.
 
-### 1. Attention signals in the list
+### 1. The list: the whole day, and what needs you
 
-Still one list, still one PR view. The list just knows what needs the user and
-says so on the row.
+Still one list, still one PR view. The list knows what needs the user, across
+the repositories they work in, and says so on the row.
+
+- [ ] **Every repository, without configuration.** Started outside a repository
+  (or given a list of them in `config.toml`), the list is every PR that needs the
+  reader, with one more column for the repository. GitHub only. This is the
+  largest engineering cost in this roadmap: the session is fixed to one
+  repository (`Provider::GitHub(GhRepo)`), a PR is known by its number alone, and
+  the drafts and the read marks are filed per repository, so a PR needs a
+  reference that names its repository (`PrRef`) wherever a number is used today.
+  The search for "the PRs that need the viewer" was once declined because the
+  search index lags; that has to be weighed again against reading each
+  repository's list. Until then `slussa list --json` and `slussa count` can
+  answer across repositories with none of it.
+- [ ] **Next PR.** After an approval or a merge, one key goes to the next PR
+  that needs the reader, and the footer says where in the queue it is (`3 of 12`).
+- [ ] **Remember the reader's choices.** The sort, the filter and the status
+  survive a restart, so the list opens the way it was left.
+- [ ] **A list that is there at once.** The first page before the rest, then
+  updated in place without the screen jumping; see *The first load is slow*
+  under *Engineering*.
 
 - [ ] **Attention reasons, the rest.** The list is sorted by what needs you,
   with a reason column (the README says how). Still open: a reason for
   mentions (they need the text of the comments), team review requests (GitHub
-  counts people only), opening the PR on the tab its reason points at, and
-  remembering the `s` choice between runs. A reason for new comments was tried
+  counts people only) and opening the PR on the tab its reason points at. A reason for new comments was tried
   and dropped: the `●` before the number already says that something changed, and
   the reason said it a second time, at the cost of a column.
-- [ ] **Merge risk** — how dangerous the merge is, beside why the PR needs
-  you: can it be reverted (a two-way door) or not (a one-way door: a
-  migration, data loss, something sent to users), and how far a mistake
-  reaches. Two sources, shown side by side and never folded into one. The
-  *declared* risk is read from the PR description by a configurable convention
-  (a heading or a first-line marker, as for AI comments). The *floor* comes
-  from path rules in `config.toml` (`one_way = ["migrations/**"]`) matched
-  against the changed files. The declared risk is a claim by the agent that
-  wrote the PR, so a floor that contradicts it is the signal: `declared
-  two-way · touches migrations/`. A marker in the PR header first; nothing is
-  shown when neither source says anything. Path rules cannot see a one-line
-  change that sends an email to 60 000 people, so the floor adds to reading
-  the PR and does not replace it. **Open:** which convention to read (none has
-  settled; see *From "Fixing the PR Bottleneck"* under *Engineering*); whether
-  a one-way door is an attention reason of its own or a marker beside the
-  existing one; and the row, which needs the description and the changed
-  paths, neither of which the list query reads today.
 - [ ] **More search filters.** The search takes `author:`, `review:`, `ci:` and
   `merge:` (`conflicts`, `clean`; the README says how); the status is the `f` picker. Missing: `label:` (the list
   query leaves the labels out, which made a page twice as slow) and `is:agent` (see
@@ -222,8 +242,43 @@ against:
   count and "unchanged since last review" so a human knows when the AI has
   stopped adding value.
 
-### 3. Act on suggestions, then merge
+### 3. Act without leaving: the build, the branch and the small edits
 
+Whatever sends the reader to the web for a minute belongs here. In the order the
+test above ranks them:
+
+- [ ] **Build logs.** The Builds tab lists the checks; a failed one should open to
+  why: the failing step's log, read from the job, scrolled inside the tab (not a
+  screen of its own), with a key to the next error. GitHub Actions first; a check
+  that is not an Action has no log to read. A failed build is the commonest
+  reason to open a browser on an agent's PR.
+- [ ] **Check out the PR locally** and **open the focused file or line in
+  `$EDITOR`** (moved from *Handoff*): preconditions for most handoffs, and
+  useful alone.
+- [ ] **Ready for review / back to draft.** Flipping an agent's draft is part of
+  triage (moved from *Scope decision*).
+- [ ] **Labels and assignees.** Add and remove, next to the reviewers `p` already
+  asks again (moved from *Scope decision* and *Diff ergonomics*).
+- [ ] **Repositories with a merge queue.** slussa merges through the REST endpoint
+  that GitHub's own documentation says does not support merging with a merge
+  queue, and recommends replacing with the asynchronous one (`merge-async`, whose
+  `merge_action` can be `merge_queue`). What the old endpoint does where the queue
+  is required, that page does not say: a refusal ("Changes must be made through
+  the merge queue") is reported, and so is a direct merge that steps past the
+  queue (a community report, not checked here). Both are wrong for slussa: a
+  refusal leaves the reader with an error where the queue is the way, and a
+  direct merge passes a gate the repository asked for. Done when the merge
+  dialog knows the repository uses a queue and says so ("add to the merge queue"
+  in place of "merge"), goes through the asynchronous endpoint, and keeps what the
+  commit-bound merge gives today: check that the new endpoint takes the head
+  (`sha`), otherwise compare it first. **Not verified:** what either endpoint does
+  against a real repository with a queue, and whether it is the repository or the
+  branch that decides; there is nothing like it on Bitbucket Data Center.
+- [ ] **Approve and merge several at once** *(open question)*. For PRs by a bot the
+  reader trusts and does not read, such as dependency updates: one decision for
+  many, each PR keeping the head it was shown. **Open:** whether it belongs. It is
+  a decision on code nobody read, which the rest of slussa is built against; a
+  narrow form (only authors the reader has named) may be acceptable.
 - [ ] **Apply suggestions** *(refined)* — apply a suggested change, and batch
   several into one commit. No provider exposes a clean "apply" API: fetch the
   file → replace the anchored line(s) → commit on the head branch. GitHub-only and
@@ -290,9 +345,6 @@ back on refresh.
   human more to read. When the header says no review has happened, sending
   the PR to an agent that fixes is the shorter path; this stays for the
   repository that has no reviewer in its pipeline.
-- [ ] **Check out PR locally** — precondition for most handoffs; also useful alone.
-- [ ] **Open focused file / line in editor** — `$EDITOR` at the anchored line
-  (PR-level browser opening is implemented).
 - [ ] **Copy additional references** — SHA / branch / permalink to a line.
 
 #### The other direction: an agent calling slussa
@@ -316,6 +368,9 @@ decides.** No new view: these are non-interactive subcommands that print and exi
   never asks for input: it connects with `session::connect` and fails when the
   account is not logged in, instead of going through `cli::connect`, which starts
   the interactive `gh auth login`.
+- [ ] **`slussa count`** — one number for a shell prompt, tmux or a status line:
+  how many PRs need the reader (the attention reasons say which). It prints and
+  exits, with no UI, and it is what makes the tool present without being open.
 - [ ] **`slussa blocked <number>`** — why the PR cannot be merged: the provider's
   reasons from `Mergeability` (`Conflicts` or `Blocked`), plus CI and review
   state, which are separate from it. Exit 0 mergeable, 3 not mergeable, 1 error,
@@ -357,10 +412,19 @@ merge for agents. The JSON is a public contract, so keep it marked experimental
 these commands go through the same provider code but are not planned to be tested
 against it.
 
-### 5. Diff ergonomics
+### 5. Reading it well
 
-Still valuable, but the reviewer reads less of the diff than before, so these
-rank below the decision path.
+Using it every day means reading code in it, and a diff that is hard to read
+sends people to the web. These rank with the rest, not below them: the reader may
+read less of a diff than before, but what they do read has to be good.
+
+- [ ] **Since you read it.** A marker in the header when the branch has moved since
+  the diff that was read (the list's head against the diff's, both already in
+  memory); then a key that shows only what is new, from the head that was read to
+  now (a head that was force-pushed away may not answer); and the builds shown for
+  the head that was read, with a line when they are for another. A merge or a
+  verdict on a moved branch is already refused, and says to read what is new;
+  this is how.
 
 - [ ] **Word-level (intra-line) diff.**
 - [ ] **Expand context** — unfold above/below a hunk (needs a full-file fetch).
@@ -370,11 +434,31 @@ rank below the decision path.
 - [ ] **Binary / image files** — a clear "(binary file)" instead of a broken diff.
 - [ ] **Viewed-files tracking** — local "mark file reviewed", saved per PR.
 - [ ] **Branch ahead / behind base** info.
-- [ ] **Assignees, milestones, projects** (reviewers + labels already shown).
+- [ ] **Milestones and projects** (reviewers and labels already shown; assignees are in group 3).
 
-### 6. Providers and platform
+### 6. Depth that stays out of sight
 
-- [ ] **GitLab MR support** via `glab` (mirrors `gh` well).
+How a product with many features stays calm: the features are there, and the
+surface does not show them until they matter.
+
+- [ ] **A command palette.** One overlay (a dialog, not a view) that lists every
+  action by name, filtered as the reader types; each action keeps its key, and the
+  palette shows it. It is the help made searchable, and what lets the number of
+  actions grow without the footer growing.
+- [ ] **Config** — default filters and status, keybindings, agent commands (moved
+  from *Providers and platform*). Defaults first: nothing has to be set to start.
+- [ ] **Saved searches.** A search that is used every day gets a name and is one
+  key away.
+
+### 7. Providers and platform
+
+- [ ] **GitHub Enterprise Server.** Only `github.com` is recognised as GitHub
+  today; any other host is probed as a Bitbucket Data Center and refused if it is
+  not one. `gh` works with a host (`gh auth login -h`), so most of this is
+  recognising it in preflight, and carrying the host in the repository the calls
+  are told to act on and in the drafts' name. It decides whether a company that
+  runs its own GitHub can try slussa at all.
+- [ ] **GitLab MR support** via `glab` (mirrors `gh` well). Reach more than anything else on this list: a team on GitLab cannot use slussa at all. After groups 1, 3 and 5, since a second provider is also the trigger for the provider trait.
 - [ ] **Windows support** — the browser and clipboard code has Windows paths,
   but CI builds only macOS and Linux and nothing has run them. Either add a
   Windows CI job and release target, or keep it stated as unsupported.
@@ -392,27 +476,38 @@ rank below the decision path.
   been tried in a real fork (what `gh repo view` answers there is read from its
   documentation, not run). **Open:** the wording, and whether the line is a
   notice at start or part of the heading.
-- [ ] **Config** — repos / providers, default filters, keybindings, agent
-  commands.
 - [ ] **Empty / loading / error states** per view (use `LoadState` everywhere).
-- [ ] **Release gaps.** What is not there yet: a Homebrew tap; publishing to
-  crates.io from the release workflow (today `cargo publish` is run by hand
-  from the tag, which needs a token); signing and notarizing the macOS binary
-  (the README gives the `xattr` command); and a check of "Review requested",
-  which has only been seen against scripted `gh` output and needs a second
-  account.
+- [ ] **Publish to crates.io from the release workflow.** Today `cargo publish` is
+  run by hand from the tag, which needs a token on the publisher's machine and
+  publishes whatever the working directory holds (a stray untracked file is
+  packaged, as the dirty-tree check shows). The way to do it without a token is
+  *Trusted Publishing*: crates.io is told which repository, workflow file and
+  (optionally) environment may publish the crate; the job swaps its OIDC identity
+  for a token that is revoked when it ends, so no secret is stored. A job after
+  the release is created, in a protected GitHub environment that needs the
+  maintainer's approval, keeps the one step that cannot be taken back under a human
+  decision; `cargo publish --dry-run` also in the workflow's dry run, so that the
+  packaging is tried without publishing. Setting it up on crates.io (the crate's
+  settings) is done by the maintainer. Not before the attestation step has run on
+  a real release, so that two new things do not meet in one.
+- [ ] **Release gaps.** Deliberately late: getting slussa into more hands comes after
+  it is a product people will want, not before. What is not there yet: a package
+  for a package manager (an own Homebrew tap that the workflow updates, or waiting
+  until the project is known enough for the main Homebrew repository, whose own
+  automation then follows the releases); signing and notarizing the macOS binary
+  (the README gives the `xattr` command); a check of "Review requested", which has
+  only been seen against scripted `gh` output and needs a second account; and, when
+  the time comes, a short demo recording for the README.
 
 ### Scope decision: authoring / management
 
 slussa is review-and-act focused. Authoring and PR *administration* belong in the
-editor, the coding agent or the web UI, and are explicitly out of scope unless
-a decision-path feature needs them:
+editor, the coding agent or the web UI, and are out of scope unless a
+decision-path feature needs them, or readers open a browser for them every day
+(then they are in group 3):
 
 - [ ] **Edit PR title / description** (the description is shown, not editable).
-- [ ] **Edit labels** — add / remove (display + filter is planned).
 - [ ] **Create a PR** — the agent or `gh pr create` does this.
-- [ ] **Draft ↔ Ready** — borderline; revisit if agent-opened drafts become the
-  norm and flipping them is part of triage.
 
 ---
 
@@ -445,8 +540,7 @@ it ahead of the feature that needs it.
   and `exit.rs` for the exit codes; `cli` never imports `tui`. New saved state is
   a file in `local/` (`seen.rs`, which exists for *Unread* and where *Viewed files* would go, `proposals.rs`
   for the agent inbox) and imports `session`, never the reverse. Thread assembly
-  and the risk and findings rules go to `domain/` (`threads`, `risk`,
-  `findings`). `config.rs` becomes `config/` when it gains the agent commands.
+  and the findings rules go to `domain/` (`threads`, `findings`). `config.rs` becomes `config/` when it gains the agent commands.
   Each new module gets `wildcard_enum_match_arm`, as `session` and `local` have,
   and a row in the import rule of `tests/repo_rules.rs`. *Trigger:* the feature
   that needs each.
@@ -582,9 +676,9 @@ below says what it rests on.
   that can be reverted needs little, one that cannot (a migration, data loss,
   something sent to users) is reviewed closely, together with how far a
   mistake reaches. His PRs carry this as a "merge danger" line at the bottom
-  of the description. It is the source of *Merge risk*. What he leaves open is
-  that the agent classifies its own PR, which is why slussa shows a floor from
-  path rules beside it.
+  of the description. Not pursued: it asks for a convention that has not settled,
+  and a marker that says nothing is wrong reads as safe (see *Judging the PR for
+  the reader* under *What this rules out*).
 - **The reviewer commits; comments are the exception.** A reviewing agent that
   comments gives the human more to read, so his fixes the code and comments
   only when unsure. It reads coding standards from a file of its own, kept out

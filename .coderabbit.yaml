@@ -34,7 +34,8 @@ reviews:
         - A change to how the types in `src/domain/review.rs` are serialized
           needs a new draft file version: an unreadable file stops the app.
         - Two views only (the PR list and the PR). Flag a new screen, dashboard
-          or sidebar; new capability is a default, a column, a marker or a key.
+          or sidebar; new capability is a default, a column, a marker, a key or a
+          command-palette entry.
         - Show only what the provider supports: unsupported actions are hidden,
           actions blocked by the PR's state stay visible with a reason.
         - Modules stay under about 500 lines and `mod.rs` composes rather than

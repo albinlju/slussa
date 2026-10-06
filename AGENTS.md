@@ -7,10 +7,11 @@ for AI-generated PRs: triage, check intent, approve or merge.
 ## Non-negotiables
 
 - **Two views only: the PR list and the PR.** New capability appears as a
-  better default, a column, a marker or one key inside those views. Never a new
-  screen, dashboard or sidebar. A feature that cannot be explained in one
-  sentence and reached in one keypress is not ready. Agent-facing subcommands
-  are not views; they print and exit.
+  better default, a column, a marker, a key that shows when it matters or an
+  entry in the command palette (once there is one) inside those views. Never a
+  new screen, dashboard or sidebar. A feature that cannot be explained in one
+  sentence, and reached with one key or found by name in the palette, is not
+  ready. Agent-facing subcommands are not views; they print and exit.
 - **Provider and process calls block and run off the UI thread**, through
   `App::spawn_fetch`. No async HTTP, no ad hoc threads, nothing started from
   rendering or key handling. A headless subcommand has no UI thread and may call
