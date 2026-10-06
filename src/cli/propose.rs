@@ -31,7 +31,7 @@ use crate::{
         proposal_document::{self, Parsed, Source},
     },
     local::{
-        proposals::{Batch, Imported, import},
+        proposals::{Batch, Imported, SummaryKept, import},
         scope::scope,
     },
     session::remote,
@@ -45,8 +45,12 @@ const MAX_BYTES: u64 = 2 * 1024 * 1024;
 struct Report {
     schema: u32,
     pr: u64,
+    /// Comments kept.
     added: usize,
+    /// Comments that were there already.
     duplicates: usize,
+    /// What became of the summary: `added`, `duplicate` or `none`.
+    summary: &'static str,
     head: String,
     /// The PR's head now, when the provider says.
     current_head: Option<String>,
@@ -149,15 +153,22 @@ fn import_batch(
     current_head: Option<&str>,
 ) -> Result<Report, Failure> {
     let Imported {
-        added, duplicates, ..
+        comments,
+        duplicates,
+        summary,
     } = import(root, scope_name, pr, batch)
         .map_err(|e| Failure::new(Kind::Failed, e.to_string()))?;
     let current = current_head.and_then(CommitOid::parse);
     Ok(Report {
         schema: 1,
         pr: pr.0,
-        added,
+        added: comments,
         duplicates,
+        summary: match summary {
+            SummaryKept::None => "none",
+            SummaryKept::Added => "added",
+            SummaryKept::Duplicate => "duplicate",
+        },
         head: head.to_string(),
         stale: current.as_ref().is_some_and(|current| current != head),
         current_head: current.map(|current| current.to_string()),
@@ -199,9 +210,10 @@ fn run_import(args: &[String]) -> Result<Report, Failure> {
         )?
     };
     tracing::info!(
-        "propose import: pr={pr} added={} duplicates={} stale={} lines_checked={}",
+        "propose import: pr={pr} added={} duplicates={} summary={} stale={} lines_checked={}",
         report.added,
         report.duplicates,
+        report.summary,
         report.stale,
         report.lines_checked
     );
@@ -318,7 +330,11 @@ mod tests {
         let report = import_batch(dir.path(), "s", PrId(44), &head, batch, Some("def456"))
             .ok()
             .expect("imported");
-        assert_eq!((report.added, report.duplicates), (3, 0));
+        // Two comments and a summary: the comments are counted, the summary named.
+        assert_eq!(
+            (report.added, report.duplicates, report.summary),
+            (2, 0, "added")
+        );
         assert!(report.stale);
         assert_eq!(report.current_head.as_deref(), Some("def456"));
 
@@ -327,7 +343,10 @@ mod tests {
         let report = import_batch(dir.path(), "s", PrId(44), &head, batch, Some("abc123"))
             .ok()
             .expect("imported");
-        assert_eq!((report.added, report.duplicates), (0, 3));
+        assert_eq!(
+            (report.added, report.duplicates, report.summary),
+            (0, 2, "duplicate")
+        );
         assert!(!report.stale);
     }
 }

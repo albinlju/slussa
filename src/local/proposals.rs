@@ -63,15 +63,25 @@ pub struct Batch {
     pub summary: Option<Summary>,
 }
 
-/// What an import did.
+/// What became of the summary a batch held.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum SummaryKept {
+    /// The batch had none.
+    None,
+    Added,
+    /// The same words on the same commit were there already.
+    Duplicate,
+}
+
+/// What an import did. The comments are counted apart from the summary, so that
+/// the one who handed in two comments is told of two.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct Imported {
-    /// What was added: comments and a summary.
-    pub added: usize,
-    /// Whether a summary was among them.
-    pub summary_added: bool,
-    /// Proposals that were already there.
+    /// Comments added.
+    pub comments: usize,
+    /// Comments that were already there.
     pub duplicates: usize,
+    pub summary: SummaryKept,
 }
 
 fn parse(bytes: &[u8], scope: &str, path: &Path) -> io::Result<Proposals> {
@@ -112,9 +122,9 @@ pub fn import(root: &Path, scope: &str, pr: PrId, batch: Batch) -> io::Result<Im
     };
     let held = all.0.entry(pr).or_default();
     let mut imported = Imported {
-        added: 0,
-        summary_added: false,
+        comments: 0,
         duplicates: 0,
+        summary: SummaryKept::None,
     };
     for comment in batch.comments {
         if held.comments.iter().any(|known| known.same_as(&comment)) {
@@ -125,16 +135,15 @@ pub fn import(root: &Path, scope: &str, pr: PrId, batch: Batch) -> io::Result<Im
             )));
         } else {
             held.comments.push(comment);
-            imported.added += 1;
+            imported.comments += 1;
         }
     }
     if let Some(summary) = batch.summary {
         if held.summaries.iter().any(|known| known.same_as(&summary)) {
-            imported.duplicates += 1;
+            imported.summary = SummaryKept::Duplicate;
         } else {
             held.summaries.push(summary);
-            imported.added += 1;
-            imported.summary_added = true;
+            imported.summary = SummaryKept::Added;
         }
     }
     let bytes = serde_json::to_vec(&Envelope {
@@ -187,9 +196,9 @@ mod tests {
         assert_eq!(
             imported,
             Imported {
-                added: 2,
-                summary_added: false,
-                duplicates: 0
+                comments: 2,
+                duplicates: 0,
+                summary: SummaryKept::None
             }
         );
 
@@ -225,9 +234,9 @@ mod tests {
         assert_eq!(
             again,
             Imported {
-                added: 1,
-                summary_added: false,
-                duplicates: 1
+                comments: 1,
+                duplicates: 1,
+                summary: SummaryKept::None
             }
         );
         let held = read(dir.path(), "s").unwrap();
@@ -245,17 +254,17 @@ mod tests {
         assert_eq!(
             import(dir.path(), "s", PrId(7), with_summary()).unwrap(),
             Imported {
-                added: 1,
-                summary_added: true,
-                duplicates: 0
+                comments: 0,
+                duplicates: 0,
+                summary: SummaryKept::Added
             }
         );
         assert_eq!(
             import(dir.path(), "s", PrId(7), with_summary()).unwrap(),
             Imported {
-                added: 0,
-                summary_added: false,
-                duplicates: 1
+                comments: 0,
+                duplicates: 0,
+                summary: SummaryKept::Duplicate
             }
         );
     }

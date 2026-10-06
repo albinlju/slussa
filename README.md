@@ -234,10 +234,11 @@ the whole document is refused and the error names each such comment
 document of an older commit is kept unchecked, and shown as written against another
 commit.
 
-It prints one line of JSON and exits: `{"schema":1,"pr":44,"added":3,"duplicates":0,
-"head":"...","current_head":"...","stale":false,"lines_checked":true}`, where `stale`
-says the PR has moved since `head` and `lines_checked` that the comments were checked to
-be on the diff. A failure is JSON on standard error, `{"schema":1,"error":{"kind":"...",
+It prints one line of JSON and exits: `{"schema":1,"pr":44,"added":2,"duplicates":0,
+"summary":"added","head":"...","current_head":"...","stale":false,"lines_checked":true}`.
+`added` and `duplicates` count the comments, `summary` says what became of the summary
+(`added`, `duplicate` or `none`), `stale` that the PR has moved since `head`, and
+`lines_checked` that the comments were checked to be on the diff. A failure is JSON on standard error, `{"schema":1,"error":{"kind":"...",
 "message":"..."}}`, and exit code 2 for a command line or a document that is wrong,
 1 for anything else: `not_logged_in`, `not_found` when the server says there is no such
 PR, and `failed`, which trying again may get past. Neither command asks for input: they

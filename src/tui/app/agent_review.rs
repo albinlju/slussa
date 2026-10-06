@@ -283,7 +283,7 @@ fn review(
     .map_err(|e| Failure::Other(format!("The proposals could not be kept: {e}")))?;
     Ok(Outcome {
         agent,
-        added: imported.added - usize::from(imported.summary_added),
+        added: imported.comments,
         duplicates: imported.duplicates,
         skipped,
         issues_missed: material.issues_missed,
