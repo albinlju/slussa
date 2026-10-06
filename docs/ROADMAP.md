@@ -9,7 +9,9 @@ built is in [ARCHITECTURE.md](ARCHITECTURE.md). History is in git.
 A read-write PR client for GitHub (through `gh`) and Bitbucket Data Center (REST
 and a personal access token). The list opens sorted by what needs you, and the PR
 has its description, conversation, diff, commits and builds, with comment, review,
-merge, decline and reopen. What is left of the AI-specific parts is below.
+merge (also when ready, and deleting the branch), decline, reopen, asking again
+for review and opening the issue it closes. What is left of the AI-specific
+parts is below.
 
 ## Positioning: where it is going
 
@@ -43,11 +45,12 @@ What this rules in (each item says how far it is):
   back, and how far a mistake reaches, decides how closely a PR is read. slussa
   shows what the PR declares next to what the changed paths say, so a
   contradiction is visible.
-- **AI review is first-class** *(not built)*. What an AI reviewer (Copilot,
-  Claude, a team bot) did is marked as AI and summarized in the header, whether
-  it commented or committed fixes: that a review happened, and against which
-  commit. Running a review from slussa comes after handoff, since an automated
-  review belongs before the human opens the PR.
+- **AI review is first-class** *(first version built)*. What an AI reviewer
+  (Copilot, Claude, a team bot) did is marked as AI: `[AI]` on its comments and
+  commits, a filter for them, and an `AI review` column in the list. Not built:
+  the summary in the PR header, whether it commented or committed fixes: that a
+  review happened, and against which commit. Running a review from slussa comes
+  after handoff, since an automated review belongs before the human opens the PR.
 - **Fast act-on-suggestion** *(not built)*. Suggestions get applied, not just displayed; the
   approve → merge path is as short as the provider allows.
 - **Handoff to the coding agent** *(not built)*. A thread, a file or a whole PR can be sent to
@@ -302,9 +305,9 @@ step with the positioning: **agents may read and propose; only the human
 decides.** No new view: these are non-interactive subcommands that print and exit.
 
 - [ ] **`slussa <PR URL>`.** `slussa 44` starts the TUI on that PR of the
-  repository you are in. A URL could name another repository, and the check that
-  it is this one is provider specific (`owner/repo` on GitHub, `projects/…/repos/…`
-  on Bitbucket), so it is left out.
+  repository you are in. Missing: a URL. It could name another repository, and
+  the check that it is this one is provider specific (`owner/repo` on GitHub,
+  `projects/…/repos/…` on Bitbucket), so it is left out.
 - [ ] **`slussa list --json`** — open PRs in the TUI's order with the "Needs you"
   reason (reuses `domain::attention`). Output has `"schema": 1`, snake_case
   identifiers (`ci_failed`, not "CI failed") and flat usernames; errors go to
@@ -451,11 +454,13 @@ it ahead of the feature that needs it.
   on `Provider` in every method; fine for two providers. Move to a
   `trait ProviderApi` (or keep the enum and implement it via the trait).
   Capabilities stay data. *Trigger:* a third provider.
-- [ ] **Render-context structs for diff/thread rendering.** Four
-  `too_many_arguments` allowances in `diff_viewer/pane.rs` and
-  `widgets/comment.rs`. Bundle the per-render inputs (theme, focus, width,
+- [ ] **Render-context structs for diff/thread rendering.** Five
+  `too_many_arguments` allowances: `diff_viewer/pane.rs` (two),
+  `widgets/comment/render.rs`, `widgets/diff_row.rs` and
+  `tabs/overview/blocks.rs`. Bundle the per-render inputs (theme, focus, width,
   anchors, queued comments, current user) into one borrowed struct. *Trigger:*
-  the AI-authored comment marker (adds one more argument otherwise).
+  the next change that adds an argument to one of them; the AI marker did not
+  need to.
 - [ ] **Share thread assembly between providers.** `github/activities.rs` and
   `bitbucket_dc/activities.rs` both turn a flat event list into threads,
   replies and reactions. Move the assembly into `domain/` and have each
@@ -497,7 +502,10 @@ it ahead of the feature that needs it.
   lines, `mod.rs` composes; `tests/repo_rules.rs` fails a file over 600). Four
   `mod.rs` files still implement instead of composing: `tui/ui/`,
   `providers/`, `providers/github/` and `providers/bitbucket_dc/`; the two
-  provider ones go with *Provider trait*. Not a refactor-only change.
+  provider ones go with *Provider trait*. Not a refactor-only change. Three
+  files are at about 500 (`tui/app/store.rs` with `Operation`,
+  `tui/ui/screens/pr_list/tests.rs`, `tui/ui/regression_tests/conversation.rs`):
+  split by concern when one of them grows again.
 - [ ] **A workspace, when something else needs the core.** slussa is one crate
   with clear module boundaries; a workspace adds compile-unit overhead and
   manifest churn without a consumer for the split crates, and an attempt on a
@@ -555,18 +563,6 @@ it ahead of the feature that needs it.
 - [ ] **`cargo nextest`** in CI (parallel, per-test timeouts, clearer failure
   output). Local `cargo test` stays fine.
 - [ ] **reqwest 0.13.** The crate is on 0.12; 0.13 is out. Not looked into.
-- [ ] **CodeRabbit on the repository.** An automatic AI reviewer on every PR.
-  *Trigger:* the repository becomes public (see *Release* under *Features to build*).
-  Third-party pages say it is free for public repositories and about 24 USD per
-  user and month for private ones; the vendor's own pricing page was not
-  checked, so check it first.
-  1. **Install the app yourself.** It is a GitHub App: install it from GitHub
-     Marketplace and give it `albinlju/slussa` only. Granting access is done in
-     the browser and is not something an agent should do.
-  2. **`.coderabbit.yaml` is in the root** (keys checked against its
-     configuration reference on 2026-10-01). Keep it in step with AGENTS.md.
-  3. It reviews pull requests, not direct pushes to `main`. `/code-review` is
-     run by hand; the two cover different moments.
 
 ### From "Fixing the PR Bottleneck" (Matt Pocock), for the AI features
 
