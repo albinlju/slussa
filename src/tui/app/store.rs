@@ -25,7 +25,7 @@ use crate::{
         capabilities::{Capabilities, Feature},
         ci::Build,
         commit::{Commit, CommitOid},
-        diff::Diff,
+        diff::{Diff, DiffRange},
         pr::{Mergeability, PrGroup, PrId, PrInfo, PrStatus, PullRequest},
         seen::Seen,
         user::Username,
@@ -143,6 +143,9 @@ pub struct PrData {
     /// Description and labels, for a provider whose list leaves them out.
     pub info: LoadState<PrInfo>,
     pub commit_diffs: HashMap<CommitOid, LoadState<Diff>>,
+    /// What changed between two commits of the PR, for what is new since the
+    /// reader looked.
+    pub range_diffs: HashMap<DiffRange, LoadState<Diff>>,
 }
 
 #[derive(Debug, Default)]
@@ -207,6 +210,7 @@ impl PrData {
             || self.mergeability.is_loading()
             || self.info.is_loading()
             || self.commit_diffs.values().any(LoadState::is_loading)
+            || self.range_diffs.values().any(LoadState::is_loading)
     }
 }
 
@@ -226,6 +230,11 @@ impl PrData {
                 .entry(oid.clone())
                 .or_insert(LoadState::NotRequested)
                 .start_loading(),
+            PrResource::RangeDiff(range) => self
+                .range_diffs
+                .entry(range.clone())
+                .or_insert(LoadState::NotRequested)
+                .start_loading(),
         }
     }
 
@@ -240,6 +249,10 @@ impl PrData {
             PrResource::CommitDiff(oid) => self
                 .commit_diffs
                 .get(oid)
+                .is_some_and(|state| state.loaded().is_some()),
+            PrResource::RangeDiff(range) => self
+                .range_diffs
+                .get(range)
                 .is_some_and(|state| state.loaded().is_some()),
         }
     }
@@ -365,6 +378,7 @@ pub enum PrResource {
     Mergeability,
     Info,
     CommitDiff(CommitOid),
+    RangeDiff(DiffRange),
 }
 
 impl PrResource {
@@ -372,6 +386,7 @@ impl PrResource {
     const fn feature(&self) -> Option<Feature> {
         match self {
             Self::Builds => Some(Feature::Builds),
+            Self::RangeDiff(_) => Some(Feature::RangeDiff),
             Self::Mergeability => Some(Feature::Mergeability),
             Self::Info => Some(Feature::PrInfo),
             Self::Commits | Self::Diff | Self::Activity | Self::CommitDiff(_) => None,
@@ -498,6 +513,7 @@ impl Store {
             FetchKey::Pr(PrResource::Commits | PrResource::CommitDiff(_), id) => {
                 on(id, |tab| tab == DetailTab::Commits)
             }
+            FetchKey::Pr(PrResource::RangeDiff(_), id) => on(id, |tab| tab == DetailTab::Diff),
         })
     }
 }

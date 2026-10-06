@@ -84,6 +84,14 @@ impl DiffLine {
     }
 }
 
+/// What changed from one commit of a PR to another: what is new since the
+/// reader looked.
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+pub struct DiffRange {
+    pub base: super::commit::CommitOid,
+    pub head: super::commit::CommitOid,
+}
+
 /// Revision of the diff actually displayed, retained with every comment draft.
 #[derive(Debug, Clone, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
 pub struct DiffRevision {

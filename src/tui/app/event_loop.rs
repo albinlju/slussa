@@ -6,12 +6,13 @@ use crate::{
         app::{
             drafts::Drafts,
             effect::{Effect, LinkAction, LinkTarget, TaskResult},
+            navigation::Screen,
             refresh,
             seen::SeenFile,
             state::AppState,
             store::{self, FetchKey, LoadState, PrResource},
         },
-        ui::{action::Action, key_to_action, render},
+        ui::{action::Action, key_to_action, render, screens::pr_detail::tabs::DetailTab},
     },
 };
 use ratatui::{
@@ -172,7 +173,7 @@ impl App {
         } else if next == Next::Continue {
             self.save_drafts();
         }
-        self.save_seen();
+        self.note_seen();
         next
     }
 
@@ -190,7 +191,7 @@ impl App {
             }
         }
         self.save_drafts();
-        self.save_seen();
+        self.note_seen();
     }
 
     fn run_effect(&mut self, effect: Effect) -> Next {
@@ -209,6 +210,13 @@ impl App {
             Effect::OpenPr(id) => self.open_named_pr(id),
             Effect::LoadOlder => self.load_older_prs(),
             Effect::LoadView => self.ensure_view_loaded(),
+            Effect::OpenSince { pr_id, range } => {
+                self.state.screen = Screen::Detail {
+                    pr_id,
+                    tab: DetailTab::Diff,
+                };
+                self.ensure_loaded(FetchKey::Pr(PrResource::RangeDiff(range), pr_id));
+            }
             Effect::LoadCommitDiff { pr_id, oid } => {
                 self.ensure_loaded(FetchKey::Pr(PrResource::CommitDiff(oid), pr_id));
             }

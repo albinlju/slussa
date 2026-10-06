@@ -6,8 +6,9 @@
 use chrono::Utc;
 
 use super::{App, navigation::Screen};
+use crate::tui::ui::screens::pr_detail::tabs::DetailTab;
 use crate::{
-    domain::pr::PrId,
+    domain::{commit::CommitOid, pr::PrId},
     local::seen::{SeenStorage, adopt_earlier},
 };
 
@@ -45,6 +46,46 @@ impl App {
             return;
         };
         self.mark_seen(pr_id);
+        self.mark_read_head();
+    }
+
+    /// The diff of the PR that is on screen has been read: the PR's own on the
+    /// Diff tab, or what is new since the reader looked when that is shown. Its
+    /// head is kept, so that the next time the PR says what has moved since.
+    /// The PR's own diff counts only while it is the branch as the list has it:
+    /// after a push it is still on screen for a while, and having it open is not
+    /// having read what was pushed.
+    fn mark_read_head(&mut self) {
+        let Screen::Detail {
+            pr_id,
+            tab: DetailTab::Diff,
+        } = self.state.screen
+        else {
+            return;
+        };
+        let store = &mut self.state.store;
+        let listed = store
+            .cache
+            .prs
+            .loaded()
+            .and_then(|prs| prs.iter().find(|pr| pr.id == pr_id))
+            .and_then(|pr| pr.head_oid.as_deref())
+            .and_then(CommitOid::parse);
+        let data = store.cache.details.get(&pr_id);
+        let head = match &self.state.ui.detail.since {
+            Some(since) => since.head_read(data).cloned(),
+            None => data
+                .and_then(|data| data.diff.loaded())
+                .and_then(|diff| diff.revision.as_ref())
+                .filter(|revision| !revision.commit)
+                .and_then(|revision| CommitOid::parse(&revision.head))
+                .filter(|head| listed.as_ref() == Some(head)),
+        };
+        if let Some(head) = head
+            && store.seen.mark_head(pr_id, &head)
+        {
+            self.seen_dirty = true;
+        }
     }
 
     fn mark_seen(&mut self, pr_id: PrId) {
@@ -54,6 +95,13 @@ impl App {
         if self.state.store.seen.mark(pr_id, updated, Utc::now()) {
             self.seen_dirty = true;
         }
+    }
+
+    /// What the key or the result just taken in may have changed on screen is
+    /// looked at, and what was looked at is written.
+    pub(super) fn note_seen(&mut self) {
+        self.mark_viewed_seen();
+        self.save_seen();
     }
 
     /// Write what was looked at, if it changed. A failed write gives the file up

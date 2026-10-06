@@ -3,8 +3,18 @@ use chrono::{DateTime, Utc};
 
 /// A commit's full object id. A type of its own, so that it cannot be passed
 /// where another string (a path, a cursor, a branch) is expected.
-#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash, serde::Serialize, serde::Deserialize)]
+#[serde(try_from = "String")]
 pub struct CommitOid(String);
+
+impl TryFrom<String> for CommitOid {
+    type Error = String;
+
+    /// What is read back from a file goes through the same rule as the rest.
+    fn try_from(text: String) -> Result<Self, String> {
+        Self::parse(&text).ok_or_else(|| "not a commit id".to_owned())
+    }
+}
 
 impl CommitOid {
     /// A commit id as git writes it: hexadecimal digits, from the four an

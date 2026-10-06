@@ -5,6 +5,7 @@ use crate::{
     domain::{
         comment::{CommentKey, ThreadHandle},
         commit::CommitOid,
+        diff::DiffRange,
         pr::{AutoMerge, DeletableBranch, MergeStrategy, PrGroup, PrId},
         review::{
             CommentAnchor, CommentTarget, PendingComment, Rerequest, ReviewComment, ReviewVerdict,
@@ -160,6 +161,20 @@ impl App {
             ticket,
             move || provider.fetch_commit_diff(&oid_fetch),
             move |r| Read::CommitDiff(pr_id, oid, r),
+        );
+    }
+
+    pub(super) fn spawn_load_range_diff(&mut self, pr_id: PrId, range: DiffRange) {
+        let key = FetchKey::Pr(PrResource::RangeDiff(range.clone()), pr_id);
+        let Some(ticket) = self.state.store.begin_fetch(key) else {
+            return;
+        };
+        let provider = self.provider.clone();
+        let asked = range.clone();
+        self.spawn_read(
+            ticket,
+            move || provider.fetch_range_diff(&asked),
+            move |r| Read::RangeDiff(pr_id, range, r),
         );
     }
 
@@ -366,6 +381,7 @@ impl App {
             FetchKey::Pr(PrResource::Mergeability, id) => self.spawn_load_mergeability(id),
             FetchKey::Pr(PrResource::Info, id) => self.spawn_load_info(id),
             FetchKey::Pr(PrResource::CommitDiff(oid), id) => self.spawn_load_commit_diff(id, oid),
+            FetchKey::Pr(PrResource::RangeDiff(range), id) => self.spawn_load_range_diff(id, range),
         }
     }
 

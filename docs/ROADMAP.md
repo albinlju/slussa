@@ -144,18 +144,25 @@ What slussa is chosen for (see *Positioning*). The approval and the merge bound 
 the commit that was read are built. These make that hold over several rounds, and
 let an agent help without deciding.
 
-- [ ] **Since you read it** (review in rounds). A marker in the header when the
-  branch has moved since the diff that was read; then a key that shows only what
-  is new, from the head that was read to now (a head that was force-pushed away
-  may not answer); the builds shown for the head that was read, with a line when
-  they are for another; and the reader's own threads, which of them were answered
-  or resolved since. A merge or a verdict on a moved branch is already refused,
-  and says to read what is new; this is how. Inside one session the list's head
-  and the diff's are both in memory. The next day, which is when it matters, they
-  are not: `local/seen.rs` keeps when a PR was looked at and how recently it had
-  been updated then, not which commit, so the head that was read has to be saved
-  with it. **Open:** what counts as read (the diff opened, or read to its end),
-  and whether the list's row says it too.
+- [ ] **Since you read it** (review in rounds) *(first version built)*. The head of
+  the diff the reader last had open is kept with when the PR was looked at
+  (`local/seen.rs`, an optional field, so the version 1 file reads and writes as
+  before). When the branch has moved since, on an open PR on GitHub, the header says
+  `↻ new since you read it` and `w` shows only what is new, from that head to the
+  one now, in the Diff tab (`w` or `esc` goes back to the whole diff). What counts
+  as read: the PR's diff open on the Diff tab while it is the branch as the list
+  has it, or the new part open; a diff that a push has outdated is not. No comment
+  is made on the new part, whose lines are not the PR's. A head that was
+  force-pushed away says so, since GitHub no longer has it to compare. Missing: the
+  commits since (the Commits tab does not mark them), the builds for the head that
+  was read with a line when they are for another, and the reader's own threads, which
+  of them were answered or resolved since; the mark on the list's row (left out of
+  the first version; the list already has `●` for changed since); a compare that is
+  of the two commits themselves after a rebase (GitHub compares from their common
+  ancestor, which shows the PR's own changes again when the branch was rebased);
+  and Bitbucket Data Center. **Open:** whether opening the Diff tab is the right
+  meaning of read: it clears the mark for a reader who goes straight to the whole
+  diff, which is what makes the mark a way in and not a log.
 - [ ] **Agents propose, the reader sends.** `slussa draft comment …` and
   `slussa review import …` put proposals in a local inbox; the TUI shows each
   beside the line it is about, marked as AI, and the reader sends, edits or

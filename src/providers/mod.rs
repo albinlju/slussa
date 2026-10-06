@@ -33,7 +33,7 @@ use crate::domain::{
     ci::Build,
     comment::{CommentId, CommentKey, ThreadHandle},
     commit::{Commit, CommitOid},
-    diff::Diff,
+    diff::{Diff, DiffRange},
     pr::{
         AutoMerge, DeletableBranch, MergeStrategy, Mergeability, PrBatch, PrGroup, PrId, PrInfo,
         PullRequest,
@@ -94,6 +94,16 @@ impl Provider {
         match self {
             Self::GitHub(repo) => github::fetch_commit_diff(repo, oid),
             Self::BitbucketDc(c) => bitbucket_dc::fetch_commit_diff(c, oid),
+        }
+    }
+
+    /// What changed between two commits of the PR.
+    pub fn fetch_range_diff(&self, range: &DiffRange) -> Result<Diff, FetchError> {
+        match self {
+            Self::GitHub(repo) => github::fetch_range_diff(repo, range),
+            Self::BitbucketDc(_) => Err(FetchError::Unsupported(
+                "Bitbucket cannot compare two commits of a PR here.".into(),
+            )),
         }
     }
 
@@ -224,6 +234,7 @@ impl Provider {
                     .into_iter()
                     .chain([
                         Feature::PrInfo,
+                        Feature::RangeDiff,
                         Feature::AutoMerge,
                         Feature::RerunBuilds,
                         Feature::DeleteBranch,

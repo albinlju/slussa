@@ -66,6 +66,11 @@ impl App {
                     .commit_diffs
                     .insert(oid, LoadState::from_result(result));
             }
+            Read::RangeDiff(pr_id, range, result) => {
+                self.pr_data_mut(pr_id)
+                    .range_diffs
+                    .insert(range, LoadState::from_result(result));
+            }
         }
         if self.state.store.reload_after_fetch.remove(&key) {
             self.load_resource(key);

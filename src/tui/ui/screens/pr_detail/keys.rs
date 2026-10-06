@@ -2,7 +2,9 @@ use super::bindings;
 use crate::tui::{
     app::effect::Effect,
     ui::{
-        action::{Action, CommitsAction, DetailAction, DiffAction, NavAction, SearchAction},
+        action::{
+            Action, CommitsAction, DetailAction, DiffAction, NavAction, PrAction, SearchAction,
+        },
         component::Component,
         components::diff_viewer::DiffFocus,
         screens::pr_detail::{Overlay, Surface, tabs::DetailTab},
@@ -91,6 +93,7 @@ fn escape_action(surface: Surface<'_>, code: KeyCode) -> Option<Action> {
     }
     Some(match surface {
         Surface::CommitDiff(_) => Action::Commits(CommitsAction::Back),
+        Surface::SinceDiff(_) => Action::from(PrAction::ToggleSince),
         Surface::Description
         | Surface::Overview
         | Surface::Diff(_)
@@ -121,7 +124,7 @@ fn tab_bracket_key(code: KeyCode) -> Option<Action> {
 
 fn tab_key(state: &super::DetailView<'_>, surface: Surface<'_>, code: KeyCode) -> Option<Action> {
     match surface {
-        Surface::Diff(viewer) => viewer
+        Surface::Diff(viewer) | Surface::SinceDiff(viewer) => viewer
             .handle_key(KeyEvent::new(code, KeyModifiers::NONE), &state.diff_files())
             .or_else(|| tab_letters(code)),
         Surface::CommitDiff(viewer) => match code {

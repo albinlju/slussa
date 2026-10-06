@@ -6,7 +6,7 @@ use crate::{
         activity::Activity,
         ci::Build,
         commit::{Commit, CommitOid},
-        diff::Diff,
+        diff::{Diff, DiffRange},
         pr::{Mergeability, PrBatch, PrGroup, PrId, PrInfo, PullRequest},
     },
     providers::{FetchError, MergeError, ReviewError},
@@ -33,6 +33,12 @@ pub enum Effect {
     LoadCommitDiff {
         pr_id: PrId,
         oid: CommitOid,
+    },
+    /// Show what is new since the reader looked: the Diff tab, with what changed
+    /// between two commits of the PR read for it.
+    OpenSince {
+        pr_id: PrId,
+        range: DiffRange,
     },
     PrLink {
         pr_id: PrId,
@@ -93,6 +99,7 @@ pub enum Read {
     Mergeability(PrId, Result<Mergeability, FetchError>),
     Info(PrId, Result<PrInfo, FetchError>),
     CommitDiff(PrId, CommitOid, Result<Diff, FetchError>),
+    RangeDiff(PrId, DiffRange, Result<Diff, FetchError>),
 }
 
 impl Read {
@@ -108,6 +115,9 @@ impl Read {
             Self::Mergeability(id, _) => FetchKey::Pr(PrResource::Mergeability, *id),
             Self::Info(id, _) => FetchKey::Pr(PrResource::Info, *id),
             Self::CommitDiff(id, oid, _) => FetchKey::Pr(PrResource::CommitDiff(oid.clone()), *id),
+            Self::RangeDiff(id, range, _) => {
+                FetchKey::Pr(PrResource::RangeDiff(range.clone()), *id)
+            }
         }
     }
 
@@ -117,7 +127,9 @@ impl Read {
             Self::Prs { result, .. } => result.as_ref().err(),
             Self::Pr(_, result) => result.as_ref().err(),
             Self::Commits(_, result) => result.as_ref().err(),
-            Self::Diff(_, result) | Self::CommitDiff(_, _, result) => result.as_ref().err(),
+            Self::Diff(_, result)
+            | Self::CommitDiff(_, _, result)
+            | Self::RangeDiff(_, _, result) => result.as_ref().err(),
             Self::Builds(_, result) => result.as_ref().err(),
             Self::Activity(_, result) => result.as_ref().err(),
             Self::Mergeability(_, result) => result.as_ref().err(),

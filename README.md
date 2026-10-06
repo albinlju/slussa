@@ -111,6 +111,13 @@ changes requested, CI failed, review requested, or approved. Team review request
 on GitHub are not counted yet. Press `s` to pick another order (newest, recently
 updated, oldest), or set `sort` in the config.
 
+slussa keeps which commit of a PR's diff you last had open. When the branch has
+moved since, the PR's header says `↻ new since you read it`, and `w` shows only
+what changed, from that commit to the one now. A commit that was force-pushed away
+may no longer be there to compare, and GitHub then says so. Opening the Diff tab
+counts as having read it, so the mark is for the way in; Bitbucket Data Center does
+not have it.
+
 A PR GitHub says cannot be merged for a conflict has `conflicts` in the `Status` column in place of its
 status, whoever wrote it. The column stands there when some row has one, and otherwise only in
 the All view, where it says `Open`, `Merged` and so on; in the other views the status is the one
