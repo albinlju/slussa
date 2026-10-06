@@ -319,6 +319,7 @@ fn the_builds_footer_offers_run_again_for_a_failed_build_and_says_why_not_on_a_c
                 name: "ci".into(),
                 state: BuildState::Failed,
                 duration_ms: None,
+                log: None,
             }]);
         }
         state

@@ -2,10 +2,15 @@ use super::bindings;
 use crate::tui::{
     app::effect::Effect,
     ui::{
-        action::{Action, CommitsAction, DetailAction, DiffAction, NavAction, SearchAction},
+        action::{
+            Action, BuildsAction, CommitsAction, DetailAction, DiffAction, NavAction, SearchAction,
+        },
         component::Component,
         components::diff_viewer::DiffFocus,
-        screens::pr_detail::{Overlay, Surface, tabs::DetailTab},
+        screens::pr_detail::{
+            Overlay, Surface,
+            tabs::{DetailTab, builds::BuildsInput},
+        },
     },
 };
 use ratatui::crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
@@ -91,6 +96,7 @@ fn escape_action(surface: Surface<'_>, code: KeyCode) -> Option<Action> {
     }
     Some(match surface {
         Surface::CommitDiff(_) => Action::Commits(CommitsAction::Back),
+        Surface::BuildLog => Action::from(BuildsAction::Close),
         Surface::Description
         | Surface::Overview
         | Surface::Diff(_)
@@ -149,10 +155,13 @@ fn tab_key(state: &super::DetailView<'_>, surface: Surface<'_>, code: KeyCode) -
             .description
             .handle_key(KeyEvent::new(code, KeyModifiers::NONE), &())
             .or_else(|| tab_nav(code)),
-        Surface::Builds => state
+        Surface::Builds | Surface::BuildLog => state
             .detail
             .builds
-            .handle_key(KeyEvent::new(code, KeyModifiers::NONE), &())
+            .handle_key(
+                KeyEvent::new(code, KeyModifiers::NONE),
+                &BuildsInput::new(state.pr_id, state.data),
+            )
             .or_else(|| tab_nav(code)),
     }
 }

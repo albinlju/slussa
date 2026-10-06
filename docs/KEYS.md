@@ -24,15 +24,15 @@ The search also takes filters, written `key:value` among the words and combined 
 
 | Key | What it does |
 | --- | --- |
-| `j` / `k` | scroll or move; in the Overview, read on through a comment taller than the screen (a few rows at a time) before moving to the next one |
+| `j` / `k` | scroll or move; in the Builds tab, move between the builds, and in a build's log scroll it; in the Overview, read on through a comment taller than the screen (a few rows at a time) before moving to the next one |
 | `^d` / `^u` | half a page |
 | `h` / `l` | previous / next tab, on every tab |
 | `1`-`5` | select a tab |
 | `[` / `]` | previous / next tab; while a commit is open, previous / next commit |
-| `enter` | open or view; in the diff it moves from the file tree into the code |
-| `esc` | back; in the diff it moves from the code back to the file tree |
+| `enter` | open or view; in the diff it moves from the file tree into the code; in the Builds tab it opens the log of the build the cursor is on (a GitHub Actions job; a check that is not one has no log, and the key does nothing) |
+| `esc` | back; in the diff it moves from the code back to the file tree, and in a build's log back to the builds |
 | `space` | toggle a fold (a folder in the file tree, a resolved thread); in the Overview, open or fold a long comment; in the diff's code pane, expand or collapse a resolved thread, or, on a long comment's fold row (`j`/`k` stop there), open or fold that comment |
-| `/` | search in the diff files or the commits; `n` / `N` jump to the next / previous match |
+| `/` | search in the diff files or the commits; `n` / `N` jump to the next / previous match; in a build's log, to the next / previous error line, round from the last to the first. The log opens on its first error with a few lines before it, and at its end when none is marked |
 | `H` / `L` | pan a wide Description |
 | `a` | submit a review verdict; tied to the commit you were shown (the head of the diff you opened, otherwise the list's), so an approval or a request for changes is refused if the branch has moved (withdrawing an approval is not), and the key is dimmed with `commit unknown` when none is known |
 | `v` | start or finish a batched review; `V` discards it |

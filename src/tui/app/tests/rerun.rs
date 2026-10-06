@@ -15,6 +15,7 @@ fn builds(app: &mut App, states: &[BuildState]) {
                     name: "ci".into(),
                     state: *state,
                     duration_ms: None,
+                    log: None,
                 })
                 .collect(),
         );

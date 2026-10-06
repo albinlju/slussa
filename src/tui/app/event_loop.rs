@@ -209,6 +209,9 @@ impl App {
             Effect::OpenPr(id) => self.open_named_pr(id),
             Effect::LoadOlder => self.load_older_prs(),
             Effect::LoadView => self.ensure_view_loaded(),
+            Effect::LoadBuildLog { pr_id, job } => {
+                self.ensure_loaded(FetchKey::Pr(PrResource::BuildLog(job), pr_id));
+            }
             Effect::LoadCommitDiff { pr_id, oid } => {
                 self.ensure_loaded(FetchKey::Pr(PrResource::CommitDiff(oid), pr_id));
             }

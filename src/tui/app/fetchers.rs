@@ -3,6 +3,7 @@
 //! write through `spawn_write` with its `WriteTicket`.
 use crate::{
     domain::{
+        ci::JobId,
         comment::{CommentKey, ThreadHandle},
         commit::CommitOid,
         pr::{AutoMerge, DeletableBranch, MergeStrategy, PrGroup, PrId},
@@ -160,6 +161,22 @@ impl App {
             ticket,
             move || provider.fetch_commit_diff(&oid_fetch),
             move |r| Read::CommitDiff(pr_id, oid, r),
+        );
+    }
+
+    pub(super) fn spawn_load_build_log(&mut self, pr_id: PrId, job: JobId) {
+        let Some(ticket) = self
+            .state
+            .store
+            .begin_fetch(FetchKey::Pr(PrResource::BuildLog(job), pr_id))
+        else {
+            return;
+        };
+        let provider = self.provider.clone();
+        self.spawn_read(
+            ticket,
+            move || provider.fetch_build_log(job),
+            move |r| Read::BuildLog(pr_id, job, r),
         );
     }
 
@@ -366,6 +383,7 @@ impl App {
             FetchKey::Pr(PrResource::Mergeability, id) => self.spawn_load_mergeability(id),
             FetchKey::Pr(PrResource::Info, id) => self.spawn_load_info(id),
             FetchKey::Pr(PrResource::CommitDiff(oid), id) => self.spawn_load_commit_diff(id, oid),
+            FetchKey::Pr(PrResource::BuildLog(job), id) => self.spawn_load_build_log(id, job),
         }
     }
 
