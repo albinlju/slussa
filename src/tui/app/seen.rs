@@ -48,6 +48,11 @@ impl App {
         self.mark_seen(pr_id);
     }
 
+    /// Whether `pr_id` is the PR on screen.
+    pub(super) fn shows(&self, pr_id: PrId) -> bool {
+        matches!(self.state.screen, Screen::Detail { pr_id: shown, .. } if shown == pr_id)
+    }
+
     /// The head of the PR's own diff, as read.
     pub(super) fn loaded_diff_head(&self, pr_id: PrId) -> Option<&str> {
         let diff = self.state.store.cache.details.get(&pr_id)?.diff.loaded()?;
@@ -59,10 +64,11 @@ impl App {
     /// new since they looked when that is shown. Its head is kept, so that the
     /// next time the PR says what has moved since.
     ///
-    /// Only an arrival counts: opening the PR on the Diff, choosing the tab, or
-    /// what is new being read. Not a refresh that swaps a newer diff in under a
-    /// reader who is already there, which would clear the mark before they had
-    /// seen anything, and not a key pressed on the diff. The PR's own diff counts
+    /// Only an arrival counts: opening the PR on the Diff, choosing the tab, the
+    /// diff the reader waited for there being read, or what is new being shown.
+    /// Not a refresh under a reader who is already there, whether it brings a
+    /// newer diff or the same one again, which would clear the mark before they
+    /// had seen anything, and not a key pressed on the diff. The PR's own diff counts
     /// only while it is the branch as the list has it: after a push it is still on
     /// screen for a while, and having it open is not having read what was pushed.
     pub(super) fn mark_read_head(&mut self) {

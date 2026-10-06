@@ -220,6 +220,8 @@ impl App {
                     tab: DetailTab::Diff,
                 };
                 self.load_new_since(pr_id, range);
+                // One that was read before is on screen at once.
+                self.mark_read_head();
             }
             Effect::LoadBuildLog { pr_id, job } => {
                 self.ensure_loaded(FetchKey::Pr(PrResource::BuildLog(job), pr_id));

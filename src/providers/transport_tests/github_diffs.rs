@@ -59,6 +59,10 @@ fn a_commit_that_is_gone_says_the_branch_was_probably_force_pushed() {
         told.contains("No common ancestor"),
         "GitHub's own words are kept: {told}"
     );
+    assert!(
+        !told.contains("w:"),
+        "a provider names no key of the surface: {told}"
+    );
 }
 
 #[test]

@@ -53,16 +53,14 @@ impl App {
                 self.pr_data_mut(pr_id).commits.reload(result);
             }
             Read::Diff(pr_id, result) => {
-                let before = self.loaded_diff_head(pr_id).map(str::to_owned);
+                // An arrival is the diff the reader is waiting for. One read again
+                // under a reader who is already on it, of a newer commit or of the
+                // same, has not been read by being read again, and nor has the
+                // diff of a PR that is not on screen.
+                let awaited = self.shows(pr_id) && self.pr_data_mut(pr_id).diff.loaded().is_none();
                 let failure = result.as_ref().err().map(FetchError::user_message);
                 self.pr_data_mut(pr_id).diff.reload(result);
-                // A diff of another commit that replaces the one the reader is on
-                // has not been read by being swapped in.
-                let replaced = before.is_some_and(|before| {
-                    self.loaded_diff_head(pr_id)
-                        .is_some_and(|after| after != before)
-                });
-                if !replaced {
+                if awaited {
                     self.mark_read_head();
                 }
                 self.new_since_after_diff(pr_id, failure);

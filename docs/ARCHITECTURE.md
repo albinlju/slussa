@@ -60,6 +60,7 @@ src/
 │   │   ├── event_loop.rs      `App`, the event loop, the task channel and effect dispatch
 │   │   ├── state.rs           AppState composition (Store, Ui, Screen)
 │   │   ├── store.rs           Cache, PR operations/errors, in-flight loads, reviews, tickets
+│   │   ├── operation.rs       The writes a PR can have pending, and what each says and changes
 │   │   ├── notice.rs          The one-line message over the footer
 │   │   ├── effect.rs          `Effect` (work), `TaskResult` and `Read` (what came back)
 │   │   ├── navigation.rs     Screen identity, open PR and initiate missing loads

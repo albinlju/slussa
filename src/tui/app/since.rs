@@ -6,7 +6,7 @@
 
 use std::collections::HashSet;
 
-use super::{App, navigation::Screen};
+use super::App;
 use crate::{
     domain::{
         commit::CommitOid,
@@ -44,7 +44,7 @@ impl App {
     /// The PR's diff was read, or could not be (`failure` says why): what is new
     /// that waited for it is asked for, or says why it cannot be told.
     pub(super) fn new_since_after_diff(&mut self, pr_id: PrId, failure: Option<String>) {
-        if !matches!(self.state.screen, Screen::Detail { pr_id: shown, .. } if shown == pr_id) {
+        if !self.shows(pr_id) {
             return;
         }
         let Some(since) = &self.state.ui.detail.since else {

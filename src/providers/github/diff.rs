@@ -48,8 +48,7 @@ pub fn fetch_range_diff(repo: &GhRepo, range: &DiffRange) -> Result<Diff, FetchE
         {
             return FetchError::Stale(format!(
                 "The commit you read is probably no longer on GitHub, since the branch was \
-                 force-pushed, so what is new cannot be told (GitHub said: {stderr}). \
-                 w: the whole diff."
+                 force-pushed, so what is new cannot be told (GitHub said: {stderr})."
             ));
         }
         error

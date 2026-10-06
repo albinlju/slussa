@@ -152,8 +152,8 @@ let an agent help without deciding.
   one now, in the Diff tab (`w` or `esc` goes back to the whole diff). What counts
   as read is an arrival: the PR's diff when the reader opens the PR on it or chooses
   the tab, while it is the branch as the list has it, or the new part when it has
-  been read; not a refresh that swaps a newer diff in under a reader who is already
-  there, and not leaving the new part when it could not be read, which keeps the
+  been read; not a refresh under a reader who is already there, whether it brings a
+  newer diff or the same one again, and not leaving the new part when it could not be read, which keeps the
   commit that was read so that `w` and `F` can ask again. No comment
   is made on the new part, whose lines are not the PR's. A head that was
   force-pushed away says so, with what GitHub answered, since it no longer has it to
@@ -675,11 +675,12 @@ it ahead of the feature that needs it.
   lines, `mod.rs` composes; `tests/repo_rules.rs` fails a file over 600). Four
   `mod.rs` files still implement instead of composing: `tui/ui/`,
   `providers/`, `providers/github/` and `providers/bitbucket_dc/`; the two
-  provider ones go with *Provider trait*. Not a refactor-only change. Three
-  files are at about 500 (`tui/app/store.rs` with `Operation`, 523 since the build
-  logs, and `PrResource`, `FetchKey` and the tickets the part to move out,
-  `tui/ui/screens/pr_list/tests.rs`, `tui/ui/regression_tests/conversation.rs`):
-  split by concern when one of them grows again.
+  provider ones go with *Provider trait*. Not a refactor-only change. Two
+  files are at about 500 (`tui/ui/screens/pr_list/tests.rs`,
+  `tui/ui/regression_tests/conversation.rs`): split by concern when one of them
+  grows again. `tui/app/store.rs` is under it since `Operation` moved to
+  `operation.rs`; `PrResource` and `FetchKey` are what would move next, and the
+  tickets stay, since only `Store` may make one.
 - [ ] **A workspace, when something else needs the core.** slussa is one crate
   with clear module boundaries; a workspace adds compile-unit overhead and
   manifest churn without a consumer for the split crates, and an attempt on a

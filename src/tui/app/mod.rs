@@ -17,6 +17,7 @@ pub mod fetchers;
 mod loads;
 pub mod navigation;
 mod notice;
+mod operation;
 pub mod pr_groups;
 pub mod refresh;
 mod seen;

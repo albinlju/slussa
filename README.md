@@ -123,7 +123,8 @@ so). A commit that was force-pushed away may no longer be there to compare, and
 GitHub's answer is shown with what it probably means; `w` goes back to the whole diff
 and asks again the next time, and `F` asks again too. Arriving at the PR's diff, by
 opening the PR on it or choosing the Diff tab, counts as having read it, so the mark is
-for the way in; a refresh that swaps a newer diff in under you does not clear it.
+for the way in; a refresh under you does not clear it, whether it brings a newer diff
+or the same one again.
 Bitbucket Data Center does not have it.
 
 A PR GitHub says cannot be merged for a conflict has `conflicts` in the `Status` column in place of its
