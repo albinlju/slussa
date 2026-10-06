@@ -491,16 +491,6 @@ impl DetailView<'_> {
 }
 
 impl DetailView<'_> {
-    /// Whether an agent is reviewing this PR now.
-    pub fn agent_reviewing(&self) -> bool {
-        self.store
-            .fetches
-            .contains(&crate::tui::app::store::FetchKey::Pr(
-                crate::tui::app::store::PrResource::AgentReview,
-                self.pr_id,
-            ))
-    }
-
     pub const fn has_pr_link(&self) -> bool {
         self.pr.url.is_some()
     }

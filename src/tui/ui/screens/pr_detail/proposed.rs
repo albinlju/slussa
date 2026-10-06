@@ -87,3 +87,15 @@ pub fn for_another_commit(store: &Store, pr_id: PrId, data: Option<&PrData>) -> 
         })
         .count()
 }
+
+impl super::DetailView<'_> {
+    /// Whether an agent is reviewing this PR now.
+    pub fn agent_reviewing(&self) -> bool {
+        self.store
+            .fetches
+            .contains(&crate::tui::app::store::FetchKey::Pr(
+                crate::tui::app::store::PrResource::AgentReview,
+                self.pr_id,
+            ))
+    }
+}

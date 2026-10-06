@@ -94,6 +94,7 @@ src/
 │       │       ├── render.rs  Composition; the comment counts per file
 │       │       ├── tree.rs    Tree rendering, the file rows with their counts
 │       │       ├── pane.rs    The code pane: diff lines, search and the cursor
+│       │       ├── inline.rs  What stands under a line: threads, queued comments and proposals
 │       │       ├── threads.rs One inline thread: its lines and the stops in it
 │       │       ├── nav.rs     What the pane cursor can stand on (line, thread,
 │       │       │              fold row, queued comment)

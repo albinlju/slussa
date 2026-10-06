@@ -1,4 +1,5 @@
 pub(crate) mod file_tree;
+mod inline;
 mod keys;
 mod nav;
 mod pane;
