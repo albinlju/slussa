@@ -5,7 +5,7 @@ pub(super) use super::super::support::*;
 pub(super) use crate::{
     domain::{
         commit::CommitOid,
-        diff::{Diff, DiffRange, DiffRevision, FileDiff},
+        diff::{Compared, Diff, DiffRange, DiffRevision, FileDiff},
     },
     tui::app::store::{FetchKey, PrResource},
 };
@@ -124,15 +124,30 @@ pub(super) fn diff_arrives(app: &mut App, head: &str, paths: &[&str]) {
     )));
 }
 
-/// The compare of what is new answers with these files.
+/// A compare with these files, of a PR that touched `before` at the commit that
+/// was read; `None` when that is not known.
+pub(super) fn compared(paths: &[&str], before: Option<&[&str]>) -> Compared {
+    Compared {
+        diff: Diff {
+            revision: None,
+            files: files(paths),
+        },
+        in_pr_before: before.map(|paths| paths.iter().map(|path| (*path).to_owned()).collect()),
+    }
+}
+
+/// The compare of what is new answers with these files, of a PR that touched
+/// none of them before.
 pub(super) fn compare_arrives(app: &mut App, paths: &[&str]) {
+    compare_arrives_of(app, paths, Some(&[]));
+}
+
+/// The compare answers with these files, of a PR that touched `before`.
+pub(super) fn compare_arrives_of(app: &mut App, paths: &[&str], before: Option<&[&str]>) {
     app.apply_result(TaskResult::Read(Read::RangeDiff(
         PrId(42),
         range("aaa111", "bbb222"),
-        Ok(Diff {
-            revision: None,
-            files: files(paths),
-        }),
+        Ok(compared(paths, before)),
     )));
 }
 

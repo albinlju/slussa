@@ -156,22 +156,14 @@ async fn f_asks_again_for_what_is_new_that_could_not_be_read() {
 
 #[tokio::test(flavor = "current_thread")]
 async fn what_is_new_is_what_is_new_in_the_files_of_the_pr() {
-    use crate::domain::diff::FileDiff;
     let mut app = returning_reader("aaa111", "bbb222");
     diff_of_files(&mut app, "bbb222", &["src/main.rs"]);
     press(&mut app, KeyCode::Char('w'));
-    let file = |path: &str| FileDiff {
-        path: path.into(),
-        hunks: vec![],
-    };
     // A merge of the target brought other.rs into the branch; the PR does not touch it.
     app.apply_result(TaskResult::Read(Read::RangeDiff(
         PrId(42),
         range("aaa111", "bbb222"),
-        Ok(Diff {
-            revision: None,
-            files: vec![file("src/main.rs"), file("other.rs")],
-        }),
+        Ok(compared(&["src/main.rs", "other.rs"], Some(&[]))),
     )));
     let kept = &app.state.store.cache.details[&PrId(42)].range_diffs[&range("aaa111", "bbb222")];
     let LoadState::Loaded(diff) = kept else {
@@ -189,10 +181,7 @@ async fn nothing_new_in_the_files_of_the_pr_says_so_and_what_it_may_mean() {
     app.apply_result(TaskResult::Read(Read::RangeDiff(
         PrId(42),
         range("aaa111", "bbb222"),
-        Ok(Diff {
-            revision: None,
-            files: vec![],
-        }),
+        Ok(compared(&[], Some(&[]))),
     )));
     let text = screen_text(&mut app);
     assert!(
@@ -203,4 +192,47 @@ async fn nothing_new_in_the_files_of_the_pr_says_so_and_what_it_may_mean() {
         text.contains("reset"),
         "it says what an empty compare can be"
     );
+}
+
+fn kept(app: &App) -> Vec<&str> {
+    let LoadState::Loaded(diff) = what_is_new(app) else {
+        panic!("read");
+    };
+    diff.files.iter().map(|file| file.path.as_str()).collect()
+}
+
+#[tokio::test(flavor = "current_thread")]
+async fn a_file_the_pr_put_back_as_the_target_has_it_is_new_and_is_kept() {
+    let mut app = returning_reader("aaa111", "bbb222");
+    // The PR touched guard.rs when it was read, and no longer does: it was put back.
+    diff_of_files(&mut app, "bbb222", &["src/main.rs"]);
+    press(&mut app, KeyCode::Char('w'));
+    compare_arrives_of(
+        &mut app,
+        &["src/main.rs", "src/guard.rs", "other.rs"],
+        Some(&["src/main.rs", "src/guard.rs"]),
+    );
+    // other.rs came with a merge of the target, in a file the PR never touched.
+    assert_eq!(kept(&app), ["src/main.rs", "src/guard.rs"]);
+}
+
+#[tokio::test(flavor = "current_thread")]
+async fn nothing_is_left_out_when_what_the_pr_touched_before_is_not_known() {
+    let mut app = returning_reader("aaa111", "bbb222");
+    diff_of_files(&mut app, "bbb222", &["src/main.rs"]);
+    press(&mut app, KeyCode::Char('w'));
+    compare_arrives_of(&mut app, &["src/main.rs", "src/guard.rs", "other.rs"], None);
+    assert_eq!(kept(&app), ["src/main.rs", "src/guard.rs", "other.rs"]);
+}
+
+#[test]
+fn the_commit_the_pr_is_against_is_taken_from_the_diff_of_the_head_asked_for() {
+    let mut app = returning_reader("aaa111", "bbb222");
+    diff_of_files(&mut app, "bbb222", &[]);
+    assert_eq!(
+        app.target_at(PrId(42), &oid("bbb222")),
+        Some(oid("0ba5e0")),
+        "the diff of that head says it"
+    );
+    assert_eq!(app.target_at(PrId(42), &oid("ccc333")), None);
 }

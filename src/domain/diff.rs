@@ -92,6 +92,18 @@ pub struct DiffRange {
     pub head: super::commit::CommitOid,
 }
 
+/// What is new since a commit, as the provider compared the two, with what it
+/// takes to keep it to the PR.
+#[derive(Debug, Clone)]
+pub struct Compared {
+    pub diff: Diff,
+    /// The files the PR touched at the commit that was read, when the provider
+    /// could list them all. One of them that the PR no longer touches was put
+    /// back as the target has it, which is new and must be seen. `None` when
+    /// they are not known: nothing can then be left out of the diff.
+    pub in_pr_before: Option<std::collections::HashSet<String>>,
+}
+
 /// Revision of the diff actually displayed, retained with every comment draft.
 #[derive(Debug, Clone, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
 pub struct DiffRevision {

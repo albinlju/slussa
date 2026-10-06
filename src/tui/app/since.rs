@@ -10,7 +10,7 @@ use super::App;
 use crate::{
     domain::{
         commit::CommitOid,
-        diff::{Diff, DiffRange},
+        diff::{Compared, Diff, DiffRange},
         pr::{PrGroup, PrId},
     },
     providers::error::FetchError,
@@ -29,6 +29,16 @@ impl App {
         }
         let diff = self.state.store.cache.details.get(&pr_id)?.diff.loaded()?;
         Some(diff.files.iter().map(|file| file.path.clone()).collect())
+    }
+
+    /// The commit the PR is against, as the PR's diff of `head` says it.
+    pub(super) fn target_at(&self, pr_id: PrId, head: &CommitOid) -> Option<CommitOid> {
+        let diff = self.state.store.cache.details.get(&pr_id)?.diff.loaded()?;
+        let revision = diff.revision.as_ref().filter(|revision| !revision.commit)?;
+        if CommitOid::parse(&revision.head)? != *head {
+            return None;
+        }
+        CommitOid::parse(revision.base.as_deref()?)
     }
 
     /// Ask for what is new: the compare when the PR's diff of its head is there,
@@ -87,20 +97,31 @@ impl App {
             .insert(range, LoadState::Failed(FetchError::Stale(why)));
     }
 
-    /// The compare kept to the files of the PR. One that arrives when the PR's
-    /// diff is not of its head cannot be, and is not kept as what is new.
+    /// The compare kept to the files of the PR: those it touches at the head, and
+    /// those it touched at the commit that was read. A file among the last that it
+    /// no longer touches was put back as the target has it, and that is new: left
+    /// out, a check that was read and then removed would go unseen. What is left
+    /// out is what a merge of the target brought, in files the PR never touched.
+    /// When the files it touched before are not known, nothing is left out. A
+    /// compare that arrives when the PR's diff is not of its head is not kept.
     pub(super) fn new_in_the_pr(
         &self,
         pr_id: PrId,
         range: &DiffRange,
-        compared: Result<Diff, FetchError>,
+        compared: Result<Compared, FetchError>,
     ) -> Result<Diff, FetchError> {
-        let mut diff = compared?;
-        let Some(paths) = self.pr_files_at(pr_id, &range.head) else {
+        let Compared {
+            mut diff,
+            in_pr_before,
+        } = compared?;
+        let Some(now) = self.pr_files_at(pr_id, &range.head) else {
             tracing::warn!("what is new not kept: pr={pr_id}: no diff of the PR at its head");
             return Err(FetchError::Stale(MOVED_AGAIN.into()));
         };
-        diff.files.retain(|file| paths.contains(&file.path));
+        if let Some(before) = in_pr_before {
+            diff.files
+                .retain(|file| now.contains(&file.path) || before.contains(&file.path));
+        }
         Ok(diff)
     }
 }

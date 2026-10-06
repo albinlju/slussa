@@ -54,10 +54,7 @@ async fn a_branch_that_moved_says_so_and_w_shows_what_is_new() {
     app.apply_result(TaskResult::Read(Read::RangeDiff(
         PrId(42),
         range("aaa111", "bbb222"),
-        Ok(Diff {
-            revision: None,
-            files: vec![],
-        }),
+        Ok(compared(&[], Some(&[]))),
     )));
     assert_eq!(
         read_head(&app),
