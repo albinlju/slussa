@@ -259,6 +259,21 @@ test above ranks them:
   triage (moved from *Scope decision*).
 - [ ] **Labels and assignees.** Add and remove, next to the reviewers `p` already
   asks again (moved from *Scope decision* and *Diff ergonomics*).
+- [ ] **Repositories with a merge queue.** slussa merges through the REST endpoint
+  that GitHub's own documentation says does not support merging with a merge
+  queue, and recommends replacing with the asynchronous one (`merge-async`, whose
+  `merge_action` can be `merge_queue`). What the old endpoint does where the queue
+  is required, that page does not say: a refusal ("Changes must be made through
+  the merge queue") is reported, and so is a direct merge that steps past the
+  queue (a community report, not checked here). Both are wrong for slussa: a
+  refusal leaves the reader with an error where the queue is the way, and a
+  direct merge passes a gate the repository asked for. Done when the merge
+  dialog knows the repository uses a queue and says so ("add to the merge queue"
+  in place of "merge"), goes through the asynchronous endpoint, and keeps what the
+  commit-bound merge gives today: check that the new endpoint takes the head
+  (`sha`), otherwise compare it first. **Not verified:** what either endpoint does
+  against a real repository with a queue, and whether it is the repository or the
+  branch that decides; there is nothing like it on Bitbucket Data Center.
 - [ ] **Approve and merge several at once** *(open question)*. For PRs by a bot the
   reader trusts and does not read, such as dependency updates: one decision for
   many, each PR keeping the head it was shown. **Open:** whether it belongs. It is
