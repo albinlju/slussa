@@ -12,10 +12,10 @@ use super::{
     store::{FetchKey, Notice, PrResource},
 };
 use crate::{
-    agent::{self, AgentError, ReviewRequest},
+    agent::{self, AgentError, ReviewRequest, RulesFile},
     domain::{
         commit::CommitOid,
-        pr::PrId,
+        pr::{IssueText, LinkedIssue, PrId},
         proposal_document::{self, Source},
     },
     local::proposals::{Batch, import},
@@ -28,7 +28,19 @@ struct Subject {
     description: Option<String>,
     source_branch: String,
     target_branch: String,
+    /// The issues the PR closes, as the provider listed them.
+    issues: Vec<LinkedIssue>,
 }
+
+/// What the review is made from besides the PR: where the repository's rules
+/// are, and the reader's own instructions, if they wrote any.
+struct Sources {
+    root: Option<PathBuf>,
+    instructions: Option<PathBuf>,
+}
+
+/// The files where a repository writes down its own rules.
+const RULES_FILES: &[&str] = &["AGENTS.md", "CLAUDE.md"];
 
 /// What an asked-for review came to.
 #[derive(Debug)]
@@ -40,6 +52,9 @@ pub struct Outcome {
     pub duplicates: usize,
     /// Comments on a line that is not in the diff, which nothing could show.
     pub skipped: usize,
+    /// Issues the PR closes that could not be read, so that the agent did not get
+    /// what they asked for.
+    pub issues_missed: usize,
     /// Whether the diff was too long to be given whole.
     pub diff_cut: bool,
 }
@@ -83,6 +98,10 @@ impl App {
             return;
         };
         let place = (source.root.clone(), source.scope.clone());
+        let sources = Sources {
+            root: self.review_root.clone(),
+            instructions: self.state.store.agent_review_instructions.clone(),
+        };
         let Some(ticket) = self
             .state
             .store
@@ -94,7 +113,7 @@ impl App {
         drop(ticket);
         let provider = self.provider.clone();
         self.spawn_fetch(
-            move || review(&provider, pr_id, &subject, &command, &place),
+            move || review(&provider, pr_id, &subject, &command, &place, &sources),
             move |returned| {
                 TaskResult::Read(Read::AgentReview(
                     pr_id,
@@ -140,11 +159,18 @@ fn subject_of(store: &super::store::Store, pr_id: PrId) -> Option<Subject> {
         .and_then(|data| data.info.loaded())
         .and_then(|info| info.description.clone())
         .or_else(|| pr.description.clone());
+    let issues = store
+        .cache
+        .details
+        .get(&pr_id)
+        .and_then(|data| data.info.loaded())
+        .map_or_else(Vec::new, |info| info.issues.clone());
     Some(Subject {
         title: pr.title.clone(),
         description: described,
         source_branch: pr.source_branch.clone(),
         target_branch: pr.target_branch.clone(),
+        issues,
     })
 }
 
@@ -157,6 +183,12 @@ fn notice_text(pr_id: PrId, outcome: &Outcome) -> String {
     };
     if outcome.skipped > 0 {
         text = format!("{text} ({} not on a line of the diff)", outcome.skipped);
+    }
+    if outcome.issues_missed > 0 {
+        text = format!(
+            "{text} · {} issue(s) could not be read",
+            outcome.issues_missed
+        );
     }
     if outcome.diff_cut {
         text.push_str(" · the diff was cut");
@@ -171,6 +203,7 @@ fn review(
     subject: &Subject,
     command: &[String],
     (root, scope): &(PathBuf, String),
+    sources: &Sources,
 ) -> Result<Outcome, Failure> {
     let (text, revision) = provider.fetch_diff_text(pr_id)?;
     // The agent is given the diff of this commit, so what it proposes is of it,
@@ -179,6 +212,9 @@ fn review(
         .ok_or_else(|| Failure::Other("The PR's head commit is not known.".into()))?;
     let diff = crate::providers::parse_unified_diff(&text);
     let agent = command.first().cloned().unwrap_or_default();
+    let instructions = read_instructions(sources.instructions.as_deref())?;
+    let (issues, issues_missed) = read_issues(provider, &subject.issues);
+    let rules = read_rules(sources.root.as_deref());
     let prompt = agent::prompt(&ReviewRequest {
         title: &subject.title,
         description: subject.description.as_deref(),
@@ -186,6 +222,9 @@ fn review(
         target_branch: &subject.target_branch,
         head: head.as_str(),
         diff: &text,
+        issues: &issues,
+        rules: &rules,
+        instructions: instructions.as_deref(),
     });
     let answer = agent::run(command, &prompt.text, agent::TIMEOUT)?;
     let json = agent::find_json(&answer).ok_or_else(|| AgentError::NoJson {
@@ -230,6 +269,56 @@ fn review(
         added: imported.added - usize::from(imported.summary_added),
         duplicates: imported.duplicates,
         skipped,
+        issues_missed,
         diff_cut: prompt.diff_cut,
     })
+}
+
+/// The reader's own instructions, when they named a file. One that cannot be read
+/// is an error and not a silent fall back to the built-in ones: they asked for it.
+fn read_instructions(path: Option<&std::path::Path>) -> Result<Option<String>, Failure> {
+    let Some(path) = path else {
+        return Ok(None);
+    };
+    std::fs::read_to_string(path).map(Some).map_err(|e| {
+        Failure::Other(format!(
+            "The instructions in {} could not be read: {e}",
+            path.display()
+        ))
+    })
+}
+
+/// What the issues the PR closes say, and how many could not be read.
+fn read_issues(provider: &Provider, listed: &[LinkedIssue]) -> (Vec<IssueText>, usize) {
+    let mut read = Vec::new();
+    let mut missed = 0;
+    for issue in listed {
+        match provider.fetch_issue_text(issue) {
+            Ok(Some(text)) => read.push(text),
+            // In another repository: nothing here to ask for, and not a failure.
+            Ok(None) => {}
+            Err(error) => {
+                tracing::warn!("could not read issue #{}: {error}", issue.number);
+                missed += 1;
+            }
+        }
+    }
+    (read, missed)
+}
+
+/// The repository's own rules, from the files it keeps them in.
+fn read_rules(root: Option<&std::path::Path>) -> Vec<RulesFile> {
+    let Some(root) = root else {
+        return Vec::new();
+    };
+    RULES_FILES
+        .iter()
+        .filter_map(|name| {
+            let text = std::fs::read_to_string(root.join(name)).ok()?;
+            (!text.trim().is_empty()).then(|| RulesFile {
+                name: (*name).to_owned(),
+                text,
+            })
+        })
+        .collect()
 }

@@ -58,6 +58,9 @@ pub struct Store {
     pub proposals: Proposals,
     /// The command that reviews a PR when asked to; empty where there is none.
     pub agent_review: Vec<String>,
+    /// A file with the instructions the reader wants an asked-for review to follow,
+    /// instead of the built-in ones.
+    pub agent_review_instructions: Option<std::path::PathBuf>,
     /// The PR the reader named on the command line, read and waiting for the
     /// list to be read before it is opened.
     pub requested: Option<PullRequest>,
@@ -116,6 +119,7 @@ impl Store {
             seen: Seen::new(),
             proposals: Proposals::default(),
             agent_review: Vec::new(),
+            agent_review_instructions: None,
             requested: None,
             cache: Cache::default(),
             groups: HashMap::new(),

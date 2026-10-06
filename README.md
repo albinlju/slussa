@@ -142,10 +142,18 @@ over SSH; inside tmux that needs `set -g set-clipboard on`.
 ## For agents
 
 **Ask for a review.** `A` in a PR runs an agent over it: slussa gives the configured
-command the PR's title, description and diff on standard input, with a prompt that
-asks for what deserves your attention as the document below, and keeps the answer
-as proposals (the default command is `claude -p`; `agent_review` in the config
-changes it, and `[]` turns the key off). A dialog names the command and what it is
+command, on standard input, everything it needs and nothing it has to find on the
+machine: the PR's title and description, the issues the PR closes, the repository's own
+rules (`AGENTS.md` and `CLAUDE.md` at the top of the repository, when it has them) and
+the diff. The built-in instructions ask two questions and keep them apart: does the
+change do what it was asked to, no less and no more (*Spec*), and does it follow the
+rules and avoid bugs you can point to (*Standards* and *Bug*); each comment starts
+with which. The answer is the document below, kept as proposals. The default command is
+`claude -p`; `agent_review` in the config changes it, and `[]` turns the key off.
+Nothing depends on a skill being installed. If you want a different review,
+`agent_review_instructions` names a file that replaces the instructions (a sentence may
+send the agent to a skill of yours, but nothing needs one); what slussa gives the agent
+and the form of its answer stay as they are. A dialog names the command and what it is
 given and asks first, every time, since the text leaves slussa. The review runs in
 the background (the footer shows it) and a notice says how many comments came; a
 comment on a line that is not in the diff is dropped and counted. slussa sets
@@ -213,6 +221,8 @@ sort = "attention"   # attention (default), recent, updated or oldest
 # Optional. What reviews a PR when you press A: a program and its arguments, given the
 # PR's title, description and diff on standard input; [] turns the key off.
 agent_review = ["claude", "-p"]
+# Optional. A file with your own review instructions, instead of the built-in ones.
+# agent_review_instructions = "~/.config/slussa/review.md"
 
 [ai]
 # Optional. For an agent that works as a person: a comment whose first line

@@ -424,21 +424,30 @@ back on refresh.
   it needs no multiplexer.
 - [ ] **Run a review from slussa** *(first version built)*. `A` runs the
   configured command (`agent_review` in `config.toml`, a program and arguments;
-  `claude -p` by default, `[]` for none) over the PR: the title, description and
-  diff go to it on standard input with a built-in prompt that asks for the document
-  of *Agents propose*, and what it answers becomes proposals the reader takes or
-  discards, so nothing is posted. A dialog names the command and what it is given
-  and asks first, each time. slussa fixes `head` to the commit whose diff the
-  agent was given and drops comments on lines that are not in it. It runs off the
-  UI thread (`spawn_fetch`), one at a time per PR, with a 10 minute deadline, and
-  a failure is the PR's error. **Missing:** the prompt does not carry severity or
-  the "Before this PR, `<who>` experienced…" format (the document has no field for
-  either); the diff is cut at 150 000 bytes and the agent is told; the command
-  cannot be given the files of the PR, which is *Check out the PR locally*; a
-  second command for another kind of review; cancelling a review that runs (it
-  ends at the deadline); the prompt cannot be changed in the config; a command
-  that is not installed is found out when it runs, not before. **Not tried
-  against** a real agent: the command has only been a script.
+  `claude -p` by default, `[]` for none) over the PR and keeps what it answers as
+  proposals the reader takes or discards, so nothing is posted. slussa gives it all of
+  what a review needs on standard input, so that nothing depends on a skill or a
+  file on the machine: the title and description, the issues the PR closes (read from
+  the provider, only those of this repository), the repository's own rules
+  (`AGENTS.md`, `CLAUDE.md` at its top) and the diff. The built-in instructions are
+  two questions kept apart, *Spec* (does it do what was asked, no less and no more)
+  and *Standards and correctness*, and each comment begins with `Spec:`,
+  `Standards:` or `Bug:`. `agent_review_instructions` names a file that replaces the
+  instructions; what is given and the form of the answer stay slussa's. A dialog
+  names the command and what it is given and asks first, each time. slussa fixes
+  `head` to the commit whose diff the agent was given and drops comments on lines
+  that are not in it. It runs off the UI thread (`spawn_fetch`), one at a time per
+  PR, with a 10 minute deadline, and a failure is the PR's error. **Missing:** the
+  kind is only a word at the start of the body and not a field the diff can show or
+  filter on; no severity or evidence; the diff is cut at 150 000 bytes (the issues at
+  8 000 and a rules file at 20 000, and the agent is told); the existing comments and
+  the CI result are not given, so a review can repeat what a reviewer said; only the
+  top of the repository is looked in for rules, and no `CONTRIBUTING.md`; the command
+  cannot be given the files of the PR, which is *Check out the PR locally*; reviewing
+  only what is new since the reader looked; cancelling a review that runs (it ends at
+  the deadline); a command that is not installed is found out when it runs. **Not
+  tried against** a real agent with the new prompt: the first real run was with the
+  first, thinner one.
 - [ ] **Copy additional references** — SHA / branch / permalink to a line.
 
 #### The other direction: an agent calling slussa

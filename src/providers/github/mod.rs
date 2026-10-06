@@ -7,6 +7,7 @@ mod commits;
 mod diff;
 mod events;
 mod graphql;
+mod issues;
 mod merge;
 mod pagination;
 mod prs;
@@ -21,6 +22,7 @@ pub use comments::{
 };
 pub use commits::fetch_commits;
 pub use diff::{fetch_commit_diff, fetch_diff, fetch_diff_text};
+pub use issues::fetch_issue_text;
 pub use merge::{merge, set_auto_merge};
 pub use prs::{fetch_info, fetch_pr, fetch_prs};
 pub use repo::GhRepo;

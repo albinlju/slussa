@@ -19,6 +19,18 @@ pub(crate) fn origin_url() -> Result<String, PreflightError> {
     Ok(String::from_utf8_lossy(&output.stdout).trim().to_string())
 }
 
+/// The top of the repository the working directory is in, where its rules files
+/// are kept.
+pub(crate) fn repo_root() -> Option<std::path::PathBuf> {
+    let output = Command::new("git")
+        .args(["rev-parse", "--show-toplevel"])
+        .output()
+        .ok()
+        .filter(|output| output.status.success())?;
+    let path = String::from_utf8_lossy(&output.stdout).trim().to_owned();
+    (!path.is_empty()).then(|| std::path::PathBuf::from(path))
+}
+
 pub(crate) fn parse_host(url: &str) -> Option<String> {
     let (authority, _) = crate::git_url::split(url)?;
     let host_port = authority.rsplit('@').next().unwrap_or(authority);

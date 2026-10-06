@@ -113,6 +113,18 @@ impl Provider {
         }
     }
 
+    /// What an issue the PR closes says. `None` for one in another repository,
+    /// whose number is not this repository's to ask for.
+    pub fn fetch_issue_text(
+        &self,
+        issue: &crate::domain::pr::LinkedIssue,
+    ) -> Result<Option<crate::domain::pr::IssueText>, FetchError> {
+        match self {
+            Self::GitHub(repo) => github::fetch_issue_text(repo, issue),
+            Self::BitbucketDc(_) => Ok(None),
+        }
+    }
+
     pub fn fetch_builds(&self, pr_id: PrId) -> Result<Vec<Build>, FetchError> {
         match self {
             Self::GitHub(repo) => github::fetch_builds(repo, pr_id),

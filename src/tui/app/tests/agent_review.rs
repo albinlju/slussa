@@ -53,10 +53,14 @@ async fn a_asks_what_it_will_run_and_enter_runs_it() {
     let text = screen_text(&mut app);
     assert!(text.contains("Ask an agent to review this PR?"), "{text}");
     assert!(text.contains("Runs: claude -p"), "it names the command");
-    assert!(
-        text.contains("title, description and diff"),
-        "and what it is given"
-    );
+    for given in [
+        "title and description",
+        "the issues it closes",
+        "the repository's rules",
+        "and the diff",
+    ] {
+        assert!(text.contains(given), "and what it is given: {given}");
+    }
     assert!(text.contains("nothing is posted"));
     assert!(!running(&app), "nothing has started yet");
 

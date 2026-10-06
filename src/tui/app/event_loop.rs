@@ -38,6 +38,9 @@ pub struct App {
     pub(super) seen_dirty: bool,
     /// Where what agents proposed is read from; none in a test.
     pub(super) proposals_source: Option<super::proposals::ProposalsSource>,
+    /// Where the repository's rules files are, for an asked-for review; none in a
+    /// test.
+    pub(super) review_root: Option<std::path::PathBuf>,
     /// A PR to open as soon as it is read, named when slussa was started.
     pub(super) start_on: Option<PrId>,
     pub state: AppState,
@@ -66,6 +69,7 @@ impl App {
             seen_file: SeenFile::Unavailable,
             seen_dirty: false,
             proposals_source: None,
+            review_root: None,
             start_on: None,
             state: AppState::new(store::Store::new(user, provider.capabilities())),
             provider,

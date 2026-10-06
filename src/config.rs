@@ -14,6 +14,21 @@ pub struct Config {
     /// arguments, given the PR's title, description and diff on standard input.
     /// An empty list turns the key off.
     pub agent_review: Option<Vec<String>>,
+    /// A file with what the reader wants an asked-for review to be, instead of
+    /// the built-in instructions. What the agent is given about the PR and the
+    /// form of its answer stay slussa's.
+    pub agent_review_instructions: Option<String>,
+}
+
+/// A path from the config, with a leading `~/` meaning the home directory.
+pub fn expand_home(path: &str) -> PathBuf {
+    match path
+        .strip_prefix("~/")
+        .and_then(|rest| dirs::home_dir().map(|home| home.join(rest)))
+    {
+        Some(expanded) => expanded,
+        None => PathBuf::from(path),
+    }
 }
 
 /// What reviews a PR when the config does not say.
@@ -104,6 +119,23 @@ mod tests {
         // One string would need a shell to split; it is refused, not guessed at.
         assert!(parse("agent_review = \"claude -p\"\n").is_err());
         assert_eq!(default_agent_review(), ["claude", "-p"]);
+    }
+
+    #[test]
+    fn reads_the_instructions_file_and_expands_the_home_directory() {
+        let config = parse("agent_review_instructions = \"~/review.md\"\n").unwrap();
+        assert_eq!(
+            config.agent_review_instructions.as_deref(),
+            Some("~/review.md")
+        );
+        assert!(parse("").unwrap().agent_review_instructions.is_none());
+        let home = dirs::home_dir().unwrap();
+        assert_eq!(expand_home("~/review.md"), home.join("review.md"));
+        assert_eq!(
+            expand_home("/etc/review.md"),
+            PathBuf::from("/etc/review.md")
+        );
+        assert_eq!(expand_home("review.md"), PathBuf::from("review.md"));
     }
 
     #[test]

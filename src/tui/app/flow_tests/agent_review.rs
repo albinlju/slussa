@@ -159,3 +159,140 @@ async fn asking_twice_runs_one_review() {
         notice(&app)
     );
 }
+
+fn with_issues(app: &mut App, issues: Vec<crate::domain::pr::LinkedIssue>) {
+    if let Some(data) = app.state.store.cache.details.get_mut(&PrId(42)) {
+        data.info = LoadState::Loaded(crate::domain::pr::PrInfo {
+            description: Some("Make it fast.".into()),
+            labels: vec![],
+            issues,
+        });
+    }
+}
+
+fn issue(number: u64, url: &str) -> crate::domain::pr::LinkedIssue {
+    crate::domain::pr::LinkedIssue {
+        number,
+        title: format!("Issue {number}"),
+        url: Some(url.into()),
+    }
+}
+
+/// An agent that keeps what it is given, and finds nothing.
+fn keeping(prompt: &std::path::Path) -> String {
+    format!("cat > '{}'; echo '{{\"comments\": []}}'", prompt.display())
+}
+
+#[tokio::test]
+async fn the_agent_is_given_the_issues_the_rules_and_the_readers_own_instructions() {
+    let dir = TempDir::new("agent-review");
+    let prompt = dir.path().join("prompt.txt");
+    let root = dir.path().join("repo");
+    std::fs::create_dir_all(&root).unwrap();
+    std::fs::write(root.join("AGENTS.md"), "Never unwrap.").unwrap();
+    let instructions = dir.path().join("review.md");
+    std::fs::write(&instructions, "Only look for security problems.").unwrap();
+
+    let _gh = fake_gh()
+        .on(
+            "issues/12",
+            r#"{"title": "Issue 12", "body": "It must be fast."}"#,
+        )
+        .install();
+    let mut app = app_asking(&keeping(&prompt), &dir);
+    app.review_root = Some(root);
+    app.state.store.agent_review_instructions = Some(instructions);
+    with_issues(
+        &mut app,
+        vec![
+            issue(12, "https://github.com/octo/repo/issues/12"),
+            // In another repository: its number is not this one's to ask for.
+            issue(7, "https://github.com/other/repo/issues/7"),
+        ],
+    );
+    app.apply(Action::Effect(Effect::RunAgentReview { pr_id: PrId(42) }));
+    settle(&mut app).await;
+
+    let given = std::fs::read_to_string(prompt).unwrap();
+    for wanted in [
+        "Only look for security problems.",
+        "--- ISSUE #12",
+        "It must be fast.",
+        "THE REPOSITORY'S OWN RULES: AGENTS.md",
+        "Never unwrap.",
+        "Make it fast.",
+    ] {
+        assert!(given.contains(wanted), "the agent was not given {wanted:?}");
+    }
+    assert!(
+        !given.contains("1. Spec."),
+        "the readers instructions replace the built-in"
+    );
+    assert!(
+        !given.contains("ISSUE #7"),
+        "an issue of another repository is not read"
+    );
+    assert!(app.state.store.errors.is_empty());
+    assert!(
+        !notice(&app).contains("could not be read"),
+        "{}",
+        notice(&app)
+    );
+}
+
+#[tokio::test]
+async fn without_instructions_or_rules_the_built_in_review_is_enough() {
+    let dir = TempDir::new("agent-review");
+    let prompt = dir.path().join("prompt.txt");
+    let _gh = fake_gh().install();
+    let mut app = app_asking(&keeping(&prompt), &dir);
+    app.review_root = Some(dir.path().join("a-repo-with-no-rules-files"));
+    app.apply(Action::Effect(Effect::RunAgentReview { pr_id: PrId(42) }));
+    settle(&mut app).await;
+    let given = std::fs::read_to_string(prompt).unwrap();
+    assert!(given.contains("1. Spec.") && given.contains("2. Standards and correctness."));
+    assert!(!given.contains("OWN RULES"));
+}
+
+#[tokio::test]
+async fn instructions_that_cannot_be_read_stop_the_review_and_are_not_replaced_by_the_built_in() {
+    let dir = TempDir::new("agent-review");
+    let prompt = dir.path().join("prompt.txt");
+    let _gh = fake_gh().install();
+    let mut app = app_asking(&keeping(&prompt), &dir);
+    app.state.store.agent_review_instructions = Some(dir.path().join("missing.md"));
+    app.apply(Action::Effect(Effect::RunAgentReview { pr_id: PrId(42) }));
+    settle(&mut app).await;
+    let error = app
+        .state
+        .store
+        .errors
+        .get(&PrId(42))
+        .cloned()
+        .unwrap_or_default();
+    assert!(
+        error.contains("The instructions in") && error.contains("could not be read"),
+        "{error}"
+    );
+    assert!(!prompt.exists(), "the agent was not run");
+}
+
+#[tokio::test]
+async fn an_issue_that_cannot_be_read_is_said_so_and_the_review_goes_on() {
+    let dir = TempDir::new("agent-review");
+    let prompt = dir.path().join("prompt.txt");
+    let _gh = fake_gh().fail("issues/12", 1, "gh: HTTP 500").install();
+    let mut app = app_asking(&keeping(&prompt), &dir);
+    with_issues(
+        &mut app,
+        vec![issue(12, "https://github.com/octo/repo/issues/12")],
+    );
+    app.apply(Action::Effect(Effect::RunAgentReview { pr_id: PrId(42) }));
+    settle(&mut app).await;
+    assert!(
+        notice(&app).contains("1 issue(s) could not be read"),
+        "{}",
+        notice(&app)
+    );
+    assert!(prompt.exists(), "the agent was run without it");
+}

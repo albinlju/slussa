@@ -414,8 +414,16 @@ impl PrDetailScreen {
             PrAction::OpenComment => return self.open_comment(pr_id, ctx),
             PrAction::OpenAgentReview => {
                 let command = ctx.store.agent_review.join(" ");
+                let instructions = ctx
+                    .store
+                    .agent_review_instructions
+                    .as_ref()
+                    .map_or_else(String::new, |path| {
+                        format!("Instructions: {}\n", path.display())
+                    });
                 let preview = format!(
-                    "Runs: {command}\nGiven: the title, description and diff of PR #{pr_id}.\n\
+                    "Runs: {command}\n{instructions}Given: the title and description of PR #{pr_id},\n\
+                     the issues it closes, the repository's rules\n(AGENTS.md, CLAUDE.md) and the diff.\n\
                      It proposes comments; nothing is posted."
                 );
                 self.ask(ConfirmDialog::new(ConfirmKind::AgentReview).with_preview(preview));

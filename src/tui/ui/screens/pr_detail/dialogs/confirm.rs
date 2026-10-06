@@ -87,7 +87,18 @@ fn render(frame: &mut Frame<'_>, dialog: &ConfirmDialog, pr: &PrSummary<'_>, are
         Line::from(Span::styled(kind.prompt(), Style::default().fg(theme.fg))),
         Line::default(),
     ];
-    for (index, line) in context.into_iter().flat_map(str::lines).take(3).enumerate() {
+    // A comment to delete is a few lines; what an agent is given takes more to say.
+    let shown = if kind == ConfirmKind::AgentReview {
+        8
+    } else {
+        3
+    };
+    for (index, line) in context
+        .into_iter()
+        .flat_map(str::lines)
+        .take(shown)
+        .enumerate()
+    {
         lines.insert(
             1 + index,
             Line::styled(line.to_owned(), Style::default().fg(theme.muted)),
