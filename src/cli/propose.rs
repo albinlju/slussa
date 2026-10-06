@@ -31,7 +31,7 @@ use crate::{
         proposal_document::{self, Parsed, Source},
     },
     local::{
-        proposals::{Batch, Imported, SummaryKept, import},
+        proposals::{self, Batch, Imported, SummaryKept, import},
         scope::scope,
     },
     session::remote,
@@ -68,10 +68,10 @@ enum Command {
 
 pub(super) fn run(args: &[String]) -> ExitCode {
     match run_import(args) {
-        Ok(report) => {
-            println!("{}", serde_json::to_string(&report).unwrap_or_default());
-            ExitCode::SUCCESS
-        }
+        Ok(report) => exit::print(
+            "propose",
+            &serde_json::to_string(&report).unwrap_or_default(),
+        ),
         Err(failure) => exit::report("propose", &failure),
     }
 }
@@ -188,16 +188,17 @@ fn run_import(args: &[String]) -> Result<Report, Failure> {
     let (parsed, lines_checked) =
         check::checked(session.provider(), pr, parsed, found.head_oid.as_deref())?;
     let head = parsed.head.clone();
+    let current = found.head_oid.as_deref().and_then(CommitOid::parse);
     let batch = Batch {
         comments: parsed.comments,
         summary: parsed.summary,
+        current: current.filter(|current| *current == head),
     };
     let origin = remote::origin_url().map_err(|e| Failure::new(Kind::Failed, e.to_string()))?;
     let scope_name = scope(session.provider(), &origin, session.user())
         .map_err(|e| Failure::new(Kind::Failed, e.to_string()))?;
-    let root = dirs::data_local_dir()
-        .ok_or_else(|| Failure::new(Kind::Failed, "cannot locate the local data directory"))?
-        .join("slussa/proposals");
+    let root = proposals::root()
+        .ok_or_else(|| Failure::new(Kind::Failed, "cannot locate the local data directory"))?;
     let report = Report {
         lines_checked,
         ..import_batch(
@@ -246,6 +247,7 @@ mod tests {
             Batch {
                 comments: parsed.comments,
                 summary: parsed.summary,
+                current: None,
             },
         )
     }

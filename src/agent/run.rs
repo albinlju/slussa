@@ -5,8 +5,9 @@ use std::{
     io::{Read, Write},
     process::{Command, Stdio},
     sync::{
-        Arc,
+        Arc, Mutex, PoisonError,
         atomic::{AtomicBool, AtomicUsize, Ordering},
+        mpsc,
     },
     time::{Duration, Instant},
 };
@@ -16,6 +17,11 @@ pub const TIMEOUT: Duration = Duration::from_mins(10);
 
 /// How much of its answer is read, so that a runaway command cannot fill memory.
 const MAX_ANSWER_BYTES: u64 = 4 * 1024 * 1024;
+
+/// How long the rest of what a command printed is waited for once it has ended.
+/// It has written everything by then, so this is only reached when it left a
+/// process behind that holds its output open, and that one is not waited for.
+const DRAIN: Duration = Duration::from_millis(500);
 
 #[derive(Debug, thiserror::Error)]
 pub enum AgentError {
@@ -39,6 +45,27 @@ pub enum AgentError {
     NoJson { program: String },
     #[error("what `{program}` answered cannot be used: {reason}")]
     Unusable { program: String, reason: String },
+}
+
+impl AgentError {
+    /// The failure for the log: which one it was and how much was said, never
+    /// what the command printed, which can repeat the PR it was given.
+    pub fn for_log(&self) -> String {
+        match self {
+            Self::NoCommand => "no command".into(),
+            Self::NotStarted { reason, .. } => format!("not started: {reason}"),
+            Self::TimedOut { after, .. } => format!("timed out after {}s", after.as_secs()),
+            Self::Failed { code, stderr, .. } => {
+                format!("failed{} stderr_bytes={}", exit(*code), stderr.len())
+            }
+            Self::NotText { .. } => "answer not UTF-8".into(),
+            Self::Cancelled { .. } => "stopped".into(),
+            Self::NoJson { .. } => "no JSON in the answer".into(),
+            Self::Unusable { reason, .. } => {
+                format!("unusable answer reason_bytes={}", reason.len())
+            }
+        }
+    }
 }
 
 fn exit(code: Option<i32>) -> String {
@@ -139,10 +166,12 @@ pub fn run(
     // Held until the process is gone, whichever way this ends.
     let _running = Running::start();
     let input = input.as_bytes().to_vec();
-    // A command that stops reading its input closes the pipe; that is not an error here.
-    let writer = std::thread::spawn(move || stdin.write_all(&input));
-    let out = reader(stdout);
-    let err = reader(stderr);
+    // A command that stops reading its input closes the pipe; that is not an
+    // error here, and the writing is not waited for: a process the command left
+    // behind may hold the pipe and never read it.
+    std::thread::spawn(move || stdin.write_all(&input));
+    let out = Reading::of(stdout);
+    let err = Reading::of(stderr);
     let started = Instant::now();
     let status = loop {
         match child.try_wait() {
@@ -167,9 +196,9 @@ pub fn run(
             }
         }
     };
-    let _ = writer.join();
-    let stdout = out.join().unwrap_or_default();
-    let stderr = String::from_utf8_lossy(&err.join().unwrap_or_default()).into_owned();
+    let until = Instant::now() + DRAIN;
+    let stdout = out.taken(until);
+    let stderr = String::from_utf8_lossy(&err.taken(until)).into_owned();
     if !status.success() {
         return Err(AgentError::Failed {
             program: program.clone(),
@@ -182,12 +211,46 @@ pub fn run(
     })
 }
 
-fn reader(pipe: impl Read + Send + 'static) -> std::thread::JoinHandle<Vec<u8>> {
-    std::thread::spawn(move || {
-        let mut bytes = Vec::new();
-        let _ = pipe.take(MAX_ANSWER_BYTES).read_to_end(&mut bytes);
-        bytes
-    })
+/// What a pipe of the command has given so far, and word of when it has given
+/// everything. Kept as it comes, so that what was printed can be taken without
+/// waiting for a pipe that is never closed.
+struct Reading {
+    bytes: Arc<Mutex<Vec<u8>>>,
+    ended: mpsc::Receiver<()>,
+}
+
+impl Reading {
+    fn of(pipe: impl Read + Send + 'static) -> Self {
+        let bytes = Arc::new(Mutex::new(Vec::new()));
+        let (end, ended) = mpsc::channel();
+        let kept = Arc::clone(&bytes);
+        std::thread::spawn(move || {
+            let mut pipe = pipe.take(MAX_ANSWER_BYTES);
+            let mut chunk = [0; 8192];
+            loop {
+                match pipe.read(&mut chunk) {
+                    Ok(0) => break,
+                    Ok(read) => kept
+                        .lock()
+                        .unwrap_or_else(PoisonError::into_inner)
+                        .extend(chunk.iter().take(read)),
+                    Err(error) if error.kind() == std::io::ErrorKind::Interrupted => {}
+                    Err(_) => break,
+                }
+            }
+            let _ = end.send(());
+        });
+        Self { bytes, ended }
+    }
+
+    /// What was read, waiting until `until` for the pipe to end.
+    fn taken(self, until: Instant) -> Vec<u8> {
+        let wait = until.saturating_duration_since(Instant::now());
+        if self.ended.recv_timeout(wait).is_err() {
+            tracing::warn!("an agent command left its output open; taking what it had printed");
+        }
+        std::mem::take(&mut *self.bytes.lock().unwrap_or_else(PoisonError::into_inner))
+    }
 }
 
 #[cfg(test)]
@@ -231,6 +294,21 @@ mod tests {
         assert_eq!(error.to_string(), "`sh` failed (exit 3): it went wrong");
     }
 
+    #[test]
+    fn the_log_is_told_which_failure_it_was_and_not_what_the_command_printed() {
+        let failed = AgentError::Failed {
+            program: "agent".into(),
+            code: Some(3),
+            stderr: "the secret title".into(),
+        };
+        assert_eq!(failed.for_log(), "failed (exit 3) stderr_bytes=16");
+        let unusable = AgentError::Unusable {
+            program: "agent".into(),
+            reason: "invalid type: string \"the secret comment\"".into(),
+        };
+        assert!(!unusable.for_log().contains("secret"));
+    }
+
     #[cfg(unix)]
     #[test]
     fn a_command_that_takes_too_long_is_stopped() {
@@ -265,6 +343,23 @@ mod tests {
     fn an_answer_that_is_not_text_is_refused() {
         let error = run(&sh("printf '\\377\\376'"), "", Duration::from_secs(5)).unwrap_err();
         assert!(matches!(error, AgentError::NotText { .. }), "{error}");
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn a_process_the_command_left_behind_with_its_output_open_is_not_waited_for() {
+        let started = Instant::now();
+        let answer = run(
+            &sh("sleep 4 & echo the answer; echo a warning >&2"),
+            "",
+            Duration::from_secs(30),
+        )
+        .unwrap();
+        assert_eq!(answer.trim(), "the answer");
+        assert!(
+            started.elapsed() < Duration::from_secs(3),
+            "the command had ended: what it printed is the answer"
+        );
     }
 
     #[cfg(unix)]

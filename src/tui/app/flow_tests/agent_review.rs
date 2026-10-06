@@ -16,7 +16,22 @@ fn pr_json(head: &str) -> String {
 }
 
 fn fake_gh() -> FakeGh {
+    fake_gh_closing(&json!([]))
+}
+
+/// `gh` for PR 42 as the server has it: the PR, its description with the issues
+/// it closes, and its diff.
+fn fake_gh_closing(issues: &serde_json::Value) -> FakeGh {
+    let pr = json!({"data": {"repository": {"pullRequest": gh_pr(42, "2026-10-01T10:00:00Z")}}});
+    let info = json!({"data": {"repository": {"pullRequest": {
+        "id": "PR_42",
+        "body": "Make it fast.",
+        "labels": {"nodes": [], "pageInfo": {"hasNextPage": false}},
+        "closingIssuesReferences": {"nodes": issues, "pageInfo": {"hasNextPage": false}}
+    }}}});
     FakeGh::new()
+        .on("statusCheckRollup", &pr.to_string())
+        .on("pullRequest(number: $pr)", &info.to_string())
         .on("pr diff 42", DIFF)
         .on("pulls/42", &pr_json("abc123"))
 }
@@ -26,10 +41,10 @@ fn app_asking(script: &str, dir: &TempDir) -> App {
     let mut app = app();
     app.state = crate::tui::ui::regression_tests::fixture();
     app.state.store.agent_review = vec!["sh".into(), "-c".into(), script.into()];
-    app.proposals_source = Some(ProposalsSource {
-        root: dir.path().join("proposals"),
-        scope: "scope".into(),
-    });
+    app.proposals_source = Some(ProposalsSource::of(
+        dir.path().join("proposals"),
+        "scope".into(),
+    ));
     app
 }
 
@@ -91,8 +106,12 @@ async fn the_agent_is_given_the_pr_and_its_answer_is_kept_as_proposals_on_lines_
     assert!(app.state.store.errors.is_empty());
 
     let given = std::fs::read_to_string(prompt).unwrap();
+    // The PR is read from the server for the review: the description and the
+    // issues are not on screen until the PR's info has been read, and here it
+    // never was.
     for wanted in [
-        "Component migration",
+        "PR number 42",
+        "Make it fast.",
         "commit abc123",
         "+new",
         "feature -> main",
@@ -160,22 +179,8 @@ async fn asking_twice_runs_one_review() {
     );
 }
 
-fn with_issues(app: &mut App, issues: Vec<crate::domain::pr::LinkedIssue>) {
-    if let Some(data) = app.state.store.cache.details.get_mut(&PrId(42)) {
-        data.info = LoadState::Loaded(crate::domain::pr::PrInfo {
-            description: Some("Make it fast.".into()),
-            labels: vec![],
-            issues,
-        });
-    }
-}
-
-fn issue(number: u64, url: &str) -> crate::domain::pr::LinkedIssue {
-    crate::domain::pr::LinkedIssue {
-        number,
-        title: format!("Issue {number}"),
-        url: Some(url.into()),
-    }
+fn issue(number: u64, url: &str) -> serde_json::Value {
+    json!({"number": number, "title": format!("Issue {number}"), "url": url})
 }
 
 /// An agent that keeps what it is given, and finds nothing.
@@ -193,23 +198,19 @@ async fn the_agent_is_given_the_issues_the_rules_and_the_readers_own_instruction
     let instructions = dir.path().join("review.md");
     std::fs::write(&instructions, "Only look for security problems.").unwrap();
 
-    let _gh = fake_gh()
-        .on(
-            "issues/12",
-            r#"{"title": "Issue 12", "body": "It must be fast."}"#,
-        )
-        .install();
+    let _gh = fake_gh_closing(&json!([
+        issue(12, "https://github.com/octo/repo/issues/12"),
+        // In another repository: its number is not this one's to ask for.
+        issue(7, "https://github.com/other/repo/issues/7"),
+    ]))
+    .on(
+        "issues/12",
+        r#"{"title": "Issue 12", "body": "It must be fast."}"#,
+    )
+    .install();
     let mut app = app_asking(&keeping(&prompt), &dir);
     app.review_root = Some(root);
     app.state.store.agent_review_instructions = Some(instructions);
-    with_issues(
-        &mut app,
-        vec![
-            issue(12, "https://github.com/octo/repo/issues/12"),
-            // In another repository: its number is not this one's to ask for.
-            issue(7, "https://github.com/other/repo/issues/7"),
-        ],
-    );
     app.apply(Action::Effect(Effect::RunAgentReview { pr_id: PrId(42) }));
     settle(&mut app).await;
 
@@ -281,12 +282,13 @@ async fn instructions_that_cannot_be_read_stop_the_review_and_are_not_replaced_b
 async fn an_issue_that_cannot_be_read_is_said_so_and_the_review_goes_on() {
     let dir = TempDir::new("agent-review");
     let prompt = dir.path().join("prompt.txt");
-    let _gh = fake_gh().fail("issues/12", 1, "gh: HTTP 500").install();
+    let _gh = fake_gh_closing(&json!([issue(
+        12,
+        "https://github.com/octo/repo/issues/12"
+    )]))
+    .fail("issues/12", 1, "gh: HTTP 500")
+    .install();
     let mut app = app_asking(&keeping(&prompt), &dir);
-    with_issues(
-        &mut app,
-        vec![issue(12, "https://github.com/octo/repo/issues/12")],
-    );
     app.apply(Action::Effect(Effect::RunAgentReview { pr_id: PrId(42) }));
     settle(&mut app).await;
     assert!(

@@ -28,10 +28,10 @@ fn screen_text(app: &mut App) -> String {
 fn app_with_agent(dir: &TempDir) -> App {
     let mut app = app();
     app.state.store.agent_review = vec!["claude".into(), "-p".into()];
-    app.proposals_source = Some(ProposalsSource {
-        root: dir.path().to_path_buf(),
-        scope: "scope".into(),
-    });
+    app.proposals_source = Some(ProposalsSource::of(
+        dir.path().to_path_buf(),
+        "scope".into(),
+    ));
     detail(&mut app, DetailTab::Overview);
     app
 }

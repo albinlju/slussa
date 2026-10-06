@@ -8,33 +8,48 @@ use std::path::PathBuf;
 use super::App;
 use crate::{
     domain::{pr::PrId, seen::How},
-    local::proposals::read,
+    local::proposals::{self, Stamp, read_changed},
 };
 
 /// Where the proposals for this repository and account are read from.
 pub struct ProposalsSource {
     pub(super) root: PathBuf,
     pub(super) scope: String,
+    /// Which file was read last: it is read again only when it is another.
+    read: Stamp,
+}
+
+impl ProposalsSource {
+    /// The file for `scope` under `root`, not read yet.
+    pub(super) fn of(root: PathBuf, scope: String) -> Self {
+        Self {
+            root,
+            scope,
+            read: Stamp::default(),
+        }
+    }
 }
 
 impl App {
     /// Read what agents have proposed from `scope`'s file, from here on.
     pub(super) fn open_proposals(&mut self, scope: String) {
-        let Some(root) = dirs::data_local_dir().map(|dir| dir.join("slussa/proposals")) else {
+        let Some(root) = proposals::root() else {
             return;
         };
-        self.proposals_source = Some(ProposalsSource { root, scope });
+        self.proposals_source = Some(ProposalsSource::of(root, scope));
         self.read_proposals();
     }
 
-    /// Read the file again. A file that cannot be read leaves what was read
-    /// before, and says so in the log; it is the agent's file, not the reader's.
+    /// Read the file again, if an import has replaced it since it was read. A
+    /// file that cannot be read leaves what was read before, and says so in the
+    /// log; it is the agent's file, not the reader's.
     pub(super) fn read_proposals(&mut self) {
-        let Some(source) = &self.proposals_source else {
+        let Some(source) = &mut self.proposals_source else {
             return;
         };
-        match read(&source.root, &source.scope) {
-            Ok(proposals) => self.state.store.proposals = proposals,
+        match read_changed(&source.root, &source.scope, &mut source.read) {
+            Ok(Some(proposals)) => self.state.store.proposals = proposals,
+            Ok(None) => {}
             Err(error) => tracing::warn!("not reading the proposals: {error}"),
         }
     }

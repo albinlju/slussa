@@ -106,6 +106,37 @@ impl ScopedFile {
     }
 }
 
+/// Which file a reader without the lock read last, so that it reads again only
+/// once a write has replaced it. At first it is of no file.
+#[derive(Debug, Default, Clone, PartialEq, Eq)]
+pub struct Stamp(Option<Mark>);
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+struct Mark {
+    modified: std::time::SystemTime,
+    len: u64,
+    /// A write replaces the file, so the one after it is another file.
+    #[cfg(unix)]
+    inode: u64,
+}
+
+impl Stamp {
+    /// The file for `scope` under `root` as it is now.
+    pub fn of(root: &Path, scope: &str) -> io::Result<Self> {
+        let file = match fs::metadata(path_of(root, scope)) {
+            Ok(file) => file,
+            Err(error) if error.kind() == io::ErrorKind::NotFound => return Ok(Self(None)),
+            Err(error) => return Err(error),
+        };
+        Ok(Self(Some(Mark {
+            modified: file.modified()?,
+            len: file.len(),
+            #[cfg(unix)]
+            inode: std::os::unix::fs::MetadataExt::ino(&file),
+        })))
+    }
+}
+
 /// Where the file for `scope` is: a name made from the scope, so the caller
 /// checks the full scope when reading.
 pub fn path_of(root: &Path, scope: &str) -> PathBuf {

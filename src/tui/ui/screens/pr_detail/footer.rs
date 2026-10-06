@@ -53,22 +53,33 @@ fn pr_action_hints(state: &DetailView<'_>) -> Vec<Hint> {
 
 /// The hints of the screen, with first among them that an agent has proposed
 /// something, wherever the reader is: what an agent found is not to be missed
-/// because the reader was not in the Diff when it finished. In the Diff the
-/// count is the one of the diff on screen.
+/// because the reader was not in the Diff when it finished. The PR's own diff
+/// draws them, and counts what is on it itself.
 fn footer_actions(state: &DetailView<'_>, tab: DetailTab) -> Vec<Hint> {
     let mut hints = tab_hints(state, tab);
-    if state.surface().diff_viewer().is_none()
-        && let Some(open) = open_proposals_hint(state)
-    {
+    if let Some(open) = open_proposals_hint(state) {
         hints.insert(0, open);
     }
     hints
 }
 
-/// How many proposals are waiting, and where they are.
+/// How many proposals are waiting, and where they are from here. Only the PR's
+/// own diff draws them: a commit's diff and what is new since the reader looked
+/// are other diffs, and point to it like the rest.
 fn open_proposals_hint(state: &DetailView<'_>) -> Option<Hint> {
-    let open = super::proposed::open_count(state.store, state.pr_id);
-    (open > 0).then(|| Hint::on(format!("{open} proposed by AI (Diff tab)")))
+    let place = match state.surface() {
+        Surface::Diff(_) => return None,
+        // The same tab, one key away (`w: whole diff`).
+        Surface::SinceDiff(_) => "whole diff",
+        Surface::CommitDiff(_)
+        | Surface::CommitList
+        | Surface::Description
+        | Surface::Overview
+        | Surface::Builds
+        | Surface::BuildLog => "Diff tab",
+    };
+    let open = super::proposed::open_count(state.store, state.pr, state.data);
+    (open > 0).then(|| Hint::on(format!("{open} proposed by AI ({place})")))
 }
 
 fn tab_hints(state: &DetailView<'_>, tab: DetailTab) -> Vec<Hint> {
@@ -220,10 +231,12 @@ fn tab_hints(state: &DetailView<'_>, tab: DetailTab) -> Vec<Hint> {
     }
 }
 
-/// That agents have proposed something on this diff, which nothing else shows
-/// until the cursor reaches a line with one.
+/// That agents have proposed something on the PR's diff, which nothing else
+/// shows until the cursor reaches a line with one.
 fn proposals_hint(state: &DetailView<'_>) -> Option<Hint> {
-    state.surface().diff_viewer()?;
+    let Surface::Diff(_) = state.surface() else {
+        return None;
+    };
     let here = super::proposed::on_this_diff(state.store, state.pr_id, state.data).len();
     let elsewhere = super::proposed::for_another_commit(state.store, state.pr_id, state.data);
     match (here, elsewhere) {

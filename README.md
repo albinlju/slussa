@@ -223,8 +223,9 @@ document is tied to it:
 ```
 
 `side` is `new` (the default) or `old`; `id` and `agent` are optional, and a finding
-that is handed in again, by its `id` or else by its words on the same line of the same
-commit, is not kept twice. A field that is not in the schema is refused, so that a
+that is handed in again on the same line of the same commit, in the same words or under
+the `id` the same agent gave it, is not kept twice. An `id` alone does not make two
+findings one: two reviews may both call their first `F1`. A field that is not in the schema is refused, so that a
 misspelling is not ignored. `head` may be written short, with seven characters or more:
 when it is the PR's head it is written out, since a proposal is shown on the diff of
 exactly its commit. A document of the PR's head is checked against the PR's diff before
@@ -232,7 +233,8 @@ anything is kept: a comment on a line that is not in the diff could never be sho
 the whole document is refused and the error names each such comment
 (`comments[1]: src/a.rs line 40 (new)`), for the agent to correct and hand in again. A
 document of an older commit is kept unchecked, and shown as written against another
-commit.
+commit. A document of the PR's head replaces what was proposed on the PR's older
+commits, and a PR that nothing has been handed in on for 90 days is forgotten.
 
 It prints one line of JSON and exits: `{"schema":1,"pr":44,"added":2,"duplicates":0,
 "summary":"added","head":"...","current_head":"...","stale":false,"lines_checked":true}`.
@@ -252,7 +254,9 @@ mark as an agent's comments), and the footer counts them. With the cursor on one
 (a line comment joins the review in progress like any other), and `d` discards it.
 Either way it is not shown again, and that is kept with what you have looked at. A
 proposal written against another commit than the diff's is not drawn on its lines,
-only counted in the footer, so that it is never on the wrong line. The proposals are
+only counted in the Diff tab's footer, so that it is never on the wrong line. Nothing
+can be done with it, so it is not among those that wait for you; a new review of the
+PR replaces it. The proposals are
 read when a PR is opened and when it refreshes. What is waiting is said wherever you
 are in the PR, first in the footer (`2 proposed by AI (Diff tab)`), and the Overview's
 sidebar has an *AI review* section with the summary an agent handed in (marked as

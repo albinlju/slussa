@@ -232,6 +232,12 @@ impl PrData {
             || self.range_diffs.values().any(LoadState::is_loading)
             || self.build_logs.values().any(LoadState::is_loading)
     }
+
+    /// The head of the PR's own diff, once it is read.
+    pub fn own_diff_head(&self) -> Option<&str> {
+        let revision = self.diff.loaded()?.revision.as_ref()?;
+        (!revision.commit).then_some(revision.head.as_str())
+    }
 }
 
 impl PrData {

@@ -20,11 +20,10 @@ pub(super) fn run(args: &[String]) -> ExitCode {
             // A terminal would act on a control character in what a PR holds; an
             // agent that reads it through a pipe is given it as it is.
             if std::io::stdout().is_terminal() {
-                println!("{}", printable(&text));
+                exit::print("context", &printable(&text))
             } else {
-                println!("{text}");
+                exit::print("context", &text)
             }
-            ExitCode::SUCCESS
         }
         Err(failure) => exit::report("context", &failure),
     }

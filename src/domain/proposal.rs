@@ -73,7 +73,7 @@ impl AgentName {
 }
 
 /// The agent's own name for a finding, kept so that the same finding sent again
-/// is not shown twice.
+/// in other words is not shown twice (`Proposal::same_as`).
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(try_from = "String", into = "String")]
 pub struct FindingId(String);
@@ -219,19 +219,18 @@ impl Proposal {
         self.agent.as_ref().map(AgentName::as_str)
     }
 
-    /// The same finding again: the agent's own id for it when it gave one, else
-    /// the same words on the same line of the same commit.
+    /// The same finding again: on the same line of the same commit, in the same
+    /// words or under the id the same agent gave it before. An id alone does not
+    /// say: agents number what they find from the start each time, so two
+    /// reviews both have an `F1`, and they are not the same finding.
     pub fn same_as(&self, other: &Self) -> bool {
-        self.head == other.head
-            && match (&self.id, &other.id) {
-                (Some(a), Some(b)) => a == b,
-                (None, _) | (_, None) => {
-                    self.path == other.path
-                        && self.line == other.line
-                        && self.side == other.side
-                        && self.body == other.body
-                }
-            }
+        let same_place = self.head == other.head
+            && self.path == other.path
+            && self.line == other.line
+            && self.side == other.side;
+        let named_again = self.agent == other.agent
+            && matches!((&self.id, &other.id), (Some(a), Some(b)) if a == b);
+        same_place && (named_again || self.body == other.body)
     }
 }
 
@@ -349,7 +348,7 @@ mod tests {
     }
 
     #[test]
-    fn the_same_finding_is_the_same_by_its_id_or_else_by_its_words() {
+    fn the_same_finding_is_one_on_the_same_line_by_its_words_or_its_agents_id() {
         let first = Proposal::new(input()).unwrap();
         assert!(first.same_as(&Proposal::new(input()).unwrap()));
 
@@ -357,7 +356,8 @@ mod tests {
         other.body = "Another thing.".into();
         assert!(!first.same_as(&Proposal::new(other).unwrap()));
 
-        // With ids, the id says, whatever the words and the line.
+        // The agent's own id says it is the same finding in other words, on the
+        // line it was on.
         let with_id = |id: &str, body: &str, line: usize| {
             let mut input = input();
             input.id = Some(id.into());
@@ -365,8 +365,19 @@ mod tests {
             input.line = line;
             Proposal::new(input).unwrap()
         };
-        assert!(with_id("F1", "words", 3).same_as(&with_id("F1", "other words", 9)));
-        assert!(!with_id("F1", "words", 3).same_as(&with_id("F2", "words", 3)));
+        assert!(with_id("F1", "words", 3).same_as(&with_id("F1", "other words", 3)));
+        assert!(!with_id("F1", "words", 3).same_as(&with_id("F2", "other words", 3)));
+        // Two reviews both number from F1: the id on another line, or from
+        // another agent, is another finding.
+        assert!(!with_id("F1", "words", 3).same_as(&with_id("F1", "other words", 9)));
+        let mut another = input();
+        another.id = Some("F1".into());
+        another.line = 3;
+        another.body = "other words".into();
+        another.agent = Some("second".into());
+        assert!(!with_id("F1", "words", 3).same_as(&Proposal::new(another).unwrap()));
+        // The same words on the same line are one finding, whatever it is called.
+        assert!(with_id("F1", "words", 3).same_as(&with_id("F2", "words", 3)));
 
         // Another commit is another finding.
         let mut later = input();

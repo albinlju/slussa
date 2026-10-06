@@ -195,8 +195,10 @@ let an agent help without deciding.
   ordinary path, into the review in progress when there is one) and `d` discards it.
   What the reader did is kept in the seen file (`local/seen.rs`, an optional list, so
   the version 1 file reads and writes as before), which also means it is forgotten
-  with the PR after 90 days. A proposal for another commit is counted in the footer
-  and not drawn. What is waiting is said in the footer on every tab, and the Overview's
+  with the PR after 90 days. A proposal for another commit is counted in the Diff
+  tab's footer and not drawn; it is not among those that wait, and a review of the PR's
+  head replaces what was proposed on its older commits. A PR nothing was handed in on
+  for 90 days is forgotten at the next import. What is waiting is said in the footer on every tab, and the Overview's
   sidebar shows the latest summary (marked when it is of an older commit) with the count
   left. At most 1 000 per PR, 500 per document and 2 MiB. A document of the PR's
   head is checked against the PR's diff before it is kept, and one with a comment on

@@ -46,6 +46,7 @@ fn app_with(proposals: Vec<Proposal>) -> App {
         ForPr {
             comments: proposals,
             summaries: vec![],
+            at: None,
         },
     );
     detail(&mut app, DetailTab::Diff);
@@ -180,14 +181,14 @@ async fn a_proposal_the_reader_dealt_with_stays_dealt_with_when_the_file_is_read
         PrId(42),
         crate::local::proposals::Batch {
             comments: vec![proposed, proposal("abc123", 2, "Another.")],
-            summary: None,
+            ..Default::default()
         },
     )
     .unwrap();
-    app.proposals_source = Some(ProposalsSource {
-        root: dir.path().to_path_buf(),
-        scope: "scope".into(),
-    });
+    app.proposals_source = Some(ProposalsSource::of(
+        dir.path().to_path_buf(),
+        "scope".into(),
+    ));
     press(&mut app, KeyCode::Char('F'));
     let text = screen_text(&mut app);
     assert!(
@@ -195,6 +196,49 @@ async fn a_proposal_the_reader_dealt_with_stays_dealt_with_when_the_file_is_read
         "discarded stays discarded"
     );
     assert!(text.contains("1 proposed by AI"), "the new one is counted");
+}
+
+#[test]
+fn a_proposal_for_another_commit_does_not_wait_for_the_reader() {
+    // Nothing can be done with it, so nothing says it is waiting.
+    let mut app = overview_with(
+        vec![proposal("def456", 1, "On an older one.")],
+        vec![summary("abc123", "All is well.")],
+    );
+    let text = screen_text(&mut app);
+    assert!(!text.contains("proposed by AI"), "{text}");
+    assert!(text.contains("Nothing left to decide"));
+
+    // Beside one of this commit, only that one waits.
+    let mut both = overview_with(
+        vec![
+            proposal("abc123", 1, "On this commit."),
+            proposal("def456", 1, "On an older one."),
+        ],
+        vec![],
+    );
+    let text = screen_text(&mut both);
+    assert!(text.contains("1 proposed by AI (Diff tab)"), "{text}");
+    assert!(text.contains("1 proposed · Diff tab"));
+}
+
+#[test]
+fn a_commits_diff_points_to_the_diff_tab_and_does_not_count_them_as_its_own() {
+    let mut app = app_with(vec![proposal("abc123", 1, "This can panic.")]);
+    let data = app.state.store.cache.details.get_mut(&PrId(42)).unwrap();
+    let LoadState::Loaded(diff) = &data.diff else {
+        panic!()
+    };
+    data.commit_diffs
+        .insert("abcdef123456".into(), LoadState::Loaded(diff.clone()));
+    app.apply(Action::Detail(DetailAction::Nav(NavAction::SelectTab(
+        DetailTab::Commits,
+    ))));
+    press(&mut app, KeyCode::Enter);
+    assert!(app.state.ui.detail.commits.open_commit().is_some());
+    let text = screen_text(&mut app);
+    assert!(!text.contains("This can panic."), "not drawn on a commit");
+    assert!(text.contains("1 proposed by AI (Diff tab)"), "{text}");
 }
 
 fn summary(head: &str, text: &str) -> crate::domain::proposal::Summary {
@@ -209,6 +253,7 @@ fn overview_with(comments: Vec<Proposal>, summaries: Vec<crate::domain::proposal
         ForPr {
             comments,
             summaries,
+            at: None,
         },
     );
     detail(&mut app, DetailTab::Overview);

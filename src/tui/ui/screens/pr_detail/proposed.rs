@@ -1,6 +1,7 @@
 //! Which of the agents' proposals the PR's diff shows: those the reader has not
 //! dealt with, written against the commit the diff is of. One written against
-//! another commit does not belong on these lines, and is only counted.
+//! another commit does not belong on these lines: the Diff tab says how many
+//! there are, and they are not counted among those that wait for the reader.
 
 use crate::{
     domain::{
@@ -14,13 +15,25 @@ use crate::{
     },
 };
 
-/// How many proposals the reader has not dealt with, whatever commit they are
-/// written against.
-pub fn open_count(store: &Store, pr_id: PrId) -> usize {
-    store.proposals.for_pr(pr_id).map_or(0, |held| {
+/// The commit whose proposals the reader can decide on: the one the PR's diff
+/// is of once it is read, and until then where the list says the branch is.
+fn head_to_decide<'a>(pr: &'a PullRequest, data: Option<&'a PrData>) -> Option<&'a str> {
+    diff_head(data).or(pr.head_oid.as_deref())
+}
+
+/// How many proposals wait for the reader: those of the commit the Diff tab
+/// shows, which it draws and the reader takes or discards there. One written
+/// against another commit is not among them. Nothing can be done with it, so
+/// it would wait for ever; the Diff tab says that it is there.
+pub fn open_count(store: &Store, pr: &PullRequest, data: Option<&PrData>) -> usize {
+    let shown = head_to_decide(pr, data);
+    store.proposals.for_pr(pr.id).map_or(0, |held| {
         held.comments
             .iter()
-            .filter(|proposal| !store.seen.is_handled(pr_id, proposal))
+            .filter(|proposal| {
+                shown.is_none_or(|shown| proposal.head().as_str() == shown)
+                    && !store.seen.is_handled(pr.id, proposal)
+            })
             .count()
     })
 }
@@ -30,10 +43,11 @@ pub fn open_count(store: &Store, pr_id: PrId) -> usize {
 pub fn ai_review<'a>(
     store: &'a Store,
     pr: &PullRequest,
+    data: Option<&PrData>,
 ) -> Option<crate::tui::ui::screens::pr_detail::tabs::overview::AiReview<'a>> {
     let held = store.proposals.for_pr(pr.id);
     let summary = held.and_then(|held| held.summaries.last());
-    let open = open_count(store, pr.id);
+    let open = open_count(store, pr, data);
     if summary.is_none() && open == 0 {
         return None;
     }
@@ -51,8 +65,7 @@ pub fn ai_review<'a>(
 
 /// The head of the PR's own diff, once it is read.
 fn diff_head(data: Option<&PrData>) -> Option<&str> {
-    let revision = data?.diff.loaded()?.revision.as_ref()?;
-    (!revision.commit).then_some(revision.head.as_str())
+    data?.own_diff_head()
 }
 
 /// The proposals to draw on the PR's diff.

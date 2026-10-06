@@ -7,13 +7,25 @@
 //! What the reader does with a proposal (sends, edits, discards it) is kept
 //! elsewhere, by the TUI, so that two processes never write the same file for
 //! long.
+//!
+//! The file does not grow for ever: a review of the PR's head replaces what was
+//! proposed on its older commits, which can no longer be shown on their lines,
+//! and a PR nothing has been handed in on for ninety days is forgotten.
 
-use std::{collections::BTreeMap, io, path::Path, time::Duration};
+use std::{
+    collections::BTreeMap,
+    io,
+    path::{Path, PathBuf},
+    time::Duration,
+};
 
+use chrono::{DateTime, TimeDelta, Utc};
 use serde::{Deserialize, Serialize};
 
+pub use super::file::Stamp;
 use super::file::{ScopedFile, path_of};
 use crate::domain::{
+    commit::CommitOid,
     pr::PrId,
     proposal::{Proposal, Summary},
 };
@@ -25,12 +37,28 @@ const WAIT: Duration = Duration::from_secs(5);
 /// disk.
 pub const MAX_PER_PR: usize = 1_000;
 
+/// How long a PR is kept after the last time something was handed in on it, so
+/// that the file does not grow with every PR ever reviewed. The same as what
+/// the reader did with its proposals is kept (`domain::seen`).
+const KEEP: TimeDelta = TimeDelta::days(90);
+
+/// Where the proposals are kept on this machine: the one place the import
+/// writes and the TUI reads, so that neither can look somewhere else.
+pub fn root() -> Option<PathBuf> {
+    dirs::data_local_dir().map(|dir| dir.join("slussa/proposals"))
+}
+
 #[derive(Debug, Default, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct ForPr {
     #[serde(default)]
     pub comments: Vec<Proposal>,
     #[serde(default)]
     pub summaries: Vec<Summary>,
+    /// When something was last handed in on the PR. A file from before it was
+    /// kept has none, and one with none is written without it, so the version 1
+    /// text stays as it was.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub at: Option<DateTime<Utc>>,
 }
 
 #[derive(Debug, Default, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -47,6 +75,14 @@ impl Proposals {
     pub fn for_pr(&self, pr: PrId) -> Option<&ForPr> {
         self.0.get(&pr)
     }
+
+    /// Forget the PRs nothing has been handed in on for the time kept, as of
+    /// `now`. One with no date is from before dates were kept: it is given this
+    /// one, and counted from here.
+    fn forget_old(&mut self, now: DateTime<Utc>) {
+        self.0
+            .retain(|_, held| now - *held.at.get_or_insert(now) <= KEEP);
+    }
 }
 
 #[derive(Serialize, Deserialize)]
@@ -61,6 +97,10 @@ struct Envelope {
 pub struct Batch {
     pub comments: Vec<Proposal>,
     pub summary: Option<Summary>,
+    /// The PR's head, when the batch is what an agent makes of that commit. It
+    /// then replaces what was proposed on other commits, which no diff the
+    /// reader has can show any more.
+    pub current: Option<CommitOid>,
 }
 
 /// What became of the summary a batch held.
@@ -110,17 +150,48 @@ pub fn read(root: &Path, scope: &str) -> io::Result<Proposals> {
     }
 }
 
+/// As `read`, when the file is another than the one `stamp` is of, and `None`
+/// when it is the same and nothing was read. The reader asks each time a PR is
+/// opened or refreshed, and the file changes only when an agent hands
+/// something in.
+pub fn read_changed(root: &Path, scope: &str, stamp: &mut Stamp) -> io::Result<Option<Proposals>> {
+    let found = Stamp::of(root, scope)?;
+    if found == *stamp {
+        return Ok(None);
+    }
+    let proposals = read(root, scope)?;
+    *stamp = found;
+    Ok(Some(proposals))
+}
+
 /// Add what an agent proposes on `pr` to the file for `scope`. What is there
 /// already is kept, and a proposal that is there is not added again. An error
 /// leaves the file as it was, including one that cannot be read: it is not
 /// written over.
 pub fn import(root: &Path, scope: &str, pr: PrId, batch: Batch) -> io::Result<Imported> {
+    import_at(root, scope, pr, batch, Utc::now())
+}
+
+/// As `import`, at the time `now`.
+fn import_at(
+    root: &Path,
+    scope: &str,
+    pr: PrId,
+    batch: Batch,
+    now: DateTime<Utc>,
+) -> io::Result<Imported> {
     let (mut file, bytes) = ScopedFile::open_waiting(root, scope, WAIT)?;
     let mut all = match &bytes {
         Some(bytes) => parse(bytes, scope, file.path())?,
         None => Proposals::default(),
     };
+    all.forget_old(now);
     let held = all.0.entry(pr).or_default();
+    held.at = Some(now);
+    if let Some(current) = &batch.current {
+        held.comments.retain(|known| known.head() == current);
+        held.summaries.retain(|known| known.head() == current);
+    }
     let mut imported = Imported {
         comments: 0,
         duplicates: 0,
@@ -131,7 +202,8 @@ pub fn import(root: &Path, scope: &str, pr: PrId, batch: Batch) -> io::Result<Im
             imported.duplicates += 1;
         } else if held.comments.len() >= MAX_PER_PR {
             return Err(io::Error::other(format!(
-                "PR #{pr} already holds {MAX_PER_PR} proposals; the reader has to clear some first"
+                "PR #{pr} already holds {MAX_PER_PR} proposals, the most that are kept; a review \
+                 of a newer commit replaces them"
             )));
         } else {
             held.comments.push(comment);
@@ -163,8 +235,8 @@ mod tests {
         test_support::TempDir,
     };
 
-    fn comment(path: &str, line: usize, body: &str) -> Proposal {
-        Proposal::new(ProposalInput {
+    fn input(path: &str, line: usize, body: &str) -> ProposalInput {
+        ProposalInput {
             head: "abc123".into(),
             path: path.into(),
             line,
@@ -172,15 +244,30 @@ mod tests {
             body: body.into(),
             id: None,
             agent: Some("reviewer".into()),
-        })
-        .unwrap()
+        }
+    }
+
+    fn comment(path: &str, line: usize, body: &str) -> Proposal {
+        Proposal::new(input(path, line, body)).unwrap()
     }
 
     fn batch(comments: Vec<Proposal>) -> Batch {
         Batch {
             comments,
-            summary: None,
+            ..Batch::default()
         }
+    }
+
+    fn of(head: &str, line: usize) -> Proposal {
+        Proposal::new(ProposalInput {
+            head: head.into(),
+            ..input("a.rs", line, "x")
+        })
+        .unwrap()
+    }
+
+    fn day(n: i64) -> DateTime<Utc> {
+        DateTime::<Utc>::from_timestamp(1_790_000_000, 0).unwrap() + TimeDelta::days(n)
     }
 
     #[test]
@@ -248,8 +335,8 @@ mod tests {
         let dir = TempDir::new("proposals");
         let summary = || Summary::new("abc123", "Looks fine.".into(), None).unwrap();
         let with_summary = || Batch {
-            comments: vec![],
             summary: Some(summary()),
+            ..Batch::default()
         };
         assert_eq!(
             import(dir.path(), "s", PrId(7), with_summary()).unwrap(),
@@ -286,6 +373,68 @@ mod tests {
         .unwrap_err();
         assert!(error.to_string().contains("already holds"), "{error}");
         assert_eq!(std::fs::read(path_of(dir.path(), "s")).unwrap(), before);
+
+        // The branch moves and the PR is reviewed again: there is room.
+        let again = Batch {
+            comments: vec![of("def456", 1)],
+            current: CommitOid::parse("def456"),
+            ..Batch::default()
+        };
+        assert_eq!(import(dir.path(), "s", PrId(7), again).unwrap().comments, 1);
+    }
+
+    #[test]
+    fn a_review_of_the_prs_head_replaces_what_was_proposed_on_other_commits() {
+        let dir = TempDir::new("proposals");
+        let older = Batch {
+            comments: vec![of("abc123", 1), of("abc123", 2)],
+            summary: Some(Summary::new("abc123", "Then.".into(), None).unwrap()),
+            current: CommitOid::parse("abc123"),
+        };
+        import(dir.path(), "s", PrId(7), older).unwrap();
+        // One of a commit that is not the head is kept beside what is there.
+        import(dir.path(), "s", PrId(7), batch(vec![of("0ddba11", 1)])).unwrap();
+        let held = read(dir.path(), "s").unwrap();
+        assert_eq!(held.for_pr(PrId(7)).unwrap().comments.len(), 3);
+
+        let newer = Batch {
+            comments: vec![of("def456", 5)],
+            summary: Some(Summary::new("def456", "Now.".into(), None).unwrap()),
+            current: CommitOid::parse("def456"),
+        };
+        import(dir.path(), "s", PrId(7), newer).unwrap();
+        let held = read(dir.path(), "s").unwrap();
+        let held = held.for_pr(PrId(7)).unwrap();
+        assert_eq!(held.comments, vec![of("def456", 5)]);
+        assert_eq!(held.summaries.len(), 1, "and its summary with them");
+    }
+
+    #[test]
+    fn a_pr_nothing_was_handed_in_on_for_ninety_days_is_forgotten_at_the_next_import() {
+        let dir = TempDir::new("proposals");
+        let one = || batch(vec![comment("a.rs", 1, "one")]);
+        import_at(dir.path(), "s", PrId(1), one(), day(0)).unwrap();
+        import_at(dir.path(), "s", PrId(2), one(), day(60)).unwrap();
+        import_at(dir.path(), "s", PrId(3), one(), day(100)).unwrap();
+        let held = read(dir.path(), "s").unwrap();
+        assert!(held.for_pr(PrId(1)).is_none(), "a hundred days ago");
+        assert!(held.for_pr(PrId(2)).is_some() && held.for_pr(PrId(3)).is_some());
+    }
+
+    #[test]
+    fn the_file_is_read_again_only_when_an_import_has_replaced_it() {
+        let dir = TempDir::new("proposals");
+        let mut stamp = Stamp::default();
+        assert!(
+            read_changed(dir.path(), "s", &mut stamp).unwrap().is_none(),
+            "no file is nothing proposed, as at the start"
+        );
+        import(dir.path(), "s", PrId(7), batch(vec![of("abc123", 1)])).unwrap();
+        let read = read_changed(dir.path(), "s", &mut stamp).unwrap();
+        assert!(read.is_some_and(|read| read.for_pr(PrId(7)).is_some()));
+        assert!(read_changed(dir.path(), "s", &mut stamp).unwrap().is_none());
+        import(dir.path(), "s", PrId(7), batch(vec![of("abc123", 2)])).unwrap();
+        assert!(read_changed(dir.path(), "s", &mut stamp).unwrap().is_some());
     }
 
     #[test]

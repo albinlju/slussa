@@ -1,6 +1,7 @@
 //! Asking an agent to review a PR: what the reader asks for with `A`. The PR's
-//! title, description and diff go to the configured command, off the UI thread,
-//! and what it answers is kept as proposals for the reader (see `proposals`).
+//! title, description and diff are read from the provider and go to the
+//! configured command, off the UI thread, and what it answers is kept as
+//! proposals for the reader (see `proposals`).
 //! Nothing is posted. The text it is given and the running of the command are
 //! `crate::agent`.
 
@@ -78,6 +79,15 @@ impl Failure {
             Self::Other(message) => message.clone(),
         }
     }
+
+    /// The failure for the log, without what the agent printed.
+    fn for_log(&self) -> String {
+        match self {
+            Self::Provider(error) => error.to_string(),
+            Self::Agent(error) => error.for_log(),
+            Self::Other(message) => message.clone(),
+        }
+    }
 }
 
 impl App {
@@ -85,9 +95,6 @@ impl App {
     pub(super) fn spawn_agent_review(&mut self, pr_id: PrId) {
         let store = &self.state.store;
         let command = store.agent_review.clone();
-        let Some(subject) = subject_of(store, pr_id) else {
-            return;
-        };
         let Some(source) = &self.proposals_source else {
             self.state.store.errors.insert(
                 pr_id,
@@ -113,11 +120,7 @@ impl App {
         let cancel = agent::Cancel::default();
         self.agent_reviews.insert(pr_id, cancel.clone());
         self.spawn_fetch(
-            move || {
-                review(
-                    &provider, pr_id, &subject, &command, &place, &sources, &cancel,
-                )
-            },
+            move || review(&provider, pr_id, &command, &place, &sources, &cancel),
             move |returned| {
                 TaskResult::Read(Read::AgentReview(
                     pr_id,
@@ -169,7 +172,7 @@ impl App {
                 self.state.store.notice = Some(Notice::info(notice_text(pr_id, &outcome)));
             }
             Err(failure) => {
-                tracing::warn!("agent review failed: pr={pr_id}: {failure}");
+                tracing::warn!("agent review failed: pr={pr_id}: {}", failure.for_log());
                 self.state.store.errors.insert(
                     pr_id,
                     format!("The review failed: {}", failure.user_message()),
@@ -177,31 +180,6 @@ impl App {
             }
         }
     }
-}
-
-fn subject_of(store: &super::store::Store, pr_id: PrId) -> Option<Subject> {
-    let pr = store.cache.prs.loaded()?.iter().find(|pr| pr.id == pr_id)?;
-    // The list may leave the description out; it is read with the PR's info.
-    let described = store
-        .cache
-        .details
-        .get(&pr_id)
-        .and_then(|data| data.info.loaded())
-        .and_then(|info| info.description.clone())
-        .or_else(|| pr.description.clone());
-    let issues = store
-        .cache
-        .details
-        .get(&pr_id)
-        .and_then(|data| data.info.loaded())
-        .map_or_else(Vec::new, |info| info.issues.clone());
-    Some(Subject {
-        title: pr.title.clone(),
-        description: described,
-        source_branch: pr.source_branch.clone(),
-        target_branch: pr.target_branch.clone(),
-        issues,
-    })
 }
 
 fn notice_text(pr_id: PrId, outcome: &Outcome) -> String {
@@ -226,16 +204,19 @@ fn notice_text(pr_id: PrId, outcome: &Outcome) -> String {
     text
 }
 
-/// The whole review, blocking: read the diff, ask the agent, keep what it says.
+/// The whole review, blocking: read the PR and its diff, ask the agent, keep what
+/// it says. The PR is read here and not taken from what is on screen, which may
+/// not have its description or the issues it closes yet: the agent is given what
+/// `slussa context` gives.
 fn review(
     provider: &Provider,
     pr_id: PrId,
-    subject: &Subject,
     command: &[String],
     (root, scope): &(PathBuf, String),
     sources: &Sources,
     cancel: &agent::Cancel,
 ) -> Result<Outcome, Failure> {
+    let subject = &Subject::read(provider, pr_id)?;
     let material = Material::gather(provider, pr_id, subject, sources.root.as_deref())?;
     // The agent is given the diff of this commit, so what it proposes is of it,
     // whatever it writes for `head` itself.
@@ -278,6 +259,7 @@ fn review(
         Batch {
             comments,
             summary: parsed.summary,
+            current: Some(head.clone()),
         },
     )
     .map_err(|e| Failure::Other(format!("The proposals could not be kept: {e}")))?;
