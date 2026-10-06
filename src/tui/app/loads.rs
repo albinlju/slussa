@@ -51,7 +51,19 @@ impl App {
                 }
                 self.pr_data_mut(pr_id).commits.reload(result);
             }
-            Read::Diff(pr_id, result) => self.pr_data_mut(pr_id).diff.reload(result),
+            Read::Diff(pr_id, result) => {
+                let before = self.loaded_diff_head(pr_id).map(str::to_owned);
+                self.pr_data_mut(pr_id).diff.reload(result);
+                // A diff of another commit that replaces the one the reader is on
+                // has not been read by being swapped in.
+                let replaced = before.is_some_and(|before| {
+                    self.loaded_diff_head(pr_id)
+                        .is_some_and(|after| after != before)
+                });
+                if !replaced {
+                    self.mark_read_head();
+                }
+            }
             Read::Builds(pr_id, result) => self.pr_data_mut(pr_id).builds.reload(result),
             Read::Activity(pr_id, result) => {
                 let result = result.map(|activity| self.state.store.judged(activity));
@@ -67,9 +79,23 @@ impl App {
                     .insert(oid, LoadState::from_result(result));
             }
             Read::RangeDiff(pr_id, range, result) => {
-                self.pr_data_mut(pr_id)
-                    .range_diffs
+                let data = self.pr_data_mut(pr_id);
+                // What is new is what is new in the files of the PR: what a merge
+                // of the target brought into the branch, in files the PR does not
+                // touch, is not part of it.
+                let in_pr: Option<std::collections::HashSet<String>> = data
+                    .diff
+                    .loaded()
+                    .map(|diff| diff.files.iter().map(|file| file.path.clone()).collect());
+                let result = result.map(|mut diff| {
+                    if let Some(paths) = &in_pr {
+                        diff.files.retain(|file| paths.contains(&file.path));
+                    }
+                    diff
+                });
+                data.range_diffs
                     .insert(range, LoadState::from_result(result));
+                self.mark_read_head();
             }
             Read::BuildLog(pr_id, job, result) => {
                 self.pr_data_mut(pr_id)

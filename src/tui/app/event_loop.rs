@@ -205,7 +205,11 @@ impl App {
                     Next::Continue
                 };
             }
-            Effect::Navigate(screen) => self.state.screen = screen,
+            Effect::Navigate(screen) => {
+                self.state.screen = screen;
+                // Choosing the Diff tab is arriving at the diff.
+                self.mark_read_head();
+            }
             Effect::Refresh => self.refresh_actions(),
             Effect::OpenPr(id) => self.open_named_pr(id),
             Effect::LoadOlder => self.load_older_prs(),

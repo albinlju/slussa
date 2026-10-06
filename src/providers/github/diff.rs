@@ -23,9 +23,11 @@ pub fn fetch_diff(repo: &GhRepo, pr_number: PrId) -> Result<Diff, FetchError> {
     Ok(diff)
 }
 
-/// What changed from `range.base` to `range.head`, as GitHub compares them.
-/// A base that was force-pushed away may not be there to compare; that is the
-/// error GitHub gives, and it is shown as it is.
+/// What changed from `range.base` to `range.head`, as GitHub compares them: from
+/// their common ancestor, so after a merge of the target into the branch it holds
+/// what the merge brought too. A base that was force-pushed away is not there to
+/// compare, and GitHub answers 404; that is told as what it most likely is, with
+/// what GitHub said.
 pub fn fetch_range_diff(repo: &GhRepo, range: &DiffRange) -> Result<Diff, FetchError> {
     let endpoint = format!(
         "repos/{{owner}}/{{repo}}/compare/{}...{}",
@@ -41,16 +43,14 @@ pub fn fetch_range_diff(repo: &GhRepo, range: &DiffRange) -> Result<Diff, FetchE
         ],
     )
     .map_err(|error| {
-        // GitHub answers 404 for a commit that is not there: what a force-push
-        // leaves of the one the reader had open.
         if let FetchError::GhFailed { stderr, .. } = &error
-            && stderr.contains("404")
+            && stderr.contains("HTTP 404")
         {
-            return FetchError::Stale(
-                "The commit you read is no longer on GitHub, so what is new cannot be told. \
-                 The branch was probably force-pushed. w: the whole diff."
-                    .into(),
-            );
+            return FetchError::Stale(format!(
+                "The commit you read is probably no longer on GitHub, since the branch was \
+                 force-pushed, so what is new cannot be told (GitHub said: {stderr}). \
+                 w: the whole diff."
+            ));
         }
         error
     })?;

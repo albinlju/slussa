@@ -113,10 +113,16 @@ updated, oldest), or set `sort` in the config.
 
 slussa keeps which commit of a PR's diff you last had open. When the branch has
 moved since, the PR's header says `↻ new since you read it`, and `w` shows only
-what changed, from that commit to the one now. A commit that was force-pushed away
-may no longer be there to compare, and GitHub then says so. Opening the Diff tab
-counts as having read it, so the mark is for the way in; Bitbucket Data Center does
-not have it.
+what changed, from that commit to the one now, in the files the PR touches. GitHub
+compares from the two commits' common ancestor, so after a merge of the target into
+the branch the files only the merge changed are left out, after a rebase the PR's own
+changes can show again, and a branch reset to an older commit shows nothing (and says
+so). A commit that was force-pushed away may no longer be there to compare, and
+GitHub's answer is shown with what it probably means; `w` goes back to the whole diff
+and asks again the next time, and `F` asks again too. Arriving at the PR's diff, by
+opening the PR on it or choosing the Diff tab, counts as having read it, so the mark is
+for the way in; a refresh that swaps a newer diff in under you does not clear it.
+Bitbucket Data Center does not have it.
 
 A PR GitHub says cannot be merged for a conflict has `conflicts` in the `Status` column in place of its
 status, whoever wrote it. The column stands there when some row has one, and otherwise only in

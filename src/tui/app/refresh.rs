@@ -1,7 +1,11 @@
 use crate::{
     domain::pr::{PrGroup, PrId},
     tui::{
-        app::{App, navigation::Screen},
+        app::{
+            App,
+            navigation::Screen,
+            store::{FetchKey, PrResource},
+        },
         ui::screens::pr_detail::tabs::DetailTab,
     },
 };
@@ -67,12 +71,25 @@ impl App {
     fn refresh_detail_view(&mut self, pr_id: PrId, tab: DetailTab) {
         match tab {
             DetailTab::Overview => self.spawn_load_activity(pr_id),
-            DetailTab::Diff => self.spawn_load_diff(pr_id),
+            DetailTab::Diff => {
+                self.spawn_load_diff(pr_id);
+                self.retry_new_since_read(pr_id);
+            }
             DetailTab::Commits => self.spawn_load_commits(pr_id),
             DetailTab::Builds => self.spawn_load_builds(pr_id),
             // The description and labels are read with `spawn_load_info` below.
             DetailTab::Description => {}
         }
+    }
+
+    /// What is new, when it is on screen and could not be read, is asked for
+    /// again. One that was read is left as it is.
+    fn retry_new_since_read(&mut self, pr_id: PrId) {
+        let Some(since) = &self.state.ui.detail.since else {
+            return;
+        };
+        let key = FetchKey::Pr(PrResource::RangeDiff(since.range().clone()), pr_id);
+        self.ensure_loaded(key);
     }
 
     fn modal_open(&self) -> bool {

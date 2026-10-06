@@ -208,3 +208,153 @@ fn a_diff_that_is_not_the_branch_any_more_is_not_what_was_read() {
     assert_eq!(read_head(&app), Some(&oid("aaa111")), "kept as it was");
     assert!(screen_text(&mut app).contains(MARK), "still says it is new");
 }
+
+/// The Diff tab is where the reader is; the whole diff on it is of `head`.
+fn diff_of_files(app: &mut App, head: &str, paths: &[&str]) {
+    use crate::domain::diff::FileDiff;
+    if let Some(data) = app.state.store.cache.details.get_mut(&PrId(42)) {
+        data.diff = LoadState::Loaded(Diff {
+            revision: Some(DiffRevision {
+                head: head.into(),
+                base: Some("0ba5e0".into()),
+                commit: false,
+            }),
+            files: paths
+                .iter()
+                .map(|path| FileDiff {
+                    path: (*path).into(),
+                    hunks: vec![],
+                })
+                .collect(),
+        });
+    }
+}
+
+#[tokio::test(flavor = "current_thread")]
+async fn a_refresh_that_swaps_in_the_newer_diff_does_not_read_it_for_the_reader() {
+    let mut app = returning_reader("aaa111", "bbb222");
+    detail(&mut app, DetailTab::Diff);
+    assert_eq!(
+        read_head(&app),
+        Some(&oid("aaa111")),
+        "the old diff is on screen"
+    );
+
+    // The minute passes: the diff is read again, and is of the branch as it is.
+    app.apply_result(TaskResult::Read(Read::Diff(
+        PrId(42),
+        Ok(Diff {
+            revision: Some(DiffRevision {
+                head: "bbb222".into(),
+                base: Some("0ba5e0".into()),
+                commit: false,
+            }),
+            files: vec![],
+        }),
+    )));
+    assert_eq!(read_head(&app), Some(&oid("aaa111")), "nobody read it");
+    assert!(screen_text(&mut app).contains(MARK), "so the mark stays");
+    // Nor does a key pressed on the diff clear it.
+    press(&mut app, KeyCode::Char('j'));
+    assert_eq!(read_head(&app), Some(&oid("aaa111")));
+    assert!(screen_text(&mut app).contains(MARK));
+}
+
+#[tokio::test(flavor = "current_thread")]
+async fn leaving_what_is_new_that_could_not_be_read_keeps_what_was_read() {
+    let mut app = returning_reader("aaa111", "bbb222");
+    // The whole diff is of the branch as it is, as it is once it has been read again.
+    diff_of_files(&mut app, "bbb222", &[]);
+    press(&mut app, KeyCode::Char('w'));
+    app.apply_result(TaskResult::Read(Read::RangeDiff(
+        PrId(42),
+        range("aaa111", "bbb222"),
+        Err(failed("HTTP 403: rate limited")),
+    )));
+    // Out by either way, `w` or `esc`: the commit that was read is not lost.
+    press(&mut app, KeyCode::Char('w'));
+    assert!(app.state.ui.detail.since.is_none());
+    assert_eq!(read_head(&app), Some(&oid("aaa111")));
+    assert!(
+        screen_text(&mut app).contains(MARK),
+        "and it can be asked for again"
+    );
+
+    press(&mut app, KeyCode::Char('w'));
+    press(&mut app, KeyCode::Esc);
+    assert_eq!(read_head(&app), Some(&oid("aaa111")));
+
+    // Asking again reads it again, since the first time failed.
+    press(&mut app, KeyCode::Char('w'));
+    let wanted = FetchKey::Pr(PrResource::RangeDiff(range("aaa111", "bbb222")), PrId(42));
+    assert!(app.state.store.fetches.contains(&wanted));
+}
+
+#[tokio::test(flavor = "current_thread")]
+async fn f_asks_again_for_what_is_new_that_could_not_be_read() {
+    let mut app = returning_reader("aaa111", "bbb222");
+    press(&mut app, KeyCode::Char('w'));
+    let wanted = FetchKey::Pr(PrResource::RangeDiff(range("aaa111", "bbb222")), PrId(42));
+    app.state.store.fetches.remove(&wanted);
+    app.apply_result(TaskResult::Read(Read::RangeDiff(
+        PrId(42),
+        range("aaa111", "bbb222"),
+        Err(failed("offline")),
+    )));
+    assert!(!app.state.store.fetches.contains(&wanted));
+    press(&mut app, KeyCode::Char('F'));
+    assert!(
+        app.state.store.fetches.contains(&wanted),
+        "F reads it again"
+    );
+}
+
+#[tokio::test(flavor = "current_thread")]
+async fn what_is_new_is_what_is_new_in_the_files_of_the_pr() {
+    use crate::domain::diff::FileDiff;
+    let mut app = returning_reader("aaa111", "bbb222");
+    diff_of_files(&mut app, "bbb222", &["src/main.rs"]);
+    press(&mut app, KeyCode::Char('w'));
+    let file = |path: &str| FileDiff {
+        path: path.into(),
+        hunks: vec![],
+    };
+    // A merge of the target brought other.rs into the branch; the PR does not touch it.
+    app.apply_result(TaskResult::Read(Read::RangeDiff(
+        PrId(42),
+        range("aaa111", "bbb222"),
+        Ok(Diff {
+            revision: None,
+            files: vec![file("src/main.rs"), file("other.rs")],
+        }),
+    )));
+    let kept = &app.state.store.cache.details[&PrId(42)].range_diffs[&range("aaa111", "bbb222")];
+    let LoadState::Loaded(diff) = kept else {
+        panic!("read");
+    };
+    let paths: Vec<&str> = diff.files.iter().map(|f| f.path.as_str()).collect();
+    assert_eq!(paths, ["src/main.rs"]);
+}
+
+#[tokio::test(flavor = "current_thread")]
+async fn nothing_new_in_the_files_of_the_pr_says_so_and_what_it_may_mean() {
+    let mut app = returning_reader("aaa111", "bbb222");
+    press(&mut app, KeyCode::Char('w'));
+    app.apply_result(TaskResult::Read(Read::RangeDiff(
+        PrId(42),
+        range("aaa111", "bbb222"),
+        Ok(Diff {
+            revision: None,
+            files: vec![],
+        }),
+    )));
+    let text = screen_text(&mut app);
+    assert!(
+        text.contains("Nothing new in the files of this PR"),
+        "{text}"
+    );
+    assert!(
+        text.contains("reset"),
+        "it says what an empty compare can be"
+    );
+}

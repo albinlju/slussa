@@ -6,10 +6,10 @@
 use crate::{
     domain::{commit::CommitOid, diff::DiffRange},
     tui::{
-        app::store::PrData,
+        app::store::{LoadState, PrData},
         ui::{
             component::Component,
-            components::diff_viewer::{DiffContext, DiffViewer},
+            components::diff_viewer::{DiffContext, DiffViewer, PaneNav},
             layout, theme,
             widgets::{self, comment::meta::Reading},
         },
@@ -76,6 +76,20 @@ pub(super) fn render(
     };
     render_banner(frame, &since.range, banner);
     let state = data.and_then(|data| data.range_diffs.get(&since.range));
+    if let Some(LoadState::Loaded(diff)) = state
+        && diff.files.is_empty()
+    {
+        // What the pane drew last is not there to act on any more.
+        since.viewer.pane = PaneNav::default();
+        frame.render_widget(
+            widgets::empty_state(
+                "Nothing new in the files of this PR. If the branch was reset to an \
+                 older commit, that is what it looks like too. w: the whole diff.",
+            ),
+            body,
+        );
+        return;
+    }
     since.viewer.render(
         frame,
         body,

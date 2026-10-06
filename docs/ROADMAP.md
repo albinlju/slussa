@@ -150,16 +150,23 @@ let an agent help without deciding.
   before). When the branch has moved since, on an open PR on GitHub, the header says
   `↻ new since you read it` and `w` shows only what is new, from that head to the
   one now, in the Diff tab (`w` or `esc` goes back to the whole diff). What counts
-  as read: the PR's diff open on the Diff tab while it is the branch as the list
-  has it, or the new part open; a diff that a push has outdated is not. No comment
+  as read is an arrival: the PR's diff when the reader opens the PR on it or chooses
+  the tab, while it is the branch as the list has it, or the new part when it has
+  been read; not a refresh that swaps a newer diff in under a reader who is already
+  there, and not leaving the new part when it could not be read, which keeps the
+  commit that was read so that `w` and `F` can ask again. No comment
   is made on the new part, whose lines are not the PR's. A head that was
-  force-pushed away says so, since GitHub no longer has it to compare. Missing: the
+  force-pushed away says so, with what GitHub answered, since it no longer has it to
+  compare. The new part is the compare of GitHub (from the two commits' common
+  ancestor) kept to the files the PR touches, which leaves out what a merge of the
+  target brought in; an empty one says it may be a reset. Missing: the
   commits since (the Commits tab does not mark them), the builds for the head that
   was read with a line when they are for another, and the reader's own threads, which
   of them were answered or resolved since; the mark on the list's row (left out of
   the first version; the list already has `●` for changed since); a compare that is
-  of the two commits themselves after a rebase (GitHub compares from their common
-  ancestor, which shows the PR's own changes again when the branch was rebased);
+  of the two commits themselves (after a rebase GitHub's compare shows the PR's own
+  changes again, and a file the PR touches that the target also changed shows what
+  the target did);
   and Bitbucket Data Center. **Open:** whether opening the Diff tab is the right
   meaning of read: it clears the mark for a reader who goes straight to the whole
   diff, which is what makes the mark a way in and not a log.

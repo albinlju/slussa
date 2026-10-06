@@ -53,7 +53,28 @@ fn a_commit_that_is_gone_says_the_branch_was_probably_force_pushed() {
         .fetch_range_diff(&range())
         .unwrap_err();
     assert!(matches!(error, FetchError::Stale(_)), "{error:?}");
-    assert!(error.user_message().contains("force-pushed"));
+    let told = error.user_message();
+    assert!(told.contains("force-pushed"), "{told}");
+    assert!(
+        told.contains("No common ancestor"),
+        "GitHub's own words are kept: {told}"
+    );
+}
+
+#[test]
+fn a_failure_that_only_has_those_digits_in_it_is_not_taken_for_a_missing_commit() {
+    // A request id or a commit id with 404 in it is no 404.
+    let _installed = FakeGh::new()
+        .fail(
+            "compare/aaa111...bbb222",
+            1,
+            "gh: HTTP 403: rate limited (request 4b404a1, commit a404b)",
+        )
+        .install();
+    let error = Provider::github_for_test()
+        .fetch_range_diff(&range())
+        .unwrap_err();
+    assert!(matches!(error, FetchError::GhFailed { .. }), "{error:?}");
 }
 
 #[test]

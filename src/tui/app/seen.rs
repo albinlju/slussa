@@ -46,16 +46,26 @@ impl App {
             return;
         };
         self.mark_seen(pr_id);
-        self.mark_read_head();
     }
 
-    /// The diff of the PR that is on screen has been read: the PR's own on the
-    /// Diff tab, or what is new since the reader looked when that is shown. Its
-    /// head is kept, so that the next time the PR says what has moved since.
-    /// The PR's own diff counts only while it is the branch as the list has it:
-    /// after a push it is still on screen for a while, and having it open is not
-    /// having read what was pushed.
-    fn mark_read_head(&mut self) {
+    /// The head of the PR's own diff, as read.
+    pub(super) fn loaded_diff_head(&self, pr_id: PrId) -> Option<&str> {
+        let diff = self.state.store.cache.details.get(&pr_id)?.diff.loaded()?;
+        let revision = diff.revision.as_ref()?;
+        (!revision.commit).then_some(revision.head.as_str())
+    }
+
+    /// The reader has arrived at a diff: the PR's own on the Diff tab, or what is
+    /// new since they looked when that is shown. Its head is kept, so that the
+    /// next time the PR says what has moved since.
+    ///
+    /// Only an arrival counts: opening the PR on the Diff, choosing the tab, or
+    /// what is new being read. Not a refresh that swaps a newer diff in under a
+    /// reader who is already there, which would clear the mark before they had
+    /// seen anything, and not a key pressed on the diff. The PR's own diff counts
+    /// only while it is the branch as the list has it: after a push it is still on
+    /// screen for a while, and having it open is not having read what was pushed.
+    pub(super) fn mark_read_head(&mut self) {
         let Screen::Detail {
             pr_id,
             tab: DetailTab::Diff,
