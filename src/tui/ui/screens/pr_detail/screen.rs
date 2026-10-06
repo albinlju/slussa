@@ -39,6 +39,8 @@ pub enum Surface<'a> {
     /// The diff of one commit.
     CommitDiff(&'a DiffViewer),
     Builds,
+    /// The log of one build.
+    BuildLog,
 }
 
 impl<'a> Surface<'a> {
@@ -46,7 +48,11 @@ impl<'a> Surface<'a> {
     pub const fn diff_viewer(self) -> Option<&'a DiffViewer> {
         match self {
             Self::Diff(viewer) | Self::CommitDiff(viewer) => Some(viewer),
-            Self::Description | Self::Overview | Self::CommitList | Self::Builds => None,
+            Self::Description
+            | Self::Overview
+            | Self::CommitList
+            | Self::Builds
+            | Self::BuildLog => None,
         }
     }
 }
@@ -162,6 +168,7 @@ impl PrDetailScreen {
                 Some(viewer) => Surface::CommitDiff(viewer),
                 None => Surface::CommitList,
             },
+            DetailTab::Builds if self.builds.log_open() => Surface::BuildLog,
             DetailTab::Builds => Surface::Builds,
         }
     }
@@ -213,8 +220,10 @@ impl Component for PrDetailScreen {
         }
         match action {
             DetailAction::Nav(action) => return self.navigate(action, pr_id, tab, ctx),
-            DetailAction::BuildsScroll(delta) => {
-                self.builds.update(delta, &());
+            DetailAction::Builds(action) => {
+                return self
+                    .builds
+                    .update(action, &tabs::builds::BuildsInput::new(pr_id, ctx.data));
             }
             DetailAction::Description(action) => {
                 self.description.update(action, &());
@@ -269,6 +278,7 @@ impl PrDetailScreen {
         };
         self.active_tab = tab;
         self.commits.close_commit();
+        self.builds.close_log();
         Some(Effect::Navigate(Screen::Detail { pr_id, tab }))
     }
 
@@ -276,7 +286,7 @@ impl PrDetailScreen {
         match self.surface(tab) {
             Surface::CommitList => Some((&self.commits.search, SearchKind::Filter)),
             Surface::Diff(viewer) | Surface::CommitDiff(viewer) => Some(viewer.active_search()),
-            Surface::Description | Surface::Overview | Surface::Builds => None,
+            Surface::Description | Surface::Overview | Surface::Builds | Surface::BuildLog => None,
         }
     }
 

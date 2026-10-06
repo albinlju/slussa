@@ -227,6 +227,7 @@ mod tests {
                 name: "Tests".into(),
                 state: crate::domain::ci::BuildState::Successful,
                 duration_ms: None,
+                log: None,
             }]),
         ] {
             data.builds = builds;

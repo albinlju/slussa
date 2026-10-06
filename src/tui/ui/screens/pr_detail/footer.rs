@@ -5,7 +5,10 @@ use crate::{
         app::store::{LoadState, PrData},
         ui::{
             components::{diff_viewer::DiffFocus, search_input::SearchInput},
-            screens::pr_detail::{DetailView, Surface, tabs::DetailTab},
+            screens::pr_detail::{
+                DetailView, Surface,
+                tabs::{DetailTab, builds::BuildsInput},
+            },
             theme,
             widgets::{self, Hint},
         },
@@ -166,8 +169,15 @@ fn footer_actions(state: &DetailView<'_>, tab: DetailTab) -> Vec<Hint> {
             hints
         }
         DetailTab::Commits => widgets::hints_on("enter: open  /: search"),
+        DetailTab::Builds if matches!(state.surface(), Surface::BuildLog) => {
+            widgets::hints_on("j/k: scroll  n/N: error  esc: back")
+        }
         DetailTab::Builds => {
-            let mut hints = widgets::hints_on("j/k: scroll  h/l: tabs");
+            let input = BuildsInput::new(state.pr_id, state.data);
+            let mut hints = widgets::hints_on("j/k: move  h/l: tabs");
+            if state.detail.builds.log_under_cursor(&input) {
+                hints.extend(widgets::hints_on("enter: log"));
+            }
             hints.extend(bindings::hint(state, 'b'));
             hints
         }
@@ -186,7 +196,9 @@ fn active_search(
             return commits_search_prompt(&state.detail.commits.search, pr_data, width);
         }
         Surface::Diff(view) | Surface::CommitDiff(view) => view,
-        Surface::Description | Surface::Overview | Surface::Builds => return None,
+        Surface::Description | Surface::Overview | Surface::Builds | Surface::BuildLog => {
+            return None;
+        }
     };
     match view.focus {
         DiffFocus::Tree => tree_search_prompt(&view.tree_search, state.diff_files(), width),

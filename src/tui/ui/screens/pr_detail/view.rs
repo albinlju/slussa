@@ -257,7 +257,9 @@ impl<'a> DetailView<'a> {
         match self.surface() {
             Surface::Overview => self.detail.overview.timeline.thread.as_ref(),
             Surface::Diff(viewer) | Surface::CommitDiff(viewer) => viewer.focused_thread(),
-            Surface::Description | Surface::CommitList | Surface::Builds => None,
+            Surface::Description | Surface::CommitList | Surface::Builds | Surface::BuildLog => {
+                None
+            }
         }
     }
 
@@ -293,7 +295,9 @@ impl<'a> DetailView<'a> {
                 .supports(crate::domain::capabilities::Feature::PrComments)
                 .then_some(CommentTarget::Pr),
             Surface::Diff(viewer) | Surface::CommitDiff(viewer) => self.pane_line_target(viewer),
-            Surface::Description | Surface::CommitList | Surface::Builds => None,
+            Surface::Description | Surface::CommitList | Surface::Builds | Surface::BuildLog => {
+                None
+            }
         }
     }
 
@@ -318,7 +322,9 @@ impl<'a> DetailView<'a> {
                 .then(|| view.focused_reply())
                 .flatten()
                 .map(CommentTarget::Reply),
-            Surface::Description | Surface::CommitList | Surface::Builds => None,
+            Surface::Description | Surface::CommitList | Surface::Builds | Surface::BuildLog => {
+                None
+            }
         }
     }
 
@@ -427,7 +433,7 @@ impl DetailView<'_> {
             )
             | A::Issues(_)
             | A::Description(_)
-            | A::BuildsScroll(_)
+            | A::Builds(_)
             | A::Timeline(_)
             | A::Error(_)
             | A::Confirm(_)

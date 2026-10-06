@@ -256,6 +256,7 @@ fn builds_scroll_to_last_check_in_a_short_terminal() {
                 name: format!("check-{i:02}"),
                 state: BuildState::Successful,
                 duration_ms: None,
+                log: None,
             })
             .collect(),
     );

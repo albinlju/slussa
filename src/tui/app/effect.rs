@@ -4,7 +4,8 @@
 use crate::{
     domain::{
         activity::Activity,
-        ci::Build,
+        build_log::BuildLog,
+        ci::{Build, JobId},
         commit::{Commit, CommitOid},
         diff::Diff,
         pr::{Mergeability, PrBatch, PrGroup, PrId, PrInfo, PullRequest},
@@ -33,6 +34,11 @@ pub enum Effect {
     LoadCommitDiff {
         pr_id: PrId,
         oid: CommitOid,
+    },
+    /// Read the log of a build the reader opened.
+    LoadBuildLog {
+        pr_id: PrId,
+        job: JobId,
     },
     PrLink {
         pr_id: PrId,
@@ -93,6 +99,7 @@ pub enum Read {
     Mergeability(PrId, Result<Mergeability, FetchError>),
     Info(PrId, Result<PrInfo, FetchError>),
     CommitDiff(PrId, CommitOid, Result<Diff, FetchError>),
+    BuildLog(PrId, JobId, Result<BuildLog, FetchError>),
 }
 
 impl Read {
@@ -108,6 +115,7 @@ impl Read {
             Self::Mergeability(id, _) => FetchKey::Pr(PrResource::Mergeability, *id),
             Self::Info(id, _) => FetchKey::Pr(PrResource::Info, *id),
             Self::CommitDiff(id, oid, _) => FetchKey::Pr(PrResource::CommitDiff(oid.clone()), *id),
+            Self::BuildLog(id, job, _) => FetchKey::Pr(PrResource::BuildLog(*job), *id),
         }
     }
 
@@ -122,6 +130,7 @@ impl Read {
             Self::Activity(_, result) => result.as_ref().err(),
             Self::Mergeability(_, result) => result.as_ref().err(),
             Self::Info(_, result) => result.as_ref().err(),
+            Self::BuildLog(_, _, result) => result.as_ref().err(),
         }
     }
 }

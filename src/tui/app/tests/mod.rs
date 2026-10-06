@@ -1,6 +1,7 @@
 //! App behaviour with results injected by hand; nothing reaches a provider.
 
 mod auto_merge;
+mod build_log;
 mod delete_branch;
 mod loading;
 mod navigation;

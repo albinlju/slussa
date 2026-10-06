@@ -2,6 +2,7 @@
 
 mod ai_diff;
 mod ai_filter;
+mod build_log;
 mod conversation;
 mod dialogs;
 mod hidden_characters;

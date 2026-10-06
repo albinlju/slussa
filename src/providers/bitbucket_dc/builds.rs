@@ -71,6 +71,7 @@ fn map_build(b: BbBuild) -> Build {
         name,
         state,
         duration_ms: b.duration,
+        log: None,
     }
 }
 

@@ -323,11 +323,16 @@ against:
 Whatever sends the reader to the web for a minute belongs here. In the order the
 test above ranks them:
 
-- [ ] **Build logs.** The Builds tab lists the checks; a failed one should open to
-  why: the failing step's log, read from the job, scrolled inside the tab (not a
-  screen of its own), with a key to the next error. GitHub Actions first; a check
-  that is not an Action has no log to read. A failed build is the commonest
-  reason to open a browser on an agent's PR.
+- [ ] **Build logs** *(first version built)*. `enter` on a build in the Builds tab
+  opens the log of its GitHub Actions job in the tab, on its first error (at its
+  end when none is marked), and `n`/`N` step between the errors. The whole log is
+  read when a build is opened, once, and the last 20 000 lines are kept. Missing:
+  a log that is still being written (GitHub gives it when the job is done), a
+  check that is not an Action (an external status has no log to read), the failing
+  step alone, a re-read of a log, and Bitbucket Data Center. **Tried against a real
+  log** (a failed job of a public repository, read with `gh` 2.98); not tried with
+  an older `gh`, which has no `--allow-escape-sequences` and gets the call again
+  without it (`FakeGh` covers that).
 - [ ] **Check out the PR locally** and **open the focused file or line in
   `$EDITOR`** (moved from *Handoff*): preconditions for most handoffs, and
   useful alone.
@@ -654,7 +659,8 @@ it ahead of the feature that needs it.
   `mod.rs` files still implement instead of composing: `tui/ui/`,
   `providers/`, `providers/github/` and `providers/bitbucket_dc/`; the two
   provider ones go with *Provider trait*. Not a refactor-only change. Three
-  files are at about 500 (`tui/app/store.rs` with `Operation`,
+  files are at about 500 (`tui/app/store.rs` with `Operation`, 523 since the build
+  logs, and `PrResource`, `FetchKey` and the tickets the part to move out,
   `tui/ui/screens/pr_list/tests.rs`, `tui/ui/regression_tests/conversation.rs`):
   split by concern when one of them grows again.
 - [ ] **A workspace, when something else needs the core.** slussa is one crate

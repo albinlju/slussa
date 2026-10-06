@@ -5,6 +5,7 @@
 pub mod activity;
 pub mod attention;
 pub mod authorship;
+pub mod build_log;
 pub mod ci;
 pub mod comment;
 pub mod commit;

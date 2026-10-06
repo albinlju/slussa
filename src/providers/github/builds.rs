@@ -1,7 +1,8 @@
 use super::GhRepo;
 use crate::{
     domain::{
-        ci::{Build, BuildState},
+        build_log::BuildLog,
+        ci::{Build, BuildState, JobId},
         pr::PrId,
     },
     providers::FetchError,
@@ -11,6 +12,8 @@ use serde::Deserialize;
 
 #[derive(Deserialize)]
 struct Check {
+    id: u64,
+    app: Option<App>,
     name: String,
     status: String,
     conclusion: Option<String>,
@@ -18,10 +21,17 @@ struct Check {
     completed_at: Option<DateTime<Utc>>,
 }
 #[derive(Deserialize)]
+struct App {
+    slug: String,
+}
+#[derive(Deserialize)]
 struct Status {
     context: String,
     state: String,
 }
+
+/// The app that reports the checks of a workflow run.
+const ACTIONS_APP: &str = "github-actions";
 
 pub fn fetch_builds(repo: &GhRepo, pr_number: PrId) -> Result<Vec<Build>, FetchError> {
     let head = super::comments::head_sha(repo, pr_number)?;
@@ -40,6 +50,11 @@ pub fn fetch_builds(repo: &GhRepo, pr_number: PrId) -> Result<Vec<Build>, FetchE
         .map(|c| Build {
             name: c.name,
             state: state(c.conclusion.as_deref().unwrap_or(&c.status)),
+            // The id of a check run by GitHub Actions is the id of its job.
+            log: c
+                .app
+                .is_some_and(|app| app.slug == ACTIONS_APP)
+                .then_some(JobId(c.id)),
             duration_ms: c
                 .started_at
                 .zip(c.completed_at)
@@ -50,8 +65,27 @@ pub fn fetch_builds(repo: &GhRepo, pr_number: PrId) -> Result<Vec<Build>, FetchE
         name: s.context,
         state: state(&s.state),
         duration_ms: None,
+        log: None,
     }));
     Ok(builds)
+}
+
+/// The log of one job. GitHub answers with a redirect to the text, which `gh`
+/// follows.
+///
+/// A log carries the terminal escape sequences of the tools that ran, and `gh`
+/// 2.92 and later refuse to print an answer with any unless told to, which is
+/// safe here: `BuildLog::parse` removes them. An older `gh` has no such flag and
+/// prints the answer as it is.
+pub fn fetch_build_log(repo: &GhRepo, job: JobId) -> Result<BuildLog, FetchError> {
+    let path = format!("repos/{{owner}}/{{repo}}/actions/jobs/{job}/logs");
+    let text = match super::cli::run_gh(repo, &["api", "--allow-escape-sequences", &path]) {
+        Err(FetchError::GhFailed { stderr, .. }) if stderr.contains("unknown flag") => {
+            super::cli::run_gh(repo, &["api", &path])?
+        }
+        answer => answer?,
+    };
+    Ok(BuildLog::parse(&String::from_utf8_lossy(&text)))
 }
 
 /// Run again the jobs that failed, in each workflow run of the PR's head that
