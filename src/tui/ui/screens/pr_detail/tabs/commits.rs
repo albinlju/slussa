@@ -143,6 +143,7 @@ pub fn render_commit_diff(
             diff: diff_state,
             threads,
             pending,
+            proposals: &[],
             reading,
         },
     );

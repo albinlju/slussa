@@ -34,6 +34,7 @@ impl App {
                     self.spawn_load_builds(pr_id);
                 }
                 if full_due {
+                    self.read_proposals();
                     if tab != DetailTab::Builds {
                         self.refresh_detail_view(pr_id, tab);
                     }
@@ -55,6 +56,7 @@ impl App {
         match self.state.screen {
             Screen::List => self.refresh_list(),
             Screen::Detail { pr_id, tab } => {
+                self.read_proposals();
                 self.refresh_detail_view(pr_id, tab);
                 self.spawn_load_mergeability(pr_id);
                 self.spawn_load_info(pr_id);

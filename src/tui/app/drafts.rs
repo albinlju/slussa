@@ -36,6 +36,7 @@ impl App {
         }
         let mut app = Self::new(session, Drafts::Disk(storage));
         app.restore(snapshot);
+        app.open_proposals(scope.clone());
         app.open_seen(scope, earlier.as_deref());
         Ok(app)
     }

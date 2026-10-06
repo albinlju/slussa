@@ -36,6 +36,8 @@ pub struct App {
     /// Where what was looked at is kept, and whether it changed since it was written.
     pub(super) seen_file: SeenFile,
     pub(super) seen_dirty: bool,
+    /// Where what agents proposed is read from; none in a test.
+    pub(super) proposals_source: Option<super::proposals::ProposalsSource>,
     /// A PR to open as soon as it is read, named when slussa was started.
     pub(super) start_on: Option<PrId>,
     pub state: AppState,
@@ -63,6 +65,7 @@ impl App {
             drafts_dirty: false,
             seen_file: SeenFile::Unavailable,
             seen_dirty: false,
+            proposals_source: None,
             start_on: None,
             state: AppState::new(store::Store::new(user, provider.capabilities())),
             provider,
@@ -209,6 +212,9 @@ impl App {
             Effect::OpenPr(id) => self.open_named_pr(id),
             Effect::LoadOlder => self.load_older_prs(),
             Effect::LoadView => self.ensure_view_loaded(),
+            Effect::HandleProposal { pr_id, index, how } => {
+                self.handle_proposal(pr_id, index, how);
+            }
             Effect::LoadBuildLog { pr_id, job } => {
                 self.ensure_loaded(FetchKey::Pr(PrResource::BuildLog(job), pr_id));
             }

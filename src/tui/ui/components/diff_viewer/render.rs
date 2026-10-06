@@ -1,18 +1,11 @@
-use super::{DiffFocus, DiffViewer, file_tree::FileComments, pane, tree};
+use super::{DiffContext, DiffFocus, DiffViewer, file_tree::FileComments, pane, tree};
 use crate::{
     domain::{
         authorship::Authorship,
         comment::CommentThread,
-        diff::{Diff, DiffLine, FileDiff, LineRef},
-        review::PendingComment,
+        diff::{DiffLine, FileDiff, LineRef},
     },
-    tui::{
-        app::store::LoadState,
-        ui::{
-            layout,
-            widgets::{self, comment::meta::Reading},
-        },
-    },
+    tui::ui::{layout, widgets},
 };
 use ratatui::{
     Frame,
@@ -22,13 +15,17 @@ use std::collections::HashSet;
 
 pub(super) fn render(
     frame: &mut Frame<'_>,
-    diff_state: Option<&LoadState<Diff>>,
-    threads: &[CommentThread],
-    pending: &[PendingComment],
+    ctx: &DiffContext<'_>,
     ui_diff: &mut DiffViewer,
-    reading: Reading<'_>,
     area: Rect,
 ) {
+    let DiffContext {
+        diff: diff_state,
+        threads,
+        pending,
+        proposals,
+        reading,
+    } = *ctx;
     // Until a pane is drawn below, there is nothing in it to act on.
     ui_diff.pane = super::PaneNav::default();
     let Some(diff) = widgets::loaded_or_placeholder(frame, diff_state, "diff", area) else {
@@ -86,6 +83,7 @@ pub(super) fn render(
             &file_stats,
             threads,
             pending,
+            proposals,
             pane_focused,
             reading,
             pane_area,

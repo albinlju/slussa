@@ -175,6 +175,16 @@ since `head`. A failure is JSON on standard error, `{"schema":1,"error":{"kind":
 it needs `gh` to be logged in already. GitHub only. The schema is experimental until
 it has been used.
 
+In the PR's Diff tab what an agent proposed stands on the line it is about, marked
+`[AI]` with the agent's name, and the footer counts them. With the cursor on one,
+`c` takes it: the comment editor opens with its words, to edit and send as your own
+(a line comment joins the review in progress like any other), and `d` discards it.
+Either way it is not shown again, and that is kept with what you have looked at. A
+proposal written against another commit than the diff's is not drawn on its lines,
+only counted in the footer, so that it is never on the wrong line. The proposals are
+read when a PR is opened and when it refreshes, and the summary an agent hands in is
+kept but not shown yet.
+
 ## Configure
 
 `~/.config/slussa/config.toml` (or `$XDG_CONFIG_HOME/slussa/config.toml`):

@@ -6,6 +6,7 @@ mod header;
 mod interactions;
 pub mod keys;
 mod opening;
+mod proposed;
 mod render;
 mod screen;
 pub mod tabs;

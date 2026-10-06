@@ -38,10 +38,12 @@ pub struct ForPr {
 pub struct Proposals(BTreeMap<PrId, ForPr>);
 
 impl Proposals {
-    #[cfg_attr(
-        not(test),
-        expect(dead_code, reason = "the TUI reads the proposals in the next change")
-    )]
+    /// What a test says is proposed on `pr`, without a file.
+    #[cfg(test)]
+    pub fn of(pr: PrId, held: ForPr) -> Self {
+        Self(BTreeMap::from([(pr, held)]))
+    }
+
     pub fn for_pr(&self, pr: PrId) -> Option<&ForPr> {
         self.0.get(&pr)
     }
@@ -86,10 +88,6 @@ fn parse(bytes: &[u8], scope: &str, path: &Path) -> io::Result<Proposals> {
 }
 
 /// What is proposed under `scope`, without taking the lock.
-#[cfg_attr(
-    not(test),
-    expect(dead_code, reason = "the TUI reads the proposals in the next change")
-)]
 pub fn read(root: &Path, scope: &str) -> io::Result<Proposals> {
     let path = path_of(root, scope);
     match std::fs::read(&path) {

@@ -420,6 +420,7 @@ impl DetailView<'_> {
                 PrAction::RerunBuilds => caps.supports(F::RerunBuilds),
                 PrAction::RerequestReview => caps.supports(F::RerequestReview),
                 PrAction::OpenIssues => caps.supports(F::PrInfo),
+                PrAction::DiscardProposal => true,
             },
             A::Review(ReviewAction::Select) => caps.reviews(),
             A::Merge(MergeAction::Select) => !caps.merge_strategies.is_empty(),

@@ -12,6 +12,7 @@ use crate::{
     domain::{
         pr::{AutoMerge, PrId},
         review::CommentTarget,
+        seen::How,
     },
     tui::{
         app::{commands::Command, effect::Effect},
@@ -19,6 +20,7 @@ use crate::{
             action::{ConfirmAction, IssueAction, MergeAction, PrAction, ReviewAction},
             component::Component,
             components::comment_editor::{CommentDraft, CommentEditor},
+            components::diff_viewer::DiffViewer,
         },
     },
 };
@@ -96,6 +98,34 @@ impl PrDetailScreen {
         if let Some(target) = target {
             self.editor = CommentEditor::start(target, String::new());
         }
+    }
+
+    /// `c`: a comment on what the cursor is on. On an agent's proposal it starts
+    /// from the proposal's words, to edit and send as the reader's own, and the
+    /// proposal is taken: it is not shown again, and the draft is what is kept.
+    fn open_comment(&mut self, pr_id: PrId, ctx: &DetailContext<'_>) -> Option<Effect> {
+        if self.editor.resume() {
+            return None;
+        }
+        let target = self.view(ctx).comment_target()?;
+        let proposed = self
+            .surface(ctx.tab)
+            .diff_viewer()
+            .and_then(DiffViewer::focused_proposal)
+            .and_then(|index| {
+                let held = ctx.store.proposals.for_pr(pr_id)?;
+                Some((index, held.comments.get(index)?.body().to_owned()))
+            });
+        if let Some((index, text)) = proposed {
+            self.editor = CommentEditor::start(target, text);
+            return Some(Effect::HandleProposal {
+                pr_id,
+                index,
+                how: How::Taken,
+            });
+        }
+        self.editor = CommentEditor::start(target, String::new());
+        None
     }
 
     fn ask(&mut self, dialog: ConfirmDialog) {
@@ -380,9 +410,14 @@ impl PrDetailScreen {
                 self.ask(ConfirmDialog::new(ConfirmKind::Reopen));
                 return None;
             }
-            PrAction::OpenComment => {
-                self.open_draft(self.view(ctx).comment_target());
-                return None;
+            PrAction::OpenComment => return self.open_comment(pr_id, ctx),
+            PrAction::DiscardProposal => {
+                let index = self.surface(ctx.tab).diff_viewer()?.focused_proposal()?;
+                return Some(Effect::HandleProposal {
+                    pr_id,
+                    index,
+                    how: How::Discarded,
+                });
             }
             PrAction::OpenReply => {
                 self.open_draft(self.view(ctx).reply_target());

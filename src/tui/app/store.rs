@@ -31,6 +31,7 @@ use crate::{
         seen::Seen,
         user::Username,
     },
+    local::proposals::Proposals,
     providers::FetchError,
 };
 use std::collections::{HashMap, HashSet};
@@ -52,6 +53,9 @@ pub struct Store {
     pub reviews: HashMap<PrId, crate::domain::review::PendingReview>,
     /// When each PR was last looked at, to mark the ones changed since.
     pub seen: Seen,
+    /// What agents have proposed, as the file said when it was last read. Which of
+    /// it the reader has dealt with is in `seen`.
+    pub proposals: Proposals,
     /// The PR the reader named on the command line, read and waiting for the
     /// list to be read before it is opened.
     pub requested: Option<PullRequest>,
@@ -108,6 +112,7 @@ impl Store {
             reload_after_fetch: HashSet::new(),
             reviews: HashMap::new(),
             seen: Seen::new(),
+            proposals: Proposals::default(),
             requested: None,
             cache: Cache::default(),
             groups: HashMap::new(),

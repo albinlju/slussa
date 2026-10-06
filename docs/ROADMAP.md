@@ -156,23 +156,30 @@ let an agent help without deciding.
   been updated then, not which commit, so the head that was read has to be saved
   with it. **Open:** what counts as read (the diff opened, or read to its end),
   and whether the list's row says it too.
-- [ ] **Agents propose, the reader sends** *(the import is built; the TUI is not)*.
+- [ ] **Agents propose, the reader sends** *(first version built)*.
   `slussa propose import <PR>` reads one JSON document (the README gives it: the
   head the agent read, an optional summary, and line comments, each with a side and
   perhaps the agent's own finding id) and keeps it in a file of its own under
   `slussa/proposals`, one per scope. The import takes the file's lock for the moment
-  it needs; the TUI will read the file without it, which is safe because a write
-  replaces the whole file. What the reader does with a proposal is to be kept by the
-  TUI in its own file, so that two processes never write the same one for long.
-  Proposals are bound to the head they were written at; a PR that has moved says
-  `stale` in the report. A finding handed in again is not kept twice. At most 1 000 per
-  PR, 500 per document and 2 MiB. **Missing, the second part:** showing each proposal
-  in the Diff beside its line, marked as AI, with keys to send it (into the review in
-  progress, as a queued line comment that is the reader's own), edit it or discard it;
-  a proposal written against another head shown as such and not on the wrong line;
-  the summary shown with the review; clearing what has been dealt with. Not planned:
-  the proposals appearing without a refresh, and Bitbucket Data Center. **Not tried
-  against** an agent that is not a script: the schema has only been written by hand.
+  it needs; the TUI reads the file without it, which is safe because a write replaces
+  the whole file, when a PR is opened and on each refresh. In the Diff tab a proposal
+  written against the commit the diff is of stands on its line, marked `[AI]`; `c`
+  takes it into the comment editor with its words (so editing and sending is the
+  ordinary path, into the review in progress when there is one) and `d` discards it.
+  What the reader did is kept in the seen file (`local/seen.rs`, an optional list, so
+  the version 1 file reads and writes as before), which also means it is forgotten
+  with the PR after 90 days. A proposal for another commit is counted in the footer
+  and not drawn. At most 1 000 per PR, 500 per document and 2 MiB. **Missing:** the
+  summary is kept and not shown (a "reviewed, nothing found" line belongs with the
+  review, which is the one thing that says an agent ran at all); a way to see the
+  proposals for another commit (they are only counted); a mark on the file in the
+  tree; proposals on the commit diffs and on *Since you read it*; `c` marks a
+  proposal taken when the editor opens, not when the comment is sent, so a draft
+  that is later thrown away loses the proposal (the draft is kept as any other, and
+  the agent's file still has it, but nothing brings it back); undoing a discard; the
+  proposals appearing without a refresh; and Bitbucket Data Center. **Not tried
+  against** an agent that is not a script, or in a real terminal: the schema has
+  only been written by hand and the Diff tab only through the test backend.
 - [ ] **`slussa context <number>`** — one compact text package for an LLM (title,
   description, unresolved threads, CI, blockers). It is the package *Send to
   agent* needs too, so build it once; it needs a size rule for long threads and
@@ -612,7 +619,7 @@ it ahead of the feature that needs it.
   on `Provider` in every method; fine for two providers. Move to a
   `trait ProviderApi` (or keep the enum and implement it via the trait).
   Capabilities stay data. *Trigger:* a third provider.
-- [ ] **Render-context structs for diff/thread rendering.** Five
+- [ ] **Render-context structs for diff/thread rendering.** (`diff_viewer::render` now takes the `DiffContext`; the rest remain.) Five
   `too_many_arguments` allowances: `diff_viewer/pane.rs` (two),
   `widgets/comment/render.rs`, `widgets/diff_row.rs` and
   `tabs/overview/blocks.rs`. Bundle the per-render inputs (theme, focus, width,

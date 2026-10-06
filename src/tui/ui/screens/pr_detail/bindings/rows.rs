@@ -328,6 +328,27 @@ pub(in crate::tui::ui::screens::pr_detail) static REMOVE_PENDING: Binding = Bind
     },
 };
 
+/// `d` on an agent's proposal in the diff discards it.
+pub(in crate::tui::ui::screens::pr_detail) static DISCARD_PROPOSAL: Binding = Binding {
+    key: 'd',
+    mods: Mods::Plain,
+    place: Place::ReadsPrOrDiff,
+    doc: None,
+    needs: Needs::Nothing,
+    label: Label::Fixed("d: discard"),
+    offer: |view| {
+        let proposed = view
+            .surface()
+            .diff_viewer()
+            .is_some_and(|viewer| viewer.focused_proposal().is_some());
+        if proposed {
+            offered(view, PrAction::DiscardProposal)
+        } else {
+            Offer::Hidden
+        }
+    },
+};
+
 /// `b` on the Builds tab runs the failed builds again, when there are some.
 pub(in crate::tui::ui::screens::pr_detail) static RERUN_BUILDS: Binding = Binding {
     key: 'b',
@@ -429,6 +450,7 @@ pub(in crate::tui::ui::screens::pr_detail) static BINDINGS: &[&Binding] = &[
     &EDIT_COMMENT,
     &DELETE_COMMENT,
     &REMOVE_PENDING,
+    &DISCARD_PROPOSAL,
     &RERUN_BUILDS,
     &REREQUEST_REVIEW,
     &OPEN_ISSUE,

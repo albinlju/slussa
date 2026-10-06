@@ -184,6 +184,30 @@ impl Proposal {
         })
     }
 
+    pub const fn head(&self) -> &CommitOid {
+        &self.head
+    }
+
+    pub fn path(&self) -> &str {
+        self.path.as_str()
+    }
+
+    pub const fn line(&self) -> usize {
+        self.line.get()
+    }
+
+    pub const fn side(&self) -> Side {
+        self.side
+    }
+
+    pub fn body(&self) -> &str {
+        self.body.as_str()
+    }
+
+    pub fn agent(&self) -> Option<&str> {
+        self.agent.as_ref().map(AgentName::as_str)
+    }
+
     /// The same finding again: the agent's own id for it when it gave one, else
     /// the same words on the same line of the same commit.
     pub fn same_as(&self, other: &Self) -> bool {

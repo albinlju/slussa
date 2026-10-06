@@ -7,7 +7,10 @@ use std::collections::BTreeMap;
 use chrono::{DateTime, Duration, Utc};
 use serde::{Deserialize, Serialize};
 
-use super::pr::{PrId, PullRequest};
+use super::{
+    pr::{PrId, PullRequest},
+    proposal::Proposal,
+};
 
 /// How long a PR may go unopened before it is forgotten, so that the file does
 /// not grow with every PR ever looked at.
@@ -18,13 +21,35 @@ const KEEP: Duration = Duration::days(90);
 /// list while it is on screen.
 const RENEW: Duration = Duration::days(1);
 
-/// What was known of a PR when it was last looked at.
+/// What the reader did with an agent's proposal.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum How {
+    /// Taken into a comment of the reader's own, to edit and send.
+    Taken,
+    Discarded,
+}
+
+/// A proposal the reader has dealt with, kept whole so that the same one handed
+/// in again is known.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+struct Handled {
+    proposal: Proposal,
+    how: How,
+}
+
+/// What was known of a PR when it was last looked at.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 struct Look {
     /// The PR's `updated` then: later than this, something has happened.
     updated: DateTime<Utc>,
     /// When it was last looked at, to forget the ones not opened for a long time.
     at: DateTime<Utc>,
+    /// The agent's proposals the reader has taken or discarded. A file from before
+    /// they were kept has none, and one with none is written without the field,
+    /// so the version 1 text stays as it was.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    handled: Vec<Handled>,
 }
 
 #[derive(Debug, Default, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -43,15 +68,52 @@ impl Seen {
     /// so that a PR opened now and then is not forgotten as long as it is.
     /// `now` dates the look.
     pub fn mark(&mut self, pr: PrId, updated: DateTime<Utc>, now: DateTime<Utc>) -> bool {
-        let before = self.0.get(&pr).copied();
-        let moved = before.is_none_or(|look| updated > look.updated);
-        let old = before.is_some_and(|look| now - look.at >= RENEW);
-        if !(moved || old) {
+        let Some(look) = self.0.get_mut(&pr) else {
+            self.0.insert(
+                pr,
+                Look {
+                    updated,
+                    at: now,
+                    handled: Vec::new(),
+                },
+            );
+            return true;
+        };
+        if !(updated > look.updated || now - look.at >= RENEW) {
             return false;
         }
-        let updated = before.map_or(updated, |look| look.updated.max(updated));
-        self.0.insert(pr, Look { updated, at: now });
+        look.updated = look.updated.max(updated);
+        look.at = now;
         true
+    }
+
+    /// The reader took or discarded this proposal. Returns whether the record
+    /// changed. A PR never looked at has no record to put it in.
+    pub fn handle(&mut self, pr: PrId, proposal: &Proposal, how: How) -> bool {
+        match self.0.get_mut(&pr) {
+            Some(look)
+                if !look
+                    .handled
+                    .iter()
+                    .any(|known| known.proposal.same_as(proposal)) =>
+            {
+                look.handled.push(Handled {
+                    proposal: proposal.clone(),
+                    how,
+                });
+                true
+            }
+            Some(_) | None => false,
+        }
+    }
+
+    /// Whether the reader has already dealt with this proposal.
+    pub fn is_handled(&self, pr: PrId, proposal: &Proposal) -> bool {
+        self.0.get(&pr).is_some_and(|look| {
+            look.handled
+                .iter()
+                .any(|known| known.proposal.same_as(proposal))
+        })
     }
 
     /// Whether the PR was opened before and has been updated since.
@@ -111,6 +173,44 @@ mod tests {
             updated,
             ai_review: crate::domain::pr::AiReview::None,
         }
+    }
+
+    fn proposal(line: usize) -> Proposal {
+        Proposal::new(crate::domain::proposal::ProposalInput {
+            head: "abc123".into(),
+            path: "a.rs".into(),
+            line,
+            side: crate::domain::proposal::Side::New,
+            body: "words".into(),
+            id: None,
+            agent: None,
+        })
+        .unwrap()
+    }
+
+    #[test]
+    fn a_proposal_dealt_with_is_known_again_and_a_later_look_does_not_forget_it() {
+        let mut seen = Seen::default();
+        assert!(
+            !seen.handle(PrId(1), &proposal(1), How::Taken),
+            "a PR never opened"
+        );
+        seen.mark(PrId(1), at(1), at(2));
+        assert!(!seen.is_handled(PrId(1), &proposal(1)));
+        assert!(seen.handle(PrId(1), &proposal(1), How::Discarded));
+        assert!(
+            !seen.handle(PrId(1), &proposal(1), How::Taken),
+            "once is enough"
+        );
+        assert!(seen.is_handled(PrId(1), &proposal(1)));
+        assert!(
+            !seen.is_handled(PrId(1), &proposal(2)),
+            "another line is another one"
+        );
+        assert!(!seen.is_handled(PrId(2), &proposal(1)), "another PR");
+        // Looking at the PR again moves its date and keeps what was decided.
+        seen.mark(PrId(1), at(30), at(31));
+        assert!(seen.is_handled(PrId(1), &proposal(1)));
     }
 
     #[test]

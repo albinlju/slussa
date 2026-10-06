@@ -7,4 +7,4 @@ mod threads;
 mod tree;
 mod viewer;
 
-pub use viewer::{DiffContext, DiffFocus, DiffViewer, FocusedNav, NavTarget, PaneNav};
+pub use viewer::{DiffContext, DiffFocus, DiffViewer, FocusedNav, NavTarget, PaneNav, ProposalAt};

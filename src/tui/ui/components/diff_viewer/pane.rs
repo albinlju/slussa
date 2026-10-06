@@ -6,14 +6,18 @@ use crate::{
     domain::{
         comment::{CommentId, CommentThread},
         diff::{Diff, DiffLine, FileDiff, LineRef},
+        proposal::{Proposal, Side},
         review::{CommentAnchor, PendingComment},
     },
     tui::ui::{
-        components::diff_viewer::{DiffViewer, FocusedNav, PaneNav},
+        components::diff_viewer::{DiffViewer, FocusedNav, PaneNav, ProposalAt},
         icons, layout, theme,
         widgets::{
             self,
-            comment::{fold::Folds, meta::Reading},
+            comment::{
+                fold::Folds,
+                meta::{self, Reading},
+            },
             markdown,
         },
     },
@@ -39,6 +43,7 @@ pub(super) fn render(
     file_stats: &[(u32, u32)],
     threads: &[CommentThread],
     pending: &[PendingComment],
+    proposals: &[ProposalAt<'_>],
     focused: bool,
     reading: Reading<'_>,
     area: Rect,
@@ -73,6 +78,7 @@ pub(super) fn render(
         diff.revision.as_ref(),
         threads,
         pending,
+        proposals,
         body_area.width,
         active,
         query,
@@ -157,6 +163,7 @@ fn build_diff_body(
     revision: Option<&crate::domain::diff::DiffRevision>,
     threads: &[CommentThread],
     pending: &[PendingComment],
+    proposals: &[ProposalAt<'_>],
     width: u16,
     active: Option<usize>,
     query: &str,
@@ -171,6 +178,7 @@ fn build_diff_body(
 
     let (comments_at, comments_at_old) = index_comments(threads, &file.path, revision);
     let (pending_at, pending_at_old) = index_pending(pending, &file.path, revision);
+    let (proposed_at, proposed_at_old) = index_proposals(proposals, &file.path);
     let now = Utc::now();
     let thread_width = width.saturating_sub(2 * DIFF_GUTTER_COLS);
 
@@ -237,6 +245,31 @@ fn build_diff_body(
                         line,
                         removed,
                         index,
+                    },
+                });
+            }
+
+            let proposed_here = if removed {
+                proposed_at_old.get(&old_no)
+            } else {
+                proposed_at.get(&new_no)
+            };
+            for proposed in proposed_here.into_iter().flatten() {
+                let idx = nav_items.len();
+                let start = lines.len();
+                let span = push_proposal_lines(
+                    &mut lines,
+                    proposed.proposal,
+                    thread_width,
+                    active == Some(idx),
+                );
+                nav_items.push(NavItem {
+                    rendered_row: start,
+                    row_span: span,
+                    kind: NavKind::Proposal {
+                        line,
+                        removed,
+                        index: proposed.index,
                     },
                 });
             }
@@ -322,6 +355,81 @@ fn index_pending<'a>(
     (by_new, by_old)
 }
 
+type ProposalIndex<'a> = HashMap<usize, Vec<ProposalAt<'a>>>;
+
+/// Bucket the agents' proposals for `path` by the line they are about, on the
+/// new side of the file and on the old.
+fn index_proposals<'a>(
+    proposals: &[ProposalAt<'a>],
+    path: &str,
+) -> (ProposalIndex<'a>, ProposalIndex<'a>) {
+    let mut by_new: ProposalIndex<'_> = HashMap::new();
+    let mut by_old: ProposalIndex<'_> = HashMap::new();
+    for proposed in proposals.iter().filter(|p| p.proposal.path() == path) {
+        let bucket = match proposed.proposal.side() {
+            Side::New => &mut by_new,
+            Side::Old => &mut by_old,
+        };
+        bucket
+            .entry(proposed.proposal.line())
+            .or_default()
+            .push(*proposed);
+    }
+    (by_new, by_old)
+}
+
+/// An agent's proposal, drawn apart from what people wrote: its own bar and an
+/// `[AI]` tag with the agent's name, and what the keys do with it while the
+/// cursor is on it. Returns the row count for nav spans.
+fn push_proposal_lines(
+    lines: &mut Vec<Line<'static>>,
+    proposal: &Proposal,
+    width: u16,
+    active: bool,
+) -> usize {
+    let theme = theme::current();
+    let bar = Style::default().fg(theme.info);
+    let body_style = Style::default().fg(theme.fg);
+    let row_style = if active {
+        Style::default().bg(theme.highlight_bg)
+    } else {
+        Style::default()
+    };
+    let text_width = width.saturating_sub(2);
+
+    let mut title = vec![
+        Span::styled(format!("{DIFF_GUTTER}▌ "), bar),
+        meta::ai_tag(),
+        Span::styled(
+            format!(" {}", proposal.agent().unwrap_or("proposal")),
+            Style::default().fg(theme.info).add_modifier(Modifier::BOLD),
+        ),
+    ];
+    if active {
+        title.push(Span::styled(
+            "   c: take as a comment  d: discard",
+            Style::default().fg(theme.muted),
+        ));
+    }
+    let mut block: Vec<Line<'static>> = vec![Line::from(title)];
+    for body_line in markdown::render_no_margin(proposal.body(), text_width) {
+        let mut spans = vec![Span::styled(format!("{DIFF_GUTTER}▌ "), bar)];
+        spans.extend(
+            body_line
+                .spans
+                .into_iter()
+                .map(|s| Span::styled(s.content, body_style)),
+        );
+        block.push(Line::from(spans));
+    }
+
+    let count = block.len();
+    for line in block {
+        lines.push(line.style(row_style));
+    }
+    count
+}
+
 /// A queued review comment, rendered as a draft block (accent bar + `pending`
 /// tag) so it reads as not-yet-posted. Returns the row count for nav spans.
 fn push_pending_lines(
@@ -385,6 +493,7 @@ fn render_pane_header(
                 format!("  {} L{line}", icons::COMMENT)
             }
             NavKind::Pending { .. } => format!("  {} L{line} (pending)", icons::COMMENT),
+            NavKind::Proposal { .. } => format!("  {} L{line} (proposed)", icons::COMMENT),
             NavKind::Line { .. } if removed => format!("  L{line} (old)"),
             NavKind::Line { .. } => format!("  L{line}"),
         }

@@ -135,6 +135,19 @@ mod tests {
     }
 
     #[test]
+    fn what_the_reader_did_with_a_proposal_is_written_and_read_back() {
+        let handled = VERSION_1.replace(
+            r#""at":"2026-10-04T09:00:00Z""#,
+            concat!(
+                r#""at":"2026-10-04T09:00:00Z","handled":[{"proposal":{"head":"abc123","#,
+                r#""path":"a.rs","line":3,"side":"new","body":"words"},"how":"taken"}]"#
+            ),
+        );
+        let envelope: Envelope = serde_json::from_str(&handled).unwrap();
+        assert_eq!(serde_json::to_string(&envelope).unwrap(), handled);
+    }
+
+    #[test]
     fn a_file_that_cannot_be_read_is_an_error_and_is_left_as_it_was() {
         let dir = TempDir::new("seen");
         let root = dir.path();

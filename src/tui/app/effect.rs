@@ -9,6 +9,7 @@ use crate::{
         commit::{Commit, CommitOid},
         diff::Diff,
         pr::{Mergeability, PrBatch, PrGroup, PrId, PrInfo, PullRequest},
+        seen::How,
     },
     providers::{FetchError, MergeError, ReviewError},
     tui::app::{
@@ -34,6 +35,13 @@ pub enum Effect {
     LoadCommitDiff {
         pr_id: PrId,
         oid: CommitOid,
+    },
+    /// The reader took an agent's proposal into a comment of their own, or
+    /// discarded it. `index` is its place among the PR's proposals.
+    HandleProposal {
+        pr_id: PrId,
+        index: usize,
+        how: How,
     },
     /// Read the log of a build the reader opened.
     LoadBuildLog {

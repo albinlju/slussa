@@ -7,6 +7,7 @@ mod loading;
 mod navigation;
 mod open_issue;
 mod opening;
+mod proposals;
 mod recovery;
 mod rerequest;
 mod rerun;

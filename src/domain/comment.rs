@@ -52,7 +52,6 @@ impl NonBlank {
         (!text.trim().is_empty()).then_some(Self(text))
     }
 
-    #[cfg(test)]
     pub fn as_str(&self) -> &str {
         &self.0
     }

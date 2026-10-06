@@ -18,6 +18,7 @@ mod loads;
 pub mod navigation;
 mod notice;
 pub mod pr_groups;
+mod proposals;
 pub mod refresh;
 mod seen;
 pub mod state;

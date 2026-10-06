@@ -117,6 +117,7 @@ fn footer_actions(state: &DetailView<'_>, tab: DetailTab) -> Vec<Hint> {
                 }));
             }
             hints.push(Hint::on("/: files"));
+            hints.extend(proposals_hint(state));
             hints.push(Hint::on("h/l: tabs"));
             return hints;
         }
@@ -143,10 +144,15 @@ fn footer_actions(state: &DetailView<'_>, tab: DetailTab) -> Vec<Hint> {
             );
         }
 
+        let proposed = view.focused_proposal().is_some();
         match state.comment_target() {
             Some(CommentTarget::Reply(_)) => hints.push(Hint::on("r: reply")),
+            Some(_) if proposed => hints.push(Hint::on("c: take as comment")),
             Some(_) => hints.push(Hint::on("c: comment")),
             None => {}
+        }
+        if proposed {
+            hints.extend(bindings::hint(state, 'd'));
         }
         if state
             .focused_thread()
@@ -183,6 +189,24 @@ fn footer_actions(state: &DetailView<'_>, tab: DetailTab) -> Vec<Hint> {
         }
         // Both returned above with hints of their own.
         DetailTab::Overview | DetailTab::Diff => Vec::new(),
+    }
+}
+
+/// That agents have proposed something on this diff, which nothing else shows
+/// until the cursor reaches a line with one.
+fn proposals_hint(state: &DetailView<'_>) -> Option<Hint> {
+    state.surface().diff_viewer()?;
+    let here = super::proposed::on_this_diff(state.store, state.pr_id, state.data).len();
+    let elsewhere = super::proposed::for_another_commit(state.store, state.pr_id, state.data);
+    match (here, elsewhere) {
+        (0, 0) => None,
+        (here, 0) => Some(Hint::on(format!("{here} proposed by AI"))),
+        (0, elsewhere) => Some(Hint::on(format!(
+            "{elsewhere} proposed by AI for another commit"
+        ))),
+        (here, elsewhere) => Some(Hint::on(format!(
+            "{here} proposed by AI (+{elsewhere} for another commit)"
+        ))),
     }
 }
 

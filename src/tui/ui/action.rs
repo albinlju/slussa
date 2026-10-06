@@ -270,6 +270,8 @@ pub enum PrAction {
     RerequestReview,
     /// `i` with several issues to open: choose one.
     OpenIssues,
+    /// `d` on an agent's proposal: the reader does not want it.
+    DiscardProposal,
 }
 
 #[derive(Debug, Clone, Copy)]

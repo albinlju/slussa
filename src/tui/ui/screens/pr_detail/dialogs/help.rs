@@ -123,7 +123,7 @@ impl Entry {
             }
             Self::Delete => {
                 let text = match (caps.supports(Feature::DeleteComments), caps.reviews()) {
-                    (true, true) => "delete own / pending",
+                    (true, true) => "delete own / pending; discard an AI proposal",
                     (true, false) => "delete own",
                     (false, true) => "remove pending comment",
                     (false, false) => return None,
@@ -265,7 +265,7 @@ mod tests {
         );
         assert_eq!(
             text(&with(&[Feature::DeleteComments], true)),
-            Some("delete own / pending")
+            Some("delete own / pending; discard an AI proposal")
         );
         assert_eq!(text(&with(&[], true)), Some("remove pending comment"));
         assert_eq!(text(&with(&[], false)), None);

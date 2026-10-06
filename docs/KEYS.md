@@ -41,9 +41,9 @@ The search also takes filters, written `key:value` among the words and combined 
 | `b` | in the Builds tab, run the failed builds again; offered when one has failed or was cancelled, and dimmed with the reason on a merged or declined PR (GitHub Actions) |
 | `p` | ask those who asked for changes to review again (GitHub); named in the footer (`p: ask alice again`), hidden when nobody asked for changes, dimmed with the reason on a merged or declined PR |
 | `i` | in the Overview, open the issue the PR closes in the browser (GitHub); the footer names it (`i: open #12`) and shows nothing when there is none. When the PR closes several, `i` asks which: `j`/`k` and `enter` in the picker, which names the repository of an issue in another one |
-| `c` | comment |
+| `c` | comment; on an agent's proposal in the diff, take it: the editor opens with the proposal's words to edit and send as your own (a line comment joins the review in progress, as any other), and the proposal is not shown again |
 | `r` | reply |
-| `e` / `d` | edit / delete your own comment (`d` also removes a queued review comment) |
+| `e` / `d` | edit / delete your own comment (`d` also removes a queued review comment, and on an agent's proposal in the diff discards it) |
 | `R` | resolve or unresolve the thread |
 | `f` | in the Overview, show all comments, only people's or only an AI agent's; offered when the PR has a comment by a bot account (GitHub) or one that starts with an `[ai] markers` line; what the filter hides stays as a dimmed line |
 | `^j` / `^k` | step between comments in a thread |
