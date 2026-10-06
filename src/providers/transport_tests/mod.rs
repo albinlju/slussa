@@ -9,6 +9,7 @@
 
 mod bitbucket;
 mod bitbucket_reviews;
+mod github_builds;
 mod github_diffs;
 mod github_merges;
 mod github_one_pr;

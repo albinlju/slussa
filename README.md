@@ -131,6 +131,13 @@ the diamonds. It says nothing of what the review found or whether it was dealt w
 that posts under your own account is told apart by the text of its comments, which the list
 does not read, and Bitbucket Data Center has no such column.
 
+In the Builds tab `j`/`k` move between the builds, and `enter` opens the log of a
+GitHub Actions job in the same place: it opens on its first error, `n` and `N` step
+between the errors and `esc` goes back to the builds. A check that is not an Action
+has no log to read, and Bitbucket Data Center has none either. The log is read from
+`gh api`, which from version 2.92 refuses text with terminal escape sequences unless
+asked; slussa asks, and removes them itself before anything is drawn.
+
 Drafts (comment editor text and queued review comments) are saved locally and
 survive a restart. A `●` before a PR's number in the list means it has changed since you
 last opened it, and opening it clears the mark. A PR you have never opened is not marked,

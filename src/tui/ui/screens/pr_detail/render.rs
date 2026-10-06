@@ -194,7 +194,11 @@ fn render_content(
                 },
             );
         }
-        DetailTab::Builds => ui.builds.render(frame, inset, &pr_data),
+        DetailTab::Builds => ui.builds.render(
+            frame,
+            inset,
+            &super::tabs::builds::BuildsInput::new(ctx.pr_id, pr_data),
+        ),
     }
 }
 

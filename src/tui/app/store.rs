@@ -22,8 +22,9 @@ use crate::{
     domain::{
         activity::Activity,
         authorship::AiMarkers,
+        build_log::BuildLog,
         capabilities::{Capabilities, Feature},
-        ci::Build,
+        ci::{Build, JobId},
         commit::{Commit, CommitOid},
         diff::{Diff, DiffRange},
         pr::{Mergeability, PrGroup, PrId, PrInfo, PrStatus, PullRequest},
@@ -146,6 +147,8 @@ pub struct PrData {
     /// What changed between two commits of the PR, for what is new since the
     /// reader looked.
     pub range_diffs: HashMap<DiffRange, LoadState<Diff>>,
+    /// The logs of the builds the reader opened.
+    pub build_logs: HashMap<JobId, LoadState<BuildLog>>,
 }
 
 #[derive(Debug, Default)]
@@ -211,6 +214,7 @@ impl PrData {
             || self.info.is_loading()
             || self.commit_diffs.values().any(LoadState::is_loading)
             || self.range_diffs.values().any(LoadState::is_loading)
+            || self.build_logs.values().any(LoadState::is_loading)
     }
 }
 
@@ -235,6 +239,11 @@ impl PrData {
                 .entry(range.clone())
                 .or_insert(LoadState::NotRequested)
                 .start_loading(),
+            PrResource::BuildLog(job) => self
+                .build_logs
+                .entry(*job)
+                .or_insert(LoadState::NotRequested)
+                .start_loading(),
         }
     }
 
@@ -253,6 +262,10 @@ impl PrData {
             PrResource::RangeDiff(range) => self
                 .range_diffs
                 .get(range)
+                .is_some_and(|state| state.loaded().is_some()),
+            PrResource::BuildLog(job) => self
+                .build_logs
+                .get(job)
                 .is_some_and(|state| state.loaded().is_some()),
         }
     }
@@ -379,6 +392,8 @@ pub enum PrResource {
     Info,
     CommitDiff(CommitOid),
     RangeDiff(DiffRange),
+    /// Read when a build is opened and not again: a log does not change.
+    BuildLog(JobId),
 }
 
 impl PrResource {
@@ -389,7 +404,11 @@ impl PrResource {
             Self::RangeDiff(_) => Some(Feature::RangeDiff),
             Self::Mergeability => Some(Feature::Mergeability),
             Self::Info => Some(Feature::PrInfo),
-            Self::Commits | Self::Diff | Self::Activity | Self::CommitDiff(_) => None,
+            Self::Commits
+            | Self::Diff
+            | Self::Activity
+            | Self::CommitDiff(_)
+            | Self::BuildLog(_) => None,
         }
     }
 }
@@ -506,6 +525,7 @@ impl Store {
             FetchKey::Pr(PrResource::Builds, id) => on(id, |tab| {
                 matches!(tab, DetailTab::Overview | DetailTab::Builds)
             }),
+            FetchKey::Pr(PrResource::BuildLog(_), id) => on(id, |tab| tab == DetailTab::Builds),
             FetchKey::Pr(PrResource::Mergeability, id) => on(id, |_| true),
             FetchKey::Pr(PrResource::Info, id) => on(id, |tab| {
                 matches!(tab, DetailTab::Overview | DetailTab::Description)

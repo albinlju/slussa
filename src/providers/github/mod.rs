@@ -15,7 +15,7 @@ mod review_threads;
 mod reviewers;
 
 pub use activities::fetch as fetch_activity;
-pub use builds::{fetch_builds, rerun_failed};
+pub use builds::{fetch_build_log, fetch_builds, rerun_failed};
 pub use comments::{
     delete_comment, edit_comment, post_comment, post_pr_comment, reply_comment, set_thread_resolved,
 };

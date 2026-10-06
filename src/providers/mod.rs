@@ -30,7 +30,8 @@ mod transport_tests;
 
 use crate::domain::{
     activity::Activity,
-    ci::Build,
+    build_log::BuildLog,
+    ci::{Build, JobId},
     comment::{CommentId, CommentKey, ThreadHandle},
     commit::{Commit, CommitOid},
     diff::{Diff, DiffRange},
@@ -111,6 +112,16 @@ impl Provider {
         match self {
             Self::GitHub(repo) => github::fetch_builds(repo, pr_id),
             Self::BitbucketDc(c) => bitbucket_dc::fetch_builds(c, pr_id),
+        }
+    }
+
+    /// The log of one build. Only GitHub Actions jobs have one to read.
+    pub fn fetch_build_log(&self, job: JobId) -> Result<BuildLog, FetchError> {
+        match self {
+            Self::GitHub(repo) => github::fetch_build_log(repo, job),
+            Self::BitbucketDc(_) => Err(FetchError::Unsupported(
+                "Bitbucket builds have no log to read here.".into(),
+            )),
         }
     }
 

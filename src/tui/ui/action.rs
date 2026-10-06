@@ -71,7 +71,7 @@ pub enum ListAction {
 pub enum DetailAction {
     Nav(NavAction),
     Description(DescriptionAction),
-    BuildsScroll(i16),
+    Builds(BuildsAction),
     Timeline(TimelineAction),
     Error(ErrorAction),
     Confirm(ConfirmAction),
@@ -89,7 +89,7 @@ impl DetailAction {
         match self {
             Self::Nav(_)
             | Self::Description(_)
-            | Self::BuildsScroll(_)
+            | Self::Builds(_)
             | Self::Timeline(_)
             | Self::Error(_)
             | Self::Issues(_) => true,
@@ -118,6 +118,7 @@ macro_rules! detail_action_from {
 detail_action_from! {
     NavAction => Nav,
     DescriptionAction => Description,
+    BuildsAction => Builds,
     TimelineAction => Timeline,
     ErrorAction => Error,
     ConfirmAction => Confirm,
@@ -141,6 +142,20 @@ pub enum NavAction {
 pub enum DescriptionAction {
     Scroll(i16),
     Horizontal(i16),
+}
+
+#[derive(Debug, Clone, Copy)]
+pub enum BuildsAction {
+    /// Move the cursor between the builds.
+    Move(i16),
+    /// Open the log of the build the cursor is on.
+    Open,
+    /// Back from the log to the builds.
+    Close,
+    Scroll(i16),
+    /// Go to the next (1) or previous (-1) error in the log, round from the
+    /// last to the first.
+    NextError(i16),
 }
 
 #[derive(Debug, Clone, Copy)]

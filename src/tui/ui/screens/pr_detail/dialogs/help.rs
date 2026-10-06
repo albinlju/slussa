@@ -34,7 +34,7 @@ const HELP: &[Entry] = &[
     Key("enter", "open / view", Needs::Nothing),
     Entry::Bound(&bindings::rows::TOGGLE_FOLD),
     Key("/", "search", Needs::Nothing),
-    Key("n/N", "next/prev match", Needs::Nothing),
+    Key("n/N", "next/prev match, or error in a log", Needs::Nothing),
     Key("[ ]", "prev/next tab/commit", Needs::Nothing),
     Key("esc", "back", Needs::Nothing),
     Entry::Bound(&bindings::rows::SUBMIT_REVIEW),

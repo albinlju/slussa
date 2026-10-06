@@ -71,6 +71,11 @@ impl App {
                     .range_diffs
                     .insert(range, LoadState::from_result(result));
             }
+            Read::BuildLog(pr_id, job, result) => {
+                self.pr_data_mut(pr_id)
+                    .build_logs
+                    .insert(job, LoadState::from_result(result));
+            }
         }
         if self.state.store.reload_after_fetch.remove(&key) {
             self.load_resource(key);

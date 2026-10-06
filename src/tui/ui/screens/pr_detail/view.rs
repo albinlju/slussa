@@ -297,6 +297,7 @@ impl<'a> DetailView<'a> {
             Surface::Description
             | Surface::CommitList
             | Surface::Builds
+            | Surface::BuildLog
             | Surface::SinceDiff(_) => None,
         }
     }
@@ -336,6 +337,7 @@ impl<'a> DetailView<'a> {
             Surface::Description
             | Surface::CommitList
             | Surface::Builds
+            | Surface::BuildLog
             | Surface::SinceDiff(_) => None,
         }
     }
@@ -364,6 +366,7 @@ impl<'a> DetailView<'a> {
             Surface::Description
             | Surface::CommitList
             | Surface::Builds
+            | Surface::BuildLog
             | Surface::SinceDiff(_) => None,
         }
     }
@@ -474,7 +477,7 @@ impl DetailView<'_> {
             )
             | A::Issues(_)
             | A::Description(_)
-            | A::BuildsScroll(_)
+            | A::Builds(_)
             | A::Timeline(_)
             | A::Error(_)
             | A::Confirm(_)

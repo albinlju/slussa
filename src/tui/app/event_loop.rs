@@ -217,6 +217,9 @@ impl App {
                 };
                 self.ensure_loaded(FetchKey::Pr(PrResource::RangeDiff(range), pr_id));
             }
+            Effect::LoadBuildLog { pr_id, job } => {
+                self.ensure_loaded(FetchKey::Pr(PrResource::BuildLog(job), pr_id));
+            }
             Effect::LoadCommitDiff { pr_id, oid } => {
                 self.ensure_loaded(FetchKey::Pr(PrResource::CommitDiff(oid), pr_id));
             }
