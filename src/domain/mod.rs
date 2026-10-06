@@ -14,6 +14,7 @@ pub mod event;
 pub mod pr;
 pub mod printable;
 pub mod proposal;
+pub mod proposal_document;
 pub mod query;
 pub mod review;
 pub mod seen;

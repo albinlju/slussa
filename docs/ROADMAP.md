@@ -421,20 +421,23 @@ back on refresh.
   terminal pane and return immediately), or *headless* (`-p`, output in a
   dialog). Command per mode in `config.toml`; suspend is the default because
   it needs no multiplexer.
-- [ ] **Run a review from slussa** *(refined)* — a key on the PR that runs a
-  configured command (default `claude -p` with a review prompt and the PR
-  context: title, body, diff) and posts the result either as one batched
-  review with line comments or as a local-only overlay the user can promote
-  to comments. The default prompt asks for each concern as "Before this PR,
-  `<who>` experienced `<old>`. With this PR, `<new>`, so `<impact>`." with a
-  `Critical | Warning | Suggestion` severity, and the posted review names the
-  head SHA it reviewed. Command and prompt in `config.toml`; the command runs
-  off the UI thread with the same deadline rules as `gh`. Moved here from *AI
-  review integration* and placed after *Send to agent*: an automated review
-  belongs before the human opens the PR, and one that posts comments gives the
-  human more to read. When the header says no review has happened, sending
-  the PR to an agent that fixes is the shorter path; this stays for the
-  repository that has no reviewer in its pipeline.
+- [ ] **Run a review from slussa** *(first version built)*. `A` runs the
+  configured command (`agent_review` in `config.toml`, a program and arguments;
+  `claude -p` by default, `[]` for none) over the PR: the title, description and
+  diff go to it on standard input with a built-in prompt that asks for the document
+  of *Agents propose*, and what it answers becomes proposals the reader takes or
+  discards, so nothing is posted. A dialog names the command and what it is given
+  and asks first, each time. slussa fixes `head` to the commit whose diff the
+  agent was given and drops comments on lines that are not in it. It runs off the
+  UI thread (`spawn_fetch`), one at a time per PR, with a 10 minute deadline, and
+  a failure is the PR's error. **Missing:** the prompt does not carry severity or
+  the "Before this PR, `<who>` experienced…" format (the document has no field for
+  either); the diff is cut at 150 000 bytes and the agent is told; the command
+  cannot be given the files of the PR, which is *Check out the PR locally*; a
+  second command for another kind of review; cancelling a review that runs (it
+  ends at the deadline); the prompt cannot be changed in the config; a command
+  that is not installed is found out when it runs, not before. **Not tried
+  against** a real agent: the command has only been a script.
 - [ ] **Copy additional references** — SHA / branch / permalink to a line.
 
 #### The other direction: an agent calling slussa

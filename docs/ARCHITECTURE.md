@@ -46,7 +46,8 @@ keyboard-only use, and prefer an existing interaction over a new visual pattern.
 src/
 ├── main.rs                Startup, logging and dispatch to `cli` or `tui`
 ├── cli/                   Arguments and the subcommands that print and exit (`auth login`, `-C`)
-├── config.rs              config.toml: theme, sort and `[ai] markers`
+├── config.rs              config.toml: theme, sort, `agent_review` and `[ai] markers`
+├── agent.rs               Asking an agent for a review: the prompt, running the command, finding its JSON
 ├── logging.rs             Log file in the data directory (`SLUSSA_LOG`), for its owner only
 ├── private_file.rs        Files only their owner may read: the drafts and the log
 ├── git_url.rs             Splits a git remote into host and path; web base URL
@@ -66,6 +67,8 @@ src/
 │   │   ├── commands.rs       `Command`, what the provider supports of it, and its execution
 │   │   ├── drafts.rs         Where drafts are kept; `App::open`, restore, save, journal
 │   │   ├── seen.rs           Marks the PR on screen as seen; writes the file of looks
+│   │   ├── proposals.rs      Reads what agents proposed; what the reader does with each
+│   │   ├── agent_review.rs   `A`: the whole review off the UI thread, and its result
 │   │   ├── desktop.rs        Browser and clipboard effects
 │   │   ├── fetchers.rs        Run providers off the UI thread
 │   │   ├── terminal.rs        `TerminalGuard`: the terminal while the TUI runs

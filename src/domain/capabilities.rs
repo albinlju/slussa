@@ -23,6 +23,9 @@ pub enum Feature {
     RerequestReview,
     /// The list omits the description and labels; they are read per PR.
     PrInfo,
+    /// The PR's diff can be read as text, which is what an agent is asked to
+    /// review.
+    AgentReview,
 }
 
 /// How a review with queued line comments reaches the provider.

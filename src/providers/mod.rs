@@ -24,6 +24,7 @@ mod url_path;
 
 pub use error::{FetchError, MergeError, ReviewError};
 pub use github::GhRepo;
+pub use unified_diff::parse as parse_unified_diff;
 
 #[cfg(test)]
 mod transport_tests;
@@ -88,6 +89,20 @@ impl Provider {
         match self {
             Self::GitHub(repo) => github::fetch_diff(repo, pr_id),
             Self::BitbucketDc(c) => bitbucket_dc::fetch_diff(c, pr_id),
+        }
+    }
+
+    /// The PR's diff as text, with the revision it is of: what an agent is asked
+    /// to review.
+    pub fn fetch_diff_text(
+        &self,
+        pr_id: PrId,
+    ) -> Result<(String, crate::domain::diff::DiffRevision), FetchError> {
+        match self {
+            Self::GitHub(repo) => github::fetch_diff_text(repo, pr_id),
+            Self::BitbucketDc(_) => Err(FetchError::Unsupported(
+                "Bitbucket's diff is not read as text here.".into(),
+            )),
         }
     }
 
@@ -235,6 +250,7 @@ impl Provider {
                     .into_iter()
                     .chain([
                         Feature::PrInfo,
+                        Feature::AgentReview,
                         Feature::AutoMerge,
                         Feature::RerunBuilds,
                         Feature::DeleteBranch,

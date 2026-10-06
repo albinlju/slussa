@@ -66,6 +66,7 @@ impl App {
                     .commit_diffs
                     .insert(oid, LoadState::from_result(result));
             }
+            Read::AgentReview(pr_id, result) => self.agent_review_done(pr_id, result),
             Read::BuildLog(pr_id, job, result) => {
                 self.pr_data_mut(pr_id)
                     .build_logs

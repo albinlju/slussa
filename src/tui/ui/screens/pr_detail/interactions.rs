@@ -164,6 +164,7 @@ impl PrDetailScreen {
                 let accepted = self.confirm()?.accepted();
                 self.overlay = None;
                 let command = match accepted? {
+                    ConfirmKind::AgentReview => return Some(Effect::RunAgentReview { pr_id }),
                     ConfirmKind::Decline => Command::Decline,
                     ConfirmKind::Reopen => Command::Reopen,
                     ConfirmKind::DiscardReview => Command::AbandonReview,
@@ -411,6 +412,15 @@ impl PrDetailScreen {
                 return None;
             }
             PrAction::OpenComment => return self.open_comment(pr_id, ctx),
+            PrAction::OpenAgentReview => {
+                let command = ctx.store.agent_review.join(" ");
+                let preview = format!(
+                    "Runs: {command}\nGiven: the title, description and diff of PR #{pr_id}.\n\
+                     It proposes comments; nothing is posted."
+                );
+                self.ask(ConfirmDialog::new(ConfirmKind::AgentReview).with_preview(preview));
+                return None;
+            }
             PrAction::DiscardProposal => {
                 let index = self.surface(ctx.tab).diff_viewer()?.focused_proposal()?;
                 return Some(Effect::HandleProposal {

@@ -13,14 +13,14 @@ use std::{
     process::ExitCode,
 };
 
-use serde::{Deserialize, Serialize};
+use serde::Serialize;
 
 use crate::{
     domain::{
         commit::CommitOid,
         pr::PrId,
         printable::printable,
-        proposal::{Proposal, ProposalError, ProposalInput, Side, Summary},
+        proposal_document::{self, Source},
     },
     local::{
         proposals::{Batch, Imported, import},
@@ -32,36 +32,6 @@ use crate::{
 /// The most a document may hold, so that an agent that loops cannot fill the
 /// disk or the screen.
 const MAX_BYTES: u64 = 2 * 1024 * 1024;
-const MAX_COMMENTS: usize = 500;
-
-#[derive(Deserialize)]
-#[serde(deny_unknown_fields)]
-struct Document {
-    schema: u32,
-    /// The commit the agent read the PR at.
-    head: String,
-    /// What names the agent, shown beside what it proposes.
-    agent: Option<String>,
-    summary: Option<String>,
-    #[serde(default)]
-    comments: Vec<CommentDocument>,
-}
-
-#[derive(Deserialize)]
-#[serde(deny_unknown_fields)]
-struct CommentDocument {
-    path: String,
-    line: usize,
-    #[serde(default = "new_side")]
-    side: Side,
-    body: String,
-    /// The agent's own name for the finding, so that it is not shown twice.
-    id: Option<String>,
-}
-
-const fn new_side() -> Side {
-    Side::New
-}
 
 #[derive(Serialize)]
 struct Report {
@@ -205,43 +175,15 @@ fn read_document(file: Option<&Path>) -> Result<Vec<u8>, Failure> {
 /// What the document proposes, each part checked: the one that is wrong is
 /// named, and nothing of a document with one is kept.
 fn parse_document(bytes: &[u8]) -> Result<(CommitOid, Batch), Failure> {
-    let invalid = |message: String| Failure::new(Kind::Invalid, message);
-    let document: Document = serde_json::from_slice(bytes)
-        .map_err(|e| invalid(format!("the document cannot be read: {e}")))?;
-    if document.schema != 1 {
-        return Err(invalid(format!(
-            "`schema` is {}; this slussa reads 1",
-            document.schema
-        )));
-    }
-    if document.comments.len() > MAX_COMMENTS {
-        return Err(invalid(format!(
-            "the document has more than {MAX_COMMENTS} comments"
-        )));
-    }
-    let head = CommitOid::parse(&document.head)
-        .ok_or_else(|| invalid(format!("`head`: {}", ProposalError::Head)))?;
-    let mut comments = Vec::with_capacity(document.comments.len());
-    for (at, comment) in document.comments.into_iter().enumerate() {
-        comments.push(
-            Proposal::new(ProposalInput {
-                head: document.head.clone(),
-                path: comment.path,
-                line: comment.line,
-                side: comment.side,
-                body: comment.body,
-                id: comment.id,
-                agent: document.agent.clone(),
-            })
-            .map_err(|e| invalid(format!("comments[{at}]: {e}")))?,
-        );
-    }
-    let summary = document
-        .summary
-        .map(|text| Summary::new(&document.head, text, document.agent.clone()))
-        .transpose()
-        .map_err(|e| invalid(format!("`summary`: {e}")))?;
-    Ok((head, Batch { comments, summary }))
+    let parsed = proposal_document::parse(bytes, Source::Caller)
+        .map_err(|message| Failure::new(Kind::Invalid, message))?;
+    Ok((
+        parsed.head,
+        Batch {
+            comments: parsed.comments,
+            summary: parsed.summary,
+        },
+    ))
 }
 
 fn import_batch(
@@ -252,7 +194,9 @@ fn import_batch(
     batch: Batch,
     current_head: Option<&str>,
 ) -> Result<Report, Failure> {
-    let Imported { added, duplicates } = import(root, scope_name, pr, batch)
+    let Imported {
+        added, duplicates, ..
+    } = import(root, scope_name, pr, batch)
         .map_err(|e| Failure::new(Kind::Failed, e.to_string()))?;
     let current = current_head.and_then(CommitOid::parse);
     Ok(Report {

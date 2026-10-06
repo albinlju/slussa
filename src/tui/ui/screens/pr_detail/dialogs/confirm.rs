@@ -22,6 +22,8 @@ pub enum ConfirmKind {
     /// Reopen a PR that was closed without merging.
     Reopen,
     DiscardReview,
+    /// Send the PR's text to the configured agent, to review it.
+    AgentReview,
 }
 
 impl ConfirmKind {
@@ -31,6 +33,7 @@ impl ConfirmKind {
             Self::Decline => "Close / decline this PR?",
             Self::Reopen => "Reopen this PR?",
             Self::DiscardReview => "Discard this review draft?",
+            Self::AgentReview => "Ask an agent to review this PR?",
         }
     }
 }
@@ -48,7 +51,7 @@ impl ConfirmKind {
     /// routine and easy to undo; a new kind has to say which it is.
     const fn default_choice(self) -> Choice {
         match self {
-            Self::Reopen | Self::DeleteComment(_) => Choice::Yes,
+            Self::Reopen | Self::DeleteComment(_) | Self::AgentReview => Choice::Yes,
             Self::Decline | Self::DiscardReview => Choice::No,
         }
     }
@@ -56,6 +59,7 @@ impl ConfirmKind {
     const fn labels(self) -> [&'static str; 2] {
         match self {
             Self::DiscardReview => ["Discard review", "Keep reviewing"],
+            Self::AgentReview => ["Run the review", "Cancel"],
             Self::DeleteComment(_) | Self::Decline | Self::Reopen => ["Yes", "No"],
         }
     }
@@ -73,7 +77,9 @@ fn render(frame: &mut Frame<'_>, dialog: &ConfirmDialog, pr: &PrSummary<'_>, are
         ConfirmKind::Decline => (Some(pr.label.as_str()), Some(pr.target_branch)),
         // Reopening states no target: nothing is lost or merged by it.
         ConfirmKind::Reopen => (Some(pr.label.as_str()), None),
-        ConfirmKind::DeleteComment(_) => (dialog.preview.as_deref(), None),
+        ConfirmKind::DeleteComment(_) | ConfirmKind::AgentReview => {
+            (dialog.preview.as_deref(), None)
+        }
         ConfirmKind::DiscardReview => (None, None),
     };
 

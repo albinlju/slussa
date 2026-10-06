@@ -215,6 +215,7 @@ impl App {
             Effect::HandleProposal { pr_id, index, how } => {
                 self.handle_proposal(pr_id, index, how);
             }
+            Effect::RunAgentReview { pr_id } => self.spawn_agent_review(pr_id),
             Effect::LoadBuildLog { pr_id, job } => {
                 self.ensure_loaded(FetchKey::Pr(PrResource::BuildLog(job), pr_id));
             }

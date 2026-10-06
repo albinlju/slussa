@@ -272,6 +272,8 @@ pub enum PrAction {
     OpenIssues,
     /// `d` on an agent's proposal: the reader does not want it.
     DiscardProposal,
+    /// `A`: ask the configured agent to review the PR, after asking the reader.
+    OpenAgentReview,
 }
 
 #[derive(Debug, Clone, Copy)]

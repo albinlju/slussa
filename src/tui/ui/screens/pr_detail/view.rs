@@ -421,6 +421,9 @@ impl DetailView<'_> {
                 PrAction::RerequestReview => caps.supports(F::RerequestReview),
                 PrAction::OpenIssues => caps.supports(F::PrInfo),
                 PrAction::DiscardProposal => true,
+                PrAction::OpenAgentReview => {
+                    caps.supports(F::AgentReview) && !self.store.agent_review.is_empty()
+                }
             },
             A::Review(ReviewAction::Select) => caps.reviews(),
             A::Merge(MergeAction::Select) => !caps.merge_strategies.is_empty(),

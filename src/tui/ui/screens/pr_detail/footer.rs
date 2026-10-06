@@ -40,7 +40,7 @@ pub(super) fn render(frame: &mut Frame<'_>, state: &DetailView<'_>, area: Rect) 
 /// shown wherever the keys work (Overview and Description). Each is what its
 /// row in `bindings` says: lit, dimmed with the reason, or left out.
 fn pr_action_hints(state: &DetailView<'_>) -> Vec<Hint> {
-    ['a', 'v', 'm', 'p', 'x']
+    ['a', 'v', 'm', 'p', 'x', 'A']
         .into_iter()
         .filter_map(|key| bindings::hint(state, key))
         .collect()
@@ -118,6 +118,7 @@ fn footer_actions(state: &DetailView<'_>, tab: DetailTab) -> Vec<Hint> {
             }
             hints.push(Hint::on("/: files"));
             hints.extend(proposals_hint(state));
+            hints.extend(bindings::hint(state, 'A'));
             hints.push(Hint::on("h/l: tabs"));
             return hints;
         }

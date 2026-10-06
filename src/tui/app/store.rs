@@ -56,6 +56,8 @@ pub struct Store {
     /// What agents have proposed, as the file said when it was last read. Which of
     /// it the reader has dealt with is in `seen`.
     pub proposals: Proposals,
+    /// The command that reviews a PR when asked to; empty where there is none.
+    pub agent_review: Vec<String>,
     /// The PR the reader named on the command line, read and waiting for the
     /// list to be read before it is opened.
     pub requested: Option<PullRequest>,
@@ -113,6 +115,7 @@ impl Store {
             reviews: HashMap::new(),
             seen: Seen::new(),
             proposals: Proposals::default(),
+            agent_review: Vec::new(),
             requested: None,
             cache: Cache::default(),
             groups: HashMap::new(),
@@ -240,6 +243,8 @@ impl PrData {
                 .entry(*job)
                 .or_insert(LoadState::NotRequested)
                 .start_loading(),
+            // Asked for by the reader, never read because a PR was opened.
+            PrResource::AgentReview => false,
         }
     }
 
@@ -259,6 +264,7 @@ impl PrData {
                 .build_logs
                 .get(job)
                 .is_some_and(|state| state.loaded().is_some()),
+            PrResource::AgentReview => false,
         }
     }
 
@@ -383,6 +389,9 @@ pub enum PrResource {
     Mergeability,
     Info,
     CommitDiff(CommitOid),
+    /// An agent asked to review the PR. Nothing is stored in the PR's data: what
+    /// it proposes is kept in a file, which is read again when it is done.
+    AgentReview,
     /// Read when a build is opened and not again: a log does not change.
     BuildLog(JobId),
 }
@@ -393,6 +402,7 @@ impl PrResource {
         match self {
             Self::Builds => Some(Feature::Builds),
             Self::Mergeability => Some(Feature::Mergeability),
+            Self::AgentReview => Some(Feature::AgentReview),
             Self::Info => Some(Feature::PrInfo),
             Self::Commits
             | Self::Diff
@@ -504,7 +514,8 @@ impl Store {
         let on = |id: &PrId, shows: fn(DetailTab) -> bool| matches!(screen, Screen::Detail { pr_id, tab } if pr_id == *id && shows(tab));
         self.refresh_failures.iter().any(|key| match key {
             FetchKey::Prs(_) => true,
-            FetchKey::One(_) => false,
+            // A review's failure is its own error on the PR, not a stale view.
+            FetchKey::One(_) | FetchKey::Pr(PrResource::AgentReview, _) => false,
             FetchKey::Pr(PrResource::Diff, id) => on(id, |tab| tab == DetailTab::Diff),
             FetchKey::Pr(PrResource::Activity, id) => on(id, |tab| {
                 matches!(

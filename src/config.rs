@@ -10,6 +10,15 @@ pub struct Config {
     pub sort: Option<String>,
     #[serde(default)]
     pub ai: AiConfig,
+    /// The command that reviews a PR when asked to (`A`): a program and its
+    /// arguments, given the PR's title, description and diff on standard input.
+    /// An empty list turns the key off.
+    pub agent_review: Option<Vec<String>>,
+}
+
+/// What reviews a PR when the config does not say.
+pub fn default_agent_review() -> Vec<String> {
+    vec!["claude".to_owned(), "-p".to_owned()]
 }
 
 /// The `[ai]` table: how comments by an AI agent are recognised.
@@ -78,6 +87,23 @@ mod tests {
         assert!(parse("theme = \"slate\"\n").unwrap().ai.markers.is_empty());
         assert!(parse("[ai]\n").unwrap().ai.markers.is_empty());
         assert!(parse("[ai]\nmarkers = \"one\"\n").is_err());
+    }
+
+    #[test]
+    fn reads_the_agent_review_command_and_it_is_a_list_not_a_line() {
+        let config = parse("agent_review = [\"claude\", \"-p\", \"--model\", \"x\"]\n").unwrap();
+        assert_eq!(
+            config.agent_review.unwrap(),
+            ["claude", "-p", "--model", "x"]
+        );
+        assert_eq!(parse("theme = \"slate\"\n").unwrap().agent_review, None);
+        assert_eq!(
+            parse("agent_review = []\n").unwrap().agent_review,
+            Some(vec![])
+        );
+        // One string would need a shell to split; it is refused, not guessed at.
+        assert!(parse("agent_review = \"claude -p\"\n").is_err());
+        assert_eq!(default_agent_review(), ["claude", "-p"]);
     }
 
     #[test]

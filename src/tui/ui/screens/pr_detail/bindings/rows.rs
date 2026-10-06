@@ -4,7 +4,10 @@ use super::{Binding, Doc, Label, Mods, Needs, Offer, Place, offered, offered_on_
 use crate::{
     domain::{capabilities::Feature, pr::PrStatus},
     tui::{
-        app::effect::{Effect, LinkAction},
+        app::{
+            effect::{Effect, LinkAction},
+            store::{FetchKey, PrResource},
+        },
         ui::{
             action::{Action, PrAction, TimelineAction},
             screens::pr_detail::{DetailView, tabs::overview::offers_filter},
@@ -349,6 +352,39 @@ pub(in crate::tui::ui::screens::pr_detail) static DISCARD_PROPOSAL: Binding = Bi
     },
 };
 
+/// `A` asks the configured agent to review the PR, once the reader has said yes.
+/// What it finds becomes proposals; nothing is posted.
+pub(in crate::tui::ui::screens::pr_detail) static AGENT_REVIEW: Binding = Binding {
+    key: 'A',
+    mods: Mods::Any,
+    place: Place::ReadsPrOrDiff,
+    doc: Some(Doc {
+        keys: "A",
+        text: "ask an agent to review the PR: its findings become proposals (asks first)",
+    }),
+    needs: Needs::Feature(Feature::AgentReview),
+    label: Label::Fixed("A: agent review"),
+    offer: |view| {
+        if view.store.agent_review.is_empty() {
+            return Offer::Hidden;
+        }
+        match view.pr.status {
+            PrStatus::Open(_) => {}
+            PrStatus::Merged => return Offer::Blocked("merged"),
+            PrStatus::Declined => return Offer::Blocked("declined"),
+        }
+        let running = view
+            .store
+            .fetches
+            .contains(&FetchKey::Pr(PrResource::AgentReview, view.pr_id));
+        if running {
+            Offer::Blocked("running")
+        } else {
+            offered(view, PrAction::OpenAgentReview)
+        }
+    },
+};
+
 /// `b` on the Builds tab runs the failed builds again, when there are some.
 pub(in crate::tui::ui::screens::pr_detail) static RERUN_BUILDS: Binding = Binding {
     key: 'b',
@@ -451,6 +487,7 @@ pub(in crate::tui::ui::screens::pr_detail) static BINDINGS: &[&Binding] = &[
     &DELETE_COMMENT,
     &REMOVE_PENDING,
     &DISCARD_PROPOSAL,
+    &AGENT_REVIEW,
     &RERUN_BUILDS,
     &REREQUEST_REVIEW,
     &OPEN_ISSUE,

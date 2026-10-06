@@ -43,6 +43,10 @@ pub enum Effect {
         index: usize,
         how: How,
     },
+    /// Ask the configured agent to review the PR, which the reader has said yes to.
+    RunAgentReview {
+        pr_id: PrId,
+    },
     /// Read the log of a build the reader opened.
     LoadBuildLog {
         pr_id: PrId,
@@ -108,6 +112,12 @@ pub enum Read {
     Info(PrId, Result<PrInfo, FetchError>),
     CommitDiff(PrId, CommitOid, Result<Diff, FetchError>),
     BuildLog(PrId, JobId, Result<BuildLog, FetchError>),
+    /// An asked-for review is over. Its failure is the PR's own error, so
+    /// `failure` does not carry it.
+    AgentReview(
+        PrId,
+        Result<super::agent_review::Outcome, super::agent_review::Failure>,
+    ),
 }
 
 impl Read {
@@ -124,6 +134,7 @@ impl Read {
             Self::Info(id, _) => FetchKey::Pr(PrResource::Info, *id),
             Self::CommitDiff(id, oid, _) => FetchKey::Pr(PrResource::CommitDiff(oid.clone()), *id),
             Self::BuildLog(id, job, _) => FetchKey::Pr(PrResource::BuildLog(*job), *id),
+            Self::AgentReview(id, _) => FetchKey::Pr(PrResource::AgentReview, *id),
         }
     }
 
@@ -139,6 +150,7 @@ impl Read {
             Self::Mergeability(_, result) => result.as_ref().err(),
             Self::Info(_, result) => result.as_ref().err(),
             Self::BuildLog(_, _, result) => result.as_ref().err(),
+            Self::AgentReview(..) => None,
         }
     }
 }

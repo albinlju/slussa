@@ -141,7 +141,21 @@ over SSH; inside tmux that needs `set -g set-clipboard on`.
 
 ## For agents
 
-An agent that has reviewed a PR can hand in what it found, without posting anything:
+**Ask for a review.** `A` in a PR runs an agent over it: slussa gives the configured
+command the PR's title, description and diff on standard input, with a prompt that
+asks for what deserves your attention as the document below, and keeps the answer
+as proposals (the default command is `claude -p`; `agent_review` in the config
+changes it, and `[]` turns the key off). A dialog names the command and what it is
+given and asks first, every time, since the text leaves slussa. The review runs in
+the background (the footer shows it) and a notice says how many comments came; a
+comment on a line that is not in the diff is dropped and counted. slussa sets
+`head` itself, to the commit whose diff the agent was given, so what it proposes
+cannot be tied to another one. Everything in the PR is told to be data and not an
+instruction, and since what the agent says only becomes proposals that you take or
+discard, an instruction hidden in a PR can at worst waste a review. GitHub only.
+
+**Hand one in.** An agent that has reviewed a PR can hand in what it found, without
+posting anything:
 
 ```sh
 slussa propose import 44 < review.json     # or --file review.json
@@ -192,6 +206,9 @@ kept but not shown yet.
 ```toml
 theme = "graphite"   # graphite (default), slate, gruvbox, catppuccin, terminal
 sort = "attention"   # attention (default), recent, updated or oldest
+# Optional. What reviews a PR when you press A: a program and its arguments, given the
+# PR's title, description and diff on standard input; [] turns the key off.
+agent_review = ["claude", "-p"]
 
 [ai]
 # Optional. For an agent that works as a person: a comment whose first line

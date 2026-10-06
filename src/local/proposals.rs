@@ -66,7 +66,10 @@ pub struct Batch {
 /// What an import did.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct Imported {
+    /// What was added: comments and a summary.
     pub added: usize,
+    /// Whether a summary was among them.
+    pub summary_added: bool,
     /// Proposals that were already there.
     pub duplicates: usize,
 }
@@ -110,6 +113,7 @@ pub fn import(root: &Path, scope: &str, pr: PrId, batch: Batch) -> io::Result<Im
     let held = all.0.entry(pr).or_default();
     let mut imported = Imported {
         added: 0,
+        summary_added: false,
         duplicates: 0,
     };
     for comment in batch.comments {
@@ -130,6 +134,7 @@ pub fn import(root: &Path, scope: &str, pr: PrId, batch: Batch) -> io::Result<Im
         } else {
             held.summaries.push(summary);
             imported.added += 1;
+            imported.summary_added = true;
         }
     }
     let bytes = serde_json::to_vec(&Envelope {
@@ -183,6 +188,7 @@ mod tests {
             imported,
             Imported {
                 added: 2,
+                summary_added: false,
                 duplicates: 0
             }
         );
@@ -220,6 +226,7 @@ mod tests {
             again,
             Imported {
                 added: 1,
+                summary_added: false,
                 duplicates: 1
             }
         );
@@ -239,6 +246,7 @@ mod tests {
             import(dir.path(), "s", PrId(7), with_summary()).unwrap(),
             Imported {
                 added: 1,
+                summary_added: true,
                 duplicates: 0
             }
         );
@@ -246,6 +254,7 @@ mod tests {
             import(dir.path(), "s", PrId(7), with_summary()).unwrap(),
             Imported {
                 added: 0,
+                summary_added: false,
                 duplicates: 1
             }
         );
