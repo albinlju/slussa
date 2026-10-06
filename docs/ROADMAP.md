@@ -462,13 +462,27 @@ surface does not show them until they matter.
   documentation, not run). **Open:** the wording, and whether the line is a
   notice at start or part of the heading.
 - [ ] **Empty / loading / error states** per view (use `LoadState` everywhere).
+- [ ] **Publish to crates.io from the release workflow.** Today `cargo publish` is
+  run by hand from the tag, which needs a token on the publisher's machine and
+  publishes whatever the working directory holds (a stray untracked file is
+  packaged, as the dirty-tree check shows). The way to do it without a token is
+  *Trusted Publishing*: crates.io is told which repository, workflow file and
+  (optionally) environment may publish the crate; the job swaps its OIDC identity
+  for a token that is revoked when it ends, so no secret is stored. A job after
+  the release is created, in a protected GitHub environment that needs the
+  maintainer's approval, keeps the one step that cannot be taken back under a human
+  decision; `cargo publish --dry-run` also in the workflow's dry run, so that the
+  packaging is tried without publishing. Setting it up on crates.io (the crate's
+  settings) is done by the maintainer. Not before the attestation step has run on
+  a real release, so that two new things do not meet in one.
 - [ ] **Release gaps.** Deliberately late: getting slussa into more hands comes after
-  it is a product people will want, not before. What is not there yet: a Homebrew tap; publishing to
-  crates.io from the release workflow (today `cargo publish` is run by hand
-  from the tag, which needs a token); signing and notarizing the macOS binary
-  (the README gives the `xattr` command); and a check of "Review requested",
-  which has only been seen against scripted `gh` output and needs a second
-  account; and, when the time comes, a short demo recording for the README.
+  it is a product people will want, not before. What is not there yet: a package
+  for a package manager (an own Homebrew tap that the workflow updates, or waiting
+  until the project is known enough for the main Homebrew repository, whose own
+  automation then follows the releases); signing and notarizing the macOS binary
+  (the README gives the `xattr` command); a check of "Review requested", which has
+  only been seen against scripted `gh` output and needs a second account; and, when
+  the time comes, a short demo recording for the README.
 
 ### Scope decision: authoring / management
 
