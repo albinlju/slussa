@@ -144,18 +144,38 @@ What slussa is chosen for (see *Positioning*). The approval and the merge bound 
 the commit that was read are built. These make that hold over several rounds, and
 let an agent help without deciding.
 
-- [ ] **Since you read it** (review in rounds). A marker in the header when the
-  branch has moved since the diff that was read; then a key that shows only what
-  is new, from the head that was read to now (a head that was force-pushed away
-  may not answer); the builds shown for the head that was read, with a line when
-  they are for another; and the reader's own threads, which of them were answered
-  or resolved since. A merge or a verdict on a moved branch is already refused,
-  and says to read what is new; this is how. Inside one session the list's head
-  and the diff's are both in memory. The next day, which is when it matters, they
-  are not: `local/seen.rs` keeps when a PR was looked at and how recently it had
-  been updated then, not which commit, so the head that was read has to be saved
-  with it. **Open:** what counts as read (the diff opened, or read to its end),
-  and whether the list's row says it too.
+- [ ] **Since you read it** (review in rounds) *(first version built)*. The head of
+  the diff the reader last had open is kept with when the PR was looked at
+  (`local/seen.rs`, an optional field, so the version 1 file reads and writes as
+  before). When the branch has moved since, on an open PR on GitHub, the header says
+  `↻ new since you read it` and `w` shows only what is new, from that head to the
+  one now, in the Diff tab (`w` or `esc` goes back to the whole diff). What counts
+  as read is an arrival: the PR's diff when the reader opens the PR on it or chooses
+  the tab, while it is the branch as the list has it, or the new part when it has
+  been read; not a refresh under a reader who is already there, whether it brings a
+  newer diff or the same one again, and not leaving the new part when it could not be read, which keeps the
+  commit that was read so that `w` and `F` can ask again. No comment
+  is made on the new part, whose lines are not the PR's. A head that was
+  force-pushed away says so, with what GitHub answered, since it no longer has it to
+  compare. The new part is the compare of GitHub (from the two commits' common
+  ancestor) kept to the files the PR touches, which leaves out what a merge of the
+  target brought in; an empty one says it may be a reset. The files are those of
+  the PR's diff of the new head, so that is read first (a compare that arrives
+  without it is not kept and does not count as read, and a branch that moved again
+  meanwhile says so), and those the PR touched at the head that was read, which
+  GitHub is asked for: a file the PR has put back as the target has it is new, and
+  left out it would hide a check that was read and then removed. When GitHub lists
+  as many files as it lists at most (300), nothing is left out. Missing: the
+  commits since (the Commits tab does not mark them), the builds for the head that
+  was read with a line when they are for another, and the reader's own threads, which
+  of them were answered or resolved since; the mark on the list's row (left out of
+  the first version; the list already has `●` for changed since); a compare that is
+  of the two commits themselves (after a rebase GitHub's compare shows the PR's own
+  changes again, and a file the PR touches that the target also changed shows what
+  the target did);
+  and Bitbucket Data Center. **Open:** whether opening the Diff tab is the right
+  meaning of read: it clears the mark for a reader who goes straight to the whole
+  diff, which is what makes the mark a way in and not a log.
 - [ ] **Agents propose, the reader sends.** `slussa draft comment …` and
   `slussa review import …` put proposals in a local inbox; the TUI shows each
   beside the line it is about, marked as AI, and the reader sends, edits or
@@ -658,11 +678,12 @@ it ahead of the feature that needs it.
   lines, `mod.rs` composes; `tests/repo_rules.rs` fails a file over 600). Four
   `mod.rs` files still implement instead of composing: `tui/ui/`,
   `providers/`, `providers/github/` and `providers/bitbucket_dc/`; the two
-  provider ones go with *Provider trait*. Not a refactor-only change. Three
-  files are at about 500 (`tui/app/store.rs` with `Operation`, 523 since the build
-  logs, and `PrResource`, `FetchKey` and the tickets the part to move out,
-  `tui/ui/screens/pr_list/tests.rs`, `tui/ui/regression_tests/conversation.rs`):
-  split by concern when one of them grows again.
+  provider ones go with *Provider trait*. Not a refactor-only change. Two
+  files are at about 500 (`tui/ui/screens/pr_list/tests.rs`,
+  `tui/ui/regression_tests/conversation.rs`): split by concern when one of them
+  grows again. `tui/app/store.rs` is under it since `Operation` moved to
+  `operation.rs`; `PrResource` and `FetchKey` are what would move next, and the
+  tickets stay, since only `Store` may make one.
 - [ ] **A workspace, when something else needs the core.** slussa is one crate
   with clear module boundaries; a workspace adds compile-unit overhead and
   manifest churn without a consumer for the split crates, and an attempt on a

@@ -270,6 +270,9 @@ pub enum PrAction {
     RerequestReview,
     /// `i` with several issues to open: choose one.
     OpenIssues,
+    /// `w`: show what is new since the reader looked, or go back to the whole
+    /// diff.
+    ToggleSince,
 }
 
 #[derive(Debug, Clone, Copy)]

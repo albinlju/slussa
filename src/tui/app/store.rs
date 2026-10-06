@@ -26,8 +26,8 @@ use crate::{
         capabilities::{Capabilities, Feature},
         ci::{Build, JobId},
         commit::{Commit, CommitOid},
-        diff::Diff,
-        pr::{Mergeability, PrGroup, PrId, PrInfo, PrStatus, PullRequest},
+        diff::{Diff, DiffRange},
+        pr::{Mergeability, PrGroup, PrId, PrInfo, PullRequest},
         seen::Seen,
         user::Username,
     },
@@ -36,6 +36,7 @@ use crate::{
 use std::collections::{HashMap, HashSet};
 
 pub use super::notice::{Notice, NoticeKind};
+pub use super::operation::Operation;
 use super::pr_groups::{GroupState, OpenChain};
 
 #[derive(Debug)]
@@ -144,6 +145,9 @@ pub struct PrData {
     /// Description and labels, for a provider whose list leaves them out.
     pub info: LoadState<PrInfo>,
     pub commit_diffs: HashMap<CommitOid, LoadState<Diff>>,
+    /// What changed between two commits of the PR, for what is new since the
+    /// reader looked.
+    pub range_diffs: HashMap<DiffRange, LoadState<Diff>>,
     /// The logs of the builds the reader opened.
     pub build_logs: HashMap<JobId, LoadState<BuildLog>>,
 }
@@ -210,6 +214,7 @@ impl PrData {
             || self.mergeability.is_loading()
             || self.info.is_loading()
             || self.commit_diffs.values().any(LoadState::is_loading)
+            || self.range_diffs.values().any(LoadState::is_loading)
             || self.build_logs.values().any(LoadState::is_loading)
     }
 }
@@ -228,6 +233,11 @@ impl PrData {
             PrResource::CommitDiff(oid) => self
                 .commit_diffs
                 .entry(oid.clone())
+                .or_insert(LoadState::NotRequested)
+                .start_loading(),
+            PrResource::RangeDiff(range) => self
+                .range_diffs
+                .entry(range.clone())
                 .or_insert(LoadState::NotRequested)
                 .start_loading(),
             PrResource::BuildLog(job) => self
@@ -250,6 +260,10 @@ impl PrData {
                 .commit_diffs
                 .get(oid)
                 .is_some_and(|state| state.loaded().is_some()),
+            PrResource::RangeDiff(range) => self
+                .range_diffs
+                .get(range)
+                .is_some_and(|state| state.loaded().is_some()),
             PrResource::BuildLog(job) => self
                 .build_logs
                 .get(job)
@@ -261,70 +275,6 @@ impl PrData {
         match commit {
             Some(oid) => self.commit_diffs.get(oid),
             None => Some(&self.diff),
-        }
-    }
-}
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum Operation {
-    Comment,
-    Moderation,
-    Review,
-    Merge,
-    AutoMerge,
-    CancelAutoMerge,
-    RerunBuilds,
-    RerequestReview,
-    Decline,
-    Reopen,
-}
-
-impl Operation {
-    /// What the notice says once it went through.
-    pub const fn done_label(self) -> &'static str {
-        match self {
-            Self::Merge => "merged",
-            Self::AutoMerge => "will merge when ready",
-            Self::CancelAutoMerge => "auto-merge off",
-            Self::RerunBuilds => "failed builds run again",
-            Self::RerequestReview => "asked to review again",
-            Self::Decline => "closed / declined",
-            Self::Reopen => "reopened",
-            Self::Review => "review submitted",
-            Self::Comment => "comment saved",
-            Self::Moderation => "comment / thread updated",
-        }
-    }
-
-    /// The status the PR has once it went through, if it changes it.
-    pub const fn moves_pr_to(self) -> Option<PrStatus> {
-        match self {
-            Self::Merge => Some(PrStatus::Merged),
-            Self::Decline => Some(PrStatus::Declined),
-            // Whether it is a draft or has a conflict is read with the list again.
-            Self::Reopen => Some(PrStatus::open()),
-            Self::Comment
-            | Self::Moderation
-            | Self::Review
-            | Self::AutoMerge
-            | Self::CancelAutoMerge
-            | Self::RerunBuilds
-            | Self::RerequestReview => None,
-        }
-    }
-
-    /// Whether it sends what is in the comment editor.
-    pub const fn sends_editor_text(self) -> bool {
-        match self {
-            Self::Comment | Self::Review => true,
-            Self::Moderation
-            | Self::Merge
-            | Self::AutoMerge
-            | Self::CancelAutoMerge
-            | Self::RerunBuilds
-            | Self::RerequestReview
-            | Self::Decline
-            | Self::Reopen => false,
         }
     }
 }
@@ -378,6 +328,7 @@ pub enum PrResource {
     Mergeability,
     Info,
     CommitDiff(CommitOid),
+    RangeDiff(DiffRange),
     /// Read when a build is opened and not again: a log does not change.
     BuildLog(JobId),
 }
@@ -387,6 +338,7 @@ impl PrResource {
     const fn feature(&self) -> Option<Feature> {
         match self {
             Self::Builds => Some(Feature::Builds),
+            Self::RangeDiff(_) => Some(Feature::RangeDiff),
             Self::Mergeability => Some(Feature::Mergeability),
             Self::Info => Some(Feature::PrInfo),
             Self::Commits
@@ -518,6 +470,7 @@ impl Store {
             FetchKey::Pr(PrResource::Commits | PrResource::CommitDiff(_), id) => {
                 on(id, |tab| tab == DetailTab::Commits)
             }
+            FetchKey::Pr(PrResource::RangeDiff(_), id) => on(id, |tab| tab == DetailTab::Diff),
         })
     }
 }

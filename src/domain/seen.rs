@@ -7,7 +7,10 @@ use std::collections::BTreeMap;
 use chrono::{DateTime, Duration, Utc};
 use serde::{Deserialize, Serialize};
 
-use super::pr::{PrId, PullRequest};
+use super::{
+    commit::CommitOid,
+    pr::{PrId, PullRequest},
+};
 
 /// How long a PR may go unopened before it is forgotten, so that the file does
 /// not grow with every PR ever looked at.
@@ -19,12 +22,17 @@ const KEEP: Duration = Duration::days(90);
 const RENEW: Duration = Duration::days(1);
 
 /// What was known of a PR when it was last looked at.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 struct Look {
     /// The PR's `updated` then: later than this, something has happened.
     updated: DateTime<Utc>,
     /// When it was last looked at, to forget the ones not opened for a long time.
     at: DateTime<Utc>,
+    /// The head of the diff the reader last had open, for what is new since. A
+    /// file from before it was kept has none, and one with none is written
+    /// without it, so the version 1 text stays as it was.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    head: Option<CommitOid>,
 }
 
 #[derive(Debug, Default, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -43,15 +51,41 @@ impl Seen {
     /// so that a PR opened now and then is not forgotten as long as it is.
     /// `now` dates the look.
     pub fn mark(&mut self, pr: PrId, updated: DateTime<Utc>, now: DateTime<Utc>) -> bool {
-        let before = self.0.get(&pr).copied();
+        let before = self.0.get(&pr);
         let moved = before.is_none_or(|look| updated > look.updated);
         let old = before.is_some_and(|look| now - look.at >= RENEW);
         if !(moved || old) {
             return false;
         }
+        let head = before.and_then(|look| look.head.clone());
         let updated = before.map_or(updated, |look| look.updated.max(updated));
-        self.0.insert(pr, Look { updated, at: now });
+        self.0.insert(
+            pr,
+            Look {
+                updated,
+                at: now,
+                head,
+            },
+        );
         true
+    }
+
+    /// The reader had the diff of `head` open. Returns whether the record
+    /// changed, so that it is written. A PR never looked at has no record to
+    /// put it in: it is opened first, and that is what makes one.
+    pub fn mark_head(&mut self, pr: PrId, head: &CommitOid) -> bool {
+        match self.0.get_mut(&pr) {
+            Some(look) if look.head.as_ref() != Some(head) => {
+                look.head = Some(head.clone());
+                true
+            }
+            Some(_) | None => false,
+        }
+    }
+
+    /// The head of the diff the reader last had open, if one was kept.
+    pub fn read_head(&self, pr: PrId) -> Option<&CommitOid> {
+        self.0.get(&pr)?.head.as_ref()
     }
 
     /// Whether the PR was opened before and has been updated since.
@@ -111,6 +145,26 @@ mod tests {
             updated,
             ai_review: crate::domain::pr::AiReview::None,
         }
+    }
+
+    #[test]
+    fn the_head_read_is_kept_per_pr_and_survives_a_later_look() {
+        let mut seen = Seen::default();
+        let (first, second) = (CommitOid::from("abc123"), CommitOid::from("def456"));
+        assert!(
+            !seen.mark_head(PrId(1), &first),
+            "a PR never opened has no record"
+        );
+        seen.mark(PrId(1), at(1), at(2));
+        assert_eq!(seen.read_head(PrId(1)), None);
+        assert!(seen.mark_head(PrId(1), &first));
+        assert!(!seen.mark_head(PrId(1), &first), "the same head is no news");
+        // A newer look at the PR does not forget which diff was read.
+        seen.mark(PrId(1), at(3), at(4));
+        assert_eq!(seen.read_head(PrId(1)), Some(&first));
+        assert!(seen.mark_head(PrId(1), &second));
+        assert_eq!(seen.read_head(PrId(1)), Some(&second));
+        assert_eq!(seen.read_head(PrId(2)), None);
     }
 
     #[test]

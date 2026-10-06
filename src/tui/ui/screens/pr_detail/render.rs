@@ -145,6 +145,20 @@ fn render_content(
                 scrollbar: Rect::new(area.right(), area.y, 1, area.height),
             },
         ),
+        DetailTab::Diff if ui.since.is_some() => {
+            if let Some(since) = &mut ui.since {
+                super::since::render(
+                    frame,
+                    since,
+                    pr_data,
+                    Reading {
+                        pr_author: &pr.author.username,
+                        folds: Folds::Open,
+                    },
+                    framed,
+                );
+            }
+        }
         DetailTab::Diff => {
             let threads = activity_threads(pr_data);
             let diff = pr_data.map(|d| &d.diff);
@@ -236,6 +250,7 @@ pub(super) fn render(
         pr_data
             .filter(|_| ctx.store.capabilities.supports(Feature::Mergeability))
             .map(|d| &d.mergeability),
+        DetailView::new(ui, ctx).moved_since_read().is_some(),
         header_area,
     );
     render_tabs_and_content(

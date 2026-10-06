@@ -60,12 +60,14 @@ src/
 │   │   ├── event_loop.rs      `App`, the event loop, the task channel and effect dispatch
 │   │   ├── state.rs           AppState composition (Store, Ui, Screen)
 │   │   ├── store.rs           Cache, PR operations/errors, in-flight loads, reviews, tickets
+│   │   ├── operation.rs       The writes a PR can have pending, and what each says and changes
 │   │   ├── notice.rs          The one-line message over the footer
 │   │   ├── effect.rs          `Effect` (work), `TaskResult` and `Read` (what came back)
 │   │   ├── navigation.rs     Screen identity, open PR and initiate missing loads
 │   │   ├── commands.rs       `Command`, what the provider supports of it, and its execution
 │   │   ├── drafts.rs         Where drafts are kept; `App::open`, restore, save, journal
 │   │   ├── seen.rs           Marks the PR on screen as seen; writes the file of looks
+│   │   ├── since.rs          What is new since the reader looked: the PR's diff of the head, then the compare
 │   │   ├── desktop.rs        Browser and clipboard effects
 │   │   ├── fetchers.rs        Run providers off the UI thread
 │   │   ├── terminal.rs        `TerminalGuard`: the terminal while the TUI runs

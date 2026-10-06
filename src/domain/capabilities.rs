@@ -23,6 +23,9 @@ pub enum Feature {
     RerequestReview,
     /// The list omits the description and labels; they are read per PR.
     PrInfo,
+    /// What changed between two commits of the PR can be read, which is what
+    /// "new since you read it" shows.
+    RangeDiff,
 }
 
 /// How a review with queued line comments reaches the provider.

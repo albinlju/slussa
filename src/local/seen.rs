@@ -135,6 +135,17 @@ mod tests {
     }
 
     #[test]
+    fn a_head_kept_with_a_look_is_written_and_read_back() {
+        let with_head = VERSION_1.replace(
+            r#""at":"2026-10-04T09:00:00Z""#,
+            r#""at":"2026-10-04T09:00:00Z","head":"abc123""#,
+        );
+        let envelope: Envelope = serde_json::from_str(&with_head).unwrap();
+        assert_eq!(envelope.seen.read_head(PrId(7)), Some(&"abc123".into()));
+        assert_eq!(serde_json::to_string(&envelope).unwrap(), with_head);
+    }
+
+    #[test]
     fn a_file_that_cannot_be_read_is_an_error_and_is_left_as_it_was() {
         let dir = TempDir::new("seen");
         let root = dir.path();

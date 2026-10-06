@@ -1,5 +1,6 @@
 use crate::{
     domain::pr::PrId,
+    providers::error::FetchError,
     tui::app::{
         App,
         effect::{Read, WriteError},
@@ -51,7 +52,19 @@ impl App {
                 }
                 self.pr_data_mut(pr_id).commits.reload(result);
             }
-            Read::Diff(pr_id, result) => self.pr_data_mut(pr_id).diff.reload(result),
+            Read::Diff(pr_id, result) => {
+                // An arrival is the diff the reader is waiting for. One read again
+                // under a reader who is already on it, of a newer commit or of the
+                // same, has not been read by being read again, and nor has the
+                // diff of a PR that is not on screen.
+                let awaited = self.shows(pr_id) && self.pr_data_mut(pr_id).diff.loaded().is_none();
+                let failure = result.as_ref().err().map(FetchError::user_message);
+                self.pr_data_mut(pr_id).diff.reload(result);
+                if awaited {
+                    self.mark_read_head();
+                }
+                self.new_since_after_diff(pr_id, failure);
+            }
             Read::Builds(pr_id, result) => self.pr_data_mut(pr_id).builds.reload(result),
             Read::Activity(pr_id, result) => {
                 let result = result.map(|activity| self.state.store.judged(activity));
@@ -65,6 +78,16 @@ impl App {
                 self.pr_data_mut(pr_id)
                     .commit_diffs
                     .insert(oid, LoadState::from_result(result));
+            }
+            Read::RangeDiff(pr_id, range, result) => {
+                // What is new is what is new in the files of the PR: what a merge
+                // of the target brought into the branch, in files the PR does not
+                // touch, is not part of it.
+                let result = self.new_in_the_pr(pr_id, &range, result);
+                self.pr_data_mut(pr_id)
+                    .range_diffs
+                    .insert(range, LoadState::from_result(result));
+                self.mark_read_head();
             }
             Read::BuildLog(pr_id, job, result) => {
                 self.pr_data_mut(pr_id)

@@ -4,7 +4,7 @@ use crate::{
         ci::BuildState,
         comment::{Comment, CommentId, CommentKey, CommentKind, ThreadHandle},
         commit::CommitOid,
-        diff::FileDiff,
+        diff::{DiffRange, FileDiff},
         pr::{DeletableBranch, LinkedIssue, Mergeability, PrId, PrInfo, PrStatus, PullRequest},
         review::{CommentTarget, Rerequest, ReviewVerdict, ReviewedHead},
     },
@@ -95,8 +95,18 @@ pub fn issues_to_open(data: Option<&PrData>) -> Vec<(&LinkedIssue, &str)> {
         .map_or_else(Vec::new, PrInfo::issues_to_open)
 }
 
-pub fn diff_files<'a>(data: Option<&'a PrData>, commit: Option<&CommitOid>) -> &'a [FileDiff] {
-    data.and_then(|data| data.diff_for(commit))
+/// The files of the diff on screen: what is new since the reader looked when
+/// that is open, else the open commit's, else the PR's.
+pub fn diff_files<'a>(
+    data: Option<&'a PrData>,
+    commit: Option<&CommitOid>,
+    since: Option<&DiffRange>,
+) -> &'a [FileDiff] {
+    let state = match since {
+        Some(range) => data.and_then(|data| data.range_diffs.get(range)),
+        None => data.and_then(|data| data.diff_for(commit)),
+    };
+    state
         .and_then(LoadState::loaded)
         .map_or(&[], |diff| diff.files.as_slice())
 }
@@ -128,7 +138,34 @@ impl<'a> DetailView<'a> {
 
     /// The files of the diff on screen: the PR's, or the open commit's.
     pub fn diff_files(&self) -> &'a [FileDiff] {
-        diff_files(self.data, self.detail.commits.open_commit())
+        diff_files(
+            self.data,
+            self.detail.commits.open_commit(),
+            self.detail
+                .since
+                .as_ref()
+                .map(super::since::SinceView::range),
+        )
+    }
+
+    /// What changed since the head the reader last had open, when the PR has
+    /// moved since: the range `w` shows. Only an open PR, and only where the
+    /// provider can compare two commits.
+    pub fn moved_since_read(&self) -> Option<DiffRange> {
+        if !self
+            .store
+            .capabilities
+            .supports(crate::domain::capabilities::Feature::RangeDiff)
+            || !matches!(self.pr.status, PrStatus::Open(_))
+        {
+            return None;
+        }
+        let base = self.store.seen.read_head(self.pr_id)?;
+        let head = CommitOid::parse(self.pr.head_oid.as_deref()?)?;
+        (*base != head).then(|| DiffRange {
+            base: base.clone(),
+            head,
+        })
     }
 
     pub fn review_context(&self) -> super::dialogs::review::ReviewContext<'a> {
@@ -257,9 +294,11 @@ impl<'a> DetailView<'a> {
         match self.surface() {
             Surface::Overview => self.detail.overview.timeline.thread.as_ref(),
             Surface::Diff(viewer) | Surface::CommitDiff(viewer) => viewer.focused_thread(),
-            Surface::Description | Surface::CommitList | Surface::Builds | Surface::BuildLog => {
-                None
-            }
+            Surface::Description
+            | Surface::CommitList
+            | Surface::Builds
+            | Surface::BuildLog
+            | Surface::SinceDiff(_) => None,
         }
     }
 
@@ -295,9 +334,11 @@ impl<'a> DetailView<'a> {
                 .supports(crate::domain::capabilities::Feature::PrComments)
                 .then_some(CommentTarget::Pr),
             Surface::Diff(viewer) | Surface::CommitDiff(viewer) => self.pane_line_target(viewer),
-            Surface::Description | Surface::CommitList | Surface::Builds | Surface::BuildLog => {
-                None
-            }
+            Surface::Description
+            | Surface::CommitList
+            | Surface::Builds
+            | Surface::BuildLog
+            | Surface::SinceDiff(_) => None,
         }
     }
 
@@ -322,9 +363,11 @@ impl<'a> DetailView<'a> {
                 .then(|| view.focused_reply())
                 .flatten()
                 .map(CommentTarget::Reply),
-            Surface::Description | Surface::CommitList | Surface::Builds | Surface::BuildLog => {
-                None
-            }
+            Surface::Description
+            | Surface::CommitList
+            | Surface::Builds
+            | Surface::BuildLog
+            | Surface::SinceDiff(_) => None,
         }
     }
 
@@ -418,6 +461,7 @@ impl DetailView<'_> {
                 PrAction::DeleteComment => caps.supports(F::DeleteComments),
                 PrAction::ResolveThread => caps.supports(F::ResolveThreads),
                 PrAction::RerunBuilds => caps.supports(F::RerunBuilds),
+                PrAction::ToggleSince => caps.supports(F::RangeDiff),
                 PrAction::RerequestReview => caps.supports(F::RerequestReview),
                 PrAction::OpenIssues => caps.supports(F::PrInfo),
             },

@@ -40,7 +40,7 @@ pub(super) fn render(frame: &mut Frame<'_>, state: &DetailView<'_>, area: Rect) 
 /// shown wherever the keys work (Overview and Description). Each is what its
 /// row in `bindings` says: lit, dimmed with the reason, or left out.
 fn pr_action_hints(state: &DetailView<'_>) -> Vec<Hint> {
-    ['a', 'v', 'm', 'p', 'x']
+    ['w', 'a', 'v', 'm', 'p', 'x']
         .into_iter()
         .filter_map(|key| bindings::hint(state, key))
         .collect()
@@ -117,6 +117,7 @@ fn footer_actions(state: &DetailView<'_>, tab: DetailTab) -> Vec<Hint> {
                 }));
             }
             hints.push(Hint::on("/: files"));
+            hints.extend(bindings::hint(state, 'w'));
             hints.push(Hint::on("h/l: tabs"));
             return hints;
         }
@@ -155,6 +156,7 @@ fn footer_actions(state: &DetailView<'_>, tab: DetailTab) -> Vec<Hint> {
             hints.extend(bindings::hint(state, 'R'));
         }
         hints.push(Hint::on("/: search"));
+        hints.extend(bindings::hint(state, 'w'));
         hints.push(Hint::on("h/l: tabs"));
         return hints;
     }
@@ -195,7 +197,7 @@ fn active_search(
         Surface::CommitList => {
             return commits_search_prompt(&state.detail.commits.search, pr_data, width);
         }
-        Surface::Diff(view) | Surface::CommitDiff(view) => view,
+        Surface::Diff(view) | Surface::CommitDiff(view) | Surface::SinceDiff(view) => view,
         Surface::Description | Surface::Overview | Surface::Builds | Surface::BuildLog => {
             return None;
         }
