@@ -112,16 +112,30 @@ fn printable(text: &str) -> String {
     let mut chars = text.chars().peekable();
     while let Some(c) = chars.next() {
         match c {
-            '\u{1b}' => {
-                if chars.next_if_eq(&'[').is_some() {
-                    // A control sequence ends at its first letter.
+            '\u{1b}' => match chars.peek() {
+                // A control sequence ends at a final byte, any of 0x40 to 0x7e.
+                Some('[') => {
+                    chars.next();
                     for next in chars.by_ref() {
-                        if next.is_ascii_alphabetic() {
+                        if ('\u{40}'..='\u{7e}').contains(&next) {
                             break;
                         }
                     }
                 }
-            }
+                // An operating system command, such as a link, ends at BEL or
+                // at ESC and a backslash.
+                Some(']') => {
+                    chars.next();
+                    while let Some(next) = chars.next() {
+                        if next == '\u{7}'
+                            || (next == '\u{1b}' && chars.next_if_eq(&'\\').is_some())
+                        {
+                            break;
+                        }
+                    }
+                }
+                _ => {}
+            },
             '\t' => out.push_str("    "),
             c if c.is_control() => {}
             c => out.push(c),
@@ -171,6 +185,25 @@ mod tests {
         let log = BuildLog::parse(LOG);
         assert_eq!(log.lines[3].text, "FAILED    tests::it");
         assert_eq!(printable("a\u{7}b\u{1b}[2Jc\u{1b}"), "abc");
+    }
+
+    #[test]
+    fn a_control_sequence_ends_at_its_final_byte_whatever_it_is() {
+        // `~` and `@` end a sequence as a letter does; the text after stays.
+        assert_eq!(printable("a\u{1b}[2~b"), "ab");
+        assert_eq!(printable("a\u{1b}[1@b"), "ab");
+        assert_eq!(printable("a\u{1b}[38;5;196mred"), "ared");
+    }
+
+    #[test]
+    fn a_link_is_dropped_whole_and_its_text_stays() {
+        let link = "\u{1b}]8;;https://example.com\u{7}click\u{1b}]8;;\u{7}";
+        assert_eq!(printable(link), "click");
+        let link = "\u{1b}]8;;https://example.com\u{1b}\\click\u{1b}]8;;\u{1b}\\ here";
+        assert_eq!(printable(link), "click here");
+        // One that is never closed takes the rest of the line, not the next.
+        let log = BuildLog::parse("\u{1b}]8;;https://x\nnext");
+        assert_eq!(log.lines[1].text, "next");
     }
 
     #[test]
