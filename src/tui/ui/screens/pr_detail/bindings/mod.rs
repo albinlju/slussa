@@ -17,6 +17,7 @@ use crate::{
 };
 use ratatui::crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
 
+mod agent_rows;
 pub(super) mod rows;
 
 /// What has to hold of the provider and the PR for a key to be in the help.

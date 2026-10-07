@@ -270,6 +270,10 @@ pub enum PrAction {
     RerequestReview,
     /// `i` with several issues to open: choose one.
     OpenIssues,
+    /// `d` on an agent's proposal: the reader does not want it.
+    DiscardProposal,
+    /// `A`: ask the configured agent to review the PR, after asking the reader.
+    OpenAgentReview,
     /// `w`: show what is new since the reader looked, or go back to the whole
     /// diff.
     ToggleSince,

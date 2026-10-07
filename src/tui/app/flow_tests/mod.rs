@@ -10,6 +10,7 @@
     reason = "the fake is held across awaits on purpose: dropped early, the next test would replace `gh` mid-flow"
 )]
 
+mod agent_review;
 mod closed_groups;
 mod open_group;
 mod pr_info;

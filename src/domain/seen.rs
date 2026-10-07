@@ -10,6 +10,7 @@ use serde::{Deserialize, Serialize};
 use super::{
     commit::CommitOid,
     pr::{PrId, PullRequest},
+    proposal::Proposal,
 };
 
 /// How long a PR may go unopened before it is forgotten, so that the file does
@@ -21,6 +22,23 @@ const KEEP: Duration = Duration::days(90);
 /// list while it is on screen.
 const RENEW: Duration = Duration::days(1);
 
+/// What the reader did with an agent's proposal.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum How {
+    /// Taken into a comment of the reader's own, to edit and send.
+    Taken,
+    Discarded,
+}
+
+/// A proposal the reader has dealt with, kept whole so that the same one handed
+/// in again is known.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+struct Handled {
+    proposal: Proposal,
+    how: How,
+}
+
 /// What was known of a PR when it was last looked at.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 struct Look {
@@ -28,6 +46,11 @@ struct Look {
     updated: DateTime<Utc>,
     /// When it was last looked at, to forget the ones not opened for a long time.
     at: DateTime<Utc>,
+    /// The agent's proposals the reader has taken or discarded. A file from before
+    /// they were kept has none, and one with none is written without the field,
+    /// so the version 1 text stays as it was.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    handled: Vec<Handled>,
     /// The head of the diff the reader last had open, for what is new since. A
     /// file from before it was kept has none, and one with none is written
     /// without it, so the version 1 text stays as it was.
@@ -51,22 +74,48 @@ impl Seen {
     /// so that a PR opened now and then is not forgotten as long as it is.
     /// `now` dates the look.
     pub fn mark(&mut self, pr: PrId, updated: DateTime<Utc>, now: DateTime<Utc>) -> bool {
-        let before = self.0.get(&pr);
-        let moved = before.is_none_or(|look| updated > look.updated);
-        let old = before.is_some_and(|look| now - look.at >= RENEW);
-        if !(moved || old) {
+        let Some(look) = self.0.get_mut(&pr) else {
+            self.0.insert(
+                pr,
+                Look {
+                    updated,
+                    at: now,
+                    handled: Vec::new(),
+                    head: None,
+                },
+            );
+            return true;
+        };
+        if !(updated > look.updated || now - look.at >= RENEW) {
             return false;
         }
-        let head = before.and_then(|look| look.head.clone());
-        let updated = before.map_or(updated, |look| look.updated.max(updated));
-        self.0.insert(
-            pr,
-            Look {
-                updated,
-                at: now,
-                head,
-            },
-        );
+        look.updated = look.updated.max(updated);
+        look.at = now;
+        true
+    }
+
+    /// The reader took or discarded this proposal, at `now`. Returns whether the
+    /// record changed. A PR not looked at yet gets its record here: the reader
+    /// has it open, which is what a look is, even when the list has not said
+    /// when it was updated.
+    pub fn handle(&mut self, pr: PrId, proposal: &Proposal, how: How, now: DateTime<Utc>) -> bool {
+        let look = self.0.entry(pr).or_insert_with(|| Look {
+            updated: now,
+            at: now,
+            handled: Vec::new(),
+            head: None,
+        });
+        if look
+            .handled
+            .iter()
+            .any(|known| known.proposal.same_as(proposal))
+        {
+            return false;
+        }
+        look.handled.push(Handled {
+            proposal: proposal.clone(),
+            how,
+        });
         true
     }
 
@@ -81,6 +130,15 @@ impl Seen {
             }
             Some(_) | None => false,
         }
+    }
+
+    /// Whether the reader has already dealt with this proposal.
+    pub fn is_handled(&self, pr: PrId, proposal: &Proposal) -> bool {
+        self.0.get(&pr).is_some_and(|look| {
+            look.handled
+                .iter()
+                .any(|known| known.proposal.same_as(proposal))
+        })
     }
 
     /// The head of the diff the reader last had open, if one was kept.
@@ -145,6 +203,51 @@ mod tests {
             updated,
             ai_review: crate::domain::pr::AiReview::None,
         }
+    }
+
+    fn proposal(line: usize) -> Proposal {
+        Proposal::new(crate::domain::proposal::ProposalInput {
+            head: "abc123".into(),
+            path: "a.rs".into(),
+            line,
+            side: crate::domain::proposal::Side::New,
+            body: "words".into(),
+            id: None,
+            agent: None,
+        })
+        .unwrap()
+    }
+
+    #[test]
+    fn dealing_with_a_proposal_of_a_pr_not_looked_at_makes_its_record() {
+        let mut seen = Seen::default();
+        assert!(seen.handle(PrId(1), &proposal(1), How::Taken, at(5)));
+        assert!(seen.is_handled(PrId(1), &proposal(1)));
+        assert!(
+            !seen.mark(PrId(1), at(4), at(5)),
+            "the look is already there"
+        );
+    }
+
+    #[test]
+    fn a_proposal_dealt_with_is_known_again_and_a_later_look_does_not_forget_it() {
+        let mut seen = Seen::default();
+        seen.mark(PrId(1), at(1), at(2));
+        assert!(!seen.is_handled(PrId(1), &proposal(1)));
+        assert!(seen.handle(PrId(1), &proposal(1), How::Discarded, at(3)));
+        assert!(
+            !seen.handle(PrId(1), &proposal(1), How::Taken, at(3)),
+            "once is enough"
+        );
+        assert!(seen.is_handled(PrId(1), &proposal(1)));
+        assert!(
+            !seen.is_handled(PrId(1), &proposal(2)),
+            "another line is another one"
+        );
+        assert!(!seen.is_handled(PrId(2), &proposal(1)), "another PR");
+        // Looking at the PR again moves its date and keeps what was decided.
+        seen.mark(PrId(1), at(30), at(31));
+        assert!(seen.is_handled(PrId(1), &proposal(1)));
     }
 
     #[test]

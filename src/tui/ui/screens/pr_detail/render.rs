@@ -142,6 +142,7 @@ fn render_content(
                 pr,
                 data: pr_data,
                 capabilities: &ctx.store.capabilities,
+                ai: super::proposed::ai_review(ctx.store, pr, pr_data),
                 scrollbar: Rect::new(area.right(), area.y, 1, area.height),
             },
         ),
@@ -162,6 +163,7 @@ fn render_content(
         DetailTab::Diff => {
             let threads = activity_threads(pr_data);
             let diff = pr_data.map(|d| &d.diff);
+            let proposals = super::proposed::on_this_diff(ctx.store, ctx.pr_id, pr_data);
             ui.diff.render(
                 frame,
                 framed,
@@ -169,6 +171,7 @@ fn render_content(
                     diff,
                     threads,
                     pending,
+                    proposals: &proposals,
                     reading: Reading {
                         pr_author: &pr.author.username,
                         folds: Folds::Open,

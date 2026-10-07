@@ -4,6 +4,23 @@ pub struct Diff {
     pub files: Vec<FileDiff>,
 }
 
+impl Diff {
+    /// Whether the diff has this line of this file, on the old side (a removed
+    /// line) or the new (an added or unchanged one): what a comment on the line
+    /// can be shown on.
+    pub fn has_line(&self, path: &str, line: usize, removed: bool) -> bool {
+        self.files
+            .iter()
+            .filter(|file| file.path == path)
+            .flat_map(|file| &file.hunks)
+            .flat_map(Hunk::numbered_lines)
+            .any(|(diff_line, new_no, old_no)| match diff_line {
+                DiffLine::Removed(_) => removed && old_no == line,
+                DiffLine::Added(_) | DiffLine::Context(_) => !removed && new_no == line,
+            })
+    }
+}
+
 #[derive(Debug, Clone)]
 pub struct FileDiff {
     pub path: String,

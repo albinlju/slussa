@@ -35,7 +35,7 @@ pub fn render(frame: &mut Frame<'_>, pr_id: PrId) {
     );
     let hints = widgets::hints_on("esc: back  q: quit");
     frame.render_widget(
-        Paragraph::new(widgets::footer(footer_area.width, &hints, false)),
+        Paragraph::new(widgets::footer(footer_area.width, &hints, None)),
         footer_area,
     );
 }

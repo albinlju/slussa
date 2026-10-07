@@ -22,6 +22,10 @@ pub enum ConfirmKind {
     /// Reopen a PR that was closed without merging.
     Reopen,
     DiscardReview,
+    /// Send the PR's text to the configured agent, to review it.
+    AgentReview,
+    /// End the review that is running.
+    StopAgentReview,
 }
 
 impl ConfirmKind {
@@ -31,6 +35,8 @@ impl ConfirmKind {
             Self::Decline => "Close / decline this PR?",
             Self::Reopen => "Reopen this PR?",
             Self::DiscardReview => "Discard this review draft?",
+            Self::AgentReview => "Ask an agent to review this PR?",
+            Self::StopAgentReview => "Stop the agent's review of this PR?",
         }
     }
 }
@@ -48,14 +54,16 @@ impl ConfirmKind {
     /// routine and easy to undo; a new kind has to say which it is.
     const fn default_choice(self) -> Choice {
         match self {
-            Self::Reopen | Self::DeleteComment(_) => Choice::Yes,
-            Self::Decline | Self::DiscardReview => Choice::No,
+            Self::Reopen | Self::DeleteComment(_) | Self::AgentReview => Choice::Yes,
+            Self::Decline | Self::DiscardReview | Self::StopAgentReview => Choice::No,
         }
     }
 
     const fn labels(self) -> [&'static str; 2] {
         match self {
             Self::DiscardReview => ["Discard review", "Keep reviewing"],
+            Self::AgentReview => ["Run the review", "Cancel"],
+            Self::StopAgentReview => ["Stop the review", "Keep waiting"],
             Self::DeleteComment(_) | Self::Decline | Self::Reopen => ["Yes", "No"],
         }
     }
@@ -73,7 +81,9 @@ fn render(frame: &mut Frame<'_>, dialog: &ConfirmDialog, pr: &PrSummary<'_>, are
         ConfirmKind::Decline => (Some(pr.label.as_str()), Some(pr.target_branch)),
         // Reopening states no target: nothing is lost or merged by it.
         ConfirmKind::Reopen => (Some(pr.label.as_str()), None),
-        ConfirmKind::DeleteComment(_) => (dialog.preview.as_deref(), None),
+        ConfirmKind::DeleteComment(_) | ConfirmKind::AgentReview | ConfirmKind::StopAgentReview => {
+            (dialog.preview.as_deref(), None)
+        }
         ConfirmKind::DiscardReview => (None, None),
     };
 
@@ -81,7 +91,18 @@ fn render(frame: &mut Frame<'_>, dialog: &ConfirmDialog, pr: &PrSummary<'_>, are
         Line::from(Span::styled(kind.prompt(), Style::default().fg(theme.fg))),
         Line::default(),
     ];
-    for (index, line) in context.into_iter().flat_map(str::lines).take(3).enumerate() {
+    // A comment to delete is a few lines; what an agent is given takes more to say.
+    let shown = if kind == ConfirmKind::AgentReview {
+        8
+    } else {
+        3
+    };
+    for (index, line) in context
+        .into_iter()
+        .flat_map(str::lines)
+        .take(shown)
+        .enumerate()
+    {
         lines.insert(
             1 + index,
             Line::styled(line.to_owned(), Style::default().fg(theme.muted)),

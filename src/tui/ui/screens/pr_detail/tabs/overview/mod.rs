@@ -1,6 +1,8 @@
 mod blocks;
 mod hidden;
 mod sidebar;
+
+pub use sidebar::AiReview;
 pub mod timeline;
 use crate::{
     domain::{
@@ -44,6 +46,8 @@ pub struct OverviewContext<'a> {
     pub pr: &'a PullRequest,
     pub data: Option<&'a PrData>,
     pub capabilities: &'a Capabilities,
+    /// What an agent's review of the PR says, if one was asked for.
+    pub ai: Option<AiReview<'a>>,
     /// Where the timeline's scrollbar goes: the screen's edge, not the tab's.
     pub scrollbar: Rect,
 }
@@ -103,6 +107,7 @@ fn render(
                 pr,
                 data: pr_data,
                 show_builds: ctx.capabilities.supports(Feature::Builds),
+                ai: ctx.ai,
             },
             sidebar,
         );

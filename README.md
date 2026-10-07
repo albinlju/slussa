@@ -166,6 +166,103 @@ repository and account, and nothing else about the PR.
 Copying a link falls back to the terminal's clipboard (OSC 52)
 over SSH; inside tmux that needs `set -g set-clipboard on`.
 
+## For agents
+
+**Ask for a review.** `A` in a PR runs an agent over it: slussa gives the configured
+command, on standard input, everything it needs and nothing it has to find on the
+machine: the PR's title and description, the issues the PR closes, the repository's own
+rules (`AGENTS.md` and `CLAUDE.md` at the top of the repository, when it has them) and
+the diff. The built-in instructions ask two questions and keep them apart: does the
+change do what it was asked to, no less and no more (*Spec*), and does it follow the
+rules and avoid bugs you can point to (*Standards* and *Bug*); each comment starts
+with which. The answer is the document below, kept as proposals. The default command is
+`claude -p`; `agent_review` in the config changes it, and `[]` turns the key off.
+Nothing depends on a skill being installed. If you want a different review,
+`agent_review_instructions` names a file that replaces the instructions (a sentence may
+send the agent to a skill of yours, but nothing needs one); what slussa gives the agent
+and the form of its answer stay as they are. A dialog names the command and what it is
+given and asks first, every time, since the text leaves slussa. `A` again while it runs stops it (after asking), and quitting slussa while an agent is at work asks first and then waits, with a spinner, for the agent to stop, so that no command is left running with nobody to read it. The review runs in
+the background (the footer shows it) and a notice says how many comments came; a
+comment on a line that is not in the diff is dropped and counted. slussa sets
+`head` itself, to the commit whose diff the agent was given, so what it proposes
+cannot be tied to another one. Everything in the PR is told to be data and not an
+instruction, and since what the agent says only becomes proposals that you take or
+discard, an instruction hidden in a PR can at worst waste a review. GitHub only.
+
+**Let your own agent review.** An agent that reviews on its own, from a skill or a
+script, reads the PR from slussa and hands in what it finds, without posting anything:
+
+```sh
+slussa context 44 > pr.txt                 # what the PR is made of, and how to hand in
+slussa propose import 44 < review.json     # or --file review.json
+slussa agent-instructions                  # how to use the two, for AGENTS.md or a skill
+```
+
+`slussa context` prints what the agent asked with `A` is given, read the same way: the
+title and description, the issues the PR closes, the repository's rules and the diff,
+with the commit the diff is of and the document to write, that commit filled in. It
+carries no review instructions, since your agent has its own. `slussa agent-instructions`
+prints a short text that tells an agent slussa is there and how to use it; an agent that
+is not told never calls it.
+
+The document is read, checked and kept for the reader; the reader sends, edits or
+discards each proposal. `head` is the commit the agent read, and everything in the
+document is tied to it:
+
+```json
+{
+  "schema": 1,
+  "head": "9f2c1ab...",
+  "agent": "gator",
+  "summary": "Two things to look at.",
+  "comments": [
+    {"path": "src/a.rs", "line": 12, "body": "This can panic.", "id": "F1"},
+    {"path": "src/a.rs", "line": 3, "side": "old", "body": "Why was this removed?"}
+  ]
+}
+```
+
+`side` is `new` (the default) or `old`; `id` and `agent` are optional, and a finding
+that is handed in again on the same line of the same commit, in the same words or under
+the `id` the same agent gave it, is not kept twice. An `id` alone does not make two
+findings one: two reviews may both call their first `F1`. A field that is not in the schema is refused, so that a
+misspelling is not ignored. `head` may be written short, with seven characters or more:
+when it is the PR's head it is written out, since a proposal is shown on the diff of
+exactly its commit. A document of the PR's head is checked against the PR's diff before
+anything is kept: a comment on a line that is not in the diff could never be shown, so
+the whole document is refused and the error names each such comment
+(`comments[1]: src/a.rs line 40 (new)`), for the agent to correct and hand in again. A
+document of an older commit is kept unchecked, and shown as written against another
+commit. A document of the PR's head replaces what was proposed on the PR's older
+commits, and a PR that nothing has been handed in on for 90 days is forgotten.
+
+It prints one line of JSON and exits: `{"schema":1,"pr":44,"added":2,"duplicates":0,
+"summary":"added","head":"...","current_head":"...","stale":false,"lines_checked":true}`.
+`added` and `duplicates` count the comments, `summary` says what became of the summary
+(`added`, `duplicate` or `none`), `stale` that the PR has moved since `head`, and
+`lines_checked` that the comments were checked to be on the diff. A failure is JSON on standard error, `{"schema":1,"error":{"kind":"...",
+"message":"..."}}`, and exit code 2 for a command line or a document that is wrong,
+1 for anything else: `not_logged_in`, `not_found` when the server says there is no such
+PR, and `failed`, which trying again may get past. Neither command asks for input: they
+need `gh` to be logged in already. GitHub only. The schema is experimental until it has
+been used.
+
+In the PR's Diff tab what an agent proposed stands on the line it is about, marked
+`[AI]` with the agent's name, the file list marks each file that has some (`◆ 1`, the same
+mark as an agent's comments), and the footer counts them. With the cursor on one,
+`c` takes it: the comment editor opens with its words, to edit and send as your own
+(a line comment joins the review in progress like any other), and `d` discards it.
+Either way it is not shown again, and that is kept with what you have looked at. A
+proposal written against another commit than the diff's is not drawn on its lines,
+only counted in the Diff tab's footer, so that it is never on the wrong line. Nothing
+can be done with it, so it is not among those that wait for you; a new review of the
+PR replaces it. The proposals are
+read when a PR is opened and when it refreshes. What is waiting is said wherever you
+are in the PR, first in the footer (`2 proposed by AI (Diff tab)`), and the Overview's
+sidebar has an *AI review* section with the summary an agent handed in (marked as
+older when the branch has moved on since) and how many proposals are left. While an
+agent runs, the footer says `agent reviewing…` with a spinner that moves.
+
 ## Configure
 
 `~/.config/slussa/config.toml` (or `$XDG_CONFIG_HOME/slussa/config.toml`):
@@ -173,6 +270,11 @@ over SSH; inside tmux that needs `set -g set-clipboard on`.
 ```toml
 theme = "graphite"   # graphite (default), slate, gruvbox, catppuccin, terminal
 sort = "attention"   # attention (default), recent, updated or oldest
+# Optional. What reviews a PR when you press A: a program and its arguments, given the
+# PR's title, description and diff on standard input; [] turns the key off.
+agent_review = ["claude", "-p"]
+# Optional. A file with your own review instructions, instead of the built-in ones.
+# agent_review_instructions = "~/.config/slussa/review.md"
 
 [ai]
 # Optional. For an agent that works as a person: a comment whose first line

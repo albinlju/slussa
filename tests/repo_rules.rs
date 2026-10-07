@@ -71,7 +71,19 @@ const IMPORTS: &[(&str, &[&str])] = &[
             "private_file",
         ],
     ),
-    ("cli", &["cli", "domain", "providers", "git_url", "session"]),
+    ("agent", &["agent", "domain", "providers"]),
+    (
+        "cli",
+        &[
+            "cli",
+            "agent",
+            "domain",
+            "providers",
+            "git_url",
+            "session",
+            "local",
+        ],
+    ),
     ("tui/ui", &["domain", "tui::app", "tui::ui"]),
 ];
 

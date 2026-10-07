@@ -89,6 +89,7 @@ impl App {
             tab: self.state.ui.detail.active_tab,
         };
         self.mark_viewed_seen();
+        self.read_proposals();
         self.mark_read_head();
         // Whatever this PR has not had read yet; the rest is shown from cache.
         for key in [

@@ -31,6 +31,7 @@ use crate::{
         seen::Seen,
         user::Username,
     },
+    local::proposals::Proposals,
     providers::FetchError,
 };
 use std::collections::{HashMap, HashSet};
@@ -53,6 +54,16 @@ pub struct Store {
     pub reviews: HashMap<PrId, crate::domain::review::PendingReview>,
     /// When each PR was last looked at, to mark the ones changed since.
     pub seen: Seen,
+    /// What agents have proposed, as the file said when it was last read. Which of
+    /// it the reader has dealt with is in `seen`.
+    pub proposals: Proposals,
+    /// The command that reviews a PR when asked to; empty where there is none.
+    pub agent_review: Vec<String>,
+    /// Whether leaving is being asked about, or waited for.
+    pub quit: super::quit::QuitGate,
+    /// A file with the instructions the reader wants an asked-for review to follow,
+    /// instead of the built-in ones.
+    pub agent_review_instructions: Option<std::path::PathBuf>,
     /// The PR the reader named on the command line, read and waiting for the
     /// list to be read before it is opened.
     pub requested: Option<PullRequest>,
@@ -109,6 +120,10 @@ impl Store {
             reload_after_fetch: HashSet::new(),
             reviews: HashMap::new(),
             seen: Seen::new(),
+            proposals: Proposals::default(),
+            agent_review: Vec::new(),
+            quit: super::quit::QuitGate::default(),
+            agent_review_instructions: None,
             requested: None,
             cache: Cache::default(),
             groups: HashMap::new(),
@@ -217,6 +232,12 @@ impl PrData {
             || self.range_diffs.values().any(LoadState::is_loading)
             || self.build_logs.values().any(LoadState::is_loading)
     }
+
+    /// The head of the PR's own diff, once it is read.
+    pub fn own_diff_head(&self) -> Option<&str> {
+        let revision = self.diff.loaded()?.revision.as_ref()?;
+        (!revision.commit).then_some(revision.head.as_str())
+    }
 }
 
 impl PrData {
@@ -245,6 +266,8 @@ impl PrData {
                 .entry(*job)
                 .or_insert(LoadState::NotRequested)
                 .start_loading(),
+            // Asked for by the reader, never read because a PR was opened.
+            PrResource::AgentReview => false,
         }
     }
 
@@ -268,6 +291,7 @@ impl PrData {
                 .build_logs
                 .get(job)
                 .is_some_and(|state| state.loaded().is_some()),
+            PrResource::AgentReview => false,
         }
     }
 
@@ -328,6 +352,9 @@ pub enum PrResource {
     Mergeability,
     Info,
     CommitDiff(CommitOid),
+    /// An agent asked to review the PR. Nothing is stored in the PR's data: what
+    /// it proposes is kept in a file, which is read again when it is done.
+    AgentReview,
     RangeDiff(DiffRange),
     /// Read when a build is opened and not again: a log does not change.
     BuildLog(JobId),
@@ -340,6 +367,7 @@ impl PrResource {
             Self::Builds => Some(Feature::Builds),
             Self::RangeDiff(_) => Some(Feature::RangeDiff),
             Self::Mergeability => Some(Feature::Mergeability),
+            Self::AgentReview => Some(Feature::AgentReview),
             Self::Info => Some(Feature::PrInfo),
             Self::Commits
             | Self::Diff
@@ -451,7 +479,8 @@ impl Store {
         let on = |id: &PrId, shows: fn(DetailTab) -> bool| matches!(screen, Screen::Detail { pr_id, tab } if pr_id == *id && shows(tab));
         self.refresh_failures.iter().any(|key| match key {
             FetchKey::Prs(_) => true,
-            FetchKey::One(_) => false,
+            // A review's failure is its own error on the PR, not a stale view.
+            FetchKey::One(_) | FetchKey::Pr(PrResource::AgentReview, _) => false,
             FetchKey::Pr(PrResource::Diff, id) => on(id, |tab| tab == DetailTab::Diff),
             FetchKey::Pr(PrResource::Activity, id) => on(id, |tab| {
                 matches!(

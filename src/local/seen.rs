@@ -135,6 +135,19 @@ mod tests {
     }
 
     #[test]
+    fn what_the_reader_did_with_a_proposal_is_written_and_read_back() {
+        let handled = VERSION_1.replace(
+            r#""at":"2026-10-04T09:00:00Z""#,
+            concat!(
+                r#""at":"2026-10-04T09:00:00Z","handled":[{"proposal":{"head":"abc123","#,
+                r#""path":"a.rs","line":3,"side":"new","body":"words"},"how":"taken"}]"#
+            ),
+        );
+        let envelope: Envelope = serde_json::from_str(&handled).unwrap();
+        assert_eq!(serde_json::to_string(&envelope).unwrap(), handled);
+    }
+
+    #[test]
     fn a_head_kept_with_a_look_is_written_and_read_back() {
         let with_head = VERSION_1.replace(
             r#""at":"2026-10-04T09:00:00Z""#,

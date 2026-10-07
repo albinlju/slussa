@@ -79,6 +79,7 @@ impl App {
                     .commit_diffs
                     .insert(oid, LoadState::from_result(result));
             }
+            Read::AgentReview(pr_id, result) => self.agent_review_done(pr_id, result),
             Read::RangeDiff(pr_id, range, result) => {
                 // What is new is what is new in the files of the PR: what a merge
                 // of the target brought into the branch, in files the PR does not

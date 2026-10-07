@@ -401,6 +401,8 @@ impl App {
             FetchKey::Pr(PrResource::CommitDiff(oid), id) => self.spawn_load_commit_diff(id, oid),
             FetchKey::Pr(PrResource::RangeDiff(range), id) => self.spawn_load_range_diff(id, range),
             FetchKey::Pr(PrResource::BuildLog(job), id) => self.spawn_load_build_log(id, job),
+            // Only the reader starts a review, with `A`; a refresh never does.
+            FetchKey::Pr(PrResource::AgentReview, _) => {}
         }
     }
 

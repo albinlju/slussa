@@ -9,6 +9,7 @@ use crate::{
         commit::{Commit, CommitOid},
         diff::{Compared, Diff, DiffRange},
         pr::{Mergeability, PrBatch, PrGroup, PrId, PrInfo, PullRequest},
+        seen::How,
     },
     providers::{FetchError, MergeError, ReviewError},
     tui::app::{
@@ -34,6 +35,21 @@ pub enum Effect {
     LoadCommitDiff {
         pr_id: PrId,
         oid: CommitOid,
+    },
+    /// The reader took an agent's proposal into a comment of their own, or
+    /// discarded it. `index` is its place among the PR's proposals.
+    HandleProposal {
+        pr_id: PrId,
+        index: usize,
+        how: How,
+    },
+    /// Ask the configured agent to review the PR, which the reader has said yes to.
+    RunAgentReview {
+        pr_id: PrId,
+    },
+    /// Stop the review that is running, which the reader has said yes to.
+    StopAgentReview {
+        pr_id: PrId,
     },
     /// Show what is new since the reader looked: the Diff tab, with what changed
     /// between two commits of the PR read for it.
@@ -107,6 +123,12 @@ pub enum Read {
     CommitDiff(PrId, CommitOid, Result<Diff, FetchError>),
     RangeDiff(PrId, DiffRange, Result<Compared, FetchError>),
     BuildLog(PrId, JobId, Result<BuildLog, FetchError>),
+    /// An asked-for review is over. Its failure is the PR's own error, so
+    /// `failure` does not carry it.
+    AgentReview(
+        PrId,
+        Result<super::agent_review::Outcome, super::agent_review::Failure>,
+    ),
 }
 
 impl Read {
@@ -126,6 +148,7 @@ impl Read {
                 FetchKey::Pr(PrResource::RangeDiff(range.clone()), *id)
             }
             Self::BuildLog(id, job, _) => FetchKey::Pr(PrResource::BuildLog(*job), *id),
+            Self::AgentReview(id, _) => FetchKey::Pr(PrResource::AgentReview, *id),
         }
     }
 
@@ -142,6 +165,7 @@ impl Read {
             Self::Mergeability(_, result) => result.as_ref().err(),
             Self::Info(_, result) => result.as_ref().err(),
             Self::BuildLog(_, _, result) => result.as_ref().err(),
+            Self::AgentReview(..) => None,
         }
     }
 }

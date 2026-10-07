@@ -119,6 +119,14 @@ impl PrInfo {
     }
 }
 
+/// What an issue says, as far as it was read: what the PR was asked to do.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct IssueText {
+    pub number: u64,
+    pub title: String,
+    pub body: Option<String>,
+}
+
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct LinkedIssue {
     pub number: u64,

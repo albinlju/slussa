@@ -21,6 +21,7 @@ pub mod components;
 pub mod format;
 pub mod icons;
 pub mod layout;
+pub mod quit_dialog;
 pub mod screens;
 pub mod theme;
 pub mod widgets;
@@ -82,6 +83,7 @@ pub fn render(frame: &mut Frame<'_>, state: &mut AppState) {
             );
         }
     }
+    quit_dialog::render(frame, state);
     if let Some(error) = &state.store.draft_error {
         let area = frame.area();
         if area.height > 0 {

@@ -251,7 +251,11 @@ fn render_footer(
     let line = if search.open {
         widgets::search_prompt_with_hint(&search.query, match_count, area.width, SEARCH_HINT)
     } else {
-        widgets::footer(area.width, &widgets::hints_on(hints), refreshing)
+        widgets::footer(
+            area.width,
+            &widgets::hints_on(hints),
+            refreshing.then_some("refreshing"),
+        )
     };
     frame.render_widget(Paragraph::new(line), area);
 }

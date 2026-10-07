@@ -62,9 +62,7 @@ impl App {
 
     /// The head of the PR's own diff, as read.
     pub(super) fn loaded_diff_head(&self, pr_id: PrId) -> Option<&str> {
-        let diff = self.state.store.cache.details.get(&pr_id)?.diff.loaded()?;
-        let revision = diff.revision.as_ref()?;
-        (!revision.commit).then_some(revision.head.as_str())
+        self.state.store.cache.details.get(&pr_id)?.own_diff_head()
     }
 
     /// The reader has arrived at a diff: the PR's own on the Diff tab, or what is
@@ -92,10 +90,8 @@ impl App {
         let head = match &self.state.ui.detail.since {
             Some(since) => since.head_read(data).cloned(),
             None => data
-                .and_then(|data| data.diff.loaded())
-                .and_then(|diff| diff.revision.as_ref())
-                .filter(|revision| !revision.commit)
-                .and_then(|revision| CommitOid::parse(&revision.head))
+                .and_then(|data| data.own_diff_head())
+                .and_then(CommitOid::parse)
                 .filter(|head| listed.as_ref() == Some(head)),
         };
         if let Some(head) = head

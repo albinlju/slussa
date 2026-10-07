@@ -18,7 +18,24 @@ pub struct Sidebar<'a> {
     pub pr: &'a PullRequest,
     pub data: Option<&'a PrData>,
     pub show_builds: bool,
+    pub ai: Option<AiReview<'a>>,
 }
+
+/// What an agent's review of the PR says, for the sidebar.
+#[derive(Debug, Clone, Copy)]
+pub struct AiReview<'a> {
+    /// Who wrote the summary.
+    pub agent: Option<&'a str>,
+    /// What it says of the PR as a whole; none when only comments were handed in.
+    pub text: Option<&'a str>,
+    /// Whether it is of an older commit than the branch is at now.
+    pub older: bool,
+    /// How many proposals wait for the reader.
+    pub open: usize,
+}
+
+/// How many rows of a summary the sidebar gives, before it says there is more.
+const SUMMARY_ROWS: usize = 10;
 impl Widget for Sidebar<'_> {
     fn render(self, area: Rect, buf: &mut Buffer) {
         let pr = self.pr;
@@ -37,6 +54,12 @@ impl Widget for Sidebar<'_> {
         section_heading(&mut lines, "Reviewers");
         lines.extend(reviewers(pr));
         lines.push(Line::default());
+
+        if let Some(ai) = self.ai {
+            section_heading(&mut lines, "AI review");
+            lines.extend(ai_review(ai, inner.width as usize));
+            lines.push(Line::default());
+        }
 
         if self.show_builds {
             section_heading(&mut lines, "Builds");
@@ -67,6 +90,44 @@ impl Widget for Sidebar<'_> {
             .collect();
         Paragraph::new(lines).render(inner, buf);
     }
+}
+
+fn ai_review(ai: AiReview<'_>, width: usize) -> Vec<Line<'static>> {
+    let theme = theme::current();
+    let mut lines = Vec::new();
+    if let Some(agent) = ai.agent {
+        lines.push(Line::from(vec![
+            Span::styled(
+                "[AI] ",
+                Style::default().fg(theme.info).add_modifier(Modifier::BOLD),
+            ),
+            Span::styled(agent.to_owned(), Style::default().fg(theme.info)),
+        ]));
+    }
+    if ai.older {
+        lines.push(muted_line("of an older commit"));
+    }
+    if let Some(text) = ai.text {
+        let rows = widgets::wrap_text(text, width);
+        let more = rows.len() > SUMMARY_ROWS;
+        lines.extend(
+            rows.into_iter()
+                .take(SUMMARY_ROWS)
+                .map(|row| Line::from(Span::styled(row, Style::default().fg(theme.fg)))),
+        );
+        if more {
+            lines.push(muted_line("…"));
+        }
+    }
+    if ai.open > 0 {
+        lines.push(Line::from(Span::styled(
+            format!("{} proposed · Diff tab", ai.open),
+            Style::default().fg(theme.accent),
+        )));
+    } else if ai.text.is_some() {
+        lines.push(muted_line("Nothing left to decide"));
+    }
+    lines
 }
 
 fn section_heading(lines: &mut Vec<Line<'static>>, title: &str) {

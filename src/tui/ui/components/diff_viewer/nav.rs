@@ -33,6 +33,12 @@ pub(super) enum NavKind {
         removed: bool,
         index: usize,
     },
+    /// An agent's proposal — `index` among the PR's proposals.
+    Proposal {
+        line: usize,
+        removed: bool,
+        index: usize,
+    },
 }
 
 pub(super) struct NavItem {
@@ -44,9 +50,9 @@ pub(super) struct NavItem {
 impl NavItem {
     pub(super) const fn anchor(&self) -> (usize, bool) {
         match &self.kind {
-            NavKind::Line { line, removed } | NavKind::Pending { line, removed, .. } => {
-                (*line, *removed)
-            }
+            NavKind::Line { line, removed }
+            | NavKind::Pending { line, removed, .. }
+            | NavKind::Proposal { line, removed, .. } => (*line, *removed),
             NavKind::Thread(thread) | NavKind::Fold { thread, .. } => (thread.line, thread.removed),
         }
     }
@@ -65,6 +71,7 @@ impl NavItem {
                 key: *key,
             },
             NavKind::Pending { index, .. } => NavTarget::Pending(*index),
+            NavKind::Proposal { index, .. } => NavTarget::Proposal(*index),
         }
     }
 }

@@ -43,6 +43,7 @@ const HELP: &[Entry] = &[
     Entry::Bound(&bindings::rows::MERGE),
     Entry::Bound(&bindings::rows::REOPEN),
     Entry::Bound(&bindings::rows::SINCE),
+    Entry::Bound(&bindings::rows::AGENT_REVIEW),
     Entry::Bound(&bindings::rows::RERUN_BUILDS),
     Entry::Bound(&bindings::rows::REREQUEST_REVIEW),
     Entry::Bound(&bindings::rows::OPEN_ISSUE),
@@ -124,7 +125,7 @@ impl Entry {
             }
             Self::Delete => {
                 let text = match (caps.supports(Feature::DeleteComments), caps.reviews()) {
-                    (true, true) => "delete own / pending",
+                    (true, true) => "delete own / pending; discard an AI proposal",
                     (true, false) => "delete own",
                     (false, true) => "remove pending comment",
                     (false, false) => return None,
@@ -266,7 +267,7 @@ mod tests {
         );
         assert_eq!(
             text(&with(&[Feature::DeleteComments], true)),
-            Some("delete own / pending")
+            Some("delete own / pending; discard an AI proposal")
         );
         assert_eq!(text(&with(&[], true)), Some("remove pending comment"));
         assert_eq!(text(&with(&[], false)), None);

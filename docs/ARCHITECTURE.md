@@ -45,8 +45,9 @@ keyboard-only use, and prefer an existing interaction over a new visual pattern.
 ```text
 src/
 ├── main.rs                Startup, logging and dispatch to `cli` or `tui`
-├── cli/                   Arguments and the subcommands that print and exit (`auth login`, `-C`)
-├── config.rs              config.toml: theme, sort and `[ai] markers`
+├── cli/                   Arguments and the subcommands that print and exit (`auth login`, `-C`, `context`, `propose import`, `agent-instructions`); `exit.rs` is how they fail, `check.rs` what a handed-in document is checked against
+├── config.rs              config.toml: theme, sort, `agent_review` and `[ai] markers`
+├── agent/                 Reviewing with an agent: what a review is made from (`material.rs`, shared by `A` and `slussa context`), what the agent is told, running the command, finding its JSON
 ├── logging.rs             Log file in the data directory (`SLUSSA_LOG`), for its owner only
 ├── private_file.rs        Files only their owner may read: the drafts and the log
 ├── git_url.rs             Splits a git remote into host and path; web base URL
@@ -67,6 +68,8 @@ src/
 │   │   ├── commands.rs       `Command`, what the provider supports of it, and its execution
 │   │   ├── drafts.rs         Where drafts are kept; `App::open`, restore, save, journal
 │   │   ├── seen.rs           Marks the PR on screen as seen; writes the file of looks
+│   │   ├── proposals.rs      Reads what agents proposed; what the reader does with each
+│   │   ├── agent_review.rs   `A`: the whole review off the UI thread, and its result
 │   │   ├── since.rs          What is new since the reader looked: the PR's diff of the head, then the compare
 │   │   ├── desktop.rs        Browser and clipboard effects
 │   │   ├── fetchers.rs        Run providers off the UI thread
@@ -91,6 +94,7 @@ src/
 │       │       ├── render.rs  Composition; the comment counts per file
 │       │       ├── tree.rs    Tree rendering, the file rows with their counts
 │       │       ├── pane.rs    The code pane: diff lines, search and the cursor
+│       │       ├── inline.rs  What stands under a line: threads, queued comments and proposals
 │       │       ├── threads.rs One inline thread: its lines and the stops in it
 │       │       ├── nav.rs     What the pane cursor can stand on (line, thread,
 │       │       │              fold row, queued comment)
@@ -101,7 +105,8 @@ src/
 │       │   │   └── render.rs, columns.rs, filter.rs   Table, its columns, sort and status filter
 │       │   └── pr_detail/
 │       │       ├── screen.rs  PrDetailScreen: children, the surface shown and the overlay
-│       │       ├── interactions.rs  Dialog/editor workflows and resolved commands
+│       │       ├── interactions.rs  Editor workflows, the keys on the PR and resolved commands
+│       │       ├── answers.rs       What the reader's answer in a dialog does
 │       │       ├── bindings/  One row per key the screen routes itself: key, where, help,
 │       │       │              and what it does now (hidden, blocked, offered)
 │       │       ├── keys.rs    Modal priority, then the rows, then the focused child
@@ -547,7 +552,8 @@ from `domain/review`, tab identities from `pr_detail/tabs`, and editor drafts fr
 `DetailView` for read-only queries. `AppState::detail_view()` is a test helper;
 application effects do not query UI state. `tests/repo_rules.rs` fails a
 `domain`, `providers`, `session`, `cli` or `tui/ui` file that imports from a layer it may not
-(test code and `test_support` excepted).
+(test code and `test_support` excepted). `cli` may use `local`, the files the subcommands
+share with the TUI (`slussa propose import` writes the proposals file), and never `tui`.
 
 Run `cargo clippy --all-targets --locked -- -D warnings` alongside the tests.
 

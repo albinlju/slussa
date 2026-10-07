@@ -41,6 +41,13 @@ pub fn run(session: Session, open: Option<PrId>) -> ExitCode {
             tracing::warn!("ignoring {blank} blank entries in `ai.markers` in the config");
         }
         app.state.store.set_ai_markers(markers);
+        app.state.store.agent_review = config
+            .agent_review
+            .unwrap_or_else(config::default_agent_review);
+        app.state.store.agent_review_instructions = config
+            .agent_review_instructions
+            .as_deref()
+            .map(config::expand_home);
         let mut guard = match TerminalGuard::enter() {
             Ok(guard) => guard,
             Err(err) => {

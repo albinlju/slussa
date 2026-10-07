@@ -31,7 +31,12 @@ pub(super) fn render(frame: &mut Frame<'_>, state: &DetailView<'_>, area: Rect) 
     } else if let Some(search) = active_search(state, pr_data, area.width) {
         search
     } else {
-        widgets::footer(area.width, &footer_actions(state, tab), state.refreshing)
+        let busy = if state.agent_reviewing() {
+            Some("agent reviewing")
+        } else {
+            state.refreshing.then_some("refreshing")
+        };
+        widgets::footer(area.width, &footer_actions(state, tab), busy)
     };
     frame.render_widget(Paragraph::new(line), area);
 }
@@ -40,13 +45,44 @@ pub(super) fn render(frame: &mut Frame<'_>, state: &DetailView<'_>, area: Rect) 
 /// shown wherever the keys work (Overview and Description). Each is what its
 /// row in `bindings` says: lit, dimmed with the reason, or left out.
 fn pr_action_hints(state: &DetailView<'_>) -> Vec<Hint> {
-    ['w', 'a', 'v', 'm', 'p', 'x']
+    ['w', 'a', 'v', 'm', 'p', 'x', 'A']
         .into_iter()
         .filter_map(|key| bindings::hint(state, key))
         .collect()
 }
 
+/// The hints of the screen, with first among them that an agent has proposed
+/// something, wherever the reader is: what an agent found is not to be missed
+/// because the reader was not in the Diff when it finished. The PR's own diff
+/// draws them, and counts what is on it itself.
 fn footer_actions(state: &DetailView<'_>, tab: DetailTab) -> Vec<Hint> {
+    let mut hints = tab_hints(state, tab);
+    if let Some(open) = open_proposals_hint(state) {
+        hints.insert(0, open);
+    }
+    hints
+}
+
+/// How many proposals are waiting, and where they are from here. Only the PR's
+/// own diff draws them: a commit's diff and what is new since the reader looked
+/// are other diffs, and point to it like the rest.
+fn open_proposals_hint(state: &DetailView<'_>) -> Option<Hint> {
+    let place = match state.surface() {
+        Surface::Diff(_) => return None,
+        // The same tab, one key away (`w: whole diff`).
+        Surface::SinceDiff(_) => "whole diff",
+        Surface::CommitDiff(_)
+        | Surface::CommitList
+        | Surface::Description
+        | Surface::Overview
+        | Surface::Builds
+        | Surface::BuildLog => "Diff tab",
+    };
+    let open = super::proposed::open_count(state.store, state.pr, state.data);
+    (open > 0).then(|| Hint::on(format!("{open} proposed by AI ({place})")))
+}
+
+fn tab_hints(state: &DetailView<'_>, tab: DetailTab) -> Vec<Hint> {
     if state.detail.editor.has_draft() {
         return widgets::hints_on("c: resume draft");
     }
@@ -118,6 +154,8 @@ fn footer_actions(state: &DetailView<'_>, tab: DetailTab) -> Vec<Hint> {
             }
             hints.push(Hint::on("/: files"));
             hints.extend(bindings::hint(state, 'w'));
+            hints.extend(proposals_hint(state));
+            hints.extend(bindings::hint(state, 'A'));
             hints.push(Hint::on("h/l: tabs"));
             return hints;
         }
@@ -144,10 +182,15 @@ fn footer_actions(state: &DetailView<'_>, tab: DetailTab) -> Vec<Hint> {
             );
         }
 
+        let proposed = view.focused_proposal().is_some();
         match state.comment_target() {
             Some(CommentTarget::Reply(_)) => hints.push(Hint::on("r: reply")),
+            Some(_) if proposed => hints.push(Hint::on("c: take as comment")),
             Some(_) => hints.push(Hint::on("c: comment")),
             None => {}
+        }
+        if proposed {
+            hints.extend(bindings::hint(state, 'd'));
         }
         if state
             .focused_thread()
@@ -185,6 +228,26 @@ fn footer_actions(state: &DetailView<'_>, tab: DetailTab) -> Vec<Hint> {
         }
         // Both returned above with hints of their own.
         DetailTab::Overview | DetailTab::Diff => Vec::new(),
+    }
+}
+
+/// That agents have proposed something on the PR's diff, which nothing else
+/// shows until the cursor reaches a line with one.
+fn proposals_hint(state: &DetailView<'_>) -> Option<Hint> {
+    let Surface::Diff(_) = state.surface() else {
+        return None;
+    };
+    let here = super::proposed::on_this_diff(state.store, state.pr_id, state.data).len();
+    let elsewhere = super::proposed::for_another_commit(state.store, state.pr_id, state.data);
+    match (here, elsewhere) {
+        (0, 0) => None,
+        (here, 0) => Some(Hint::on(format!("{here} proposed by AI"))),
+        (0, elsewhere) => Some(Hint::on(format!(
+            "{elsewhere} proposed by AI for another commit"
+        ))),
+        (here, elsewhere) => Some(Hint::on(format!(
+            "{here} proposed by AI (+{elsewhere} for another commit)"
+        ))),
     }
 }
 

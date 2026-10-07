@@ -6,6 +6,7 @@ use crate::{
     domain::{
         comment::{CommentId, CommentKey, CommentThread},
         diff::{Diff, FileDiff},
+        proposal::Proposal,
         review::{CommentAnchor, PendingComment},
     },
     tui::{
@@ -22,11 +23,23 @@ use crate::{
 use ratatui::{Frame, crossterm::event::KeyEvent, layout::Rect};
 use std::collections::HashSet;
 
+#[derive(Clone, Copy)]
 pub struct DiffContext<'a> {
     pub diff: Option<&'a LoadState<Diff>>,
     pub threads: &'a [CommentThread],
     pub pending: &'a [PendingComment],
+    /// What agents proposed on lines of this diff, which the reader has not dealt
+    /// with yet.
+    pub proposals: &'a [ProposalAt<'a>],
     pub reading: Reading<'a>,
+}
+
+/// An agent's proposal that belongs on this diff, with its place among the PR's
+/// proposals, which is what the keys name it by.
+#[derive(Debug, Clone, Copy)]
+pub struct ProposalAt<'a> {
+    pub index: usize,
+    pub proposal: &'a Proposal,
 }
 
 #[derive(Debug, Default)]
@@ -111,6 +124,8 @@ pub enum NavTarget {
     },
     /// A queued review comment, by its index in the pending review.
     Pending(usize),
+    /// An agent's proposal, by its place among the PR's proposals.
+    Proposal(usize),
 }
 
 #[derive(Debug, Default, Clone, Copy, PartialEq, Eq)]
@@ -143,15 +158,7 @@ impl Component for DiffViewer {
         None
     }
     fn render(&mut self, frame: &mut Frame<'_>, area: Rect, ctx: &DiffContext<'_>) {
-        render::render(
-            frame,
-            ctx.diff,
-            ctx.threads,
-            ctx.pending,
-            self,
-            ctx.reading,
-            area,
-        );
+        render::render(frame, ctx, self, area);
     }
 }
 
@@ -172,7 +179,7 @@ impl DiffViewer {
                 ..
             }) => Some(thread),
             Some(FocusedNav {
-                target: NavTarget::Line | NavTarget::Pending(_),
+                target: NavTarget::Line | NavTarget::Pending(_) | NavTarget::Proposal(_),
                 ..
             })
             | None => None,
@@ -187,6 +194,25 @@ impl DiffViewer {
         }
     }
 
+    /// The agent's proposal the pane cursor is on.
+    pub const fn focused_proposal(&self) -> Option<usize> {
+        match &self.pane.focused {
+            Some(FocusedNav {
+                target: NavTarget::Proposal(index),
+                ..
+            }) => Some(*index),
+            Some(FocusedNav {
+                target:
+                    NavTarget::Line
+                    | NavTarget::Thread(_)
+                    | NavTarget::Fold { .. }
+                    | NavTarget::Pending(_),
+                ..
+            })
+            | None => None,
+        }
+    }
+
     /// The queued review comment the pane cursor is on, so `d` can remove it.
     pub const fn focused_pending(&self) -> Option<usize> {
         match &self.pane.focused {
@@ -195,7 +221,11 @@ impl DiffViewer {
                 ..
             }) => Some(*index),
             Some(FocusedNav {
-                target: NavTarget::Line | NavTarget::Thread(_) | NavTarget::Fold { .. },
+                target:
+                    NavTarget::Line
+                    | NavTarget::Thread(_)
+                    | NavTarget::Fold { .. }
+                    | NavTarget::Proposal(_),
                 ..
             })
             | None => None,
@@ -230,7 +260,11 @@ impl DiffViewer {
                 ..
             }) => Some(*key),
             Some(FocusedNav {
-                target: NavTarget::Line | NavTarget::Thread(_) | NavTarget::Pending(_),
+                target:
+                    NavTarget::Line
+                    | NavTarget::Thread(_)
+                    | NavTarget::Pending(_)
+                    | NavTarget::Proposal(_),
                 ..
             })
             | None => None,

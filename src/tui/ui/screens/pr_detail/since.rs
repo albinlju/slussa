@@ -119,6 +119,8 @@ pub(super) fn render(
             diff: state,
             threads: &[],
             pending: &[],
+            // Its lines are not the PR's, so no proposal stands on them either.
+            proposals: &[],
             reading,
         },
     );

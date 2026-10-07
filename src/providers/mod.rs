@@ -24,6 +24,7 @@ mod url_path;
 
 pub use error::{FetchError, MergeError, ReviewError};
 pub use github::GhRepo;
+pub use unified_diff::parse as parse_unified_diff;
 
 #[cfg(test)]
 mod transport_tests;
@@ -91,10 +92,36 @@ impl Provider {
         }
     }
 
+    /// The PR's diff as text, with the revision it is of: what an agent is asked
+    /// to review.
+    pub fn fetch_diff_text(
+        &self,
+        pr_id: PrId,
+    ) -> Result<(String, crate::domain::diff::DiffRevision), FetchError> {
+        match self {
+            Self::GitHub(repo) => github::fetch_diff_text(repo, pr_id),
+            Self::BitbucketDc(_) => Err(FetchError::Unsupported(
+                "Bitbucket's diff is not read as text here.".into(),
+            )),
+        }
+    }
+
     pub fn fetch_commit_diff(&self, oid: &CommitOid) -> Result<Diff, FetchError> {
         match self {
             Self::GitHub(repo) => github::fetch_commit_diff(repo, oid),
             Self::BitbucketDc(c) => bitbucket_dc::fetch_commit_diff(c, oid),
+        }
+    }
+
+    /// What an issue the PR closes says. `None` for one in another repository,
+    /// whose number is not this repository's to ask for.
+    pub fn fetch_issue_text(
+        &self,
+        issue: &crate::domain::pr::LinkedIssue,
+    ) -> Result<Option<crate::domain::pr::IssueText>, FetchError> {
+        match self {
+            Self::GitHub(repo) => github::fetch_issue_text(repo, issue),
+            Self::BitbucketDc(_) => Ok(None),
         }
     }
 
@@ -250,6 +277,7 @@ impl Provider {
                     .into_iter()
                     .chain([
                         Feature::PrInfo,
+                        Feature::AgentReview,
                         Feature::RangeDiff,
                         Feature::AutoMerge,
                         Feature::RerunBuilds,

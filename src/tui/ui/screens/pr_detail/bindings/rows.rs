@@ -12,6 +12,10 @@ use crate::{
     },
 };
 
+pub(in crate::tui::ui::screens::pr_detail) use super::agent_rows::{
+    AGENT_REVIEW, DISCARD_PROPOSAL,
+};
+
 // The rows, in the order the help lists them. Where a key has two rows, the
 // first one that is offered is the one that applies.
 
@@ -456,6 +460,8 @@ pub(in crate::tui::ui::screens::pr_detail) static BINDINGS: &[&Binding] = &[
     &EDIT_COMMENT,
     &DELETE_COMMENT,
     &REMOVE_PENDING,
+    &DISCARD_PROPOSAL,
+    &AGENT_REVIEW,
     &RERUN_BUILDS,
     &SINCE,
     &REREQUEST_REVIEW,

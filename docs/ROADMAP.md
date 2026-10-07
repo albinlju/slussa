@@ -183,30 +183,55 @@ let an agent help without deciding.
   and Bitbucket Data Center. **Open:** whether opening the Diff tab is the right
   meaning of read: it clears the mark for a reader who goes straight to the whole
   diff, which is what makes the mark a way in and not a log.
-- [ ] **Agents propose, the reader sends.** `slussa draft comment …` and
-  `slussa review import …` put proposals in a local inbox; the TUI shows each
-  beside the line it is about, marked as AI, and the reader sends, edits or
-  discards it. The marker it relies on is built. It needs a store separate from
-  the draft file, which the TUI holds locked for as long as it runs
-  (`DraftStorage`) and rewrites whole when its content changes, so a second
-  process cannot write into it; de-duplication (a content hash or finding ID);
-  and anchors that carry their `DiffRevision`, so that a proposal written against
-  another head is shown as such and not on the wrong line. It starts from
-  nothing: `cli/` holds only `auth` today, so the first of these commands brings
-  the headless connection, the JSON types and the exit codes described under
-  *The other direction: an agent calling slussa* in group 5. **Open:** what an
-  agent hands in (the fields of a proposal, and one document for a whole review
-  or one call per comment), and whether a proposal written while the TUI is open
-  appears without a refresh.
-- [ ] **`slussa context <number>`** — one compact text package for an LLM (title,
-  description, unresolved threads, CI, blockers). It is the package *Send to
-  agent* needs too, so build it once; it needs a size rule for long threads and
-  diffs.
-- [ ] **`slussa agent-instructions`** — prints how an agent should use slussa, as a
-  short snippet for AGENTS.md or a skill. An agent that is not told slussa is
-  there never calls it, so this ships with the proposals and not after them. A
-  CLI plus this is simpler than an MCP server for a local tool built on `gh` and
-  `git`; revisit MCP later (it is also the trigger for a `slussa-core`).
+- [ ] **Agents propose, the reader sends** *(first version built)*.
+  `slussa propose import <PR>` reads one JSON document (the README gives it: the
+  head the agent read, an optional summary, and line comments, each with a side and
+  perhaps the agent's own finding id) and keeps it in a file of its own under
+  `slussa/proposals`, one per scope. The import takes the file's lock for the moment
+  it needs; the TUI reads the file without it, which is safe because a write replaces
+  the whole file, when a PR is opened and on each refresh. In the Diff tab a proposal
+  written against the commit the diff is of stands on its line, marked `[AI]`; `c`
+  takes it into the comment editor with its words (so editing and sending is the
+  ordinary path, into the review in progress when there is one) and `d` discards it.
+  What the reader did is kept in the seen file (`local/seen.rs`, an optional list, so
+  the version 1 file reads and writes as before), which also means it is forgotten
+  with the PR after 90 days. A proposal for another commit is counted in the Diff
+  tab's footer and not drawn; it is not among those that wait, and a review of the PR's
+  head replaces what was proposed on its older commits. A PR nothing was handed in on
+  for 90 days is forgotten at the next import. What is waiting is said in the footer on every tab, and the Overview's
+  sidebar shows the latest summary (marked when it is of an older commit) with the count
+  left. At most 1 000 per PR, 500 per document and 2 MiB. A document of the PR's
+  head is checked against the PR's diff before it is kept, and one with a comment on
+  a line that is not there is refused whole with the comments named, since such a
+  comment could never be shown (the agent slussa asks has its own dropped and
+  counted, since it cannot be asked again); a `head` written short is written out
+  when it is the PR's head, where before nothing of such a document was ever drawn.
+  **Missing:** what the reader did with a proposal is not told back to the agent
+  (`slussa propose list`, so that it does not propose again what was discarded); the summary is
+  only the latest, cannot be dismissed and is not shown where the sidebar is hidden (a
+  narrow terminal); a way to see the
+  proposals for another commit (they are only counted); a mark in the PR list; proposals on the commit diffs and on *Since you read it*; `c` marks a
+  proposal taken when the editor opens, not when the comment is sent, so a draft
+  that is later thrown away loses the proposal (the draft is kept as any other, and
+  the agent's file still has it, but nothing brings it back); undoing a discard; the
+  proposals appearing without a refresh; and Bitbucket Data Center. **Not tried
+  against** an agent that is not a script, or in a real terminal: the schema has
+  only been written by hand and the Diff tab only through the test backend.
+- [ ] **`slussa context <number>`** *(first version built)*. Prints what a PR is
+  made of for an agent that reviews on its own: the title and description, the
+  issues it closes, the repository's rules (`AGENTS.md`, `CLAUDE.md`) and the diff,
+  with the commit the diff is of and the document to hand in, that commit filled in.
+  It is read by the same code as the review asked for with `A` (`agent::Material`),
+  so both agents review the same thing, and it carries no review instructions. The
+  diff is cut at 150 kB and says so. **Missing:** the unresolved threads, the builds
+  and why a merge is blocked, which *Send to agent* needs too; a way to ask for the
+  whole of a longer diff; and Bitbucket Data Center.
+- [ ] **`slussa agent-instructions`** *(first version built)*. Prints how an agent
+  uses `slussa context` and `slussa propose import`, as a short text for AGENTS.md
+  or a skill: an agent that is not told slussa is there never calls it. A CLI plus
+  this is simpler than an MCP server for a local tool built on `gh` and `git`;
+  revisit MCP later (it is also the trigger for a `slussa-core`). **Missing:**
+  installing it as a skill, which is left to the reader.
 - [ ] **Tried by a few readers.** When the two first items exist: a recording
   that shows them, and a handful of people who review agents' PRs asked to use
   slussa for a week. What they open the web for goes to group 4. This is how the
@@ -439,20 +464,33 @@ back on refresh.
   terminal pane and return immediately), or *headless* (`-p`, output in a
   dialog). Command per mode in `config.toml`; suspend is the default because
   it needs no multiplexer.
-- [ ] **Run a review from slussa** *(refined)* — a key on the PR that runs a
-  configured command (default `claude -p` with a review prompt and the PR
-  context: title, body, diff) and posts the result either as one batched
-  review with line comments or as a local-only overlay the user can promote
-  to comments. The default prompt asks for each concern as "Before this PR,
-  `<who>` experienced `<old>`. With this PR, `<new>`, so `<impact>`." with a
-  `Critical | Warning | Suggestion` severity, and the posted review names the
-  head SHA it reviewed. Command and prompt in `config.toml`; the command runs
-  off the UI thread with the same deadline rules as `gh`. Moved here from *AI
-  review integration* and placed after *Send to agent*: an automated review
-  belongs before the human opens the PR, and one that posts comments gives the
-  human more to read. When the header says no review has happened, sending
-  the PR to an agent that fixes is the shorter path; this stays for the
-  repository that has no reviewer in its pipeline.
+- [ ] **Run a review from slussa** *(first version built)*. `A` runs the
+  configured command (`agent_review` in `config.toml`, a program and arguments;
+  `claude -p` by default, `[]` for none) over the PR and keeps what it answers as
+  proposals the reader takes or discards, so nothing is posted. slussa gives it all of
+  what a review needs on standard input, so that nothing depends on a skill or a
+  file on the machine: the title and description, the issues the PR closes (read from
+  the provider, only those of this repository), the repository's own rules
+  (`AGENTS.md`, `CLAUDE.md` at its top) and the diff. The built-in instructions are
+  two questions kept apart, *Spec* (does it do what was asked, no less and no more)
+  and *Standards and correctness*, and each comment begins with `Spec:`,
+  `Standards:` or `Bug:`. `agent_review_instructions` names a file that replaces the
+  instructions; what is given and the form of the answer stay slussa's. A dialog
+  names the command and what it is given and asks first, each time. slussa fixes
+  `head` to the commit whose diff the agent was given and drops comments on lines
+  that are not in it. It runs off the UI thread (`spawn_fetch`), one at a time per
+  PR, with a 10 minute deadline, and a failure is the PR's error. `A` while it runs stops it (after asking), and quitting
+  asks first and waits, with a spinner, for the agent to stop; only the command's own
+  process is ended, not anything it started. **Missing:** the
+  kind is only a word at the start of the body and not a field the diff can show or
+  filter on; no severity or evidence; the diff is cut at 150 000 bytes (the issues at
+  8 000 and a rules file at 20 000, and the agent is told); the existing comments and
+  the CI result are not given, so a review can repeat what a reviewer said; only the
+  top of the repository is looked in for rules, and no `CONTRIBUTING.md`; the command
+  cannot be given the files of the PR, which is *Check out the PR locally*; reviewing
+  only what is new since the reader looked; a command that is not installed is found out when it runs. **Not
+  tried against** a real agent with the new prompt: the first real run was with the
+  first, thinner one.
 - [ ] **Copy additional references** — SHA / branch / permalink to a line.
 
 #### The other direction: an agent calling slussa
@@ -637,7 +675,7 @@ it ahead of the feature that needs it.
   on `Provider` in every method; fine for two providers. Move to a
   `trait ProviderApi` (or keep the enum and implement it via the trait).
   Capabilities stay data. *Trigger:* a third provider.
-- [ ] **Render-context structs for diff/thread rendering.** Five
+- [ ] **Render-context structs for diff/thread rendering.** (`diff_viewer::render` now takes the `DiffContext`; the rest remain.) Five
   `too_many_arguments` allowances: `diff_viewer/pane.rs` (two),
   `widgets/comment/render.rs`, `widgets/diff_row.rs` and
   `tabs/overview/blocks.rs`. Bundle the per-render inputs (theme, focus, width,

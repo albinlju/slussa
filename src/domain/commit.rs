@@ -19,10 +19,12 @@ impl TryFrom<String> for CommitOid {
 impl CommitOid {
     /// A commit id as git writes it: hexadecimal digits, from the four an
     /// abbreviation has to the sixty-four of a SHA-256. It goes into the paths
-    /// of requests, so nothing else is let in: the only way to make one.
+    /// of requests, so nothing else is let in: the only way to make one. The
+    /// digits are kept in lower case, as git writes them, so that the same
+    /// commit written two ways is equal.
     pub fn parse(text: &str) -> Option<Self> {
         let hex = (4..=64).contains(&text.len()) && text.bytes().all(|b| b.is_ascii_hexdigit());
-        hex.then(|| Self(text.to_owned()))
+        hex.then(|| Self(text.to_ascii_lowercase()))
     }
 
     pub fn as_str(&self) -> &str {
@@ -32,6 +34,18 @@ impl CommitOid {
     /// The seven characters a commit is known by.
     pub fn short(&self) -> String {
         self.0.chars().take(7).collect()
+    }
+
+    /// Whether this is `full` written short: its start, and at least the seven
+    /// characters a commit is known by. Fewer say too little about which commit
+    /// was meant.
+    pub fn abbreviates(&self, full: &Self) -> bool {
+        self.0.len() >= 7
+            && self.0.len() < full.0.len()
+            && full
+                .0
+                .get(..self.0.len())
+                .is_some_and(|start| start == self.0)
     }
 }
 
@@ -76,6 +90,15 @@ mod tests {
     use super::CommitOid;
 
     #[test]
+    fn the_same_commit_written_in_upper_case_is_equal() {
+        let upper = CommitOid::parse("ABCDEF1234567890").unwrap();
+        let lower = CommitOid::parse("abcdef1234567890").unwrap();
+        assert_eq!(upper, lower);
+        assert_eq!(upper.as_str(), "abcdef1234567890");
+        assert!(CommitOid::parse("ABCDEF1").unwrap().abbreviates(&lower));
+    }
+
+    #[test]
     fn a_commit_id_is_hexadecimal_and_nothing_else_is() {
         for ok in ["abcd", "ABCDEF12", &"a".repeat(40), &"0".repeat(64)] {
             assert!(CommitOid::parse(ok).is_some(), "{ok}");
@@ -94,5 +117,19 @@ mod tests {
         ] {
             assert!(CommitOid::parse(bad).is_none(), "{bad:?}");
         }
+    }
+
+    #[test]
+    fn a_commit_written_short_is_the_start_of_the_whole_and_seven_characters_or_more() {
+        let full = CommitOid::parse("9f2c1ab7d0e4455566677788899900aabbccddee").unwrap();
+        let short = |text: &str| CommitOid::parse(text).unwrap();
+        assert!(short("9f2c1ab").abbreviates(&full));
+        assert!(short("9F2C1AB7D0").abbreviates(&full), "whatever the case");
+        assert!(!short("9f2c1a").abbreviates(&full), "six say too little");
+        assert!(!short("1ab7d0e").abbreviates(&full), "not its start");
+        assert!(
+            !full.abbreviates(&full),
+            "the whole is not short for itself"
+        );
     }
 }

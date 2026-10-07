@@ -1,3 +1,4 @@
+mod answers;
 mod bindings;
 mod build_status;
 pub mod dialogs;
@@ -6,6 +7,7 @@ mod header;
 mod interactions;
 pub mod keys;
 mod opening;
+mod proposed;
 mod render;
 mod screen;
 mod since;

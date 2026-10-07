@@ -25,19 +25,19 @@ impl ScopedFile {
             directory.mode(0o700);
         }
         directory.create(root)?;
-        // Deterministic filename; the caller checks the full scope when reading.
-        let hash = scope.bytes().fold(0xcbf2_9ce4_8422_2325_u64, |h, b| {
-            (h ^ u64::from(b)).wrapping_mul(0x100_0000_01b3)
-        });
-        let path = root.join(format!("{hash:016x}.json"));
+        let path = path_of(root, scope);
         let lock = private_options()
             .create(true)
             .truncate(false)
             .open(path.with_extension("lock"))?;
-        lock.try_lock().map_err(|e| {
-            io::Error::other(format!(
+        lock.try_lock().map_err(|e| match e {
+            fs::TryLockError::WouldBlock => io::Error::new(
+                io::ErrorKind::WouldBlock,
+                "Draft storage is already in use or cannot be locked",
+            ),
+            fs::TryLockError::Error(e) => io::Error::other(format!(
                 "Draft storage is already in use or cannot be locked: {e}"
-            ))
+            )),
         })?;
         let bytes = match fs::read(&path) {
             Ok(bytes) => Some(bytes),
@@ -53,6 +53,26 @@ impl ScopedFile {
             },
             bytes,
         ))
+    }
+
+    /// As `open`, for a file that is held only for a moment by a short job, such
+    /// as an import: it waits up to `wait` for the one that has it.
+    pub fn open_waiting(
+        root: &Path,
+        scope: &str,
+        wait: std::time::Duration,
+    ) -> io::Result<(Self, Option<Vec<u8>>)> {
+        let started = std::time::Instant::now();
+        loop {
+            match Self::open(root, scope) {
+                Err(error)
+                    if error.kind() == io::ErrorKind::WouldBlock && started.elapsed() < wait =>
+                {
+                    std::thread::sleep(std::time::Duration::from_millis(20));
+                }
+                result => return result,
+            }
+        }
     }
 
     /// Replace the file's content, all or nothing. Nothing is written when it
@@ -84,6 +104,46 @@ impl ScopedFile {
     pub fn path(&self) -> &Path {
         &self.path
     }
+}
+
+/// Which file a reader without the lock read last, so that it reads again only
+/// once a write has replaced it. At first it is of no file.
+#[derive(Debug, Default, Clone, PartialEq, Eq)]
+pub struct Stamp(Option<Mark>);
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+struct Mark {
+    modified: std::time::SystemTime,
+    len: u64,
+    /// A write replaces the file, so the one after it is another file.
+    #[cfg(unix)]
+    inode: u64,
+}
+
+impl Stamp {
+    /// The file for `scope` under `root` as it is now.
+    pub fn of(root: &Path, scope: &str) -> io::Result<Self> {
+        let file = match fs::metadata(path_of(root, scope)) {
+            Ok(file) => file,
+            Err(error) if error.kind() == io::ErrorKind::NotFound => return Ok(Self(None)),
+            Err(error) => return Err(error),
+        };
+        Ok(Self(Some(Mark {
+            modified: file.modified()?,
+            len: file.len(),
+            #[cfg(unix)]
+            inode: std::os::unix::fs::MetadataExt::ino(&file),
+        })))
+    }
+}
+
+/// Where the file for `scope` is: a name made from the scope, so the caller
+/// checks the full scope when reading.
+pub fn path_of(root: &Path, scope: &str) -> PathBuf {
+    let hash = scope.bytes().fold(0xcbf2_9ce4_8422_2325_u64, |h, b| {
+        (h ^ u64::from(b)).wrapping_mul(0x100_0000_01b3)
+    });
+    root.join(format!("{hash:016x}.json"))
 }
 
 /// Open again after the earlier handle was dropped. A child process started by
