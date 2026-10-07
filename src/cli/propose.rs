@@ -21,7 +21,7 @@ use std::{
 use serde::Serialize;
 
 use super::{
-    check,
+    check::{self, Lines},
     exit::{self, Failure, Kind},
 };
 use crate::{
@@ -185,10 +185,16 @@ fn run_import(args: &[String]) -> Result<Report, Failure> {
         .provider()
         .fetch_pr(pr)
         .map_err(|e| Failure::unread_pr(pr, &e))?;
-    let (parsed, lines_checked) =
+    let (parsed, lines) =
         check::checked(session.provider(), pr, parsed, found.head_oid.as_deref())?;
     let head = parsed.head.clone();
-    let current = found.head_oid.as_deref().and_then(CommitOid::parse);
+    // The head the diff was read at, when the PR moved while that was done: it
+    // is the later of the two reads, and the one the proposals are held against.
+    let current_head = match &lines {
+        Lines::Moved(read) => Some(read.to_string()),
+        Lines::Checked | Lines::Unchecked => found.head_oid,
+    };
+    let current = current_head.as_deref().and_then(CommitOid::parse);
     let batch = Batch {
         comments: parsed.comments,
         summary: parsed.summary,
@@ -200,14 +206,14 @@ fn run_import(args: &[String]) -> Result<Report, Failure> {
     let root = proposals::root()
         .ok_or_else(|| Failure::new(Kind::Failed, "cannot locate the local data directory"))?;
     let report = Report {
-        lines_checked,
+        lines_checked: lines == Lines::Checked,
         ..import_batch(
             &root,
             &scope_name,
             pr,
             &head,
             batch,
-            found.head_oid.as_deref(),
+            current_head.as_deref(),
         )?
     };
     tracing::info!(

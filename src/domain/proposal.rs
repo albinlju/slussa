@@ -13,7 +13,7 @@ use std::num::NonZeroUsize;
 /// How long an agent's text may be, so that a runaway one cannot fill the file
 /// or the screen.
 pub const MAX_BODY: usize = 16_000;
-const MAX_NAME: usize = 64;
+pub(super) const MAX_NAME: usize = 64;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]

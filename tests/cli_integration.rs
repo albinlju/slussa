@@ -389,5 +389,9 @@ fn agent_instructions_name_the_two_commands_and_that_nothing_is_posted() {
     ] {
         assert!(output.combined.contains(wanted), "missing {wanted:?}");
     }
-    assert_eq!(Sandbox::new().run(&["agent-instructions", "x"]).code, 2);
+    let wrong = Sandbox::new().run(&["agent-instructions", "x"]);
+    assert_eq!(wrong.code, 2);
+    let error: serde_json::Value = serde_json::from_str(wrong.combined.trim())
+        .unwrap_or_else(|e| panic!("not JSON ({e}): {}", wrong.combined));
+    assert_eq!(error["error"]["kind"], "usage");
 }

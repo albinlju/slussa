@@ -58,24 +58,37 @@ fn off_the_diff(diff: &Diff, head: &CommitOid, comments: &[Proposal]) -> Result<
     ))
 }
 
+/// What became of checking the comments against the PR's diff.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(super) enum Lines {
+    /// They are on the diff of the PR's head.
+    Checked,
+    /// There was no diff of the document's commit to check against: it is of
+    /// another commit, or the provider does not give the diff as text.
+    Unchecked,
+    /// The PR moved while this ran: the diff was read at this commit, which is
+    /// the PR's head now and not what the document is of.
+    Moved(CommitOid),
+}
+
 /// Check the comments against the PR's diff, when the document is of the PR's
-/// head: that is the diff there is to read. Whether they were checked.
+/// head: that is the diff there is to read.
 fn check_lines(
     provider: &Provider,
     pr: PrId,
     parsed: &Parsed,
     current: Option<&CommitOid>,
-) -> Result<bool, Failure> {
+) -> Result<Lines, Failure> {
     if current != Some(&parsed.head) {
-        return Ok(false);
+        return Ok(Lines::Unchecked);
     }
     if parsed.comments.is_empty() {
-        return Ok(true);
+        return Ok(Lines::Checked);
     }
     let (text, revision) = match provider.fetch_diff_text(pr) {
         Ok(read) => read,
         // A provider whose diff is not read as text has nothing to check against.
-        Err(FetchError::Unsupported(_)) => return Ok(false),
+        Err(FetchError::Unsupported(_)) => return Ok(Lines::Unchecked),
         Err(error) => {
             return Err(Failure::new(
                 Kind::Failed,
@@ -88,11 +101,13 @@ fn check_lines(
         }
     };
     // The PR moved while this ran: the diff is of another commit than the document.
-    if CommitOid::parse(&revision.head).as_ref() != Some(&parsed.head) {
-        return Ok(false);
+    match CommitOid::parse(&revision.head) {
+        Some(read) if read != parsed.head => return Ok(Lines::Moved(read)),
+        Some(_) => {}
+        None => return Ok(Lines::Unchecked),
     }
     off_the_diff(&parse_unified_diff(&text), &parsed.head, &parsed.comments)?;
-    Ok(true)
+    Ok(Lines::Checked)
 }
 
 /// The document as it is kept: its `head` written out when it is the PR's head
@@ -102,14 +117,14 @@ pub(super) fn checked(
     pr: PrId,
     parsed: Parsed,
     current_head: Option<&str>,
-) -> Result<(Parsed, bool), Failure> {
+) -> Result<(Parsed, Lines), Failure> {
     let current = current_head.and_then(CommitOid::parse);
     let parsed = match &current {
         Some(current) => parsed.written_out(current),
         None => parsed,
     };
-    let lines_checked = check_lines(provider, pr, &parsed, current.as_ref())?;
-    Ok((parsed, lines_checked))
+    let lines = check_lines(provider, pr, &parsed, current.as_ref())?;
+    Ok((parsed, lines))
 }
 
 #[cfg(test)]
@@ -162,10 +177,10 @@ last\n";
         let provider = Provider::github_for_test();
         // An added line, an unchanged one and a removed one are all lines of the diff.
         let on_it = document_at(HEAD, &[(2, "new"), (1, "new"), (2, "old")]);
-        let (kept, lines_checked) = checked(&provider, PrId(44), on_it, Some(HEAD))
+        let (kept, lines) = checked(&provider, PrId(44), on_it, Some(HEAD))
             .ok()
             .expect("kept");
-        assert!(lines_checked);
+        assert_eq!(lines, Lines::Checked);
         assert_eq!(kept.comments.len(), 3);
     }
 
@@ -195,7 +210,7 @@ last\n";
         let _gh = github();
         let provider = Provider::github_for_test();
         let short = document_at("abc1234", &[(2, "new")]);
-        let (kept, lines_checked) = checked(&provider, PrId(44), short, Some(HEAD))
+        let (kept, lines) = checked(&provider, PrId(44), short, Some(HEAD))
             .ok()
             .expect("kept");
         assert_eq!(
@@ -204,7 +219,7 @@ last\n";
             "written out, so it is shown on the diff"
         );
         assert_eq!(kept.comments[0].head().as_str(), HEAD);
-        assert!(lines_checked);
+        assert_eq!(lines, Lines::Checked);
     }
 
     #[test]
@@ -212,17 +227,42 @@ last\n";
         let gh = crate::test_support::FakeGh::new().install();
         let provider = Provider::github_for_test();
         let older = document_at("fff0000aaa", &[(40, "new")]);
-        let (kept, lines_checked) = checked(&provider, PrId(44), older, Some(HEAD))
+        let (kept, lines) = checked(&provider, PrId(44), older, Some(HEAD))
             .ok()
             .expect("kept");
         let calls = gh.calls();
         drop(gh);
-        assert!(
-            !lines_checked,
+        assert_eq!(
+            lines,
+            Lines::Unchecked,
             "an older commit's diff is not there to read"
         );
         assert_eq!(kept.head.as_str(), "fff0000aaa");
         assert!(calls.is_empty(), "{calls:?}");
+    }
+
+    #[test]
+    fn a_pr_that_moved_while_the_diff_was_read_is_said_to_have_moved() {
+        let _gh = crate::test_support::FakeGh::new()
+            .on(
+                "pulls/44",
+                r#"{"head": {"sha": "9999999aaaa"}, "base": {"sha": "0ba5e00"}}"#,
+            )
+            .on("pr diff", DIFF)
+            .install();
+        let provider = Provider::github_for_test();
+        let (_, lines) = checked(
+            &provider,
+            PrId(44),
+            document_at(HEAD, &[(2, "new")]),
+            Some(HEAD),
+        )
+        .ok()
+        .expect("kept");
+        assert_eq!(
+            lines,
+            Lines::Moved(CommitOid::parse("9999999aaaa").unwrap())
+        );
     }
 
     #[test]

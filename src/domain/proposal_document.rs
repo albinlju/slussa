@@ -10,7 +10,7 @@
 
 use super::{
     commit::CommitOid,
-    proposal::{Proposal, ProposalError, ProposalInput, Side, Summary},
+    proposal::{MAX_NAME, Proposal, ProposalError, ProposalInput, Side, Summary},
 };
 use serde::Deserialize;
 
@@ -41,8 +41,9 @@ struct Document {
     head: Option<String>,
     agent: Option<String>,
     summary: Option<String>,
-    #[serde(default)]
-    comments: Vec<CommentDocument>,
+    /// A model writes `null` for what it has none of as often as it leaves the
+    /// field out.
+    comments: Option<Vec<CommentDocument>>,
 }
 
 #[derive(Deserialize)]
@@ -53,6 +54,14 @@ struct CommentDocument {
     side: Side,
     body: String,
     id: Option<String>,
+}
+
+/// The name a command is known by when the agent gave none: the program without
+/// its directory, which `AgentName` would refuse for its length, kept to what it
+/// allows. Nothing when there is nothing to call it by.
+fn program_name(program: &str) -> Option<String> {
+    let name = std::path::Path::new(program).file_name()?.to_string_lossy();
+    Some(name.chars().take(MAX_NAME).collect())
 }
 
 const fn new_side() -> Side {
@@ -112,13 +121,14 @@ pub fn parse(bytes: &[u8], source: Source<'_>) -> Result<Parsed, String> {
             }
         }
     }
-    let document: Document = serde_json::from_value(value).map_err(unreadable)?;
+    let mut document: Document = serde_json::from_value(value).map_err(unreadable)?;
+    let comments_written = document.comments.take().unwrap_or_default();
     match (document.schema, source) {
         (Some(1), _) | (None, Source::Asked { .. }) => {}
         (Some(other), _) => return Err(format!("`schema` is {other}; this slussa reads 1")),
         (None, Source::Caller) => return Err("`schema` is missing; this slussa reads 1".into()),
     }
-    if document.comments.len() > MAX_COMMENTS {
+    if comments_written.len() > MAX_COMMENTS {
         return Err(format!(
             "the document has more than {MAX_COMMENTS} comments"
         ));
@@ -130,13 +140,12 @@ pub fn parse(bytes: &[u8], source: Source<'_>) -> Result<Parsed, String> {
                 CommitOid::parse(head).ok_or_else(|| format!("`head`: {}", ProposalError::Head))?;
             (head, document.agent)
         }
-        Source::Asked { head, agent } => (
-            head.clone(),
-            document.agent.or_else(|| Some(agent.to_owned())),
-        ),
+        Source::Asked { head, agent } => {
+            (head.clone(), document.agent.or_else(|| program_name(agent)))
+        }
     };
-    let mut comments = Vec::with_capacity(document.comments.len());
-    for (at, comment) in document.comments.into_iter().enumerate() {
+    let mut comments = Vec::with_capacity(comments_written.len());
+    for (at, comment) in comments_written.into_iter().enumerate() {
         comments.push(
             Proposal::new(ProposalInput {
                 head: head.to_string(),
@@ -242,6 +251,43 @@ mod tests {
             )
             .is_err()
         );
+    }
+
+    #[test]
+    fn an_answer_with_null_comments_is_a_review_without_comments() {
+        let head = oid("fedcba");
+        let asked = Source::Asked {
+            head: &head,
+            agent: "claude",
+        };
+        let parsed = parse(br#"{"summary": "Fine.", "comments": null}"#, asked).unwrap();
+        assert!(parsed.comments.is_empty());
+        assert!(parsed.summary.is_some());
+    }
+
+    #[test]
+    fn the_program_of_a_command_names_the_agent_by_its_last_part() {
+        let head = oid("fedcba");
+        let long = format!("/opt/{}/bin/claude", "x".repeat(100));
+        let asked = Source::Asked {
+            head: &head,
+            agent: &long,
+        };
+        let parsed = parse(
+            br#"{"summary": "Fine.", "comments": [{"path": "a.rs", "line": 2, "body": "Look."}]}"#,
+            asked,
+        )
+        .unwrap();
+        assert_eq!(
+            parsed.comments.first().and_then(|c| c.agent()),
+            Some("claude")
+        );
+        let overlong = "y".repeat(200);
+        let asked = Source::Asked {
+            head: &head,
+            agent: &overlong,
+        };
+        assert!(parse(br#"{"summary": "Fine."}"#, asked).is_ok());
     }
 
     #[test]

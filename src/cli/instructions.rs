@@ -4,6 +4,8 @@
 
 use std::process::ExitCode;
 
+use super::exit::{self, Failure, Kind};
+
 pub(super) const TEXT: &str = "\
 ## Reviewing a pull request with slussa
 
@@ -34,10 +36,12 @@ approves, merges or posts for you: the person decides.
 ";
 
 pub(super) fn run(args: &[String]) -> ExitCode {
+    const COMMAND: &str = "agent-instructions";
     if !args.is_empty() {
-        eprintln!("slussa: `agent-instructions` takes no arguments.");
-        return ExitCode::from(2);
+        return exit::report(
+            COMMAND,
+            &Failure::new(Kind::Usage, "`agent-instructions` takes no arguments."),
+        );
     }
-    print!("{TEXT}");
-    ExitCode::SUCCESS
+    exit::print(COMMAND, TEXT.trim_end())
 }

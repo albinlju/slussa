@@ -94,24 +94,29 @@ impl Seen {
         true
     }
 
-    /// The reader took or discarded this proposal. Returns whether the record
-    /// changed. A PR never looked at has no record to put it in.
-    pub fn handle(&mut self, pr: PrId, proposal: &Proposal, how: How) -> bool {
-        match self.0.get_mut(&pr) {
-            Some(look)
-                if !look
-                    .handled
-                    .iter()
-                    .any(|known| known.proposal.same_as(proposal)) =>
-            {
-                look.handled.push(Handled {
-                    proposal: proposal.clone(),
-                    how,
-                });
-                true
-            }
-            Some(_) | None => false,
+    /// The reader took or discarded this proposal, at `now`. Returns whether the
+    /// record changed. A PR not looked at yet gets its record here: the reader
+    /// has it open, which is what a look is, even when the list has not said
+    /// when it was updated.
+    pub fn handle(&mut self, pr: PrId, proposal: &Proposal, how: How, now: DateTime<Utc>) -> bool {
+        let look = self.0.entry(pr).or_insert_with(|| Look {
+            updated: now,
+            at: now,
+            handled: Vec::new(),
+            head: None,
+        });
+        if look
+            .handled
+            .iter()
+            .any(|known| known.proposal.same_as(proposal))
+        {
+            return false;
         }
+        look.handled.push(Handled {
+            proposal: proposal.clone(),
+            how,
+        });
+        true
     }
 
     /// The reader had the diff of `head` open. Returns whether the record
@@ -214,17 +219,24 @@ mod tests {
     }
 
     #[test]
+    fn dealing_with_a_proposal_of_a_pr_not_looked_at_makes_its_record() {
+        let mut seen = Seen::default();
+        assert!(seen.handle(PrId(1), &proposal(1), How::Taken, at(5)));
+        assert!(seen.is_handled(PrId(1), &proposal(1)));
+        assert!(
+            !seen.mark(PrId(1), at(4), at(5)),
+            "the look is already there"
+        );
+    }
+
+    #[test]
     fn a_proposal_dealt_with_is_known_again_and_a_later_look_does_not_forget_it() {
         let mut seen = Seen::default();
-        assert!(
-            !seen.handle(PrId(1), &proposal(1), How::Taken),
-            "a PR never opened"
-        );
         seen.mark(PrId(1), at(1), at(2));
         assert!(!seen.is_handled(PrId(1), &proposal(1)));
-        assert!(seen.handle(PrId(1), &proposal(1), How::Discarded));
+        assert!(seen.handle(PrId(1), &proposal(1), How::Discarded, at(3)));
         assert!(
-            !seen.handle(PrId(1), &proposal(1), How::Taken),
+            !seen.handle(PrId(1), &proposal(1), How::Taken, at(3)),
             "once is enough"
         );
         assert!(seen.is_handled(PrId(1), &proposal(1)));

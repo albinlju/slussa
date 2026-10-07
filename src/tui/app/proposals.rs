@@ -5,6 +5,8 @@
 
 use std::path::PathBuf;
 
+use chrono::Utc;
+
 use super::App;
 use crate::{
     domain::{pr::PrId, seen::How},
@@ -64,7 +66,7 @@ impl App {
         else {
             return;
         };
-        if store.seen.handle(pr_id, proposal, how) {
+        if store.seen.handle(pr_id, proposal, how, Utc::now()) {
             self.seen_dirty = true;
         }
     }

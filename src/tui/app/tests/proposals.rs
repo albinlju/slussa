@@ -132,6 +132,26 @@ async fn d_discards_a_proposal_and_it_is_not_shown_again() {
 }
 
 #[tokio::test(flavor = "current_thread")]
+async fn d_and_c_work_on_a_pr_the_list_has_not_told_of() {
+    // `slussa 42` before the list has loaded: nothing has made a look at the PR.
+    let discarded = proposal("abc123", 1, "This can panic.");
+    let mut app = app_with(vec![discarded.clone()]);
+    app.state.store.seen = crate::domain::seen::Seen::default();
+    on_the_proposal(&mut app);
+    press(&mut app, KeyCode::Char('d'));
+    assert!(handled(&app, &discarded));
+    assert!(!screen_text(&mut app).contains("This can panic."));
+
+    let taken = proposal("abc123", 1, "This can panic.");
+    let mut app = app_with(vec![taken.clone()]);
+    app.state.store.seen = crate::domain::seen::Seen::default();
+    on_the_proposal(&mut app);
+    press(&mut app, KeyCode::Char('c'));
+    assert!(app.state.ui.detail.editor.is_open());
+    assert!(handled(&app, &taken), "taken, though no look was kept");
+}
+
+#[tokio::test(flavor = "current_thread")]
 async fn c_takes_a_proposal_into_an_editor_that_starts_from_its_words() {
     let proposed = proposal("abc123", 1, "This can panic.");
     let mut app = app_with(vec![proposed.clone()]);
@@ -170,10 +190,12 @@ async fn a_draft_in_progress_is_resumed_and_does_not_take_another_proposal() {
 async fn a_proposal_the_reader_dealt_with_stays_dealt_with_when_the_file_is_read_again() {
     let proposed = proposal("abc123", 1, "This can panic.");
     let mut app = app_with(vec![proposed.clone()]);
-    app.state
-        .store
-        .seen
-        .handle(PrId(42), &proposed, crate::domain::seen::How::Discarded);
+    app.state.store.seen.handle(
+        PrId(42),
+        &proposed,
+        crate::domain::seen::How::Discarded,
+        chrono::Utc::now(),
+    );
     let dir = TempDir::new("proposals");
     import(
         dir.path(),
@@ -332,9 +354,11 @@ async fn the_file_list_marks_the_files_that_have_a_proposal_to_look_at() {
     assert!(!screen_text(&mut elsewhere).contains("◆ "));
 
     // Once the reader has dealt with it, the mark goes.
-    app.state
-        .store
-        .seen
-        .handle(PrId(42), &proposed, crate::domain::seen::How::Discarded);
+    app.state.store.seen.handle(
+        PrId(42),
+        &proposed,
+        crate::domain::seen::How::Discarded,
+        chrono::Utc::now(),
+    );
     assert!(!screen_text(&mut app).contains("◆ "));
 }
